@@ -40,6 +40,8 @@ pnpm dsh web
 
 `pnpm run dev:web` 先构建一次再启动 Web UI：之后浏览器端源码改动会自动重建产物并刷新页面；宿主端包不在监听范围内，改动后重启进程即可（加 `--skip-build` 复用已有产物）。`pnpm run start:web` 直接启动上一次构建的产物，与 `pnpm dsh web` 等价。
 
+需要后台常驻时用 `make web-bg`（tmux 会话 `dsh-web`，启动后打印带 token 的 URL），停止用 `make web-stop`。
+
 ### 官方 npm 版本
 
 上游的 `npx @deepseek-ai/dsh web` 会下载并运行 npm 上的官方发布包，不读取本仓库源码，本分支的改动不会生效，且版本可能落后于本仓库，只用于对照上游行为。
