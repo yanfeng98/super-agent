@@ -440,49 +440,6 @@ describe('hand-declared providers', () => {
 })
 
 describe('catalog routes with per-model configuration', () => {
-  it('keeps both Azure protocols under the azure catalog route', () => {
-    const provider = resolveProfiles({ azure: {} }).get('azure')?.piProvider
-    if (provider === undefined) throw new Error('the installed catalog ships no azure provider')
-    const models = provider.getModels()
-    const protocols = new Set(models.map(model => model.api))
-
-    expect(provider.id).toBe('azure')
-    expect(protocols).toContain('azure-openai-responses')
-    expect(protocols).toContain('openai-completions')
-    expect(models.every(model => model.provider === 'azure')).toBe(true)
-    expect(catalogProvider('azure-openai-responses')).toBeUndefined()
-  })
-
-  it('requires a protocol for an uncataloged model on the mixed Azure route', () => {
-    expect(() => resolveProfiles({ azure: { models: [{ id: 'private-deployment' }] } }))
-      .toThrow(/needs an api/)
-  })
-
-  it.each(['azure-openai-responses', 'openai-completions'])(
-    'sends Azure %s requests with the configured deployment name',
-    async (api) => {
-      const events = api === 'openai-completions' ? textEvents : [
-        '{"type":"response.created","response":{"id":"resp_azure"}}',
-        '{"type":"response.completed","response":{"id":"resp_azure","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4}}}',
-      ]
-      const server = await mockServer([{ events }])
-      const provider = resolveProfiles({ azure: {} }).get('azure')!.piProvider!
-      const model = provider.getModels().find(model => model.api === api)!
-      const stream = provider.streamSimple(model, normalizeContext({ messages: [] }), {
-        apiKey: 'test-key',
-        env: {
-          AZURE_OPENAI_BASE_URL: server.url,
-          AZURE_OPENAI_API_VERSION: 'v1',
-          AZURE_OPENAI_DEPLOYMENT_NAME_MAP: `${model.id}=private-deployment`,
-        },
-      })
-
-      expect(await stream.result()).toMatchObject({ provider: 'azure', stopReason: 'stop' })
-      expect(server.requests).toEqual([expect.objectContaining({ model: 'private-deployment' })])
-      expect(server.paths).toEqual([api === 'openai-completions' ? '/chat/completions' : '/responses?api-version=v1'])
-    },
-  )
-
   it('serves the installed catalog untouched when the profile lists no models', async () => {
     const server = await mockServer([])
     const ctx = await harness({ providers: { deepseek: { baseURL: server.url } } })
@@ -1120,11 +1077,11 @@ describe('compat switches', () => {
   })
 
   it('serves the Responses compat type on every protocol pi-ai gives it to', () => {
-    // pi-ai types azure-openai-responses and openai-codex-responses with the
-    // same OpenAIResponsesCompat, so a switch settable on one is settable on all.
-    for (const route of ['azure', 'openai-codex']) {
+    // pi-ai types openai-responses and openai-codex-responses with the same
+    // OpenAIResponsesCompat, so a switch settable on one is settable on all.
+    for (const [route, api] of [['openai', 'openai-responses'], ['openai-codex', 'openai-codex-responses']] as const) {
       const models = modelsOf({ [route]: { compat: { supportsDeveloperRole: false } } }, route)
-      const model = [...models.values()].find(model => model.api === (route === 'azure' ? 'azure-openai-responses' : 'openai-codex-responses'))
+      const model = [...models.values()].find(model => model.api === api)
       expect(model).toBeDefined()
       expect(model?.compat).toMatchObject({ supportsDeveloperRole: false })
     }
@@ -1275,7 +1232,7 @@ describe('configurable-provider directory', () => {
     expect(offered).toContain('openai-codex')
     expect(offered).toContain('anthropic')
     expect(offered).toContain('openai')
-    expect(offered).toContain('azure')
+    expect(offered).not.toContain('azure')
     expect(offered).not.toContain('azure-openai-responses')
   })
 
@@ -1294,17 +1251,19 @@ describe('configurable-provider directory', () => {
     expect(catalogModels('typesafe').size).toBe(0)
   })
 
-  it('withholds the removed amazon-bedrock route from every catalog surface', async () => {
+  it('withholds removed catalog routes from every catalog surface', async () => {
     const ctx = await harness({})
     const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
 
-    // pi-ai still ships the route, but this build removes it before it reaches
-    // the provider directory, model resolution, discovery, or sign-in.
-    expect(getBuiltinProviders()).toContain('amazon-bedrock')
-    expect(catalogProviderIds()).not.toContain('amazon-bedrock')
-    expect(catalogProvider('amazon-bedrock')).toBeUndefined()
-    expect(catalogModels('amazon-bedrock').size).toBe(0)
-    expect(offered).not.toContain('amazon-bedrock')
+    // pi-ai still ships both routes, but this build removes them before they
+    // reach the provider directory, model resolution, discovery, or sign-in.
+    for (const provider of ['amazon-bedrock', 'azure']) {
+      expect(getBuiltinProviders()).toContain(provider)
+      expect(catalogProviderIds()).not.toContain(provider)
+      expect(catalogProvider(provider)).toBeUndefined()
+      expect(catalogModels(provider).size).toBe(0)
+      expect(offered).not.toContain(provider)
+    }
   })
 
   it('lists a route a stored profile names as a catalog route, not a declared one', async () => {

@@ -86,10 +86,10 @@ describe('modality schema boundary', () => {
 })
 
 describe('withheld catalog providers', () => {
-  it('refuses a profile that names the removed amazon-bedrock route', () => {
+  it.each(['amazon-bedrock', 'azure'])('refuses a profile that names the removed %s route', (provider) => {
     for (const validation of ['strict', 'deferred'] as const) {
-      expect(() => resolveProfiles({ 'amazon-bedrock': {} }, validation))
-        .toThrow(/provider "amazon-bedrock" is removed from this build/)
+      expect(() => resolveProfiles({ [provider]: {} }, validation))
+        .toThrow(new RegExp(`provider "${provider}" is removed from this build`))
     }
   })
 })

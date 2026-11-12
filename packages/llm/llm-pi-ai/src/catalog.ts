@@ -181,11 +181,14 @@ function servesChat(provider: Provider): boolean {
 /**
  * Installed-catalog routes this build removes from the product.
  *
- * `amazon-bedrock` is withheld deliberately: it must not be offered, discovered,
- * signed in to, or resolved as an installed route. `resolveProfiles()` refuses a
- * profile that names it, so configuration cannot restore the route either.
+ * `amazon-bedrock` and `azure` are withheld deliberately: neither fits the key,
+ * endpoint, and headers a route profile describes — Bedrock authenticates
+ * through the AWS credential chain, and Azure addresses deployments through
+ * provider environment — so neither may be offered, discovered, signed in to,
+ * or resolved as an installed route. `resolveProfiles()` refuses a profile that
+ * names either, so configuration cannot restore the route either.
  */
-const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set(['amazon-bedrock'])
+const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set(['amazon-bedrock', 'azure'])
 
 /**
  * Whether this build removes an installed catalog route from the product.

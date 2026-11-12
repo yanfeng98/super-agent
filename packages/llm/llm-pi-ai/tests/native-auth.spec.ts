@@ -87,7 +87,7 @@ describe('provider metadata', () => {
   it('keeps a newly installed provider configurable without guessed metadata', () => {
     const provider = { ...catalogProvider('openai')!, id: 'new-provider' }
     expect(providerDefaultsOf(provider)).toEqual({ defaultBaseURL: 'https://api.openai.com/v1' })
-    expect(providerDefaultsOf({ ...catalogProvider('azure')!, id: 'new-provider' })).toEqual({})
+    expect(providerDefaultsOf({ ...catalogProvider('opencode')!, id: 'new-provider' })).toEqual({})
     expect(providerDefaultsOf({ ...provider, baseUrl: 'https://{ACCOUNT}.example' })).toEqual({})
   })
 

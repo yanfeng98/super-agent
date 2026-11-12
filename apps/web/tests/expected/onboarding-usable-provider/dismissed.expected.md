@@ -23,7 +23,6 @@
     - combobox "提供商":
       - option "ant-ling"
       - option "anthropic"
-      - option "azure"
       - option "baseten"
       - option "cerebras"
       - option "cloudflare-ai-gateway"
