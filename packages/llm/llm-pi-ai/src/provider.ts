@@ -41,8 +41,8 @@ import { createProvider } from './models.ts'
  * authenticates through OAuth — none of which this configuration shape can
  * express, so offering them would hand back a provider that cannot
  * authenticate. The remainder are absent for want of a consumer rather than a
- * blocker: each is one line here once a deployment needs it. Catalog routes
- * still reach every protocol through their own provider; only an explicit
+ * blocker: each is one line here once a deployment needs it. A catalog route
+ * still reaches its own protocol through its provider; only an explicit
  * override is refused.
  */
 const PROTOCOLS: Readonly<Record<string, () => ProviderStreams>> = {
