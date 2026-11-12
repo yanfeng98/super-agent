@@ -156,7 +156,7 @@ describe('request-level dynamic profiles', () => {
     const ctx = await boot(dir, {})
 
     expect(ctx.llm.listProviders()).toEqual([])
-    // Dormant ≠ invisible: every installed catalog provider is configurable
+    // Dormant ≠ invisible: every served catalog provider is configurable
     // before any route exists, each addressed inside the providers dict and
     // described by the endpoint and environment variables it uses unconfigured.
     const directory = ctx.llm.listConfigurableProviders()

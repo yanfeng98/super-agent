@@ -11,7 +11,7 @@ import { getAllBuiltinModels, getBuiltinModels, getBuiltinProviders } from '@ear
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream'
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
 import type { Api, Model, OpenAICompletionsCompat, Provider } from '@earendil-works/pi-ai'
-import { catalogModels, catalogProvider } from '../src/catalog.ts'
+import { catalogModels, catalogProvider, catalogProviderIds } from '../src/catalog.ts'
 import { resolveProfiles } from '../src/config.ts'
 import { createModels, createProvider, getSupportedThinkingLevels } from '../src/models.ts'
 import { buildProvider, supportedProtocols } from '../src/provider.ts'
@@ -1130,12 +1130,6 @@ describe('compat switches', () => {
     }
   })
 
-  it('serves the Bedrock compat type on its own protocol', () => {
-    const models = modelsOf({ 'amazon-bedrock': { compat: { supportsStrictMode: false } } }, 'amazon-bedrock')
-    const [first] = [...models.values()]
-    expect((first?.compat as { supportsStrictMode?: boolean }).supportsStrictMode).toBe(false)
-  })
-
   it('refuses a compat key no wire protocol declares instead of dropping it', () => {
     // Schemastery passes unknown keys through, so silently dropping one would
     // make an unreadable switch look applied; the resolver must refuse it.
@@ -1270,7 +1264,7 @@ describe('configurable-provider directory', () => {
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(catalogOnly)
   })
 
-  it('offers every installed catalog route, including one that only signs in', async () => {
+  it('offers every served catalog route, including one that only signs in', async () => {
     const ctx = await harness({})
     const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
 
@@ -1298,6 +1292,19 @@ describe('configurable-provider directory', () => {
     expect(offered).not.toContain('typesafe')
     expect(catalogProvider('typesafe')).toBeUndefined()
     expect(catalogModels('typesafe').size).toBe(0)
+  })
+
+  it('withholds the removed amazon-bedrock route from every catalog surface', async () => {
+    const ctx = await harness({})
+    const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
+
+    // pi-ai still ships the route, but this build removes it before it reaches
+    // the provider directory, model resolution, discovery, or sign-in.
+    expect(getBuiltinProviders()).toContain('amazon-bedrock')
+    expect(catalogProviderIds()).not.toContain('amazon-bedrock')
+    expect(catalogProvider('amazon-bedrock')).toBeUndefined()
+    expect(catalogModels('amazon-bedrock').size).toBe(0)
+    expect(offered).not.toContain('amazon-bedrock')
   })
 
   it('lists a route a stored profile names as a catalog route, not a declared one', async () => {
