@@ -25,6 +25,7 @@ import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import {
   CACHE_CONTROL_FORMATS,
   CHAT_TEMPLATE_VARS,
+  isWithheldProvider,
   MAX_TOKENS_FIELDS,
   MODALITIES,
   PiAiCatalogError,
@@ -448,6 +449,11 @@ export function resolveProfiles(
   const entries = Object.entries(providers ?? {})
   const resolved = new Map<string, ResolvedPiAiProviderProfile>()
   for (const [provider, source] of entries) {
+    if (isWithheldProvider(provider)) {
+      throw new Error(
+        `llm-pi-ai: provider "${provider}" is removed from this build; delete the route or select another provider`,
+      )
+    }
     rejectRemovedFields(provider, source)
     if (provider.length === 0) throw new Error('llm-pi-ai: provider names must be non-empty')
     if (source.baseURL !== undefined && source.baseURL.length === 0) {

@@ -85,6 +85,15 @@ describe('modality schema boundary', () => {
   })
 })
 
+describe('withheld catalog providers', () => {
+  it('refuses a profile that names the removed amazon-bedrock route', () => {
+    for (const validation of ['strict', 'deferred'] as const) {
+      expect(() => resolveProfiles({ 'amazon-bedrock': {} }, validation))
+        .toThrow(/provider "amazon-bedrock" is removed from this build/)
+    }
+  })
+})
+
 describe('request image policy bounds', () => {
   it.each([
     ['requestImagePixelBudget', 0, /requestImagePixelBudget must be a positive safe integer/],

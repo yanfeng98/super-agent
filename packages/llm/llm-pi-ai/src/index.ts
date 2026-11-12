@@ -135,7 +135,7 @@ function registrationFacts(profiles: ReadonlyMap<string, ResolvedPiAiProviderPro
 }
 
 /**
- * The configurable-provider directory: every installed catalog route, plus
+ * The configurable-provider directory: every catalog route this build serves, plus
  * every route the current profiles declare. A hand-declared route has no
  * catalog entry, so without this union it would have no settings address and
  * configuration surfaces could neither show nor edit it. A catalog route also
@@ -261,9 +261,9 @@ export function apply(ctx: Context, config: Config): void {
   // composition without it (headless, ACP) simply has no surface to sign in
   // from, while everything else this plugin does still works.
   ctx.inject(['authorization'], (authorized) => { registerPiAiFlows(authorized, auth) })
-  // The full installed catalog is configurable from the moment the plugin
-  // mounts — dormant or not — so configuration surfaces can offer every
-  // pi-ai provider before any route exists. Hand-declared routes join it as
+  // Every served catalog route is configurable from the moment the plugin
+  // mounts — dormant or not — so configuration surfaces can offer the served
+  // pi-ai catalog before any route exists. Hand-declared routes join it as
   // profiles appear, and leave with them.
   let directory: DirectoryRegistrationHandle | undefined
   let directoryFacts: unknown

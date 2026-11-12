@@ -179,13 +179,36 @@ function servesChat(provider: Provider): boolean {
 }
 
 /**
+ * Installed-catalog routes this build removes from the product.
+ *
+ * `amazon-bedrock` is withheld deliberately: it must not be offered, discovered,
+ * signed in to, or resolved as an installed route. `resolveProfiles()` refuses a
+ * profile that names it, so configuration cannot restore the route either.
+ */
+const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set(['amazon-bedrock'])
+
+/**
+ * Whether this build removes an installed catalog route from the product.
+ * @param provider - provider route key.
+ * @returns whether the route is withheld.
+ */
+export function isWithheldProvider(provider: string): boolean {
+  return WITHHELD_PROVIDERS.has(provider)
+}
+
+/**
  * Installed catalog providers this adapter serves, by id, constructed once.
  * Each entry owns the API implementations for its own models, which is why a
  * catalog route reuses this provider instead of being rebuilt from parts.
  * @returns the catalog provider index, in catalog order.
  */
 function catalogProviders(): Map<string, Provider> {
-  providerIndex ??= new Map(builtinProviders().filter(servesChat).map(provider => [provider.id, provider]))
+  providerIndex ??= new Map(
+    builtinProviders()
+      .filter(provider => !isWithheldProvider(provider.id))
+      .filter(servesChat)
+      .map(provider => [provider.id, provider]),
+  )
   return providerIndex
 }
 
