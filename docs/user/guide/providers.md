@@ -24,7 +24,7 @@ A saved credential displays a masked preview in the input and a green hint that 
 
 An editable, nonempty key draft has an eye button. Select **Show secret** to check what you typed, and **Hide secret** to mask it again. Changing the input masks it again. Native password fields do not offer cut; select the draft and press Backspace to erase it, or reveal it before cutting. Stored credentials remain write-only.
 
-Amazon Bedrock and Azure are not offered in this build. The offered catalog omits `amazon-bedrock` and `azure`, and neither `bedrock-converse-stream` nor `azure-openai-responses` is one of the custom API protocols, so an endpoint for either cannot be configured here.
+Amazon Bedrock (`amazon-bedrock`), Azure (`azure`), and Cloudflare AI Gateway (`cloudflare-ai-gateway`) are not offered in this build, and their catalog routes cannot be selected here. `bedrock-converse-stream` and `azure-openai-responses` are not custom API protocols, so those transports are unavailable as well. `cloudflare-workers-ai` remains available.
 
 ## Add a custom model API
 

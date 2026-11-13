@@ -181,14 +181,16 @@ function servesChat(provider: Provider): boolean {
 /**
  * Installed-catalog routes this build removes from the product.
  *
- * `amazon-bedrock` and `azure` are withheld deliberately: neither fits the key,
- * endpoint, and headers a route profile describes — Bedrock authenticates
- * through the AWS credential chain, and Azure addresses deployments through
- * provider environment — so neither may be offered, discovered, signed in to,
+ * `amazon-bedrock`, `azure`, and `cloudflare-ai-gateway` are withheld
+ * deliberately: Bedrock signs through the AWS credential chain, Azure resolves
+ * deployment names and API versions through provider environment, and the
+ * Cloudflare gateway's catalog endpoints carry account and gateway placeholders
+ * that pi-ai fills from that same environment — provider-specific wiring the
+ * route profile does not model. None may be offered, discovered, signed in to,
  * or resolved as an installed route. `resolveProfiles()` refuses a profile that
- * names either, so configuration cannot restore the route either.
+ * names one, so configuration cannot restore the route either.
  */
-const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set(['amazon-bedrock', 'azure'])
+const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set(['amazon-bedrock', 'azure', 'cloudflare-ai-gateway'])
 
 /**
  * Whether this build removes an installed catalog route from the product.

@@ -24,7 +24,7 @@
 
 可编辑的密钥草稿非空时，输入框内显示眼睛按钮。选择**显示密钥**检查当前输入，选择**隐藏密钥**重新遮住输入。修改输入后会重新遮住密钥。原生密码框不提供剪切；可选中草稿后按 Backspace 清空，或显示明文后再剪切。已保存凭据仍保持只写。
 
-本构建不提供 Amazon Bedrock 与 Azure。提供的目录不含 `amazon-bedrock` 与 `azure`，且 `bedrock-converse-stream` 与 `azure-openai-responses` 都不在自定义模型 API 的协议选项中，因此无法在这里配置任一端点。
+本构建不提供 Amazon Bedrock（`amazon-bedrock`）、Azure（`azure`）与 Cloudflare AI Gateway（`cloudflare-ai-gateway`），这些目录路由无法在这里选择。`bedrock-converse-stream` 与 `azure-openai-responses` 不在自定义模型 API 的协议选项中，因此这两种传输同样不可用。`cloudflare-workers-ai` 仍可用。
 
 ## 添加自定义模型 API
 
