@@ -254,7 +254,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 
 这些限制说明适配器在哪里停止、由未来工作接续。它们是当前包约束，不是通用 pi-ai 对比或任务积压。
 
-- **本构建的目录不提供 `amazon-bedrock`、`azure`、`cloudflare-ai-gateway` 与 `cloudflare-workers-ai`**——pi-ai 仍随包提供这些路由，但本包不会展示、发现、登录或解析它们；点名其中任一条的 profile 会以配置错误失败，而不是解析出本构建不提供的路由。`bedrock-converse-stream` 与 `azure-openai-responses` 不是可配置协议，手工声明的路由同样无法选择这些传输。
+- **本构建的目录不提供 `amazon-bedrock`、`azure`、`cloudflare-ai-gateway`、`cloudflare-workers-ai` 与 `xiaomi-token-plan-ams`**——pi-ai 仍随包提供这些路由，但本包不会展示、发现、登录或解析它们；点名其中任一条的 profile 会以配置错误失败，而不是解析出本构建不提供的路由。`xiaomi-token-plan-ams` 与 `xiaomi-token-plan-cn`、`xiaomi-token-plan-sgp` 提供同样的四个 MiMo 模型，仅端点区域（阿姆斯特丹）不同，需要该端点的部署仍可通过 OpenAI 兼容的自定义模型 API 接入。`bedrock-converse-stream` 与 `azure-openai-responses` 不是可配置协议，手工声明的路由同样无法选择这些传输。
 - **`maxRequestImageBytes` 只计算 base64 图片载荷**，文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。
 - **字节上限没有移除量子**：达到 `maxRequestImageBytes` 后，每张新图片都只省略最少的最老前缀，因此每个新增图片的请求都会让提示词缓存复用从该位置重新开始。
 - **登录只存在于发起它的进程中**——授权尝试不持久，因此登录中途刷新页面会放弃它，用户需要重新开始。退出登录是对已存储记录执行 `deleteRecord`，只在本地忘记它，不会告知签发方。
