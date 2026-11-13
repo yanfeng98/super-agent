@@ -24,7 +24,7 @@
 
 可编辑的密钥草稿非空时，输入框内显示眼睛按钮。选择**显示密钥**检查当前输入，选择**隐藏密钥**重新遮住输入。修改输入后会重新遮住密钥。原生密码框不提供剪切；可选中草稿后按 Backspace 清空，或显示明文后再剪切。已保存凭据仍保持只写。
 
-本构建不提供 Amazon Bedrock（`amazon-bedrock`）、Azure（`azure`）、Cloudflare AI Gateway（`cloudflare-ai-gateway`）与 Cloudflare Workers AI（`cloudflare-workers-ai`），这些目录路由无法在这里选择。`bedrock-converse-stream` 与 `azure-openai-responses` 不在自定义模型 API 的协议选项中，因此这两种传输同样不可用。
+本构建不提供 Amazon Bedrock（`amazon-bedrock`）、Azure（`azure`）、Cloudflare AI Gateway（`cloudflare-ai-gateway`）与 Cloudflare Workers AI（`cloudflare-workers-ai`），选择器中也不会出现它们。存量 profile 若点名其中一条，`llm-pi-ai` 插件会加载失败：错误会指出该路由，从 `llm-pi-ai.config.providers` 删除该条目即可恢复插件的其他路由。`bedrock-converse-stream` 与 `azure-openai-responses` 不在自定义模型 API 的协议选项中，但 OpenAI 兼容端点仍可通过自定义模型 API 接入。迁移步骤见[升级指南](../../upgrade-guide/v0.2.2-rc.2/llm-pi-ai-removed-providers/guide.zh.md)。
 
 ## 添加自定义模型 API
 
