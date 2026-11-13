@@ -21,7 +21,6 @@
       - option "anthropic"
       - option "baseten"
       - option "cerebras"
-      - option "cloudflare-workers-ai"
       - option "deepseek"
       - option "fireworks"
       - option "github-copilot"

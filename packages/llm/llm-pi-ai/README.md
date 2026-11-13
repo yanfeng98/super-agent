@@ -254,7 +254,7 @@ Recorded response content appends to the next request and does not invalidate it
 
 These limits define where the adapter stops and future work begins. They are current package constraints, not a general pi-ai comparison or a task backlog.
 
-- **`amazon-bedrock`, `azure`, and `cloudflare-ai-gateway` are withheld from this build's catalog** — pi-ai still ships these routes, but this package does not offer, discover, sign in to, or resolve them; a profile that names one fails with a configuration error instead of resolving a route this build does not serve. `bedrock-converse-stream` and `azure-openai-responses` are not configurable protocols, so a hand-declared route cannot select those transports either.
+- **`amazon-bedrock`, `azure`, `cloudflare-ai-gateway`, and `cloudflare-workers-ai` are withheld from this build's catalog** — pi-ai still ships these routes, but this package does not offer, discover, sign in to, or resolve them; a profile that names one fails with a configuration error instead of resolving a route this build does not serve. `bedrock-converse-stream` and `azure-openai-responses` are not configurable protocols, so a hand-declared route cannot select those transports either.
 - **`maxRequestImageBytes` counts base64 image payload only** — text, tools, descriptors, and JSON structure ride outside the bound, so it must sit below the gateway's request-body cap with headroom.
 - **The byte bound has no removal quantum** — at `maxRequestImageBytes`, every new image offloads the minimum oldest prefix, so prompt-cache reuse restarts from that point on each image-adding request.
 - **A sign-in lives only in the process that started it** — an authorization attempt is not durable, so reloading the page mid-login abandons it and the human starts over. Signing out is `deleteRecord` on the stored record, which forgets it locally without telling the issuer.
@@ -287,7 +287,7 @@ These limits define where the adapter stops and future work begins. They are cur
 
 This Dev Note is non-authoritative working context: undecided directions and notes for maintainers. Shipped behavior and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
-- The offered protocol set is deliberately narrower than pi-ai's full API set: Vertex and Codex authenticate through flows a profile cannot completely describe with a key, an endpoint, and headers; their catalog routes still reach them through their own provider, and only an explicit override is refused. Codex is sign-in-able through the authorization flow's OAuth grant. Bedrock, Azure, and Cloudflare AI Gateway are withheld from the catalog entirely.
+- The offered protocol set is deliberately narrower than pi-ai's full API set: Vertex and Codex authenticate through flows a profile cannot completely describe with a key, an endpoint, and headers; their catalog routes still reach them through their own provider, and only an explicit override is refused. Codex is sign-in-able through the authorization flow's OAuth grant. Bedrock, Azure, and both Cloudflare routes are withheld from the catalog entirely.
 - The `compat` switch set is pinned to pi-ai's compat types by drift gates; an upstream upgrade that adds a field, gives a further protocol a compat type, or widens a value union fails the build until someone classifies it.
 
 </details>
