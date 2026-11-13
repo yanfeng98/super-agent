@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "The dsh-llm-pi-ai catalog no longer offers amazon-bedrock, azure, cloudflare-ai-gateway, or cloudflare-workers-ai."
+description: "The dsh-llm-pi-ai catalog no longer offers amazon-bedrock, azure, cloudflare-ai-gateway, cloudflare-workers-ai, or xiaomi-token-plan-ams."
 ---
 
 # Removed pi-ai provider routes
@@ -9,11 +9,11 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The `dsh-llm-pi-ai` provider catalog no longer offers `amazon-bedrock`, `azure`, `cloudflare-ai-gateway`, or `cloudflare-workers-ai`. They are absent from the provider picker, model discovery, sign-in, and model resolution. The installed pi-ai package still ships these routes; this build withholds them.
+The `dsh-llm-pi-ai` provider catalog no longer offers `amazon-bedrock`, `azure`, `cloudflare-ai-gateway`, `cloudflare-workers-ai`, or `xiaomi-token-plan-ams`. They are absent from the provider picker, model discovery, sign-in, and model resolution. The installed pi-ai package still ships these routes; this build withholds them.
 
 A stored `llm-pi-ai` profile that names one of these routes fails to load with `provider "<id>" is removed from this build; delete the route or select another provider`. Because resolution rejects the whole `providers` dictionary, the plugin's other routes stay unavailable until that entry is removed. The two DeepSeek routes, `deepseek-official` and `deepseek-account`, come from separate plugins and are unaffected.
 
-`bedrock-converse-stream` and `azure-openai-responses` are not custom API protocols, so a hand-declared route cannot select those transports. The Cloudflare routes used OpenAI-compatible protocols, so an OpenAI-compatible endpoint you operate can still be added as a custom model API.
+`bedrock-converse-stream` and `azure-openai-responses` are not custom API protocols, so a hand-declared route cannot select those transports. The Cloudflare routes and `xiaomi-token-plan-ams` use OpenAI-compatible protocols, so an OpenAI-compatible endpoint you operate can still be added as a custom model API. That includes the AMS token-plan endpoint, which serves the same four MiMo models as the China and Singapore token plans.
 
 ## Migration
 

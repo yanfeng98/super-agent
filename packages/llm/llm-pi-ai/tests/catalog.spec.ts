@@ -1258,7 +1258,13 @@ describe('configurable-provider directory', () => {
 
     // pi-ai still ships these routes, but this build removes them before they
     // reach the provider directory, model resolution, discovery, or sign-in.
-    for (const provider of ['amazon-bedrock', 'azure', 'cloudflare-ai-gateway', 'cloudflare-workers-ai']) {
+    for (const provider of [
+      'amazon-bedrock',
+      'azure',
+      'cloudflare-ai-gateway',
+      'cloudflare-workers-ai',
+      'xiaomi-token-plan-ams',
+    ]) {
       expect(getBuiltinProviders()).toContain(provider)
       expect(catalogProviderIds()).not.toContain(provider)
       expect(catalogProvider(provider)).toBeUndefined()

@@ -49,7 +49,6 @@
       - option "vercel-ai-gateway"
       - option "xai"
       - option "xiaomi"
-      - option "xiaomi-token-plan-ams"
       - option "xiaomi-token-plan-cn"
       - option "xiaomi-token-plan-sgp"
       - option "zai"
