@@ -1255,9 +1255,9 @@ describe('configurable-provider directory', () => {
     const ctx = await harness({})
     const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
 
-    // pi-ai still ships both routes, but this build removes them before they
+    // pi-ai still ships these routes, but this build removes them before they
     // reach the provider directory, model resolution, discovery, or sign-in.
-    for (const provider of ['amazon-bedrock', 'azure']) {
+    for (const provider of ['amazon-bedrock', 'azure', 'cloudflare-ai-gateway']) {
       expect(getBuiltinProviders()).toContain(provider)
       expect(catalogProviderIds()).not.toContain(provider)
       expect(catalogProvider(provider)).toBeUndefined()

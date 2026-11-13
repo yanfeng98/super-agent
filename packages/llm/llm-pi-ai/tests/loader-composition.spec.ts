@@ -116,9 +116,9 @@ describe('llm-pi-ai real dormant composition', () => {
     // The shipped posture: the adapter exists, no route does.
     expect(ctx.llm.listProviders()).toEqual([])
     const directory = ctx.llm.listConfigurableProviders()
-    expect(directory.find(entry => entry.provider === 'cloudflare-ai-gateway')).toMatchObject({
-      nativeAuth: { env: ['CLOUDFLARE_API_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_GATEWAY_ID'], oauth: false },
-      baseURLEnv: ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_GATEWAY_ID'],
+    expect(directory.find(entry => entry.provider === 'cloudflare-workers-ai')).toMatchObject({
+      nativeAuth: { env: ['CLOUDFLARE_API_KEY', 'CLOUDFLARE_ACCOUNT_ID'], oauth: false },
+      baseURLEnv: ['CLOUDFLARE_ACCOUNT_ID'],
     })
     expect(directory.find(entry => entry.provider === 'radius')?.defaultBaseURL).toBe('https://radius.pi.dev/v1')
     expect(directory.find(entry => entry.provider === 'opencode')?.defaultBaseURL).toBeUndefined()

@@ -254,7 +254,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 
 这些限制说明适配器在哪里停止、由未来工作接续。它们是当前包约束，不是通用 pi-ai 对比或任务积压。
 
-- **本构建的目录不提供 `amazon-bedrock` 与 `azure`**——pi-ai 仍随包提供这两条路由，但本包不会展示、发现、登录或解析它们。点名其中任一条的 profile 会以配置错误失败，因为 `bedrock-converse-stream` 不是可配置协议，而 Azure 通过提供方环境而非路由字段解析部署名与 API 版本。
+- **本构建的目录不提供 `amazon-bedrock`、`azure` 与 `cloudflare-ai-gateway`**——pi-ai 仍随包提供这些路由，但本包不会展示、发现、登录或解析它们；点名其中任一条的 profile 会以配置错误失败，而不是解析出本构建不提供的路由。`bedrock-converse-stream` 与 `azure-openai-responses` 不是可配置协议，手工声明的路由同样无法选择这些传输。
 - **`maxRequestImageBytes` 只计算 base64 图片载荷**，文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。
 - **字节上限没有移除量子**：达到 `maxRequestImageBytes` 后，每张新图片都只省略最少的最老前缀，因此每个新增图片的请求都会让提示词缓存复用从该位置重新开始。
 - **登录只存在于发起它的进程中**——授权尝试不持久，因此登录中途刷新页面会放弃它，用户需要重新开始。退出登录是对已存储记录执行 `deleteRecord`，只在本地忘记它，不会告知签发方。
@@ -287,7 +287,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 
 本开发备注是不具权威性的工作上下文：尚未决定的探索方向与维护者备注。已交付的行为与既定理由以上文、包代码和相关 Agent Note 为准。
 
-- 提供的协议集合刻意比 pi-ai 的完整 API 集合更窄：Vertex 与 Codex 通过 profile 无法以密钥、端点与标头完整描述的流程认证；它们的目录路由仍可经自有提供方到达，只有显式覆盖会被拒绝。Codex 可经授权流程的 OAuth grant 登录。Bedrock 与 Azure 则完全不予提供。
+- 提供的协议集合刻意比 pi-ai 的完整 API 集合更窄：Vertex 与 Codex 通过 profile 无法以密钥、端点与标头完整描述的流程认证；它们的目录路由仍可经自有提供方到达，只有显式覆盖会被拒绝。Codex 可经授权流程的 OAuth grant 登录。Bedrock、Azure 与 Cloudflare AI Gateway 则完全不予提供。
 - `compat` 开关集合由漂移门禁钉在 pi-ai 的 compat 类型上；上游升级若新增字段、为更多协议赋予 compat 类型或扩大值联合，会在有人分类前让构建失败。
 
 </details>
