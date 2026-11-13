@@ -24,7 +24,7 @@ A saved credential displays a masked preview in the input and a green hint that 
 
 An editable, nonempty key draft has an eye button. Select **Show secret** to check what you typed, and **Hide secret** to mask it again. Changing the input masks it again. Native password fields do not offer cut; select the draft and press Backspace to erase it, or reveal it before cutting. Stored credentials remain write-only.
 
-Amazon Bedrock (`amazon-bedrock`), Azure (`azure`), Cloudflare AI Gateway (`cloudflare-ai-gateway`), and Cloudflare Workers AI (`cloudflare-workers-ai`) are not offered in this build, and their catalog routes cannot be selected here. `bedrock-converse-stream` and `azure-openai-responses` are not custom API protocols, so those transports are unavailable as well.
+Amazon Bedrock (`amazon-bedrock`), Azure (`azure`), Cloudflare AI Gateway (`cloudflare-ai-gateway`), and Cloudflare Workers AI (`cloudflare-workers-ai`) are not offered in this build and do not appear in the picker. A stored profile that names one prevents the `llm-pi-ai` plugin from loading: the error names the route, and deleting that entry from `llm-pi-ai.config.providers` restores the plugin's other routes. `bedrock-converse-stream` and `azure-openai-responses` are not custom API protocols, but an OpenAI-compatible endpoint can still be added as a custom model API. See the [upgrade guide](../../upgrade-guide/v0.2.2-rc.2/llm-pi-ai-removed-providers/guide.md) for the migration steps.
 
 ## Add a custom model API
 
