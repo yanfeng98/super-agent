@@ -1263,6 +1263,7 @@ describe('configurable-provider directory', () => {
       'azure',
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
+      'xiaomi-token-plan-sgp',
       'xiaomi-token-plan-ams',
     ]) {
       expect(getBuiltinProviders()).toContain(provider)

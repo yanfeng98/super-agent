@@ -50,7 +50,6 @@
       - option "xai"
       - option "xiaomi"
       - option "xiaomi-token-plan-cn"
-      - option "xiaomi-token-plan-sgp"
       - option "zai"
       - option "zai-coding-cn"
     - group: 自定义设置
