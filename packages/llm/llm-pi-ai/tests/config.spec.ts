@@ -91,6 +91,7 @@ describe('withheld catalog providers', () => {
     'azure',
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',
+    'xiaomi-token-plan-sgp',
     'xiaomi-token-plan-ams',
   ])('refuses a profile that names the removed %s route', (provider) => {
     for (const validation of ['strict', 'deferred'] as const) {

@@ -187,11 +187,11 @@ function servesChat(provider: Provider): boolean {
  * through provider environment, and both Cloudflare routes resolve account- or
  * gateway-scoped catalog endpoints from placeholders pi-ai fills using that
  * same environment — provider-specific wiring the route profile does not model.
- * `xiaomi-token-plan-ams` duplicates `xiaomi-token-plan-cn` and
- * `xiaomi-token-plan-sgp`: all three serve the same four MiMo models and differ
- * only in the endpoint region the subscription resolves. It speaks
- * OpenAI-compatible chat completions, so a deployment that needs the Amsterdam
- * endpoint can add it as a custom model API.
+ * `xiaomi-token-plan-sgp` and `xiaomi-token-plan-ams` duplicate
+ * `xiaomi-token-plan-cn`: all three serve the same four MiMo models and differ
+ * only in the endpoint region the subscription resolves. They speak
+ * OpenAI-compatible chat completions, so a deployment that needs the Singapore
+ * or Amsterdam endpoint can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -202,6 +202,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'azure',
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
+  'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
 ])
 
