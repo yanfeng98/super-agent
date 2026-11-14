@@ -120,7 +120,9 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 宽度拖拽条的指示线只在已捕获指针的拖拽期间跟随指针，普通悬停不改变其位置。
 
-常驻 composer 在无 Session 与有 Session 之间保持挂载。输入空白字符会隐藏占位提示；没有附件的纯空白草稿无法发送。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 是携带认领的行首原子 chip，文件夹文本引用以图标前缀携带文件夹图形，草稿文字和引用语义字段由逐 Session Conversation store 持久化。QueueDock 从 Session 的 `inbox` 投影读取 `next-turn`，包含从冷状态恢复的消息，仅排除仍由本地 transcript 提交承接的 requestId。其他排队行保留正常展示和操作。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览使用 [UserText Factory](#sent-user-text)（wire 会话形式折叠为其标签），并按原始附件顺序展示本地或持久化的图片和文件。图片使用缩略图，文件使用紧凑的名称与大小卡片。编辑态在 ui-primitives 的 `InlineEditor` 中展示字面发送文本，因此重新编辑不会丢失换行。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。 composer 键盘映射经斜杠流水线裁决触发菜单的按键——Tab 确认高亮补全项（可下钻项则下钻），Escape 与 Shift+Tab 离开菜单且不选定——其余按键交给编辑器自身。 在 Apple 平台上，Home 与 End 把光标移到当前视觉行的行首或行末，而不是滚动对话，按住 Shift 时扩展选区；光标紧贴在 quote 左侧时，End 与 Cmd+Right 走同一路径移到该行末尾。 接管键盘的浮层通过 `SessionInput.focus()` 把键盘还回来，该路径走 Lexical 自己的 focus，因此光标回到草稿原来的位置而不是开头。
+常驻 composer 在无 Session 与有 Session 之间保持挂载。输入空白字符会隐藏占位提示；没有附件的纯空白草稿无法发送。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 是携带认领的行首原子 chip，文件夹文本引用以图标前缀携带文件夹图形，草稿文字和引用语义字段由逐 Session Conversation store 持久化。QueueDock 从 Session 的 `inbox` 投影读取 `next-turn`，包含从冷状态恢复的消息，仅排除仍由本地 transcript 提交承接的 requestId。其他排队行保留正常展示和操作。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览使用 [UserText Factory](#sent-user-text)（wire 会话形式折叠为其标签），并按原始附件顺序展示本地或持久化的图片和文件。图片使用缩略图，文件使用紧凑的名称与大小卡片。编辑态在 ui-primitives 的 `InlineEditor` 中展示字面发送文本，因此重新编辑不会丢失换行。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。 composer 键盘映射经斜杠流水线裁决触发菜单的按键——Tab 确认高亮补全项（可下钻项则下钻），Escape 与 Shift+Tab 离开菜单且不选定——未认领的按键交给编辑器自身。 在 Apple 平台上，Home 与 End 把光标移到当前视觉行的行首或行末，而不是滚动对话，按住 Shift 时扩展选区；光标紧贴在 quote 左侧时，End 与 Cmd+Right 走同一路径移到该行末尾。 接管键盘的浮层通过 `SessionInput.focus()` 把键盘还回来，该路径走 Lexical 自己的 focus，因此光标回到草稿原来的位置而不是开头。
+
+composer 输入历史按文件夹隔离：草稿为空且没有附件时，↑ 召回该 Session 工作目录最新一次被接受的提交，之后 ↑/↓ 在更旧和更新之间移动，↓ 越过最新一条时清空草稿。召回的多行条目仍用方向键移动光标——历史只在首行向上、末行向下离开条目——任何编辑都会结束历史导航。触发菜单、IME 组合、带修饰键的箭头、非折叠选区、附件和非空草稿都保留各自的箭头行为。成功发送的消息与命令会被记录；被拒绝或失败的提交、空白草稿以及与最新一条重复的提交不记录。每个文件夹在浏览器 localStorage 中按 Session 工作目录保留最新 100 条。
 
 窄屏浏览器设置中，繁忙时 Enter 偏好的标签与控件间距缩小；Windows 和 macOS 桌面窗口保留标准间距。
 
@@ -223,6 +225,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
 - **手动继续使用固定产品白名单**——支持的失败码独立于提供方可配置的 `retryableCodes`；修改自动重试策略不会扩展或缩小此操作的范围。即使默认策略不重试 `STREAM_CLOSED`，用户仍可明确发起新轮次。该错误码也可能表示协议违规，因此再次请求不保证能够恢复。
 - **composer 内的毛玻璃只在 Chromium 中验证过**——docked composer 设置 `will-change: transform` 后，Chromium 中后代的 `backdrop-filter` 仍会采样背后的 transcript；WebKit 中的表现尚未验证。
+- **composer 输入历史只保存在浏览器本地，并按精确路径分桶**——它不会随浏览器配置同步到其他设备或浏览器，清除站点数据会清空历史，重命名或移动文件夹会从空历史开始。
 - **文档级文件拖放未经路由**——每个已挂载的附件视图都会处理文档级文件拖放，因此在右侧栏打开可继续的子代理对话时，一次拖放会把文件同时加入两个 composer；只有窗口级粘贴经过单一的粘贴路由。
 - **出错的 Definition 让每次发布都完整回放**——增量 flush 失败后，assembler 回放已加载的完整窗口，以保持视图正确。若某个 Definition 在每次更新中都失败，在其 owner 修复前，每次发布都会回放整个窗口（[Window 更新路径](../../../docs/subsystems/conversation.zh.md#window-update-paths)）。
 

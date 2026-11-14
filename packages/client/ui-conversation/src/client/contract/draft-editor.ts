@@ -81,6 +81,13 @@ export interface ComposerKeyboard {
   /** Submit with an explicit delivery mode resolved by the submission policy (Enter gestures and the primary Send button). */
   submit(mode: InputSubmitMode, source?: 'click' | 'enter'): void
   /**
+   * Move through the Session folder's accepted-input history at the draft
+   * boundary; Up recalls older entries and Down newer ones.
+   * @param direction - the key's history direction.
+   * @returns whether history claims the key (the caller consumes it).
+   */
+  historyStep(direction: 'older' | 'newer'): boolean
+  /**
    * Steer every still-pending queued message into the running turn (the
    * empty-draft accelerated-Enter gesture; the queue dock's per-row steer
    * button is the same operation applied to the whole queue).

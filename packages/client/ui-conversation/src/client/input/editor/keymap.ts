@@ -1,10 +1,11 @@
 /**
  * Composer keymap over the Lexical command layer: menu arbitration
- * (arrows/escape/enter), space adjudication, the Enter submit gesture, and
- * paste routing. Registered at CRITICAL priority so it decides before
- * @lexical/plain-text's own Enter/paste defaults; a handler returning false
- * falls through to those defaults (Shift+Enter's line break, ordinary
- * spaces, text paste the bar routes itself).
+ * (arrows/escape/enter), folder input history at the draft boundary, space
+ * adjudication, the Enter submit gesture, and paste routing. Registered at
+ * CRITICAL priority so it decides before @lexical/plain-text's own Enter/paste
+ * defaults; a handler returning false falls through to those defaults
+ * (Shift+Enter's line break, ordinary spaces, text paste the bar routes
+ * itself).
  *
  * IME guard: a composition-closing Enter/Space must not submit or adjudicate.
  * KeyboardEvent.isComposing covers most engines; Safari delivers the closing
@@ -38,6 +39,11 @@ export interface ComposerKeymapHandlers {
   canSubmit(): boolean
   /** Plain Enter submits; exactly Ctrl+Enter or Cmd+Enter selects accelerated delivery. */
   submit(accelerated: boolean): void
+  /**
+   * History navigation for an unmodified ArrowUp/ArrowDown the menu did not
+   * claim. True means history consumed the key.
+   */
+  historyStep(direction: 'older' | 'newer'): boolean
   /**
    * Pasted files with directory metadata supplied by the clipboard entry API.
    * @param files - browser files in clipboard order.
@@ -220,13 +226,19 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
   }
   const recentlyComposing = (): boolean => composing || Date.now() < composingUntil
 
-  const arrow = (key: ArbitrateKey) => (event: KeyboardEvent | null): boolean => {
+  const arrow = (key: ArbitrateKey, history?: 'older' | 'newer') => (event: KeyboardEvent | null): boolean => {
     const inComposition = event !== null && isComposingEvent(event, recentlyComposing)
     if (handlers.arbitrate(key, inComposition) !== 'pass') {
       event?.preventDefault()
       return true
     }
-    return false
+    // History takes only a bare arrow the menu left alone: modifiers keep
+    // their platform meaning and IME composition owns the key.
+    if (history === undefined || event === null || inComposition
+      || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false
+    if (!handlers.historyStep(history)) return false
+    event.preventDefault()
+    return true
   }
 
   return mergeRegister(
@@ -254,8 +266,8 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       return movePastQuote(editor, event)
     }, COMMAND_PRIORITY_CRITICAL),
     editor.registerUpdateListener(syncComposition),
-    editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
-    editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up', 'older'), COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down', 'newer'), COMMAND_PRIORITY_CRITICAL),
     // Tab settles the highlighted completion and passes without one, keeping
     // native focus traversal; Shift+Tab leaves the menu like Escape whenever it
     // is open, highlight or not, so the two Tab gestures never disagree about

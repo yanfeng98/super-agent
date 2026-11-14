@@ -22,6 +22,10 @@ Start a session and send:
 
 The agent can read and edit workspace files, run commands, delegate work, and maintain a plan. The Web UI asks before operations that require approval under the active permission policy.
 
+## Recall previous input
+
+The composer keeps the newest 100 accepted inputs for the current workspace folder. With an empty composer, `↑` recalls the newest one; `↑` and `↓` walk older and newer entries, and `↓` past the newest clears the composer. A trigger menu, IME composition, a non-empty draft, or attachments keep their normal arrow behavior, and editing a recalled entry ends history navigation. This history is stored in the current browser and keyed by the workspace's exact path, so another browser, or a renamed or moved folder, starts without it.
+
 ## Continue
 
 - [Configure models](./providers.md)
