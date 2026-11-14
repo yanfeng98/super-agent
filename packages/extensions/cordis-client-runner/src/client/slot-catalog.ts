@@ -4424,6 +4424,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-shortcuts ShortcutReference id \'shortcuts\'',
       'client-ui-workspace SessionRenameDialog id \'workspace.session-rename\'',
       'client-ui-workspace SessionArchiveConfirmDialog id \'workspace.session-archive\'',
+      'client-ui-workspace SessionDeleteConfirmDialog id \'workspace.session-delete\'',
       'client-ui-workspace RowActionToast id \'workspace.row-toast\'',
       'experimental-client-ui-forge ActionToast id \'forge-panel.toast\'',
       'cua PermissionToast id \'cua-permission-outcome\'',
@@ -5870,7 +5871,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'list',
     scope: 'root',
     summary: 'The hover buttons at the end of one Session row, in ascending `order`, after the "..." menu trigger.',
-    doc: 'The hover buttons at the end of one Session row, in ascending `order`,\nafter the "..." menu trigger. ui-workspace registers `archive` (100) and\n`pin` (200) here. An entry renders one icon button (or nothing, when its\naction does not apply to the row) and owns the action it performs. Clicks\ninside the strip stay in the strip, so the button needs no propagation\nhandling to keep the row from opening. Hoverless devices hide this slot;\ncontribute the action to the menu list as well for touch access.',
+    doc: 'The hover buttons at the end of one Session row, in ascending `order`,\nafter the "..." menu trigger. ui-workspace registers `archive` (100),\n`pin` (200), and `delete` (300) here. An entry renders one icon button (or nothing, when its\naction does not apply to the row) and owns the action it performs. Clicks\ninside the strip stay in the strip, so the button needs no propagation\nhandling to keep the row from opening. Hoverless devices hide this slot;\ncontribute the action to the menu list as well for touch access.',
     registerOptions: [
       {
         name: 'id',
@@ -5916,6 +5917,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-workspace ArchiveSessionRowButton id \'archive\'',
       'client-ui-workspace PinSessionRowButton id \'pin\'',
+      'client-ui-workspace DeleteSessionRowButton id \'delete\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.workspaces.session.row.action\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces.session.row.action\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -6207,7 +6209,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
       'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
     ],
-    keyDomain: 'fixed by the owner\'s key table { [K in ToastKind]: ToastNotice<K> }, already taken: archivedNotOpenable, createFailed, defaultWorkspaceFailed, forkRequiresOpen, pinFailed, readingFailed, sessionIdCopied, sessionIdCopyFailed, shortcutForkFailed, unpinFailed',
+    keyDomain: 'fixed by the owner\'s key table { [K in ToastKind]: ToastNotice<K> }, already taken: archivedNotOpenable, createFailed, defaultWorkspaceFailed, deleted, forkRequiresOpen, pinFailed, readingFailed, sessionIdCopied, sessionIdCopyFailed, shortcutForkFailed, unpinFailed',
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'shell.overlay\' (client-ui-workspace), so it exists while that entry is mounted',
@@ -6215,6 +6217,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'readingFailed\'>> key \'readingFailed\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'sessionIdCopi… key \'sessionIdCopied\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'sessionIdCopy… key \'sessionIdCopyFailed\'',
+      'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'deleted\'>> key \'deleted\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'pinFailed\'>> key \'pinFailed\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'unpinFailed\'>> key \'unpinFailed\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'archivedNotOp… key \'archivedNotOpenable\'',

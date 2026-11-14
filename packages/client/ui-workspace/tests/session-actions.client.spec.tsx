@@ -10,13 +10,16 @@ import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
  */
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { SessionDeleteError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { allowAllAccess, bindSnapshotSelector, makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import {
+  allowAllAccess, bindSnapshotSelector, makeTranslate, RemoteError, SlotTestRuntime,
+} from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { registerToasts } from '../src/client/toast/register.ts'
 import { ArchiveToastEntry } from '../src/client/toast/Toast.tsx'
@@ -25,11 +28,12 @@ import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {
   RowToast, RowToastState, SessionArchiveConfirmInjected, SessionArchiveConfirmRequest,
-  SessionRenameDialogInjected, SessionRenameTarget,
+  SessionDeleteConfirmInjected, SessionDeleteTarget, SessionRenameDialogInjected, SessionRenameTarget,
 } from '../src/client/contract/slots.ts'
 import {
   ArchiveSessionRowButton, SessionArchiveConfirmDialog,
 } from '../src/client/session-actions/ArchiveSession.tsx'
+import { DeleteSessionRowButton, SessionDeleteConfirmDialog } from '../src/client/session-actions/DeleteSession.tsx'
 import { PinSessionRowButton } from '../src/client/session-actions/PinSession.tsx'
 import { SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
@@ -542,6 +546,12 @@ describe('RowActionToast', () => {
     expect(screen.getByRole('alert').textContent).toBe(translate('toast.readingFailed'))
   })
 
+  it.each([t, tEn])('reports a completed deletion through the global toast', async (translate) => {
+    const { notify } = await toastSurface(undefined, translate)
+    notify({ kind: 'deleted' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.deleted'))
+  })
+
   it.each([t, tEn])('reports clipboard success and failure through the global toast', async (translate) => {
     const { notify } = await toastSurface(undefined, translate)
     notify({ kind: 'sessionIdCopied' })
@@ -708,5 +718,128 @@ describe('RowActionToast', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+
+describe('delete action', () => {
+  /** The delete share over fixed membership: the request callback the entries call. */
+  const deleteShare = () => ({ requestSessionDelete: vi.fn() })
+
+  it('row button raises the confirmation and is absent without access', () => {
+    const share = deleteShare()
+    const view = render(<DeleteSessionRowButton {...actionRow} {...share} />)
+    fireEvent.click(screen.getByRole('button', { name: '删除会话…' }))
+    expect(share.requestSessionDelete).toHaveBeenCalledExactlyOnceWith(sid('one'), 'Session title')
+
+    view.rerender(
+      <DeleteSessionRowButton
+        {...actionRow}
+        {...share}
+        useSessionAccess={(_id, action) => action !== 'session/delete'}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: '删除会话…' })).toBeNull()
+  })
+
+  /** The dialog over a test-owned request source; settling clears the request the way apply does. */
+  function deleteDialog(
+    deleteSession: SessionDeleteConfirmInjected['deleteSession'],
+    translate = t,
+  ) {
+    const request = createSnapshotStore<SessionDeleteTarget | null>(null)
+    const settleSessionDelete = vi.fn(() => { request.set(null) })
+    render(
+      <SessionDeleteConfirmDialog
+        {...overlay}
+        t={translate}
+        useDeleteRequest={bindSnapshotSelector(request)}
+        settleSessionDelete={settleSessionDelete}
+        deleteSession={deleteSession}
+      />,
+    )
+    const ask = (target: SessionDeleteTarget = { sessionId: sid('one'), displayTitle: 'Old session' }): void => {
+      act(() => { request.set(target) })
+    }
+    return { settleSessionDelete, ask }
+  }
+
+  it('renders nothing until requested, then confirms, locks while deleting, and settles on success', async () => {
+    const pending = Promise.withResolvers<undefined>()
+    const deleteSession = vi.fn<SessionDeleteConfirmInjected['deleteSession']>(() => pending.promise)
+    const { settleSessionDelete, ask } = deleteDialog(deleteSession)
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    ask()
+    expect(screen.getByRole('dialog', { name: '永久删除此会话？' })).toBeTruthy()
+    expect(screen.getByText('“Old session”及其全部对话历史将被永久删除，无法恢复。')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    expect(deleteSession).toHaveBeenCalledExactlyOnceWith(sid('one'))
+    expect(screen.getByRole('button', { name: '取消' })).toHaveProperty('disabled', true)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(settleSessionDelete).not.toHaveBeenCalled()
+
+    await act(async () => { pending.resolve(undefined) })
+    expect(settleSessionDelete).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('keeps the dialog open with the localized refusal and lets Cancel dismiss it', async () => {
+    const deleteSession = vi.fn<SessionDeleteConfirmInjected['deleteSession']>()
+      .mockRejectedValueOnce(new SessionDeleteError(
+        new RemoteError('session/in-use', 'held', { sessionId: sid('one') }), sid('one'),
+      ))
+      .mockRejectedValueOnce(new SessionDeleteError(
+        new RemoteError('session/subagent', 'child', { sessionId: sid('one') }), sid('one'),
+      ))
+    const { settleSessionDelete, ask } = deleteDialog(deleteSession)
+    ask()
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('此会话正在使用中。请稍后重试。') })
+    expect(settleSessionDelete).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('子智能体会话不能单独删除。') })
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(settleSessionDelete).toHaveBeenCalledOnce()
+  })
+
+  it('lists the work that still runs when the Host refuses an active Session', async () => {
+    const deleteSession = vi.fn<SessionDeleteConfirmInjected['deleteSession']>().mockRejectedValueOnce(
+      new SessionDeleteError(
+        new RemoteError('session/active', 'busy', { sessionId: sid('one'), activity: [{ kind: 'turn' }] }),
+        sid('one'),
+      ),
+    )
+    const { ask } = deleteDialog(deleteSession)
+    ask({ sessionId: sid('one'), displayTitle: 'Busy' })
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe('此会话仍有工作在进行。请先停止或移除这些工作，然后再删除。')
+    })
+    expect(screen.getByRole('list', { name: '仍在进行的工作' }).textContent).toBe('进行中的回合')
+  })
+
+  it('reports a vanished Session, an unknown Host failure, and a non-Host rejection', async () => {
+    const deleteSession = vi.fn<SessionDeleteConfirmInjected['deleteSession']>()
+      .mockRejectedValueOnce(new SessionDeleteError(
+        new RemoteError('session/not-found', 'gone', { sessionId: sid('one') }), sid('one'),
+      ))
+      .mockRejectedValueOnce(new SessionDeleteError(
+        new RemoteError('gateway/internal', 'unexpected wire failure', {}), sid('one'),
+      ))
+      .mockRejectedValueOnce(new Error('transport down'))
+      .mockRejectedValueOnce('denied')
+    const { ask } = deleteDialog(deleteSession)
+    ask()
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('此会话已不存在。') })
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('unexpected wire failure') })
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('transport down') })
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('denied') })
   })
 })

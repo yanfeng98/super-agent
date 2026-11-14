@@ -22,6 +22,7 @@ import {
   type ApiSessionAgentResult,
 } from './agent.ts'
 import { SessionCommandController, hasPromptContent } from './commands.ts'
+import { SessionDeletion } from './delete.ts'
 import { SessionControlController } from './control.ts'
 import { HistoryController } from './history/controller.ts'
 import { StateController } from './state/controller.ts'
@@ -43,6 +44,8 @@ import type {
   SessionControlFrame,
   SessionCreateRequest,
   SessionCreateValue,
+  SessionDeleteRequest,
+  SessionDeleteValue,
   SessionFollowFrame,
   SessionFollowRequest,
   SessionForkRequest,
@@ -161,6 +164,7 @@ export class SessionController extends TypertRemoteService {
 
   private agents!: ApiSessionAgentController
   private commands!: SessionCommandController
+  private deletion!: SessionDeletion
   private controlState!: SessionControlController
   private listState!: ApiSessionList
   private readonly openPath: (path: string, signal: AbortSignal) => Promise<void>
@@ -193,6 +197,7 @@ export class SessionController extends TypertRemoteService {
     this.agents = new ApiSessionAgentController(ctx)
     this.agents.initialize()
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
+    this.deletion = new SessionDeletion(ctx, this.agents)
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
       const result = await this.agents.resolveAgent(sessionId)
       if ('error' in result) throw result.error
@@ -438,6 +443,20 @@ export class SessionController extends TypertRemoteService {
   @Remote('rename')
   rename(request: SessionRenameRequest): Promise<SessionRenameValue> {
     return this.commands.rename(request)
+  }
+
+  /**
+   * Permanently delete one ordinary Session: its stored log on every
+   * generation, its Workspace account and archive/pin membership, and its
+   * list entry. Refused while the Session still runs work, is a subagent
+   * conversation, or is held by an Agent or storage handle this controller
+   * does not own; refusal leaves everything untouched.
+   * @param request - Session identity to delete.
+   * @returns confirmation that the Session and its artifacts are gone.
+   */
+  @Remote('delete')
+  delete(request: SessionDeleteRequest): Promise<SessionDeleteValue> {
+    return this.deletion.delete(request)
   }
 
   /**

@@ -336,9 +336,9 @@ The optional `eventCount`/`sizeBytes` fields remain cheap backend observations f
 
 ## The backend
 
-The shipped provider implements the abstract `SessionPersistence` contract (`create`/`open`/`stat`/`list`, with per-session `SessionHandle`s carrying `read`/`append`/`flush`/`close` and optional cancellation throughout) and passes the shared persistence contract suite:
+The shipped provider implements the abstract `SessionPersistence` contract (`create`/`open`/`stat`/`list`/`remove`, with per-session `SessionHandle`s carrying `read`/`append`/`flush`/`close` and optional cancellation throughout) and passes the shared persistence contract suite:
 
-- **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)** — an append-only logical JSONL log per session, stored as checksummed concatenated Zstandard frames by default or raw lines by configuration, with crash-safe atomic materialization, per-batch `fsync` appends, and torn-tail truncation before the first new append. `stat`/`list` carry `sizeBytes` and a best-effort `fs.stat`-derived revision.
+- **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)** — an append-only logical JSONL log per session, stored as checksummed concatenated Zstandard frames by default or raw lines by configuration, with crash-safe atomic materialization, per-batch `fsync` appends, and torn-tail truncation before the first new append. `stat`/`list` carry `sizeBytes` and a best-effort `fs.stat`-derived revision. `remove` takes the session's write lease, deletes its whole session directory, and refuses while any handle, write claim, or foreign lease still holds the identity.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -378,6 +378,8 @@ Storage semantics shared by every backend: events are contiguous from seq 0 and 
 Visibility: a created session is observable through `stat`/`list`/`open` in this process from the moment `create` resolves, even while a backend defers physical materialization (a pure optimization); other processes see the session only once it materializes, and a session that never materialized before a crash never existed. `SessionHandle.flush` forces materialization.
 
 Freshness: once an `append` or `flush` resolves, reads started afterwards on this backend instance observe at least that prefix.
+
+Removal deletes one session's durable artifacts in full, including every committed generation; it requires exclusive access to that session and is the only storage operation that makes an existing identity unobservable.
 
 ```ts cordis-catalog
 /**
@@ -439,6 +441,23 @@ abstract stat(id: SessionId, options?: SessionPersistenceStatOptions): Promise<S
  * @returns one snapshot per stored session.
  */
 abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+/**
+ * Permanently remove one stored session and every durable artifact it owns.
+ *
+ * Removal requires exclusive access: a backend refuses while an open handle
+ * or a pending creation holds the session in this process, or while another
+ * process holds its write lease. Once it resolves, the identity is absent
+ * from `stat`, `list`, and `open` on this and every other backend instance
+ * that shares the storage. Removal is not a generation operation: it deletes
+ * the session's complete artifact set, not one observed generation.
+ * @param id - the stored session to remove.
+ * @param options - optional cancellation observed before removal work starts.
+ * @returns resolution after the session's artifacts are gone.
+ * @throws {SessionPersistenceNotFoundError} when the session does not exist.
+ * @throws {SessionPersistenceBusyError} while the session is still in use.
+ */
+abstract remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void>
 ```
 
 Types: [SessionId](core.md)

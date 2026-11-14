@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets applications persist and resume session event logs through a backend-independent API. Readers can create, open, inspect, list, append to, read, flush, and close stored sessions while preserving contiguous append-only history. A completed flush is the durability barrier; readers never receive torn tails or invalid records, and only one writer per session is allowed within a backend instance. Use the shipped [JSONL backend](../session-persistence-jsonl/README.md) for one compressed log per session, or implement another backend with the same observable guarantees.
+This package lets applications persist and resume session event logs through a backend-independent API. Readers can create, open, inspect, list, remove, append to, read, flush, and close stored sessions while preserving contiguous append-only history. A completed flush is the durability barrier; readers never receive torn tails or invalid records, and only one writer per session is allowed within a backend instance. Use the shipped [JSONL backend](../session-persistence-jsonl/README.md) for one compressed log per session, or implement another backend with the same observable guarantees.
 
 ## Table of Contents
 
@@ -41,12 +41,15 @@ const handle = await ctx.sessionPersistence.open(id, 'write')  // claim single-w
 const reader = await ctx.sessionPersistence.open(id, 'read')   // observe without ownership
 const snap = await ctx.sessionPersistence.stat(id)             // header + revision (+ eventCount / sizeBytes) without a log read
 const all = await ctx.sessionPersistence.list()                // one snapshot per visible stored session
+await ctx.sessionPersistence.remove(id)                        // permanently delete one stored session's artifacts
 await ctx.sessionPersistence.flush()                           // backend-wide durability barrier over every active write handle
 ```
 
 Service-level `flush()` drains every active write handle's routed events and materializes its session, exactly as each handle's own `flush` would; failures aggregate per session as an `AggregateError` without abandoning the sweep, and a handle closed mid-sweep counts as flushed because close itself drains durably.
 
 Every log read and write flows through the returned `SessionHandle`; there are no id-addressed append or load methods. `handle.read(offset?, length?)` returns `{ eventState, events }`: the outer slice belongs to the caller, while `eventState` distinguishes an exclusively `detached` event graph from a `shared-frozen` graph that may also reside in a backend cache. The producer establishes this state and slices preserve it even when empty. Both states are safe to adopt without copying; a consumer that needs mutable events clones them first. Reads never include a torn tail, repeated reads on one handle never observe an older state than a prior read, and a write handle reads its own successful appends. `handle.append(events)` appends a contiguous batch whose first `seq` equals the stored next-seq; persistence is best-effort on resolution — the batch is accepted, ordered, and visible to reads on this backend instance, and only a resolved `flush` promises it survives a crash (the shipped JSONL backend happens to persist each batch immediately). `handle.flush()` is the durability barrier and also materializes an empty created session so it becomes durably listable. `handle.close()` is idempotent and uncancellable: a read handle frees local resources; a write handle completes pending durability and releases write ownership. Once an `append` or `flush` resolves, reads started afterwards on the same backend instance — on any handle, or through `stat`/`list` — observe at least that prefix.
+
+`remove(id)` is the one operation that makes an existing identity unobservable: it deletes the session's complete artifact set, not one generation, and afterwards `stat`/`list` no longer report the id and `open` rejects as not found. It requires exclusive access, so a backend refuses with `SessionPersistenceBusyError` while an open handle or pending creation holds the session in this process and while another process holds its write lease; an absent session rejects with `SessionPersistenceNotFoundError`. A live writer must be closed first — removal never waits for or preempts one.
 
 ### Ownership and visibility
 
@@ -88,6 +91,7 @@ The package is a seam, not a backend framework: it exports the abstract `Session
 - **Durability.** `append` persists best-effort; `flush` — per handle or service-wide — is the barrier that promises storage and also materializes an empty session.
 - **Fail-closed reads.** `validateStoredEvents` refuses unknown event vocabulary and retired pre-release shapes; `assertVersion` refuses foreign format versions.
 - **Single writer per backend instance.** The provider's in-process claim is taken at `create`/`open('write')` and released at handle close.
+- **Removal is exclusive and complete.** `remove` deletes every generation of one session and no other, refuses while any handle, pending creation, or foreign write lease holds it, and leaves the identity absent from `stat`, `list`, and `open` on every instance sharing the storage.
 
 ### Source map
 

@@ -36,6 +36,19 @@ export class SessionAlreadyOwnedError extends Error {
   }
 }
 
+/**
+ * Removal found the session still held by an open handle in this process, a
+ * pending creation, or another process's write lease. Nothing was removed;
+ * the session is available again once the holder releases it.
+ */
+export class SessionPersistenceBusyError extends Error {
+  /** @param sessionId - the session that is still in use. */
+  constructor(readonly sessionId: SessionId) {
+    super(`session "${sessionId}" is still in use; close its handles before removing it`)
+    this.name = 'SessionPersistenceBusyError'
+  }
+}
+
 /** A mutation (`append`/`flush`) was called on a read handle. */
 export class SessionReadOnlyError extends Error {
   /**

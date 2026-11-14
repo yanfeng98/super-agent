@@ -142,6 +142,14 @@ export interface ISessions {
     allowMigration?: boolean
   }): Promise<SessionId>
   /**
+   * Permanently delete one Session on the Host: its stored log on every
+   * generation and every Host reference to it. The refreshed list no longer
+   * holds the row, and every connected Client receives the removal.
+   * @param sessionId - Session to delete.
+   * @throws {SessionDeleteError} when the Host refuses the removal or the call fails.
+   */
+  delete(sessionId: SessionId): Promise<void>
+  /**
    * Borrow an already-retained Agent-scoped Context without extending its lifetime.
    * @param id - session id.
    * @returns the live scoped Context, or undefined without a retained generation.

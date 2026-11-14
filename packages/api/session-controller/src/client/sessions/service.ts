@@ -101,6 +101,22 @@ export class SessionForkError extends Error {
   }
 }
 
+/** Structured session-deletion failure: a refused or failed permanent removal. */
+export class SessionDeleteError extends Error {
+  override readonly name = 'SessionDeleteError'
+
+  /**
+   * @param rpcError - Host business or folded transport error.
+   * @param sessionId - the session the caller asked to delete.
+   */
+  constructor(
+    readonly rpcError: RemoteFailure,
+    readonly sessionId: SessionId,
+  ) {
+    super(`session deletion failed: ${rpcError.code}: ${rpcError.message}`)
+  }
+}
+
 /** Identity-stable logical binding for one materialized Client Session. */
 export interface SessionBinding {
   readonly sessionId: SessionId
@@ -271,7 +287,7 @@ export class ClientSessions implements ISessions {
    */
   constructor(
     private readonly rootCtx: Context,
-    remote: SessionRemotes,
+    private readonly remote: SessionRemotes,
   ) {
     this.manager = new SessionManager(remote)
     this.list = createSnapshotStore<SessionListState>({
@@ -363,6 +379,22 @@ export class ClientSessions implements ISessions {
    */
   refreshProjections(sessionId: SessionId): Promise<void> {
     return this.manager.refreshProjections(sessionId)
+  }
+
+  /**
+   * Permanently delete one Session on the Host, then refresh the authoritative
+   * list so its row disappears even before the forwarded removal lands.
+   * @param sessionId - Session to delete.
+   * @throws {SessionDeleteError} when the Host refuses the removal or the call fails.
+   */
+  async delete(sessionId: SessionId): Promise<void> {
+    const result = await this.remote.session.delete({ sessionId })
+    if (!result.ok) throw new SessionDeleteError(result.error, sessionId)
+    // The Host committed the removal; the forwarded `api-session/removed` edge
+    // drops the row too, so a failed refresh is a diagnostic, never a failed deletion.
+    await this.refresh().catch((reason: unknown) => {
+      console.warn('session list refresh after deletion failed:', reason)
+    })
   }
 
   /**

@@ -123,6 +123,11 @@ class TracePersistence extends SessionPersistence {
     })
   }
 
+  remove(id: SessionIdType): Promise<void> {
+    if (!TracePersistence.entries.delete(id)) return Promise.reject(new SessionPersistenceNotFoundError(id))
+    return Promise.resolve()
+  }
+
   list(): Promise<readonly SessionPersistenceSnapshot[]> {
     TracePersistence.listCalls += 1
     if (TracePersistence.listFailure !== undefined) return Promise.reject(TracePersistence.listFailure)

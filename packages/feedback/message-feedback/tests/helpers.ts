@@ -150,6 +150,10 @@ class TestPersistence extends SessionPersistence {
     }))
   }
 
+  async remove(id: SessionId): Promise<void> {
+    if (!this.durable.delete(id)) throw new SessionPersistenceNotFoundError(id)
+  }
+
   private handle(stored: StoredSession, access: SessionAccess): SessionHandle {
     let closed = false
     const handle: SessionHandle = {

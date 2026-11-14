@@ -21,6 +21,7 @@ import {
   SessionAlreadyOwnedError,
   SessionFormatUnsupportedError,
   SessionHandleClosedError,
+  SessionPersistenceBusyError,
   SessionPersistenceNotFoundError,
   SessionReadOnlyError,
 } from '../src/index.ts'
@@ -609,6 +610,91 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
         expect(await persistence.stat(brandString<SessionId>('absent-stat'))).toBeUndefined()
       } finally {
         await dispose()
+      }
+    })
+
+    it('remove deletes every artifact and leaves other sessions intact', async () => {
+      const { persistence, dispose } = await make()
+      try {
+        const removed = meta('remove-target', '/work')
+        const kept = meta('remove-kept', '/work')
+        const removedHandle = await persistence.create(removed)
+        await removedHandle.append(oneTurnLog())
+        await removedHandle.close()
+        const keptHandle = await persistence.create(kept)
+        await keptHandle.append(oneTurnLog())
+        await keptHandle.close()
+
+        await persistence.remove(removed.id)
+
+        expect(await persistence.stat(removed.id)).toBeUndefined()
+        expect((await persistence.list()).map(snapshot => snapshot.header.id)).not.toContain(removed.id)
+        await expect(persistence.open(removed.id, 'read')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+        const remaining = await persistence.open(kept.id, 'read')
+        expect((await remaining.read()).events).toEqual(oneTurnLog())
+        await remaining.close()
+
+        // A removed identity is unusable until something creates it again.
+        await expect(persistence.remove(removed.id)).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+        const recreated = await persistence.create(removed)
+        await recreated.close()
+      } finally {
+        await dispose()
+      }
+    })
+
+    it('remove refuses while a handle still owns the session, then succeeds after close', async () => {
+      const { persistence, dispose } = await make()
+      try {
+        const m = meta('remove-busy', '/work')
+        const writer = await persistence.create(m)
+        await writer.append(oneTurnLog())
+        await expect(persistence.remove(m.id)).rejects.toBeInstanceOf(SessionPersistenceBusyError)
+        await writer.close()
+        await persistence.remove(m.id)
+        expect(await persistence.stat(m.id)).toBeUndefined()
+      } finally {
+        await dispose()
+      }
+    })
+
+    it('remove observes cancellation before touching storage', async () => {
+      const { persistence, dispose } = await make()
+      try {
+        const m = meta('remove-abort', '/work')
+        const writer = await persistence.create(m)
+        await writer.append(oneTurnLog())
+        await writer.close()
+        const controller = new AbortController()
+        controller.abort(new Error('abort the removal'))
+
+        await expect(persistence.remove(m.id, { signal: controller.signal }))
+          .rejects.toThrow('abort the removal')
+        expect(await persistence.stat(m.id)).toBeDefined()
+      } finally {
+        await dispose()
+      }
+    })
+
+    it('remove is visible to a fresh instance over the same storage', async () => {
+      const backend = await make()
+      try {
+        if (backend.reopen === undefined) return
+        const m = meta('remove-reopen', '/work')
+        const writer = await backend.persistence.create(m)
+        await writer.append(oneTurnLog())
+        await writer.close()
+        await backend.persistence.remove(m.id)
+        const reopened = await backend.reopen()
+        try {
+          expect(await reopened.persistence.stat(m.id)).toBeUndefined()
+          await expect(reopened.persistence.open(m.id, 'read'))
+            .rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+        } finally {
+          await reopened.dispose()
+        }
+      } finally {
+        await backend.dispose()
       }
     })
   })

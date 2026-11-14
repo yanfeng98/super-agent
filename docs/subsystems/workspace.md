@@ -133,7 +133,7 @@ The controller's `initializeDefault` takes no request: it owns the fixed `defaul
 
 The controller's [transport types](../../packages/api/workspace-controller/src/types.ts) define `WorkspacePinSessionRequest` and `WorkspaceUnpinSessionRequest`, each carrying one `sessionId`. Both operations return `WorkspacePinValue`: the complete `pinnedSessionIds` array of Session ids, most recently pinned first. Pinning requires a known, unarchived Session; unpinning an id that is not pinned succeeds without changing the set. Archiving removes the Session's pin in the same durable write, and unarchiving does not restore it.
 
-## Archive admission
+## Archive and deletion admission
 
 Archiving is a registry-global durable set, and the registry refuses to hide running work behind it. The rule is a capability seam over two Host events the package declares and dispatches ([events](#workspace-events)): `workspace/session-activity` (waterfall) asks the composed providers what still runs for a Session, and `workspace/session-stop` (parallel) asks them to stop it. Each provider registers on the root like any listener, so the package knows no agent, job, or schedule vocabulary; the families are keys of a merge-extensible map.
 
@@ -154,8 +154,9 @@ interface SessionActivityKindMap {}
 
 ```ts type-equiv
 /**
- * One reason a session counts as active for archive admission. Families with
- * per-item identity list their items so a caller can name what must stop.
+ * One reason a session counts as active for archive or deletion admission.
+ * Families with per-item identity list their items so a caller can name what
+ * must stop.
  */
 interface SessionActivity {
   readonly kind: SessionActivityKind
@@ -165,6 +166,8 @@ interface SessionActivity {
 ```
 
 `SessionActivityItem` carries the family-specific `id` (a session, job, or schedule id) and an optional display `label`. `archiveSession(sessionId)` asks the waterfall once, after the existence check, and rejects a non-empty answer with `WorkspaceActiveSessionError` (`sessionId`, `activity`) without writing; the controller maps it to the `workspace/session-active` error, whose details carry the same two fields. `archiveSession(sessionId, { stopActivity: true })` — the `ArchiveSessionOptions` field the transport request exposes as `stopActivity` — skips the check, writes the archive, then dispatches `workspace/session-stop`; a rejecting provider is logged and the archive stays, and the stopped work is never awaited to settlement. An already archived id neither asks nor stops. The shipped providers, what they stop, and the `agent/pre-step` gate that keeps an archived Session from running a model step are documented with the [registry package](../../packages/workspace/workspace/README.md#api-behavior); the decision record is the [archive-stops-running-work Agent Note](../../.agents/notes/implemented/feature/2026-09-21-archive-stops-running-session-work.md).
+
+Permanent Session deletion reuses this admission seam before it removes anything: `session/delete` in [`dsh-session-controller`](../../packages/api/session-controller) asks `workspace/session-activity` and refuses with the same activity detail, so the registry stays the single owner of the "what still runs" rule. The registry never deletes a Session itself; `forgetSession(sessionId)` drops a removed identity's account slot, archive and pin membership, and cached header and path facts. That call is idempotent, probes no Session existence, and permits a crash between its account and global writes because the invisible residue is already tolerated by membership projection and the next accepted mutation ([registry package](../../packages/workspace/workspace/README.md#api-behavior)).
 
 ## Consumers
 
@@ -615,6 +618,23 @@ archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promi
 unarchiveSession(sessionId: SessionId): Promise<void>
 
 /**
+ * Drop every registry reference to a session that no longer exists: its
+ * Workspace account slot, its global archive and pin membership, and its
+ * cached header and path facts. Idempotent, and it never probes session
+ * existence — the caller has already removed the session, and dropping an
+ * id cannot introduce an unknown one.
+ *
+ * The account and the global state are two writes. A crash between them
+ * leaves only invisible residue (an unaccounted-without-header id, or a
+ * stale archive/pin id whose session is gone), both of which the existing
+ * membership projection and next accepted mutation already tolerate; no
+ * pending-mutation marker is needed.
+ * @param sessionId - The session whose references must disappear.
+ * @returns resolution after durability.
+ */
+forgetSession(sessionId: SessionId): Promise<void>
+
+/**
  * Pin one session durably, prepending it to the registry-global pin set.
  * The session must exist (live or in session persistence) and must not be
  * archived. An already pinned id resolves without writing or reordering.
@@ -655,16 +675,17 @@ Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/w
 
 #### `workspace/session-activity` — waterfall
 
-Ask the composed providers what still runs for a session before it is archived. A listener prepends its own SessionActivity entries to the result of `next()`; the registry's innermost callback returns an empty list, so a composition without providers archives freely. Any non-empty result refuses the archive without a write.
+Ask the composed providers what still runs for a session before it is archived or permanently deleted. A listener prepends its own SessionActivity entries to the result of `next()`; the registry's innermost callback returns an empty list, so a composition without providers proceeds freely. Any non-empty result refuses that operation without a write.
 
 ```ts cordis-catalog
 /**
  * Ask the composed providers what still runs for a session before it is
- * archived. A listener prepends its own {@link SessionActivity} entries to
- * the result of `next()`; the registry's innermost callback returns an
- * empty list, so a composition without providers archives freely. Any
- * non-empty result refuses the archive without a write.
- * @param request - the session about to be archived.
+ * archived or permanently deleted. A listener prepends its own
+ * {@link SessionActivity} entries to the result of `next()`; the registry's
+ * innermost callback returns an empty list, so a composition without
+ * providers proceeds freely. Any non-empty result refuses that operation
+ * without a write.
+ * @param request - the session about to be archived or deleted.
  * @param next - delegate to the remaining providers.
  * @mode waterfall
  */

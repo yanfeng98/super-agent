@@ -3032,6 +3032,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the accepted title and durable event sequence.',
       },
       {
+        signature: '@Remote(\'delete\') delete(request: SessionDeleteRequest): Promise<SessionDeleteValue>',
+        description: 'Permanently delete one ordinary Session: its stored log on every generation, its Workspace account and archive/pin membership, and its list entry. Refused while the Session still runs work, is a subagent conversation, or is held by an Agent or storage handle this controller does not own; refusal leaves everything untouched.',
+        parameters: [{ name: 'request', description: 'Session identity to delete.' }],
+        returns: 'confirmation that the Session and its artifacts are gone.',
+      },
+      {
         signature: '@Remote(\'fork\') async fork(request: SessionForkRequest): Promise<SessionForkValue>',
         description: 'Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers.',
         parameters: [{ name: 'request', description: 'source Session, optional exact inclusive event boundary, and migration preflight choice.' }],
@@ -3159,7 +3165,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'sessionPersistence',
     summary: 'Durable append-only session storage addressed through per-session handles.',
-    description: 'Durable append-only session storage addressed through per-session handles.\n\nStorage semantics shared by every backend: events are contiguous from seq 0 and never rewritten; a torn physical tail is never returned to a reader and is truncated by the write path before its first append; reads validate current-format records only and refuse unknown vocabulary fail-closed. `append` persists best-effort; `flush` — per handle or service-wide — is the durability barrier.\n\nVisibility: a created session is observable through `stat`/`list`/`open` in this process from the moment `create` resolves, even while a backend defers physical materialization (a pure optimization); other processes see the session only once it materializes, and a session that never materialized before a crash never existed. `SessionHandle.flush` forces materialization.\n\nFreshness: once an `append` or `flush` resolves, reads started afterwards on this backend instance observe at least that prefix.',
+    description: 'Durable append-only session storage addressed through per-session handles.\n\nStorage semantics shared by every backend: events are contiguous from seq 0 and never rewritten; a torn physical tail is never returned to a reader and is truncated by the write path before its first append; reads validate current-format records only and refuse unknown vocabulary fail-closed. `append` persists best-effort; `flush` — per handle or service-wide — is the durability barrier.\n\nVisibility: a created session is observable through `stat`/`list`/`open` in this process from the moment `create` resolves, even while a backend defers physical materialization (a pure optimization); other processes see the session only once it materializes, and a session that never materialized before a crash never existed. `SessionHandle.flush` forces materialization.\n\nFreshness: once an `append` or `flush` resolves, reads started afterwards on this backend instance observe at least that prefix.\n\nRemoval deletes one session\'s durable artifacts in full, including every committed generation; it requires exclusive access to that session and is the only storage operation that makes an existing identity unobservable.',
     methods: [
       {
         signature: 'readonly identity: symbol = Symbol(\'sessionPersistence\')',
@@ -3198,6 +3204,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List every stored session visible to this process, in no promised order.',
         parameters: [{ name: 'options', description: 'optional cancellation.' }],
         returns: 'one snapshot per stored session.',
+      },
+      {
+        signature: 'abstract remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void>',
+        description: 'Permanently remove one stored session and every durable artifact it owns.\n\nRemoval requires exclusive access: a backend refuses while an open handle or a pending creation holds the session in this process, or while another process holds its write lease. Once it resolves, the identity is absent from `stat`, `list`, and `open` on this and every other backend instance that shares the storage. Removal is not a generation operation: it deletes the session\'s complete artifact set, not one observed generation.',
+        parameters: [{ name: 'id', description: 'the stored session to remove.' }, { name: 'options', description: 'optional cancellation observed before removal work starts.' }],
+        returns: 'resolution after the session\'s artifacts are gone.',
+        throws: ['{SessionPersistenceNotFoundError} when the session does not exist.', '{SessionPersistenceBusyError} while the session is still in use.'],
       },
     ],
   },
@@ -5004,6 +5017,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'resolution after durability.',
       },
       {
+        signature: 'forgetSession(sessionId: SessionId): Promise<void>',
+        description: 'Drop every registry reference to a session that no longer exists: its Workspace account slot, its global archive and pin membership, and its cached header and path facts. Idempotent, and it never probes session existence — the caller has already removed the session, and dropping an id cannot introduce an unknown one.\n\nThe account and the global state are two writes. A crash between them leaves only invisible residue (an unaccounted-without-header id, or a stale archive/pin id whose session is gone), both of which the existing membership projection and next accepted mutation already tolerate; no pending-mutation marker is needed.',
+        parameters: [{ name: 'sessionId', description: 'The session whose references must disappear.' }],
+        returns: 'resolution after durability.',
+      },
+      {
         signature: 'pinSession(sessionId: SessionId): Promise<void>',
         description: 'Pin one session durably, prepending it to the registry-global pin set. The session must exist (live or in session persistence) and must not be archived. An already pinned id resolves without writing or reordering.',
         parameters: [{ name: 'sessionId', description: 'The session to pin.' }],
@@ -5186,8 +5205,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'api-session/removed',
     mode: 'emit',
     signature: '\'api-session/removed\'(sessionId: SessionId): void',
-    summary: 'A Session left the live Host registry.',
-    description: 'A Session left the live Host registry.',
+    summary: 'A Session left the Host catalog: its live Agent was disposed, or the Session was permanently deleted (with no Agent left to dispose).',
+    description: 'A Session left the Host catalog: its live Agent was disposed, or the Session was permanently deleted (with no Agent left to dispose). Consumers remove the row and drop cached per-Session data.',
     parameters: [{ name: 'sessionId', description: 'removed Session identity.' }],
   },
   {
@@ -5818,9 +5837,9 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'workspace/session-activity',
     mode: 'waterfall',
     signature: '\'workspace/session-activity\'( request: SessionActivityRequest, next: () => Promise<readonly SessionActivity[]>, ): Promise<readonly SessionActivity[]>',
-    summary: 'Ask the composed providers what still runs for a session before it is archived.',
-    description: 'Ask the composed providers what still runs for a session before it is archived. A listener prepends its own SessionActivity entries to the result of `next()`; the registry\'s innermost callback returns an empty list, so a composition without providers archives freely. Any non-empty result refuses the archive without a write.',
-    parameters: [{ name: 'request', description: 'the session about to be archived.' }, { name: 'next', description: 'delegate to the remaining providers.' }],
+    summary: 'Ask the composed providers what still runs for a session before it is archived or permanently deleted.',
+    description: 'Ask the composed providers what still runs for a session before it is archived or permanently deleted. A listener prepends its own SessionActivity entries to the result of `next()`; the registry\'s innermost callback returns an empty list, so a composition without providers proceeds freely. Any non-empty result refuses that operation without a write.',
+    parameters: [{ name: 'request', description: 'the session about to be archived or deleted.' }, { name: 'next', description: 'delegate to the remaining providers.' }],
   },
   {
     name: 'workspace/session-archived',
@@ -9023,6 +9042,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionCreateValue {\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}',
   },
   {
+    name: 'SessionDeleteRequest',
+    declaration: 'export interface SessionDeleteRequest {\n    readonly sessionId: SessionId;\n}',
+  },
+  {
+    name: 'SessionDeleteValue',
+    declaration: 'export interface SessionDeleteValue {\n    readonly deleted: true;\n}',
+  },
+  {
     name: 'SessionEndInput',
     declaration: 'export interface SessionEndInput {\n    reason: \'clear\' | \'logout\' | \'prompt_input_exit\' | \'resume\' | \'other\';\n    sessionId: string;\n}',
   },
@@ -9289,6 +9316,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionPersistenceOpenOptions',
     declaration: 'export interface SessionPersistenceOpenOptions {\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'SessionPersistenceRemoveOptions',
+    declaration: 'export interface SessionPersistenceRemoveOptions {\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'SessionPersistenceRevision',

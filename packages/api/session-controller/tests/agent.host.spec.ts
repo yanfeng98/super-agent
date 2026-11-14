@@ -4,11 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
+import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -262,5 +263,134 @@ describe('ApiSession creation', () => {
     writeFileSync(file, 'not a directory')
     await expect(agents.createSession({ cwd: join(file, 'child'), reusable: () => true }))
       .rejects.toThrow('failed to ensure project directory')
+  })
+})
+
+describe('ApiSession Agent lifecycle for deletion', () => {
+  it('retains the resume handle and releases it exactly once', async () => {
+    const { ctx, agents } = await harness()
+    const meta = header('retained-handle')
+    const resumed = unpublishedAgent(ctx, meta)
+    const dispose = vi.fn(() => Promise.resolve())
+    vi.spyOn(ctx.agents, 'resume').mockResolvedValue({ agent: resumed, dispose })
+    const observed = {
+      source: 'prepared',
+      header: meta,
+      events: [],
+      cursor: -1,
+      projections: { asOfSeq: -1, values: {} },
+      retain: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
+    } as unknown as SessionObservation
+
+    await expect(agents.resolveObservedAgent(observed)).resolves.toEqual({ agent: resumed })
+    await expect(agents.disposeAgent(meta.id)).resolves.toBe(true)
+    expect(dispose).toHaveBeenCalledOnce()
+    // The capability is spent: a later deletion attempt finds no retained handle.
+    await expect(agents.disposeAgent(meta.id)).resolves.toBe(false)
+  })
+
+  it('waits out a rejecting in-flight resume before reporting no retained handle', async () => {
+    const { ctx, agents } = await harness()
+    const meta = header('deleting-during-resume')
+    providePersistence(ctx, {
+      list: () => Promise.resolve([meta]),
+      inspect: () => Promise.resolve({ meta, events: [] }),
+    })
+    const resume = Promise.withResolvers<AgentHandle>()
+    vi.spyOn(ctx.agents, 'resume').mockReturnValue(resume.promise)
+    const resolving = agents.resolveAgent(meta.id)
+    const disposing = agents.disposeAgent(meta.id)
+
+    resume.reject(new Error('resume failed'))
+    await expect(disposing).resolves.toBe(false)
+    // The awaiting resolve observes the same failure as its own Session-domain error.
+    await expect(resolving).resolves.toMatchObject({ error: { code: 'gateway/internal' } })
+  })
+
+  it('disposes a handle published by an in-flight resume', async () => {
+    const { ctx, agents } = await harness()
+    const meta = header('deleting-after-resume')
+    providePersistence(ctx, {
+      list: () => Promise.resolve([meta]),
+      inspect: () => Promise.resolve({ meta, events: [] }),
+    })
+    const resumed = unpublishedAgent(ctx, meta)
+    const dispose = vi.fn(() => Promise.resolve())
+    const resume = Promise.withResolvers<AgentHandle>()
+    vi.spyOn(ctx.agents, 'resume').mockReturnValue(resume.promise)
+    const resolving = agents.resolveAgent(meta.id)
+    const disposing = agents.disposeAgent(meta.id)
+
+    resume.resolve({ agent: resumed, dispose })
+    await expect(disposing).resolves.toBe(true)
+    expect(dispose).toHaveBeenCalledOnce()
+    await resolving
+  })
+
+  it('mints a fresh Session instead of reusing an identity under deletion', async () => {
+    const { ctx, agents } = await harness()
+    const cwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-delete-'))
+    tempDirs.push(cwd)
+    const deleting = brandString<SessionId>('deleting-create')
+    agents.beginDeletion(deleting)
+    const create = vi.spyOn(ctx.agents, 'create').mockImplementation(async (options) => {
+      const session = ctx.sessions.create(options.sessionId, { meta: { cwd } })
+      return {
+        agent: { id: session.id, session, status: 'idle', ctx } as Agent,
+        dispose: () => Promise.resolve(),
+      }
+    })
+
+    const created = await agents.createSession({ sessionId: deleting, cwd, reusable: () => true })
+
+    expect(created.agent.id).not.toBe(deleting)
+    expect(String(created.agent.id).startsWith('session-')).toBe(true)
+    expect(create).toHaveBeenCalledOnce()
+    // The minted Session was created under a fresh identity, never the deleting one.
+    expect(ctx.sessions.get(deleting)).toBeUndefined()
+    agents.endDeletion(deleting)
+  })
+
+  it('waits for an in-flight named creation before releasing its handle', async () => {
+    const { ctx, agents } = await harness()
+    const cwd = mkdtempSync(join(tmpdir(), 'dsh-session-controller-create-delete-'))
+    tempDirs.push(cwd)
+    const named = brandString<SessionId>('creating-during-delete')
+    const observation = Promise.withResolvers<never>()
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession').mockReturnValue(observation.promise)
+    const dispose = vi.fn(() => Promise.resolve())
+    vi.spyOn(ctx.agents, 'create').mockImplementation(async (options) => {
+      const session = ctx.sessions.create(options.sessionId, { meta: { cwd } })
+      return { agent: { id: session.id, session, status: 'idle', ctx } as Agent, dispose }
+    })
+    const creating = agents.createSession({ sessionId: named, cwd, reusable: () => true })
+    // Let the queued claim enter and pass the fence check before the deletion
+    // starts; only then can its resume/create race the removal.
+    await vi.waitFor(() => { expect(observe).toHaveBeenCalled() })
+    agents.beginDeletion(named)
+    const disposing = agents.disposeAgent(named)
+    observation.reject(new SessionQueryError('not stored', 'SESSION_QUERY_SESSION_NOT_FOUND'))
+
+    await expect(creating).resolves.toMatchObject({ agent: { id: named } })
+    await expect(disposing).resolves.toBe(true)
+    expect(dispose).toHaveBeenCalledOnce()
+    agents.endDeletion(named)
+  })
+
+  it('fences new resumes while a deletion owns the identity', async () => {
+    const { agents } = await harness()
+    const sessionId = brandString<SessionId>('deleting')
+    agents.beginDeletion(sessionId)
+
+    await expect(agents.resolveAgent(sessionId)).resolves.toMatchObject({
+      error: { code: 'session/not-found' },
+    })
+
+    agents.endDeletion(sessionId)
+    // Without a stored log the resume now fails on its own terms, never on the fence.
+    await expect(agents.resolveAgent(sessionId)).resolves.toMatchObject({
+      error: { code: 'session/not-found' },
+    })
   })
 })

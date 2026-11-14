@@ -145,7 +145,9 @@ class FakeSessions implements ISessions {
   readonly retain = vi.fn<ISessions['retain']>((target) => {
     const release = vi.fn<() => void>()
     const sessionId = typeof target === 'string' ? target : target.childSessionId
-    const binding = { sessionId } as SessionReference['binding']
+    const removed = this.removedSessions
+    const session = { getSnapshot: () => ({ removed: removed.has(sessionId) }) }
+    const binding = { sessionId, session } as SessionReference['binding']
     const reference: SessionReference = {
       sessionId,
       binding,
@@ -155,6 +157,15 @@ class FakeSessions implements ISessions {
     }
     this.retained.push({ reference, release })
     return reference
+  })
+  readonly removedSessions = new Set<SessionId>()
+  readonly deleteCalls: SessionId[] = []
+  readonly delete = vi.fn<ISessions['delete']>(async (sessionId: SessionId) => {
+    this.deleteCalls.push(sessionId)
+    this.list.update((state) => {
+      const { [sessionId]: _gone, ...byId } = state.byId
+      return { ...state, ids: state.ids.filter(id => id !== sessionId), byId }
+    })
   })
   readonly subagentAddress = vi.fn<ISessions['subagentAddress']>()
   readonly binding = vi.fn<ISessions['binding']>(sessionId =>
@@ -1493,6 +1504,20 @@ describe('UiWorkspaceService', () => {
     expect(b.sessions.retained[0]!.reference.sessionId).toBe(sid('saved'))
   })
 
+  it('clears a selected Session that another client removed from the catalog', () => {
+    const b = bench()
+    b.uiWorkspace.openSession(sid('current'))
+    b.selectPanel.mockClear()
+
+    // The broadcast marks the resident Session removed without releasing local owners.
+    b.sessions.removedSessions.add(sid('current'))
+    b.sessions.list.set(b.sessions.list.getSnapshot())
+
+    expect(b.sessions.retained[0]!.release).toHaveBeenCalledOnce()
+    expect(b.selectPanel).toHaveBeenCalledOnce()
+    expect(b.selectPanel).toHaveBeenCalledWith(null)
+  })
+
   it('clears a selected Session when an external archive snapshot arrives', () => {
     const b = bench()
     b.uiWorkspace.openSession(sid('current'))
@@ -1512,6 +1537,42 @@ describe('UiWorkspaceService', () => {
 
     expect(b.sessions.retained[0]!.release).toHaveBeenCalledOnce()
     expect(b.selectPanel).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears a selected Session after deleting it and forwards the deletion', async () => {
+    const b = bench()
+    b.uiWorkspace.openSession(sid('current'))
+    b.selectPanel.mockClear()
+
+    await b.uiWorkspace.deleteSession(sid('current'))
+
+    expect(b.sessions.delete).toHaveBeenCalledExactlyOnceWith(sid('current'))
+    expect(b.sessions.retained[0]!.release).toHaveBeenCalledOnce()
+    expect(b.selectPanel).toHaveBeenCalledOnce()
+    expect(b.selectPanel).toHaveBeenCalledWith(null)
+  })
+
+  it('deletes an unselected Session without clearing the current selection', async () => {
+    const b = bench()
+    b.uiWorkspace.openSession(sid('current'))
+    b.selectPanel.mockClear()
+
+    await b.uiWorkspace.deleteSession(sid('other'))
+
+    expect(b.sessions.delete).toHaveBeenCalledExactlyOnceWith(sid('other'))
+    expect(b.sessions.retained[0]!.release).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+  })
+
+  it('preserves deletion failures and keeps the selection', async () => {
+    const b = bench()
+    b.uiWorkspace.openSession(sid('current'))
+    b.selectPanel.mockClear()
+    b.sessions.delete.mockRejectedValueOnce(new Error('delete rejected'))
+
+    await expect(b.uiWorkspace.deleteSession(sid('current'))).rejects.toThrow('delete rejected')
+    expect(b.sessions.retained[0]!.release).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
   })
 
   it('forwards archive commands and preserves failures', async () => {

@@ -93,6 +93,19 @@ describe('SessionController facade', () => {
       .resolves.toMatchObject({ reason: 'idle' })
   })
 
+  it('delegates permanent deletion to the Session deletion command', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
+    const controller = await createSessionTestController(ctx, defaults)
+
+    // The harness's persistence double cannot stat beyond its seed, so the
+    // delegation surfaces its Session-domain failure rather than hanging.
+    await expect(controller.delete({ sessionId: brandString<SessionId>('missing-delete') }))
+      .rejects.toBeInstanceOf(Error)
+  })
+
   it('owns Host service methods and publishes Agent lifecycle projections', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())

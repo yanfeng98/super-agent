@@ -96,6 +96,13 @@ export interface UiWorkspace {
    */
   archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>
   /**
+   * Permanently delete a Session and clear it when it is the current
+   * selection. The Host removes the stored log and every reference; the
+   * Client list refreshes from the authoritative result.
+   * @param sessionId - Session to delete.
+   */
+  deleteSession(sessionId: SessionId): Promise<void>
+  /**
    * Unarchive a Session, restoring it to its recorded Workspace position.
    * @param sessionId - Session to unarchive.
    */
@@ -384,6 +391,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     if (this.mainReference?.sessionId === sessionId) this.clearMain()
   }
 
+  async deleteSession(sessionId: SessionId): Promise<void> {
+    await this.sessions.delete(sessionId)
+    if (this.mainReference?.sessionId === sessionId) this.clearMain()
+  }
+
   async unarchiveSession(sessionId: SessionId): Promise<void> {
     await this.workspaces.unarchiveSession(sessionId)
   }
@@ -432,6 +444,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     let initial: 'waiting' | 'connecting' | 'done' = 'waiting'
     const reconcile = (): void => {
       if (this.lifetime.signal.aborted) return
+      if (this.clearRemovedCurrent()) return
       if (this.clearArchivedCurrent()) return
       if (initial !== 'waiting' || this.restorationNavigation?.aborted === true) return
       const workspace = this.workspaces.list.getSnapshot()
@@ -501,6 +514,20 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       if (!signal.aborted) this.notify({ kind: 'defaultWorkspaceFailed' })
       return undefined
     }
+  }
+
+  /**
+   * Clear the selection when the Session it names left the Host catalog
+   * (deleted, or its Agent was disposed). Another tab or peer can perform that
+   * removal, so the broadcast must not leave this view addressing a dead
+   * Session.
+   * @returns true when a removed current selection was cleared.
+   */
+  private clearRemovedCurrent(): boolean {
+    const current = this.mainReference
+    if (current === undefined || !current.binding.session.getSnapshot().removed) return false
+    this.clearMain()
+    return true
   }
 
   /** @returns true when an archived current selection was cleared. */

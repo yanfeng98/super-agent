@@ -12,7 +12,9 @@ import type { SessionId, SessionSeq, SessionSeqCursor } from '@deepseek-ai/dsh-s
 import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionActivity, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+
+export type { SessionActivity } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
@@ -207,6 +209,18 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/title-invalid': { readonly sessionId: SessionId }
     'session/fork-unavailable': { readonly sessionId: SessionId }
     'session/migration-required': { readonly sessionId: SessionId }
+    /**
+     * Permanent deletion was refused without removing anything because the
+     * Session still has running work; `activity` names what must stop first.
+     */
+    'session/active': {
+      readonly sessionId: SessionId
+      readonly activity: readonly SessionActivity[]
+    }
+    /** Deletion found the Session held by an Agent or storage handle it does not own. */
+    'session/in-use': { readonly sessionId: SessionId }
+    /** Deletion refused a subagent conversation, which is removed with its parent catalog. */
+    'session/subagent': { readonly sessionId: SessionId }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
       readonly childSessionId: SessionId
@@ -304,6 +318,19 @@ export interface SessionRenameRequest {
 export interface SessionRenameValue {
   readonly title: string
   readonly seq: number
+}
+
+/**
+ * Session deletion request: the permanent removal of one ordinary Session's
+ * stored log and of every Host reference to it.
+ */
+export interface SessionDeleteRequest {
+  readonly sessionId: SessionId
+}
+
+/** Confirmation that the Session and its stored artifacts are gone. */
+export interface SessionDeleteValue {
+  readonly deleted: true
 }
 
 /** Session fork request. */
@@ -684,7 +711,9 @@ declare module '@deepseek-ai/cordis' {
      */
     'api-session/added'(summary: SessionSummary): void
     /**
-     * A Session left the live Host registry.
+     * A Session left the Host catalog: its live Agent was disposed, or the
+     * Session was permanently deleted (with no Agent left to dispose).
+     * Consumers remove the row and drop cached per-Session data.
      * @mode emit
      * @param sessionId - removed Session identity.
      */

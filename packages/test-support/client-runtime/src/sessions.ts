@@ -319,7 +319,7 @@ export class TestSessions implements ISessions {
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'create' | 'refreshProjections' | 'refresh' | 'search' | 'fork'
+    method: 'create' | 'refreshProjections' | 'refresh' | 'search' | 'fork' | 'delete'
     args: unknown[]
   }[] = []
 
@@ -650,6 +650,12 @@ export class TestSessions implements ISessions {
   refreshProjections(sessionId: SessionId): Promise<void> {
     this.calls.push({ method: 'refreshProjections', args: [sessionId] })
     return Promise.resolve()
+  }
+
+  /** Record a permanent deletion and drop the catalogued fixture row. */
+  async delete(sessionId: SessionId): Promise<void> {
+    this.calls.push({ method: 'delete', args: [sessionId] })
+    await this.remove(sessionId)
   }
 
   /** Record a list refresh; fixture callers publish list state explicitly. */

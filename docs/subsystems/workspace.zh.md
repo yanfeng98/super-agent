@@ -133,7 +133,7 @@ interface Workspace {
 
 控制器的[传输类型](../../packages/api/workspace-controller/src/types.ts)定义了 `WorkspacePinSessionRequest` 和 `WorkspaceUnpinSessionRequest`，两者都携带一个 `sessionId`。两个操作都返回 `WorkspacePinValue`：完整的会话 id 数组 `pinnedSessionIds`，最近置顶的会话排在前面。置顶要求会话已知且未归档；对未置顶的 id 取消置顶会成功，且不改变集合。归档在同一次持久化写入中移除该会话的置顶，取消归档不会恢复置顶。
 
-## 归档准入
+## 归档与删除准入
 
 归档是一个注册表全局的持久化集合，注册表拒绝把正在运行的工作藏在它后面。这条规则是本包声明并派发的两个宿主事件之上的能力接缝（[事件](#workspace-events)）：`workspace/session-activity`（waterfall）向已组合的提供方询问某会话还有什么在跑，`workspace/session-stop`（parallel）请它们停止这些工作。每个提供方像任何监听器一样在根上注册，因此本包不认识 agent、job 或 schedule 的词汇；各族是一个可合并扩展的 map 的键。
 
@@ -154,8 +154,9 @@ interface SessionActivityKindMap {}
 
 ```ts type-equiv
 /**
- * One reason a session counts as active for archive admission. Families with
- * per-item identity list their items so a caller can name what must stop.
+ * One reason a session counts as active for archive or deletion admission.
+ * Families with per-item identity list their items so a caller can name what
+ * must stop.
  */
 interface SessionActivity {
   readonly kind: SessionActivityKind
@@ -165,6 +166,8 @@ interface SessionActivity {
 ```
 
 `SessionActivityItem` 携带各族自己的 `id`（会话、任务或提醒 id）和可选的展示 `label`。`archiveSession(sessionId)` 在存在性检查之后只询问 waterfall 一次，对非空答案以 `WorkspaceActiveSessionError`（`sessionId`、`activity`）拒绝且不写入；控制器把它映射为 `workspace/session-active` 错误，其 details 携带同样的两个字段。`archiveSession(sessionId, { stopActivity: true })`——`ArchiveSessionOptions` 的这个字段由传输请求以 `stopActivity` 暴露——跳过检查、先写入归档、再派发 `workspace/session-stop`；提供方抛错只记日志，归档保留，被停止的工作从不等待收敛。已归档的 id 既不询问也不停止。随附的提供方、它们停止什么，以及让已归档会话不跑模型步的 `agent/pre-step` 门禁，记录在[注册表包](../../packages/workspace/workspace/README.zh.md#api-behavior)；决策记录见 [archive-stops-running-work Agent Note](../../.agents/notes/implemented/feature/2026-09-21-archive-stops-running-session-work.zh.md)。
+
+永久删除会话在移除任何内容之前复用同一准入接缝：[`dsh-session-controller`](../../packages/api/session-controller) 的 `session/delete` 询问 `workspace/session-activity` 并以同样的活动详情拒绝，因此“还有什么在跑”的规则仍只由本注册表拥有。注册表自身从不删除 Session；`forgetSession(sessionId)` 在 Session Controller 删除已存储日志后，清除该身份的记账槽位、归档与置顶成员资格，以及缓存的 header 与路径事实。该调用幂等、不探测会话是否存在，并允许其记账写入与全局写入之间发生崩溃，因为不可见残留本就被成员投影与下一次被接受的修改所容忍（见[注册表包](../../packages/workspace/workspace/README.zh.md#api-behavior)）。
 
 ## 消费方
 
@@ -615,6 +618,23 @@ archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promi
 unarchiveSession(sessionId: SessionId): Promise<void>
 
 /**
+ * Drop every registry reference to a session that no longer exists: its
+ * Workspace account slot, its global archive and pin membership, and its
+ * cached header and path facts. Idempotent, and it never probes session
+ * existence — the caller has already removed the session, and dropping an
+ * id cannot introduce an unknown one.
+ *
+ * The account and the global state are two writes. A crash between them
+ * leaves only invisible residue (an unaccounted-without-header id, or a
+ * stale archive/pin id whose session is gone), both of which the existing
+ * membership projection and next accepted mutation already tolerate; no
+ * pending-mutation marker is needed.
+ * @param sessionId - The session whose references must disappear.
+ * @returns resolution after durability.
+ */
+forgetSession(sessionId: SessionId): Promise<void>
+
+/**
  * Pin one session durably, prepending it to the registry-global pin set.
  * The session must exist (live or in session persistence) and must not be
  * archived. An already pinned id resolves without writing or reordering.
@@ -655,16 +675,17 @@ Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/w
 
 #### `workspace/session-activity` — waterfall
 
-Ask the composed providers what still runs for a session before it is archived. A listener prepends its own SessionActivity entries to the result of `next()`; the registry's innermost callback returns an empty list, so a composition without providers archives freely. Any non-empty result refuses the archive without a write.
+Ask the composed providers what still runs for a session before it is archived or permanently deleted. A listener prepends its own SessionActivity entries to the result of `next()`; the registry's innermost callback returns an empty list, so a composition without providers proceeds freely. Any non-empty result refuses that operation without a write.
 
 ```ts cordis-catalog
 /**
  * Ask the composed providers what still runs for a session before it is
- * archived. A listener prepends its own {@link SessionActivity} entries to
- * the result of `next()`; the registry's innermost callback returns an
- * empty list, so a composition without providers archives freely. Any
- * non-empty result refuses the archive without a write.
- * @param request - the session about to be archived.
+ * archived or permanently deleted. A listener prepends its own
+ * {@link SessionActivity} entries to the result of `next()`; the registry's
+ * innermost callback returns an empty list, so a composition without
+ * providers proceeds freely. Any non-empty result refuses that operation
+ * without a write.
+ * @param request - the session about to be archived or deleted.
  * @param next - delegate to the remaining providers.
  * @mode waterfall
  */

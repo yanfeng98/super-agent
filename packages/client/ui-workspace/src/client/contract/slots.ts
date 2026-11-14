@@ -214,8 +214,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     }
     /**
      * The hover buttons at the end of one Session row, in ascending `order`,
-     * after the "..." menu trigger. ui-workspace registers `archive` (100) and
-     * `pin` (200) here. An entry renders one icon button (or nothing, when its
+     * after the "..." menu trigger. ui-workspace registers `archive` (100),
+     * `pin` (200), and `delete` (300) here. An entry renders one icon button (or nothing, when its
      * action does not apply to the row) and owns the action it performs. Clicks
      * inside the strip stay in the strip, so the button needs no propagation
      * handling to keep the row from opening. Hoverless devices hide this slot;
@@ -356,6 +356,7 @@ export type RowToast =
   | { kind: 'pinFailed' }
   | { kind: 'unpinFailed' }
   | { kind: 'archivedNotOpenable' }
+  | { kind: 'deleted' }
   | { kind: 'defaultWorkspaceFailed' }
   | { kind: 'forkRequiresOpen'; sessionId: SessionId }
   | { kind: 'shortcutForkFailed'; reason: 'unavailable' | 'failed' }
@@ -449,6 +450,35 @@ export interface ForkSessionInjected {
   forkSession: (sessionId: SessionId) => void
 }
 
+/** Delete action share: the row only raises the confirmation request. */
+export interface DeleteSessionInjected {
+  /** Ask for the permanent-delete confirmation seeded with the row's title. */
+  requestSessionDelete: (sessionId: SessionId, displayTitle: string) => void
+}
+
+/** A permanent-delete confirmation the row button or menu asked for. */
+export interface SessionDeleteTarget {
+  /** Session to delete. */
+  sessionId: SessionId
+  /** The row's display title, named in the dialog. */
+  displayTitle: string
+}
+
+/**
+ * Delete confirmation share: the pending request, its settlement, and the
+ * deletion hop the dialog confirms with.
+ */
+export interface SessionDeleteConfirmInjected {
+  hooks: {
+    /** The confirmation asked for, until the dialog consumes or cancels it. */
+    deleteRequest: HostObservable<SessionDeleteTarget | null>
+  }
+  /** Consume or cancel the pending confirmation. */
+  settleSessionDelete: () => void
+  /** Permanently delete the Session; resolves after the Host removed its artifacts. */
+  deleteSession: (sessionId: SessionId) => Promise<void>
+}
+
 /** Rename action share: the row only raises the request; the dialog entry answers it. */
 export interface RenameSessionInjected {
   /** Ask for the rename dialog, seeded with the row's current title. */
@@ -514,6 +544,13 @@ export type SessionArchiveConfirmProps =
   & PropsLocale<'workspace'>
   & Omit<SessionArchiveConfirmInjected, 'hooks'>
   & PropsHooks<SessionArchiveConfirmInjected['hooks']>
+
+/** Props of the permanent-delete dialog entry in `shell.overlay`. */
+export type SessionDeleteConfirmProps =
+  PropsRuntime<'shell.overlay'>
+  & PropsLocale<'workspace'>
+  & Omit<SessionDeleteConfirmInjected, 'hooks'>
+  & PropsHooks<SessionDeleteConfirmInjected['hooks']>
 
 /** Props of the existing overlay's keyed notice dispatcher. */
 export type RowToastProps =
