@@ -49,6 +49,8 @@ Client 列表行和驻留 Session 使用当前 `sessionListMetadata` 投影纠�
 
 `session.create` 返回一个用于新对话的 Session，响应指明实际使用的 Session。请求指明的 `sessionId` 在满足以下条件时被复用：仍为空白（尚未开始任何轮次）、属于请求的目录、是请求的工作区中未归档的成员，且未被其他写者占用；活动 Session 原地复用，持久化 Session 被恢复并持续持有其写锁。被复用的 Session 运行请求的 `agentPreset`，请求未指明时运行配置的默认 preset：不解析它记录的 preset，变更在 Agent 发布前记录为 `agent-preset/selected`。指明的 Session 若已开始、不满足工作区归属，或被其他写者占用，则保持不变，改为新建 Session。没有对应已存储 Session 的 `sessionId` 成为新 Session 的标识。指明其他目录中的 Session 返回 `session/conflict`，指明由 subagent 路由拥有的 Session 返回 `session/agent-busy`；这两项检查先于 preset 解析。指明同一标识的创建请求按到达顺序执行，preset 解析也包含在内，每个响应报告其自身请求完成时该 Session 运行的 preset。`session.list` 根据缓存元数据列出持久化空白会话，不打开冷日志正文。
 
+`session.delete({ sessionId })` 永久移除一个普通 Session：其全部代际的已存储日志、其工作区记账与归档/置顶成员资格，以及其列表行。Host 在以下情况拒绝且不触碰任何内容：会话仍通过 `workspace/session-activity` waterfall 报告运行中的工作（`session/active`，携带活动清单）、它是子智能体对话（`session/subagent`）、或本控制器无法释放的 Agent/活动 Session 条目，或仍被打开的存储句柄持有它（`session/in-use`）；未知身份报告 `session/not-found`。随后控制器为该身份挡住新的 resume 与具名会话创建、等待在途 resume、通过创建或恢复时保留的句柄释放自己拥有的活动 Agent、经 `sessionPersistence.remove` 删除已存储制品，并经 `workspaceRegistry.forgetSession` 清理注册表。已释放的 Agent 已发布 `api-session/removed`；冷会话的删除直接发布该事件，因此每个已连接客户端都会移除该行。从未实体化的活动会话没有制品，这一缺失即视为删除完成。删除不会级联或回收派生存储：附件、投影检查点、归档或已结束日程的目标 id，以及内存中的阅读记录都保留原有内容。
+
 Client 列表刷新保留未变化的行对象，并在顺序和值均相同时复用条目数组。每行的 `retainedBy` 包含正数的本地引用来源计数，Host 元数据刷新不能覆盖它们。缓存成员检查使用每次刷新构建的 ID 集合，因此对账成本随当前列表和保留缓存的规模线性增长。 Host 摘要更新会替换运行状态与 Agent 可用性；本地 create/fork 响应只补充已有行缺失的元数据。普通 Session 被移除后，仅在目录仍有子项时保留其投影 store。
 
 后台 job 的名册行与观测流属于 [`dsh-api-job-controller`](../job-controller/README.zh.md)；控制流只承载投影。
@@ -135,6 +137,7 @@ Blockquote 作为普通 prompt 文本传递，不携带 quote 元数据。本地
 - 文件引用补全使用共享 Agent lookup，因此可能恢复冷 Session；`skills/list` 目录是不激活 Agent 的 skill 元数据读取路径。
 - 受理/运行的展示记忆只存在于客户端内存，页面重载后即丢失。
 - 该记忆不在 tab 之间共享：同一会话可能在一个 tab 中已转正，在另一个 tab 中仍显示为 `New Session`。
+- 会话删除不级联：被删除父会话的子智能体后代仍作为独立对话存在；已结束或暂停的日程保留目标 id，日程 UI 已将其报告为不可用；派生存储（附件、投影检查点、阅读记录）不被回收。
 
 
 <a id="dev-note"></a>

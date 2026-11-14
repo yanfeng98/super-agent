@@ -2,14 +2,14 @@ import { type MessageId, createMessage } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { appendFile, mkdtemp, mkdir, open, rm, readFile, writeFile, readdir, stat, symlink, utimes } from 'node:fs/promises'
+import { appendFile, chmod, mkdtemp, mkdir, open, rm, readFile, writeFile, readdir, stat, symlink, utimes } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { scheduler } from 'node:timers/promises'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
+import { SessionPersistenceBusyError, type SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   assertNoRetiredHeaderFields, encodeSegment, eventLines, generationLogFilename, generationLogPath,
@@ -21,6 +21,7 @@ import {
 } from '../../session-persistence/tests/contract.ts'
 import { runLiveWritePathContract } from '../../session-persistence/tests/live-write-contract.ts'
 import { LIVE_WRITE_BATCH_MAX_DELAY_MS, type JsonlSessionHandle, type JsonlHandleStorage } from '../src/storage.ts'
+import { SessionWriteLease } from '../src/lease.ts'
 import { JsonlGenerationSourceChangedError } from '../src/generation.ts'
 import SessionStore from '@deepseek-ai/dsh-session'
 
@@ -374,6 +375,88 @@ runLiveWritePathContract('jsonl', LIVE_WRITE_BATCH_MAX_DELAY_MS, async () => {
     return ctx
   }
   return { ctx: await mount(), remount: mount }
+})
+
+describe('JsonlSessionPersistence: permanent removal', () => {
+  it('deletes every generation and the lock file, and another process holding the lease blocks it', async () => {
+    const instanceRoot = await freshRoot()
+    const ctx = new Context()
+    dirs.push(instanceRoot)
+    const fiber = await ctx.plugin(JsonlSessionPersistence, { root: instanceRoot, compression: 'none' })
+    const m = meta('removal-target', '/work')
+    await writeLog(ctx.sessionPersistence, m, oneTurnLog())
+    const dir = sessionDir(instanceRoot, m.cwd, m.id)
+    expect((await stat(join(dir, 'session.v4.jsonl'))).isFile()).toBe(true)
+
+    const held = await SessionWriteLease.acquire(dir, m.id)
+    try {
+      await expect(ctx.sessionPersistence.remove(m.id)).rejects.toBeInstanceOf(SessionPersistenceBusyError)
+      // The refusal removed nothing: the log and its lease are still there.
+      expect((await stat(join(dir, 'session.v4.jsonl'))).isFile()).toBe(true)
+    } finally {
+      await held.release()
+    }
+
+    await expect(ctx.sessionPersistence.remove(m.id)).resolves.toBeUndefined()
+    await expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await ctx.sessionPersistence.stat(m.id)).toBeUndefined()
+    await fiber.dispose()
+  })
+
+  it('refuses removal while a read handle is still open', async () => {
+    const instanceRoot = await freshRoot()
+    const ctx = new Context()
+    const fiber = await ctx.plugin(JsonlSessionPersistence, { root: instanceRoot, compression: 'none' })
+    const m = meta('removal-reader-held', '/work')
+    await writeLog(ctx.sessionPersistence, m, oneTurnLog())
+    const bystander = meta('removal-bystander', '/work')
+    await writeLog(ctx.sessionPersistence, bystander, oneTurnLog())
+    const reader = await ctx.sessionPersistence.open(m.id, 'read')
+    try {
+      await expect(ctx.sessionPersistence.remove(m.id)).rejects.toBeInstanceOf(SessionPersistenceBusyError)
+      // A handle for another Session does not block this identity's removal.
+      await expect(ctx.sessionPersistence.remove(bystander.id)).resolves.toBeUndefined()
+    } finally {
+      await reader.close()
+    }
+    await ctx.sessionPersistence.remove(m.id)
+    expect(await ctx.sessionPersistence.stat(m.id)).toBeUndefined()
+    await fiber.dispose()
+  })
+
+  it('propagates a lease failure that is not cross-process contention', async () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) return
+    const instanceRoot = await freshRoot()
+    const ctx = new Context()
+    const fiber = await ctx.plugin(JsonlSessionPersistence, { root: instanceRoot, compression: 'none' })
+    const m = meta('removal-lease-denied', '/work')
+    await writeLog(ctx.sessionPersistence, m, oneTurnLog())
+    const lock = join(sessionDir(instanceRoot, m.cwd, m.id), 'session.lock')
+    await chmod(lock, 0o000)
+    try {
+      await expect(ctx.sessionPersistence.remove(m.id)).rejects.toMatchObject({ code: 'EACCES' })
+    } finally {
+      await chmod(lock, 0o600)
+    }
+    // The failure removed nothing.
+    expect(await ctx.sessionPersistence.stat(m.id)).toBeDefined()
+    await fiber.dispose()
+  })
+
+  it('observes cancellation before removing anything', async () => {
+    const instanceRoot = await freshRoot()
+    const ctx = new Context()
+    const fiber = await ctx.plugin(JsonlSessionPersistence, { root: instanceRoot, compression: 'none' })
+    const m = meta('removal-aborted', '/work')
+    await writeLog(ctx.sessionPersistence, m, oneTurnLog())
+    const controller = new AbortController()
+    controller.abort(new Error('stop the removal'))
+
+    await expect(ctx.sessionPersistence.remove(m.id, { signal: controller.signal }))
+      .rejects.toThrow('stop the removal')
+    expect(await ctx.sessionPersistence.stat(m.id)).toBeDefined()
+    await fiber.dispose()
+  })
 })
 
 describe('JsonlSessionPersistence: format helpers', () => {

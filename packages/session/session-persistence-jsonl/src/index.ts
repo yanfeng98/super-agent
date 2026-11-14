@@ -22,14 +22,15 @@ import { createHash, randomBytes } from 'node:crypto'
 import pLimit, { type LimitFunction } from 'p-limit'
 import {
   SessionPersistence, SessionFormatUnsupportedError,
-  SessionPersistenceCorruptionError,
-  SessionAlreadyExistsError, SessionPersistenceNotFoundError,
+  SessionPersistenceCorruptionError, SessionPersistenceBusyError,
+  SessionAlreadyExistsError, SessionAlreadyOwnedError, SessionPersistenceNotFoundError,
   assertStoredId, materializeCreateHeader, sessionFormatVersionRefusal, validateStoredEvents,
   type SessionAccess, type SessionHandle,
   type SessionHandleReadResult,
   type SessionLocation, type SessionPersistenceCreateOptions,
   type SessionPersistenceListOptions, type SessionPersistenceOpenOptions,
   type SessionPersistenceSnapshot, type SessionPersistenceStatOptions,
+  type SessionPersistenceRemoveOptions,
   type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
 import { JsonlBackendTracker, JsonlSessionHandle, type StorageHandleState } from './storage.ts'
@@ -584,6 +585,54 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     signal?.throwIfAborted()
     return snapshots
+  }
+
+  /**
+   * Permanently remove one stored session: every committed generation, its
+   * lock file, and its session directory. Exclusive access is enforced twice
+   * — in-process open handles or claims, then the cross-process write lease —
+   * so a removal never deletes storage a live writer or reader still relies
+   * on. An unmaterialized created session has no artifacts and is refused as
+   * busy while its creator handle is open.
+   * @param id - the stored session to remove.
+   * @param options - optional cancellation.
+   * @returns resolution after the session directory is gone.
+   * @throws {SessionPersistenceNotFoundError} when no artifact exists for the id.
+   * @throws {SessionPersistenceBusyError} while any handle, claim, or foreign writer holds it.
+   */
+  async remove(
+    id: SessionId,
+    options?: SessionPersistenceRemoveOptions,
+  ): Promise<void> {
+    options?.signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    if (this.tracker.holdsSession(id)) throw new SessionPersistenceBusyError(id)
+    const selected = await this.findLog(id, options?.signal)
+    if (selected === undefined) throw new SessionPersistenceNotFoundError(id)
+    const dir = dirname(selected.sourcePath)
+    let lease: SessionWriteLease
+    try {
+      lease = await SessionWriteLease.acquire(dir, id)
+    } catch (error: unknown) {
+      if (error instanceof SessionAlreadyOwnedError) throw new SessionPersistenceBusyError(id)
+      throw error
+    }
+    try {
+      options?.signal?.throwIfAborted()
+      // A handle may have opened while the lease was acquired; the in-process
+      // claim is the same authority every other write path honors.
+      /* v8 ignore next 3 -- a handle opening between the lease and this check is a genuine race with no deterministic seam. */
+      if (this.tracker.holdsSession(id)) throw new SessionPersistenceBusyError(id)
+      await rm(dir, { recursive: true, force: true })
+      this.coldLogMemo.delete(id)
+      this.migrationPreparations.delete(id)
+      // Path-keyed header reuse never outlives a listing; dropping it here
+      // keeps removed artifacts from being reused by a later stale lookup.
+      this.listedHeaders.clear()
+    } finally {
+      await lease.release()
+    }
   }
 
   // --- handle-facing storage internals (package-private via the handle class below) ---

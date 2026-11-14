@@ -27,6 +27,7 @@ export {
   SessionAlreadyExistsError,
   SessionAlreadyOwnedError,
   SessionFormatUnsupportedError,
+  SessionPersistenceBusyError,
   SessionHandleClosedError,
   SessionOwnershipLostError,
   SessionPersistenceCorruptionError,
@@ -115,6 +116,12 @@ export interface SessionPersistenceListOptions {
   readonly signal?: AbortSignal
 }
 
+/** Options for {@link SessionPersistence.remove}. */
+export interface SessionPersistenceRemoveOptions {
+  /** Optional cancellation observed before the removal starts. */
+  readonly signal?: AbortSignal
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     sessionPersistence: SessionPersistence
@@ -140,6 +147,10 @@ declare module '@deepseek-ai/cordis' {
  *
  * Freshness: once an `append` or `flush` resolves, reads started afterwards
  * on this backend instance observe at least that prefix.
+ *
+ * Removal deletes one session's durable artifacts in full, including every
+ * committed generation; it requires exclusive access to that session and is
+ * the only storage operation that makes an existing identity unobservable.
  */
 export abstract class SessionPersistence extends Service {
   /** Process-local instance identity, stable through Context proxies and distinct after service replacement. */
@@ -208,6 +219,23 @@ export abstract class SessionPersistence extends Service {
    * @returns one snapshot per stored session.
    */
   abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+  /**
+   * Permanently remove one stored session and every durable artifact it owns.
+   *
+   * Removal requires exclusive access: a backend refuses while an open handle
+   * or a pending creation holds the session in this process, or while another
+   * process holds its write lease. Once it resolves, the identity is absent
+   * from `stat`, `list`, and `open` on this and every other backend instance
+   * that shares the storage. Removal is not a generation operation: it deletes
+   * the session's complete artifact set, not one observed generation.
+   * @param id - the stored session to remove.
+   * @param options - optional cancellation observed before removal work starts.
+   * @returns resolution after the session's artifacts are gone.
+   * @throws {SessionPersistenceNotFoundError} when the session does not exist.
+   * @throws {SessionPersistenceBusyError} while the session is still in use.
+   */
+  abstract remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void>
 }
 
 export default SessionPersistence

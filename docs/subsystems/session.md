@@ -840,6 +840,10 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 
 The optional `application` selects a registered file handler without changing the system default; `workspacePathApplications({ path })` returns current handlers, names, icons, and default selection after Host path verification.
 
+## Permanent Session deletion
+
+`session/delete` is the one operation that removes a stored Session: it deletes every committed generation and the Host references to the identity ([persistence](persistence.md), [workspace](workspace.md)). Admission runs before any removal: the Session must not be a subagent conversation, must report no running work through `workspace/session-activity`, and must not be held by an Agent or live Session entry the controller cannot release, or by an open storage handle; a refusal leaves the log, references, and activity untouched. The controller retains each Agent handle it creates or resumes precisely so this operation can stop the live Agent and release its write handle. Deletion publishes the ordinary `api-session/removed` edge once, whether the Session was live or cold, and it neither cascades to subagent descendants nor collects derived stores.
+
 ## Session-log upload exclusions
 
 `ctx.sessionLogDeepSeek.registerExclusion()` registers a caller-owned predicate over `SessionLogUploadRequest`. Any match omits the log contribution and its acceptance callback before reading Session events. No match preserves normal upload eligibility. The [package README](../../packages/session/session-log-deepseek/README.md#upload-exclusions) defines failure and disposal behavior.
@@ -965,6 +969,17 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @returns the accepted title and durable event sequence.
  */
 @Remote('rename') rename(request: SessionRenameRequest): Promise<SessionRenameValue>
+
+/**
+ * Permanently delete one ordinary Session: its stored log on every
+ * generation, its Workspace account and archive/pin membership, and its
+ * list entry. Refused while the Session still runs work, is a subagent
+ * conversation, or is held by an Agent or storage handle this controller
+ * does not own; refusal leaves everything untouched.
+ * @param request - Session identity to delete.
+ * @returns confirmation that the Session and its artifacts are gone.
+ */
+@Remote('delete') delete(request: SessionDeleteRequest): Promise<SessionDeleteValue>
 
 /**
  * Fork one cold-readable exact event prefix into a new Session. An omitted
@@ -1316,11 +1331,13 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/removed` — emit
 
-A Session left the live Host registry.
+A Session left the Host catalog: its live Agent was disposed, or the Session was permanently deleted (with no Agent left to dispose). Consumers remove the row and drop cached per-Session data.
 
 ```ts cordis-catalog
 /**
- * A Session left the live Host registry.
+ * A Session left the Host catalog: its live Agent was disposed, or the
+ * Session was permanently deleted (with no Agent left to dispose).
+ * Consumers remove the row and drop cached per-Session data.
  * @mode emit
  * @param sessionId - removed Session identity.
  */

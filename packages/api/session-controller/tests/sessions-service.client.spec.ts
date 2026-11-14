@@ -1076,6 +1076,45 @@ describe('fork', () => {
   })
 })
 
+describe('permanent deletion', () => {
+  it('calls the Host endpoint and refreshes the authoritative list', async ({ bench }) => {
+    const b = bench()
+    await feedList(b, [{ id: 'gone' }, { id: 'kept' }])
+    const listCalls = b.mock.log.calls('session/list').length
+
+    await b.svc.delete(sid('gone'))
+
+    expect(b.mock.log.calls('session/delete').map(call => call.args)).toEqual([[{ sessionId: 'gone' }]])
+    expect(b.mock.log.calls('session/list').length).toBe(listCalls + 1)
+  })
+
+  it('maps a Host refusal to SessionDeleteError', async ({ bench }) => {
+    const b = bench()
+    b.mock.remote.session.delete.mockResolvedValueOnce(
+      err(new RemoteError('session/active', 'busy', { sessionId: sid('gone'), activity: [] })),
+    )
+
+    await expect(b.svc.delete(sid('gone'))).rejects.toMatchObject({
+      name: 'SessionDeleteError',
+      sessionId: 'gone',
+      rpcError: { code: 'session/active' },
+    })
+  })
+
+  it('keeps a committed deletion successful when the follow-up refresh fails', async ({ bench }) => {
+    const b = bench()
+    vi.spyOn(b.svc, 'refresh').mockRejectedValueOnce(new Error('wire down'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await expect(b.svc.delete(sid('gone'))).resolves.toBeUndefined()
+      await Promise.resolve()
+      expect(warn).toHaveBeenCalledWith('session list refresh after deletion failed:', expect.any(Error))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
 describe('catalog arrival', () => {
   it('keeps a retained binding alive without a catalog row after Host removal', async ({ bench }) => {
     const b = bench()

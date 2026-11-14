@@ -1205,6 +1205,65 @@ describe('registry-global session archive', () => {
   })
 })
 
+describe('forgetting a removed session', () => {
+  it('drops the account slot, archive membership, and pin membership in one operation', async () => {
+    const dir = await makeDir('forget-home')
+    const result = await harness({ sessions: [header('kept', dir, 100), header('gone', dir, 200)] })
+    const workspace = result.registry.list()[0]!
+    await result.registry.pinSession(brandString<SessionId>('kept'))
+    await result.registry.archiveSession(brandString<SessionId>('gone'))
+    expect(workspace.sessionIds).toEqual(['gone', 'kept'])
+    expect(result.registry.archivedSessionIds).toEqual(['gone'])
+    expect(result.registry.pinnedSessionIds).toEqual(['kept'])
+
+    await result.registry.forgetSession(brandString<SessionId>('gone'))
+
+    expect(workspace.sessionIds).toEqual(['kept'])
+    expect(result.registry.archivedSessionIds).toEqual([])
+    expect(result.registry.pinnedSessionIds).toEqual(['kept'])
+    expect(storedState(result.pool).archivedSessionIds).toEqual([])
+    const changes = result.changes.length
+    await result.registry.forgetSession(brandString<SessionId>('gone'))
+    // Repeating the forget neither rewrites the medium nor emits a change.
+    expect(result.changes.length).toBe(changes)
+
+    await result.registry.forgetSession(brandString<SessionId>('kept'))
+    expect(workspace.sessionIds).toEqual([])
+    expect(result.registry.pinnedSessionIds).toEqual([])
+  })
+
+  it('forgets an unaccounted session without touching any workspace record', async () => {
+    const strayDir = await makeDir('forget-stray')
+    const result = await harness({
+      sessions: [header('accounted', await makeDir('forget-accounted'), 100)],
+      liveSessions: [header('stray', strayDir, 200)],
+    })
+    await result.registry.pinSession(brandString<SessionId>('stray'))
+    expect(result.registry.pinnedSessionIds).toEqual(['stray'])
+    const recordWrites = result.changes.filter(change => change.table === 'workspaces').length
+
+    await result.registry.forgetSession(brandString<SessionId>('stray'))
+
+    expect(result.registry.pinnedSessionIds).toEqual([])
+    expect(result.changes.filter(change => change.table === 'workspaces').length).toBe(recordWrites)
+  })
+
+  it('keeps the forget durable across a restart', async () => {
+    const dir = await makeDir('forget-restart')
+    const pool = new MemoryMediaPool()
+    const first = await harness({ pool, sessions: [header('kept', dir, 100), header('gone', dir, 200)] })
+    await first.registry.archiveSession(brandString<SessionId>('gone'))
+    await first.registry.forgetSession(brandString<SessionId>('gone'))
+    await first.fiber.dispose()
+
+    const second = await harness({ pool, sessions: [header('kept', dir, 100)] })
+    expect(second.registry.list()[0]!.sessionIds).toEqual(['kept'])
+    expect(second.registry.archivedSessionIds).toEqual([])
+    expect(second.registry.pinnedSessionIds).toEqual([])
+    await second.fiber.dispose()
+  })
+})
+
 describe('registry-global session unarchive', () => {
   it('unarchives durably in order, idempotently skips absent ids, and leaves accounting untouched', async () => {
     const dir = await makeDir('unarchive-home')

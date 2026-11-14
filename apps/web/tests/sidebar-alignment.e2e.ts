@@ -580,7 +580,7 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
     const restingBox = await row.boundingBox()
     await row.hover()
     const labels = kind === 'session'
-      ? [`Session actions for ${sessionTitle}`, 'Archive session', 'Pin session'] as const
+      ? [`Session actions for ${sessionTitle}`, 'Archive session', 'Pin session', 'Delete session…'] as const
       : [`Workspace actions for ${workspaceTitle}`, `New session in ${workspaceTitle}`] as const
     await row.getByRole('button', { name: labels[0], exact: true }).waitFor()
     const metrics = await measureRowActions(row)

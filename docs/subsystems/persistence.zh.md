@@ -336,9 +336,9 @@ interface SessionPersistenceSnapshot {
 
 ## 后端
 
-随产品交付的 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
+随产品交付的 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`/`remove`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
 
-- **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)**——逐会话仅追加的逻辑 JSONL 日志，默认存储为带 checksum 的连续 Zstandard frame，也可配置为原始行；具备崩溃安全的原子实体化、逐批 `fsync` 的 append，以及在第一次新 append 之前截断撕裂尾部。`stat`/`list` 携带 `sizeBytes` 与尽力而为的、由 `fs.stat` 派生的修订号。
+- **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)**——逐会话仅追加的逻辑 JSONL 日志，默认存储为带 checksum 的连续 Zstandard frame，也可配置为原始行；具备崩溃安全的原子实体化、逐批 `fsync` 的 append，以及在第一次新 append 之前截断撕裂尾部。`stat`/`list` 携带 `sizeBytes` 与尽力而为的、由 `fs.stat` 派生的修订号。`remove` 取得该会话的写租约、删除其整个会话目录，并在任何句柄、写认领或其他进程租约仍持有该身份时拒绝。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -378,6 +378,8 @@ Storage semantics shared by every backend: events are contiguous from seq 0 and 
 Visibility: a created session is observable through `stat`/`list`/`open` in this process from the moment `create` resolves, even while a backend defers physical materialization (a pure optimization); other processes see the session only once it materializes, and a session that never materialized before a crash never existed. `SessionHandle.flush` forces materialization.
 
 Freshness: once an `append` or `flush` resolves, reads started afterwards on this backend instance observe at least that prefix.
+
+Removal deletes one session's durable artifacts in full, including every committed generation; it requires exclusive access to that session and is the only storage operation that makes an existing identity unobservable.
 
 ```ts cordis-catalog
 /**
@@ -439,6 +441,23 @@ abstract stat(id: SessionId, options?: SessionPersistenceStatOptions): Promise<S
  * @returns one snapshot per stored session.
  */
 abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+/**
+ * Permanently remove one stored session and every durable artifact it owns.
+ *
+ * Removal requires exclusive access: a backend refuses while an open handle
+ * or a pending creation holds the session in this process, or while another
+ * process holds its write lease. Once it resolves, the identity is absent
+ * from `stat`, `list`, and `open` on this and every other backend instance
+ * that shares the storage. Removal is not a generation operation: it deletes
+ * the session's complete artifact set, not one observed generation.
+ * @param id - the stored session to remove.
+ * @param options - optional cancellation observed before removal work starts.
+ * @returns resolution after the session's artifacts are gone.
+ * @throws {SessionPersistenceNotFoundError} when the session does not exist.
+ * @throws {SessionPersistenceBusyError} while the session is still in use.
+ */
+abstract remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void>
 ```
 
 Types: [SessionId](core.zh.md)

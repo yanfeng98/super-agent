@@ -467,6 +467,20 @@ export class JsonlBackendTracker {
   }
 
   /**
+   * Whether this process still holds any handle or write claim for one
+   * session, the in-process side of removal's exclusive-access requirement.
+   * @param id - the session to test.
+   * @returns true while a handle is open or a write claim is being constructed.
+   */
+  holdsSession(id: SessionId): boolean {
+    if (this.writers.has(id)) return true
+    for (const handle of this.openHandles) {
+      if (handle.id === id) return true
+    }
+    return false
+  }
+
+  /**
    * Drop a pending entry once the session materialized durably.
    * @param id - the session that reached durable storage.
    */

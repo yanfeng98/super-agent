@@ -95,7 +95,7 @@ export class WorkspaceOrderInvalidError extends Error {
 }
 
 
-/** The session an archive request is about to write into the archive set. */
+/** The session an archive or deletion request is about to act on. */
 export interface SessionActivityRequest {
   readonly sessionId: SessionId
 }
@@ -119,11 +119,12 @@ declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
      * Ask the composed providers what still runs for a session before it is
-     * archived. A listener prepends its own {@link SessionActivity} entries to
-     * the result of `next()`; the registry's innermost callback returns an
-     * empty list, so a composition without providers archives freely. Any
-     * non-empty result refuses the archive without a write.
-     * @param request - the session about to be archived.
+     * archived or permanently deleted. A listener prepends its own
+     * {@link SessionActivity} entries to the result of `next()`; the registry's
+     * innermost callback returns an empty list, so a composition without
+     * providers proceeds freely. Any non-empty result refuses that operation
+     * without a write.
+     * @param request - the session about to be archived or deleted.
      * @param next - delegate to the remaining providers.
      * @mode waterfall
      */
@@ -429,6 +430,45 @@ export class WorkspaceRegistry extends Service {
         ...state,
         archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
       })
+    })
+  }
+
+  /**
+   * Drop every registry reference to a session that no longer exists: its
+   * Workspace account slot, its global archive and pin membership, and its
+   * cached header and path facts. Idempotent, and it never probes session
+   * existence — the caller has already removed the session, and dropping an
+   * id cannot introduce an unknown one.
+   *
+   * The account and the global state are two writes. A crash between them
+   * leaves only invisible residue (an unaccounted-without-header id, or a
+   * stale archive/pin id whose session is gone), both of which the existing
+   * membership projection and next accepted mutation already tolerate; no
+   * pending-mutation marker is needed.
+   * @param sessionId - The session whose references must disappear.
+   * @returns resolution after durability.
+   */
+  forgetSession(sessionId: SessionId): Promise<void> {
+    return this.enqueueOperation(async () => {
+      const holder = [...this.requireTable().entries()]
+        .find(([, record]) => record.sessionIds.includes(sessionId))
+      if (holder !== undefined) {
+        const workspace = this.entities.get(holder[0])
+        /* v8 ignore next 2 -- validated state gives every table record its order entry, so the entity exists. */
+        if (workspace !== undefined) await workspace.detachSession(sessionId)
+      }
+      const state = this.requireState()
+      if (state.archivedSessionIds.includes(sessionId) || state.pinnedSessionIds.includes(sessionId)) {
+        await this.setState({
+          ...state,
+          archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
+          pinnedSessionIds: state.pinnedSessionIds.filter(id => id !== sessionId),
+        })
+      }
+      this.headers.delete(sessionId)
+      this.sessionPaths.delete(sessionId)
+      this.missingSessionPaths.delete(sessionId)
+      this.invalidSessionPaths.delete(sessionId)
     })
   }
 

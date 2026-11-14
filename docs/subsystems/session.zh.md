@@ -844,6 +844,10 @@ interface PluginRecord {
 
 可选的 `application` 指定文件关联应用，不修改系统默认值；`workspacePathApplications({ path })` 在校验 Host 路径后返回当前关联应用、名称、图标和默认项。
 
+## 永久删除会话
+
+`session/delete` 是删除已存储会话的唯一操作：它删除全部已提交代际，以及 Host 上对该身份的引用（[持久化](persistence.zh.md)、[工作区](workspace.zh.md)）。准入先于任何移除：该会话不得是子智能体对话、不得通过 `workspace/session-activity` 报告运行中的工作，也不得被控制器无法释放的 Agent 或活动 Session 条目、或仍打开的存储句柄持有；拒绝时日志、引用与活动均保持不变。控制器保留它创建或恢复的每个 Agent 句柄，正是为了让该操作能停止活动 Agent 并释放其写句柄。无论会话是活动还是冷态，删除都只发布一次常规的 `api-session/removed` 边，且不级联到子智能体后代、不回收派生存储。
+
 ## Session 日志上传排除条件
 
 `ctx.sessionLogDeepSeek.registerExclusion()` 注册归调用方所有的判断函数，输入为 `SessionLogUploadRequest`。任意条件匹配时，在读取 Session 事件前省略日志贡献与接受回调。没有条件匹配时保留普通上传资格判断。[包 README](../../packages/session/session-log-deepseek/README.zh.md#upload-exclusions) 定义失败与释放行为。
@@ -969,6 +973,17 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @returns the accepted title and durable event sequence.
  */
 @Remote('rename') rename(request: SessionRenameRequest): Promise<SessionRenameValue>
+
+/**
+ * Permanently delete one ordinary Session: its stored log on every
+ * generation, its Workspace account and archive/pin membership, and its
+ * list entry. Refused while the Session still runs work, is a subagent
+ * conversation, or is held by an Agent or storage handle this controller
+ * does not own; refusal leaves everything untouched.
+ * @param request - Session identity to delete.
+ * @returns confirmation that the Session and its artifacts are gone.
+ */
+@Remote('delete') delete(request: SessionDeleteRequest): Promise<SessionDeleteValue>
 
 /**
  * Fork one cold-readable exact event prefix into a new Session. An omitted
@@ -1320,11 +1335,13 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/removed` — emit
 
-A Session left the live Host registry.
+A Session left the Host catalog: its live Agent was disposed, or the Session was permanently deleted (with no Agent left to dispose). Consumers remove the row and drop cached per-Session data.
 
 ```ts cordis-catalog
 /**
- * A Session left the live Host registry.
+ * A Session left the Host catalog: its live Agent was disposed, or the
+ * Session was permanently deleted (with no Agent left to dispose).
+ * Consumers remove the row and drop cached per-Session data.
  * @mode emit
  * @param sessionId - removed Session identity.
  */
