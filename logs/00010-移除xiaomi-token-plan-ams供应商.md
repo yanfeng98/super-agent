@@ -13,7 +13,7 @@
 | `packages/llm/llm-pi-ai/tests/config.spec.ts` | 存量 profile 拒绝测试参数化加入 `xiaomi-token-plan-ams`，strict 与 deferred 均覆盖。 |
 | `packages/llm/llm-pi-ai/README.md` / `.zh.md` / `.i18n.yaml` | Known Limitations 更新为五条路由均不提供，并说明 AMS 端点与 cn/sgp 套餐模型一致；重新记录双语哈希。 |
 | `docs/user/guide/providers.md` / `.zh.md` / `.i18n.yaml` | 第三方提供商说明加入 Xiaomi Token Plan AMS，补充可用自定义模型 API 接入的替代路径；重新记录双语哈希。 |
-| `docs/upgrade-guide/v0.2.2-rc.2/llm-pi-ai-removed-providers/guide.md` / `.zh.md` / `.i18n.yaml` | 升级指南的 front matter、变更段与迁移说明加入第五条路由；重新记录双语哈希。 |
+| `docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/guide.md` / `.zh.md` / `.i18n.yaml` | 升级指南的 front matter、变更段与迁移说明加入第五条路由；重新记录双语哈希。 |
 | `apps/web/tests/expected/models-settings/empty.expected.md` | 删除 `option "xiaomi-token-plan-ams"`（可选项 37 → 36）。 |
 | `apps/web/tests/expected/models-settings/native-keyless.expected.md` | 同上。 |
 | `apps/web/tests/expected/onboarding-usable-provider/dismissed.expected.md` | 同上。 |
@@ -79,6 +79,8 @@
 复查中同时为用户指南补注路由区域（`xiaomi-token-plan-ams`，阿姆斯特丹），避免读者仅凭 `ams` 缩写无法判断端点归属；双语配对已重新记录。
 
 核对结论：`catalog.ts` 是本包唯一的 pi-ai 供应商枚举点，设置页目录、登录、路由解析、模型发现均经 `catalogProvider(s)` / `catalogProviderIds()` 取用，无旁路；上游 pi-ai README 确认 AMS 指阿姆斯特丹；三份 provider JSON 逐字段比对显示 ams/cn/sgp 的 4 个模型除 `provider` 与 `baseUrl` 外完全一致，文档「同模型、仅端点不同」成立；三个 golden 删除前后分别为 37 与 36 项；i18n 哈希仅被改章节发生变化。
+
+**版本目录修正（2026-11-14）**：基线合并上游后根 `package.json` 已升到 `0.2.2-rc.3`，而升级指南仍位于 `v0.2.2-rc.2/`。按 [升级指南技能](../.agents/skills/dsh-create-upgrade-guide/SKILL.md) 的规则（版本目录取写作时的根版本，发布落地后未发布的指南随新版本目录迁移），把整个 `llm-pi-ai-removed-providers` 条目迁到 `docs/upgrade-guide/v0.2.2-rc.3/`，同步更新用户指南链接与双语配对记录；`verify-upgrade-guides --base origin/main` 与文档门禁全部通过。
 
 复查后重新执行：469 个测试、`tsc -b`、host 产物重建 + `build:check` 2/2、`test:docs` 21/21、`verify-provider-data`、改动文件覆盖率 100%、oxlint 0/0、`git diff --check`，全部通过。
 
