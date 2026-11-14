@@ -91,6 +91,8 @@ describe('withheld catalog providers', () => {
     'azure',
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',
+    'moonshotai',
+    'moonshotai-cn',
     'xiaomi-token-plan-sgp',
     'xiaomi-token-plan-ams',
   ])('refuses a profile that names the removed %s route', (provider) => {

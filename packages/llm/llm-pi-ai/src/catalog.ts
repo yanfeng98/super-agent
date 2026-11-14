@@ -189,9 +189,12 @@ function servesChat(provider: Provider): boolean {
  * same environment — provider-specific wiring the route profile does not model.
  * `xiaomi-token-plan-sgp` and `xiaomi-token-plan-ams` duplicate
  * `xiaomi-token-plan-cn`: all three serve the same four MiMo models and differ
- * only in the endpoint region the subscription resolves. They speak
- * OpenAI-compatible chat completions, so a deployment that needs the Singapore
- * or Amsterdam endpoint can add it as a custom model API.
+ * only in the endpoint region the subscription resolves. `moonshotai` and
+ * `moonshotai-cn` are one Kimi service's global and China endpoints, both
+ * withheld: this build offers Kimi through `kimi-coding` and through a custom
+ * OpenAI-compatible route for the open platform. The Moonshot and Xiaomi
+ * routes speak OpenAI-compatible chat completions, so a deployment that needs
+ * one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -202,6 +205,8 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'azure',
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
+  'moonshotai',
+  'moonshotai-cn',
   'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
 ])

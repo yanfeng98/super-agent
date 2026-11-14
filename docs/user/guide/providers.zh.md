@@ -16,7 +16,7 @@
 
 ## 添加第三方提供商
 
-选择**添加模型提供商**。卡片默认打开在**第三方模型提供商**：选取 dsh 自带的提供商——列表显示的是提供商 id，例如 `anthropic`、`openai`、Kimi 对应的 `moonshotai`、GLM 对应的 `zai`——输入其 API 密钥并保存。已安装目录会提供端点、协议和模型列表。
+选择**添加模型提供商**。卡片默认打开在**第三方模型提供商**：选取 dsh 自带的提供商——列表显示的是提供商 id，例如 `anthropic`、`openai`、Kimi 编码套餐对应的 `kimi-coding`、GLM 对应的 `zai`——输入其 API 密钥并保存。已安装目录会提供端点、协议和模型列表。
 
 认证 **?** 说明已保存凭据的优先级和环境后备。密钥留空时，使用已保存凭据，或尝试读取列出的环境变量。绿色提示标明已检测到环境变量。黄色提示表示未检测到凭据变量；请输入 API 密钥或配置列出的变量。状态未确认表示读取失败。检测不验证凭据，也不测试连接。AWS profile 和 Google 应用默认凭据等提供商管理的凭据文件不在检查范围内。没有原生密钥认证的提供商（例如 `openai-codex`）不显示密钥字段，除非 profile 显式指定了凭据引用。
 
@@ -24,7 +24,7 @@
 
 可编辑的密钥草稿非空时，输入框内显示眼睛按钮。选择**显示密钥**检查当前输入，选择**隐藏密钥**重新遮住输入。修改输入后会重新遮住密钥。原生密码框不提供剪切；可选中草稿后按 Backspace 清空，或显示明文后再剪切。已保存凭据仍保持只写。
 
-本构建不提供 Amazon Bedrock（`amazon-bedrock`）、Azure（`azure`）、Cloudflare AI Gateway（`cloudflare-ai-gateway`）、Cloudflare Workers AI（`cloudflare-workers-ai`）、Xiaomi Token Plan SGP（`xiaomi-token-plan-sgp`，新加坡）与 Xiaomi Token Plan AMS（`xiaomi-token-plan-ams`，阿姆斯特丹），选择器中也不会出现它们。存量 profile 若点名其中一条，`llm-pi-ai` 插件会加载失败：错误会指出该路由，从 `llm-pi-ai.config.providers` 删除该条目即可恢复插件的其他路由。`bedrock-converse-stream` 与 `azure-openai-responses` 不在自定义模型 API 的协议选项中，但 OpenAI 兼容端点仍可通过自定义模型 API 接入；SGP 与 AMS token 套餐端点同样适用，它们与 `xiaomi-token-plan-cn` 提供相同的四个 MiMo 模型；这类路由需使用与被移除路由不同的 Provider ID，该 ID 仍会被拒绝。迁移步骤见[升级指南](../../upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/guide.zh.md)。
+本构建不提供 Amazon Bedrock（`amazon-bedrock`）、Azure（`azure`）、Cloudflare AI Gateway（`cloudflare-ai-gateway`）、Cloudflare Workers AI（`cloudflare-workers-ai`）、Moonshot AI（`moonshotai`，国际站端点）、Moonshot AI CN（`moonshotai-cn`，中国站端点）、Xiaomi Token Plan SGP（`xiaomi-token-plan-sgp`，新加坡）与 Xiaomi Token Plan AMS（`xiaomi-token-plan-ams`，阿姆斯特丹），选择器中也不会出现它们。存量 profile 若点名其中一条，`llm-pi-ai` 插件会加载失败：错误会指出该路由，从 `llm-pi-ai.config.providers` 删除该条目即可恢复插件的其他路由。`bedrock-converse-stream` 与 `azure-openai-responses` 不在自定义模型 API 的协议选项中，但 OpenAI 兼容端点仍可通过自定义模型 API 接入；SGP 与 AMS token 套餐端点同样适用，它们与 `xiaomi-token-plan-cn` 提供相同的四个 MiMo 模型；Moonshot 开放平台的 `api.moonshot.ai` 与 `api.moonshot.cn` 端点亦然，两者提供相同的四个 Kimi 模型；这类路由需使用与被移除路由不同的 Provider ID，该 ID 仍会被拒绝。Kimi 编码套餐（`kimi-coding`）仍然提供。迁移步骤见[升级指南](../../upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/guide.zh.md)。
 
 ## 添加自定义模型 API
 
