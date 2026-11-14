@@ -10,6 +10,7 @@ import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { recordKeyFor } from '../src/auth.ts'
+import { catalogProviderIds } from '../src/catalog.ts'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
@@ -160,7 +161,7 @@ describe('request-level dynamic profiles', () => {
     // before any route exists, each addressed inside the providers dict and
     // described by the endpoint and environment variables it uses unconfigured.
     const directory = ctx.llm.listConfigurableProviders()
-    expect(directory.length).toBeGreaterThan(30)
+    expect(directory.length).toBe(catalogProviderIds().length)
     expect(directory).toContainEqual({
       provider: 'openai',
       displayName: 'openai',

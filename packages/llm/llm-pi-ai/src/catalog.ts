@@ -192,9 +192,14 @@ function servesChat(provider: Provider): boolean {
  * only in the endpoint region the subscription resolves. `moonshotai` and
  * `moonshotai-cn` are one Kimi service's global and China endpoints, both
  * withheld: this build offers Kimi through `kimi-coding` and through a custom
- * OpenAI-compatible route for the open platform. The Moonshot and Xiaomi
- * routes speak OpenAI-compatible chat completions, so a deployment that needs
- * one can add it as a custom model API.
+ * OpenAI-compatible route for the open platform. `qwen-token-plan`,
+ * `qwen-token-plan-cn`, and `qwen-token-plan-individual` are one Alibaba Cloud
+ * token-plan service as well: `qwen-token-plan` and `-cn` serve the same twenty
+ * models from the Singapore and Beijing endpoints, and the individual route
+ * exposes nine of those models from the Singapore endpoint, so the three
+ * describe one subscription rather than three services. The Moonshot, Xiaomi,
+ * and Qwen token-plan routes speak OpenAI-compatible chat completions, so a
+ * deployment that needs one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -207,6 +212,9 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'cloudflare-workers-ai',
   'moonshotai',
   'moonshotai-cn',
+  'qwen-token-plan',
+  'qwen-token-plan-cn',
+  'qwen-token-plan-individual',
   'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
 ])
