@@ -190,7 +190,11 @@ export class SubmitMachine {
     if (ev.ok) {
       this.phase = 'plain'
       this.claim = undefined
-      const effects: InputEffect[] = [{ type: 'commit-draft', retainSuffixOf: flight.attempt.draftSnapshot }]
+      const effects: InputEffect[] = [{
+        type: 'commit-draft',
+        retainSuffixOf: flight.attempt.draftSnapshot,
+        sent: flight.attempt.draftSnapshot,
+      }]
       if (ev.outcome?.text !== undefined) {
         effects.push({ type: 'notice', level: ev.outcome.kind === 'error' ? 'error' : 'info', text: ev.outcome.text })
       }
@@ -208,7 +212,9 @@ export class SubmitMachine {
     if (this.phase !== 'sending' || flight === undefined || flight.attempt.seq !== ev.attempt.seq) return []
     this.inflight = undefined
     this.phase = 'plain'
-    const effects: InputEffect[] = ev.ok ? [{ type: 'commit-draft', retainSuffixOf: null }] : []
+    const effects: InputEffect[] = ev.ok
+      ? [{ type: 'commit-draft', retainSuffixOf: null, sent: flight.attempt.draftSnapshot }]
+      : []
     const text = ev.message ?? ev.outcome?.text
     if (text !== undefined) {
       effects.push({ type: 'notice', level: ev.ok && ev.outcome?.kind !== 'error' ? 'info' : 'error', text })

@@ -407,6 +407,8 @@ export type InputEffect =
    * snapshot keeps a pure suffix typed during the Host round-trip (content
    * appended after the sent snapshot survives; interleaved edits cannot be
    * separated and clear whole); null clears unconditionally (an accepted
-   * message froze the editor, so nothing was typed after it).
+   * message froze the editor, so nothing was typed after it). `sent` is the
+   * clipboard text the submit plane accepted, recorded in the folder's input history
+   * before the editor clears.
    */
-  | { readonly type: 'commit-draft'; readonly retainSuffixOf: string | null }
+  | { readonly type: 'commit-draft'; readonly retainSuffixOf: string | null; readonly sent: string }

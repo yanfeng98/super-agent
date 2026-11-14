@@ -91,7 +91,10 @@ describe('submit-machine: plain × enter', () => {
     const informed = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'sent', occurrences: [], quotes: [], attachmentIds: [] }), 0, 'default-sink')
     expect(m.dispatch({
       type: 'sink-settled', attempt: informed.attempt, ok: true, outcome: { kind: 'success', text: 'queued' },
-    })).toEqual([{ type: 'commit-draft', retainSuffixOf: null }, { type: 'notice', level: 'info', text: 'queued' }])
+    })).toEqual([
+      { type: 'commit-draft', retainSuffixOf: null, sent: 'sent' },
+      { type: 'notice', level: 'info', text: 'queued' },
+    ])
     expect(m.dispatch({ type: 'sink-settled', attempt: informed.attempt, ok: true })).toEqual([])
   })
 

@@ -25,6 +25,7 @@ import type { ComposerBlocks } from '../contract/composer-blocks.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
+import { appendInputHistory, readInputHistory } from './history.ts'
 import { reportMessageSubmission } from './submission-analytics.ts'
 import { readConversationDraft } from '../stores.ts'
 
@@ -132,6 +133,11 @@ export class InputHub implements SessionInputResolver {
         return !state.removed && (state.subagent === null
           || state.subagent.address.mode === 'continuable')
           && this.conversation().blocks.storeFor(session.sessionId).getSnapshot() === undefined
+      },
+      history: {
+        folder: () => this.folderOf(session.sessionId),
+        entries: readInputHistory,
+        record: appendInputHistory,
       },
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandAttachments: {
@@ -321,6 +327,15 @@ export class InputHub implements SessionInputResolver {
     const sessions = this.rootCtx.get('sessions')
     if (sessions === undefined) throw new Error('conversation.input: sessions service unavailable')
     return sessions
+  }
+
+  /**
+   * Resolve the Session's folder for input-history scoping.
+   * @param id - Session identity.
+   * @returns the catalogued working directory, or undefined while the catalog has none.
+   */
+  private folderOf(id: SessionId): string | undefined {
+    return this.sessions().list.getSnapshot().byId[id]?.cwd
   }
 
   private conversation(): ConversationAttachmentFace {

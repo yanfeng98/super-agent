@@ -28,6 +28,8 @@ import { serializeDraftPrompt } from './prompt.ts'
 import { SubmitMachine } from './machine.ts'
 import { resolveDraftInput, snapshotDraft } from '../draft.ts'
 import { DraftEditorRuntime } from './editor/runtime.ts'
+import { atHistoryBoundary } from './history.ts'
+import type { ComposerHistorySource } from './history.ts'
 import type { EditorProjection } from './editor/projection.ts'
 
 /** Popup face the shell needs (dismissal only; typed structurally to avoid a value import). */
@@ -75,6 +77,11 @@ export interface SessionInputDeps {
   quoteInsertionAllowed?: () => boolean
   /** Current localized quote removal copy. */
   quoteRemoveLabel?: () => string
+  /**
+   * Per-folder accepted-input history. The folder is resolved on demand from
+   * the Session catalog; absent = this input has no history.
+   */
+  history?: ComposerHistorySource | undefined
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
   commandAttachments: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -175,6 +182,12 @@ export class SessionInputShell implements SessionInput {
   private disposed = false
   /** Conversation store writer for the current semantic document. */
   private persistDraft: ((draft: DraftSnapshot) => void) | undefined
+  /** Folder entries captured when browsing starts, oldest first. */
+  private historyEntries: readonly string[] = []
+  /** Index into the captured entries while browsing; undefined outside history. */
+  private historyIndex: number | undefined
+  /** Draft text the last recall installed; a different text means the user edited and left history. */
+  private historyExpected: string | undefined
   /** A restored draft's command token waiting for the trigger pipeline, with the revision its restore produced. */
   private pendingCommand: { readonly token: string; readonly rev: number } | undefined
   /** The in-flight claim resolution for a restored command chip. */
@@ -207,11 +220,18 @@ export class SessionInputShell implements SessionInput {
     // with content so a snapshot-built span (apply.ts) stays CAS-valid across
     // caret motion and subscribers do not re-render per caret move.
     if (projectionContentChanged(prev, this.projection)) {
+      if (this.historyIndex !== undefined && this.projection.clipboardText !== this.historyExpected) {
+        this.cancelHistoryBrowse()
+      }
       this.rev += 1
       this.dispatchRun(({ type: 'draft-changed', command: this.projection.command }))
     }
     const caret = this.projection.caret
-    if (caret !== null) {
+    // An unchanged recalled entry keeps the arrows: tracking its slash token
+    // would open the trigger menu and take the next key from history.
+    const browsingUnchanged = this.historyIndex !== undefined
+      && this.projection.clipboardText === this.historyExpected
+    if (caret !== null && !browsingUnchanged) {
       this.deps.inputTriggers?.()?.track(
         this.projection.detectText, caret, { tier: guardOf(this.core.state.phase) }, this.rev,
       )
@@ -227,7 +247,12 @@ export class SessionInputShell implements SessionInput {
    * @param text - plain text or the complete semantic document.
    */
   setDraft(text: DraftInput): void {
-    const draft = resolveDraftInput(text)
+    this.cancelHistoryBrowse()
+    this.applyResolvedDraft(resolveDraftInput(text))
+  }
+
+  /** Apply one resolved semantic draft without changing history navigation. */
+  private applyResolvedDraft(draft: DraftSnapshot): void {
     this.cancelCommandRestore()
     if (draft.references.length === 0 && (draft.quotes?.length ?? 0) === 0) this.draftEditor.setDraft(draft.text)
     else this.draftEditor.restoreDraft(draft.text, draft.references, draft.quotes, { remove: this.deps.quoteRemoveLabel?.() ?? '' })
@@ -311,6 +336,7 @@ export class SessionInputShell implements SessionInput {
    * preserved when the current draft is kept; blocked after disposal or during a pending submission.
    */
   requestDraftInitialization(options: DraftInitializationOptions): DraftInitializationResult {
+    this.cancelHistoryBrowse()
     if (this.draftInitializationBlocked()) return 'blocked'
     const whenDraftExists = options.whenDraftExists ?? (options.clearPreviousDraft === true ? 'replace' : 'keep')
     if (whenDraftExists === 'replace') {
@@ -401,6 +427,7 @@ export class SessionInputShell implements SessionInput {
    */
   submit(mode: InputSubmitMode = 'queue', source?: 'click' | 'enter', allowEmpty = false): void {
     if (this.disposed) return
+    this.cancelHistoryBrowse()
     const timestamp = Date.now()
     let state: MessageSubmissionState | undefined
     if (this.snapshot.phase === 'plain' && (this.snapshot.draft.trim() !== '' || this.attachmentIds.length > 0)) {
@@ -442,6 +469,72 @@ export class SessionInputShell implements SessionInput {
    */
   arbitrate(key: ArbitrateKey, composing: boolean): ArbitrateOutcome {
     return this.deps.inputTriggers?.()?.arbitrate(key, composing) ?? 'pass'
+  }
+
+  /**
+   * Move through the Session folder's accepted-input history. A first Up
+   * starts only from an empty, attachment-free draft; after that the arrows
+   * walk entries from their first and last lines, Down past the newest entry
+   * clears the draft, and any edit leaves history.
+   * @param direction - history direction requested by the key.
+   * @returns whether history claims the key.
+   */
+  historyStep(direction: 'older' | 'newer'): boolean {
+    if (this.disposed || frozen(this.snapshot.phase)) return false
+    if (this.historyIndex === undefined) return direction === 'older' && this.startHistory()
+    const selection = this.projection.selection
+    if (selection !== null && selection.start !== selection.end) return false
+    const caret = selection?.start ?? this.projection.clipboardText.length
+    if (!atHistoryBoundary(this.projection.clipboardText, caret, direction)) return false
+    if (direction === 'older') {
+      if (this.historyIndex === 0) return true
+      this.recallHistory(this.historyIndex - 1)
+      return true
+    }
+    if (this.historyIndex >= this.historyEntries.length - 1) {
+      this.setDraft('')
+      return true
+    }
+    this.recallHistory(this.historyIndex + 1)
+    return true
+  }
+
+  /** Enter history at the folder's newest entry; the draft stays untouched when history cannot start. */
+  private startHistory(): boolean {
+    const history = this.deps.history
+    if (history === undefined || this.projection.clipboardText !== '' || this.attachmentIds.length > 0) return false
+    try {
+      return this.startHistoryFrom(history)
+    } catch (_error: unknown) {
+      // The catalog may disappear while a closing scope still owns this editor.
+      return false
+    }
+  }
+
+  private startHistoryFrom(history: ComposerHistorySource): boolean {
+    const folder = history.folder()
+    if (folder === undefined || folder === '') return false
+    const entries = history.entries(folder)
+    if (entries.length === 0) return false
+    this.historyEntries = entries
+    this.recallHistory(entries.length - 1)
+    return true
+  }
+
+  /** Install one captured entry, keeping the browsing state its own update must observe. */
+  private recallHistory(index: number): void {
+    const text = this.historyEntries[index]
+    if (text === undefined) return
+    this.historyIndex = index
+    this.historyExpected = text
+    this.applyResolvedDraft({ text, references: [] })
+  }
+
+  /** Leave history navigation, keeping the current draft as an ordinary edit. */
+  private cancelHistoryBrowse(): void {
+    this.historyEntries = []
+    this.historyIndex = undefined
+    this.historyExpected = undefined
   }
 
   /**
@@ -695,18 +788,25 @@ export class SessionInputShell implements SessionInput {
         return
       }
       case 'commit-draft': {
-        this.commitDraft(fx.retainSuffixOf)
+        this.commitDraft(fx.retainSuffixOf, fx.sent)
         return
       }
     }
   }
 
   /**
-   * Execute the commit-draft effect: clear the committed content (retaining
-   * a pure typed-during-flight suffix when the snapshot allows) and cut the
-   * undo history so sent content cannot resurrect.
+   * Execute the commit-draft effect: record the accepted text in the folder's
+   * history, clear the committed content (retaining a pure typed-during-flight
+   * suffix when the snapshot allows), and cut the undo history so sent content
+   * cannot resurrect.
    */
-  private commitDraft(retainSuffixOf: string | null): void {
+  private commitDraft(retainSuffixOf: string | null, sent: string): void {
+    this.cancelHistoryBrowse()
+    try {
+      this.recordHistory(sent)
+    } catch (_error: unknown) {
+      // Accepted content must clear even when the history scope or store fails.
+    }
     this.draftEditor.clearCommittedDraft((clip) => {
       if (retainSuffixOf !== null && clip !== retainSuffixOf && clip.startsWith(retainSuffixOf)) {
         return retainSuffixOf.length
@@ -714,6 +814,11 @@ export class SessionInputShell implements SessionInput {
       return null
     })
     this.draftEditor.clearHistory()
+  }
+
+  private recordHistory(sent: string): void {
+    const folder = this.deps.history?.folder()
+    if (folder !== undefined && folder !== '') this.deps.history?.record(folder, sent)
   }
 
   /**

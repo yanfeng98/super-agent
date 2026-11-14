@@ -26,7 +26,7 @@ describe('keymap keydown routing', () => {
     editor.setRootElement(first)
     const unregister = registerComposerKeymap(editor, {
       arbitrate: () => 'pass', space: () => false, dismissPopup: () => {},
-      canSubmit: () => false, submit: () => {}, intakeFiles: () => {}, pasteText: () => {},
+      canSubmit: () => false, submit: () => {}, historyStep: () => false, intakeFiles: () => {}, pasteText: () => {},
     })
     onTestFinished(unregister)
     fireEvent.compositionStart(first)
@@ -60,6 +60,7 @@ describe('keymap keydown routing', () => {
       dismissPopup: () => {},
       canSubmit: () => true,
       submit,
+      historyStep: () => false,
       intakeFiles: () => {},
       pasteText: () => {},
     })
@@ -89,7 +90,7 @@ describe('keymap keydown routing', () => {
     const arbitrate = vi.fn(() => 'pass' as const)
     onTestFinished(registerComposerKeymap(editor, {
       arbitrate, space: () => false, dismissPopup: () => {}, canSubmit: () => true,
-      submit, intakeFiles: () => {}, pasteText: () => {},
+      submit, historyStep: () => false, intakeFiles: () => {}, pasteText: () => {},
     }))
     editor.update(() => {
       const paragraph = $createParagraphNode().append($createTextNode('unsent draft'))
@@ -128,6 +129,7 @@ describe('keymap keydown routing', () => {
       dismissPopup: () => {},
       canSubmit: () => true,
       submit: () => {},
+      historyStep: () => false,
       intakeFiles: () => {},
       pasteText: () => {},
     })
@@ -165,7 +167,7 @@ describe('keymap keydown routing', () => {
       onTestFinished(registerPlainText(editor))
       onTestFinished(registerComposerKeymap(editor, {
         arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, canSubmit: () => true,
-        submit: () => {}, intakeFiles: () => {}, pasteText: () => {},
+        submit: () => {}, historyStep: () => false, intakeFiles: () => {}, pasteText: () => {},
       }))
       return { editor, root, modify }
     }
@@ -227,5 +229,63 @@ describe('keymap keydown routing', () => {
       expect(modify).toHaveBeenCalledExactlyOnceWith('extend', 'forward', 'lineboundary')
       expect(caret(editor)).toBe('paragraph@0')
     })
+  })
+})
+
+describe('composer history arrows', () => {
+  function historyBench(overrides: {
+    readonly arbitrate?: () => 'consumed' | 'pick-highlighted' | 'pass'
+    readonly historyStep?: (direction: 'older' | 'newer') => boolean
+  } = {}) {
+    const editor = createEditor({ namespace: 'history-arrows', onError: (error) => { throw error } })
+    const root = document.createElement('div')
+    root.contentEditable = 'true'
+    document.body.appendChild(root)
+    editor.setRootElement(root)
+    onTestFinished(() => { editor.setRootElement(null); root.remove() })
+    const historyStep = vi.fn(overrides.historyStep ?? (() => true))
+    const arbitrate = vi.fn(overrides.arbitrate ?? (() => 'pass' as const))
+    onTestFinished(registerComposerKeymap(editor, {
+      arbitrate, space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+      submit: () => {}, historyStep, intakeFiles: () => {}, pasteText: () => {},
+    }))
+    return { editor, root, historyStep, arbitrate }
+  }
+
+  it.each([
+    { key: 'ArrowUp', direction: 'older' as const, arbitrated: 'up' },
+    { key: 'ArrowDown', direction: 'newer' as const, arbitrated: 'down' },
+  ])('routes an unmodified $key to history after arbitration passes', ({ key, direction, arbitrated }) => {
+    const { root, historyStep, arbitrate } = historyBench()
+    expect(fireEvent.keyDown(root, { key })).toBe(false)
+    expect(arbitrate).toHaveBeenCalledWith(arbitrated, false)
+    expect(historyStep).toHaveBeenCalledExactlyOnceWith(direction)
+  })
+
+  it('leaves the arrow to the editor when history does not claim it', () => {
+    const { root, historyStep } = historyBench({ historyStep: () => false })
+    expect(fireEvent.keyDown(root, { key: 'ArrowUp' })).toBe(true)
+    expect(historyStep).toHaveBeenCalledOnce()
+  })
+
+  it('keeps arrows with modifiers and IME composition out of history', () => {
+    const { root, historyStep } = historyBench()
+    for (const init of [
+      { key: 'ArrowUp', shiftKey: true },
+      { key: 'ArrowDown', shiftKey: true },
+      { key: 'ArrowUp', ctrlKey: true },
+      { key: 'ArrowUp', metaKey: true },
+      { key: 'ArrowDown', altKey: true },
+      { key: 'ArrowUp', keyCode: 229 },
+    ]) {
+      expect(fireEvent.keyDown(root, init)).toBe(true)
+    }
+    expect(historyStep).not.toHaveBeenCalled()
+  })
+
+  it('keeps a claimed menu arrow out of history', () => {
+    const { root, historyStep } = historyBench({ arbitrate: () => 'consumed' })
+    expect(fireEvent.keyDown(root, { key: 'ArrowUp' })).toBe(false)
+    expect(historyStep).not.toHaveBeenCalled()
   })
 })
