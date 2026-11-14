@@ -9,7 +9,7 @@ import { deriveKeyRef, joinProviderDirectory, ModelsSettingsStore, providerUsabl
 it.each([
   ['anthropic', 'ANTHROPIC_API_KEY'],
   ['kimi-coding', 'KIMI_CODING_API_KEY'],
-  ['qwen-token-plan-cn', 'QWEN_TOKEN_PLAN_CN_API_KEY'],
+  ['xiaomi-token-plan-cn', 'XIAOMI_TOKEN_PLAN_CN_API_KEY'],
   ['google-vertex', 'GOOGLE_VERTEX_API_KEY'],
   ['constructor', 'CONSTRUCTOR_API_KEY'],
 ])('stores a typed key for route %s under a reference derived from the route id', (provider, ref) => {

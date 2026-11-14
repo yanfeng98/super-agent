@@ -1181,7 +1181,8 @@ describe('configurable-provider directory', () => {
       { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [] },
     ])
     const before = ctx.llm.listConfigurableProviders().length
-    expect(before).toBeGreaterThan(30)
+    // Every served catalog route, plus the one this test registered.
+    expect(before).toBe(catalogProviderIds().length + 1)
 
     await configurations.get(ctx)!.update({
       providers: {
@@ -1265,6 +1266,9 @@ describe('configurable-provider directory', () => {
       'cloudflare-workers-ai',
       'moonshotai',
       'moonshotai-cn',
+      'qwen-token-plan',
+      'qwen-token-plan-cn',
+      'qwen-token-plan-individual',
       'xiaomi-token-plan-sgp',
       'xiaomi-token-plan-ams',
     ]) {
