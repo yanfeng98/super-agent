@@ -190,7 +190,7 @@ describe('serialized conversation updates', () => {
   })
 
   it.each([
-    { provider: 'moonshotai', modelId: 'kimi-k3', field: 'messages', role: 'system' },
+    { provider: 'kimi-coding', modelId: 'k3', field: 'messages', role: 'system' },
     { provider: 'openai', modelId: 'gpt-5.4', field: 'input', role: 'developer' },
   ])('preserves update placement through $provider', async ({ provider, modelId, field, role }) => {
     const { requests } = await send(provider, modelId, {
@@ -235,7 +235,7 @@ describe('serialized conversation updates', () => {
 describe('historical tool availability on the wire', () => {
   it('anchors Kimi tool additions after user input in Chat Completions', async () => {
     const update = addition()
-    const { requests } = await send('moonshotai', 'kimi-k3', {
+    const { requests } = await send('kimi-coding', 'k3', {
       messages: [user('first'), update], tools: [baseline, added],
       toolHistory: { tools: [baseline], updates: [{ messageId: update.id, additions: [added] }] },
     })

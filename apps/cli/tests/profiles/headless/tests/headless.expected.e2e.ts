@@ -1002,7 +1002,7 @@ describe('headless stream-json snapshots', () => {
         tsconfigPath,
         prepare: cwd => writeFile(join(cwd, 'task.txt'), 'Call snapshot_ping once.\n'),
         env: {
-          MOONSHOT_API_KEY: 'snapshot-key',
+          KIMI_API_KEY: 'snapshot-key',
           DSH_SNAPSHOT_BASE_URL: server.url,
           NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
         },

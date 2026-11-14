@@ -37,8 +37,6 @@
       - option "minimax"
       - option "minimax-cn" [selected]
       - option "mistral"
-      - option "moonshotai"
-      - option "moonshotai-cn"
       - option "nvidia"
       - option "openai"
       - option "openai-codex"

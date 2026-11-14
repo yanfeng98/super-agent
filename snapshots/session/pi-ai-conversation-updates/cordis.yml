@@ -4,8 +4,8 @@
 - id: llm-pi-ai
   config:
     providers:
-      moonshotai:
-        apiKeyEnv: MOONSHOT_API_KEY
+      kimi-coding:
+        apiKeyEnv: KIMI_API_KEY
 
 - insert:
     - id: dynamic-tool-prompt-updates

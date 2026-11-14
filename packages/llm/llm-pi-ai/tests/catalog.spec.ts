@@ -1263,6 +1263,8 @@ describe('configurable-provider directory', () => {
       'azure',
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
+      'moonshotai',
+      'moonshotai-cn',
       'xiaomi-token-plan-sgp',
       'xiaomi-token-plan-ams',
     ]) {
