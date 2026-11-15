@@ -222,11 +222,20 @@ function servesChat(provider: Provider): boolean {
  * accounts billed in separate currencies, so this build keeps the China route and
  * withholds the international one; an international account can still be used
  * through an Anthropic Messages custom model API at
- * `https://api.minimax.io/anthropic`.
+ * `https://api.minimax.io/anthropic`. `radius` is a third-party gateway that
+ * resells other vendors' models: 26 of its 29 model ids keep the same id on
+ * built-in routes, and the other three (`balanced`, `cheap`, `precise`) are
+ * intent aliases resolving to `kimi-k3`, `deepseek-v4.1-flash`, and
+ * `gpt-5.6-sol`, which other routes serve, so withholding it removes a routing
+ * and billing layer rather than model coverage. It speaks `pi-messages`, a
+ * protocol no hand-declared route can select, but its endpoint also answers
+ * OpenAI-compatible chat completions at `https://radius.pi.dev/v1`, so a
+ * deployment that needs the gateway can add it as an `openai-completions`
+ * custom model API under a different provider id.
  * The Cerebras, Moonshot, Xiaomi, Qwen, and Hugging Face routes speak
- * OpenAI-compatible chat completions, and the gateway and MiniMax endpoints
- * speak Anthropic Messages, so a deployment that needs one can add it as a
- * custom model API.
+ * OpenAI-compatible chat completions, and the Vercel AI Gateway and MiniMax
+ * endpoints speak Anthropic Messages, so a deployment that needs one can add it
+ * as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -246,6 +255,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'qwen-token-plan',
   'qwen-token-plan-cn',
   'qwen-token-plan-individual',
+  'radius',
   'vercel-ai-gateway',
   'xiaomi',
   'xiaomi-token-plan-sgp',
