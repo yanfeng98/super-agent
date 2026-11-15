@@ -120,7 +120,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await modes.getByRole('tab', { name: '第三方模型提供商' }).getAttribute('aria-selected')).toBe('true')
     const pick = dialog.getByLabel('提供商', { exact: true })
     await pick.waitFor({ timeout: 10_000 })
-    await expect.poll(async () => pick.locator('option').count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(25)
+    await expect.poll(async () => pick.locator('option').count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(24)
     const options = await pick.locator('option').allTextContents()
     expect(options).toContain('anthropic')
     expect(options).toContain('minimax-cn')

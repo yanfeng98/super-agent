@@ -93,6 +93,7 @@ describe('withheld catalog providers', () => {
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',
     'huggingface',
+    'minimax',
     'moonshotai',
     'moonshotai-cn',
     'opencode',

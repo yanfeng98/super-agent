@@ -28,7 +28,6 @@
       - option "groq"
       - option "kimi-coding"
       - option "meta"
-      - option "minimax"
       - option "minimax-cn"
       - option "mistral"
       - option "nvidia"
