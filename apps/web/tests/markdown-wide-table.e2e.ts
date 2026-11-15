@@ -1,19 +1,17 @@
 // Web e2e scenario: markdown tables in the message column, deepsuite-chat
-// parity. Tables under four columns (and long-cell tables) fill the 748px
-// message column and wrap; four-or-more-column tables keep their natural
-// width, scroll horizontally inside their wrapper, and — through the
-// renderer's `md-table-wide` hook plus AssistantMarkdown's container-query
-// breakout — span the whole transcript width instead of clipping at the
-// message column, with the table content still starting at the message
-// column's left edge. When the transcript is narrower than the message
-// column the breakout clamps to neutral and the plain in-column scroll
-// remains.
+// parity. Tables under four columns (and long-cell tables) fill the message
+// column and wrap; four-or-more-column tables take their natural width up to
+// the width the transcript offers, so a table whose cells can wrap stays
+// inside the message column and every table's content starts at the same x.
+// Only the cells' 100px readable floors can exceed that width — a
+// many-column table like the fourteen-column one — and then the wrapper keeps
+// its horizontal scroll.
 //
-// Only a real engine lays out CSS tables and resolves container-query
-// units, so the fill/scroll/breakout relations, the lead-padding alignment,
-// arrow-key scrolling, and the zoom/DPR arms are all measured in Chromium
-// across viewport stops. The golden records relations and booleans, never
-// pixels: absolute widths document the platform, not the behavior.
+// Only a real engine lays out CSS tables, so the fill/scroll relations, the
+// column alignment, arrow-key scrolling, and the zoom/DPR arms are all
+// measured in Chromium across viewport stops. The golden records relations
+// and booleans, never pixels: absolute widths document the platform, not the
+// behavior.
 //
 // Zero model calls: the transcript is a closed turn assembled through the
 // Session API and seeded cold; a stray stream would fail loud with
@@ -57,32 +55,32 @@ const TAIL_MARKER = 'MWT_TABLES_DONE'
 const FILL_MARKER = 'MWT_FILL_C1'
 const WIDE_MARKER = 'MWT_WIDE_C01'
 const LONG_CELL_MARKER = 'MWT_LONGCELL_F1'
+const PROSE_MARKER = 'MWT_PROSE_C1'
 const SHORT_MARKER = 'MWT_SHORT_C1'
-const MARKERS = [FILL_MARKER, WIDE_MARKER, LONG_CELL_MARKER]
+const MARKERS = [FILL_MARKER, WIDE_MARKER, LONG_CELL_MARKER, PROSE_MARKER]
 /** Golden-facing names, in {@link MARKERS} order. */
-const TABLE_NAMES = ['fill', 'wide', 'long-cell']
+const TABLE_NAMES = ['fill', 'wide', 'long-cell', 'prose']
 
 /**
  * Viewport sweep. The wide stops leave the transcript far wider than the
- * 748px message column, so the breakout relation holds with a fat margin on
- * every platform; the narrow stop drops the transcript below the message
- * column, which must clamp the breakout to neutral. The sidebar is collapsed
+ * message column, where a wrapping table has room to grow; the narrow stop
+ * drops the transcript to the message column itself. The sidebar is collapsed
  * for the whole sweep (see beforeAll), so the transcript width follows the
  * viewport identically on overlay- and classic-scrollbar platforms.
  */
 const WIDTHS = [1680, 1100, 640]
 
-/** A sentence long enough that three of them cannot sit unwrapped in the 748px column. */
+/** A sentence long enough that three of them cannot sit unwrapped in the message column. */
 const SENTENCE = 'This cell carries one full sentence so the unwrapped table is far wider than the message column.'
 /** Unbroken path-like token (no scheme, so GFM does not autolink it and no anchor joins the tab order). */
 const LONG_TOKEN = 'workspace/deepseek-harness/packages/client/ui-primitives/src/markdown/render.tsx/'.repeat(3)
 const CJK_SENTENCE = '这个单元格包含一段较长的中文说明，用来验证长内容在窄列宽下按最小可读宽度换行而不是把列压缩到无法阅读。'
 
-/** The assistant markdown includes fitting and overflowing wide tables. */
+/** The assistant markdown includes fitting, wrapping, and overflowing tables. */
 function tablesMarkdown(): string {
-  const wideHeader = [WIDE_MARKER, ...Array.from({ length: 11 }, (_, i) => `C${String(i + 2).padStart(2, '0')}`)]
+  const wideHeader = [WIDE_MARKER, ...Array.from({ length: 13 }, (_, i) => `C${String(i + 2).padStart(2, '0')}`)]
   const wideRow = (row: number): string[] =>
-    Array.from({ length: 12 }, (_, i) => `v${String(row)}${String(i + 1).padStart(2, '0')}`)
+    Array.from({ length: 14 }, (_, i) => `v${String(row)}${String(i + 1).padStart(2, '0')}`)
   return [
     'Markdown tables exercise the wide-table layout rules.',
     '',
@@ -99,9 +97,16 @@ function tablesMarkdown(): string {
     `| Memory | ${SENTENCE} | ${SENTENCE} |`,
     '',
     `| ${wideHeader.join(' | ')} |`,
-    `|${' --- |'.repeat(12)}`,
+    `|${' --- |'.repeat(14)}`,
     `| ${wideRow(1).join(' | ')} |`,
     `| ${wideRow(2).join(' | ')} |`,
+    '',
+    // Four columns whose cells can wrap: the table must fit the message column
+    // instead of keeping its natural width.
+    `| ${PROSE_MARKER} | Problem | Location | Fix |`,
+    '| --- | --- | --- | --- |',
+    `| 1 | ${SENTENCE} | \`00015\` background section | ${SENTENCE} |`,
+    `| 2 | ${CJK_SENTENCE} | logs/00009 §6 | ${SENTENCE} |`,
     '',
     `| ${LONG_CELL_MARKER} | Value |`,
     '| --- | --- |',
@@ -169,11 +174,9 @@ interface TableReading {
   clientWidth: number
   /** Rendered wrapper height; wrapping shows up as growth when the column narrows. */
   height: number
-  /** Renderer marked the table with the `md-table-wide` breakout hook. */
+  /** Renderer marked the table with the `md-table-wide` hook. */
   wideHook: boolean
-  /** Resolved lead padding (the breakout's alignment compensation). */
-  paddingLeft: number
-  /** The table's own left x, for the content-alignment relation. */
+  /** The table's own left x, for the column-alignment relation. */
   tableLeft: number
 }
 
@@ -192,7 +195,6 @@ function readTables(page: Page): Promise<TableReading[]> {
         clientWidth: wrapper.clientWidth,
         height: wrapper.getBoundingClientRect().height,
         wideHook: wrapper.classList.contains('md-table-wide'),
-        paddingLeft: Number.parseFloat(getComputedStyle(wrapper).paddingLeft),
         tableLeft: table.getBoundingClientRect().left,
       }
     })
@@ -227,11 +229,11 @@ async function awaitTableLayout(target: Page): Promise<void> {
 }
 
 /**
- * Render the golden body: relations only. `fills` is the wrap-first claim
- * (the wrapper has no residual horizontal scroll), `scrolls` the many-column
- * fallback, and `breaks out` whether the wide wrapper spans past the message
- * column (compared against the fill table, which by construction is exactly
- * the message column's width).
+ * Render the golden body: relations only. `fills` is the claim that the table
+ * needs no horizontal scroll (its cells wrap inside the column), and
+ * `scrolls` the many-column fallback. The fill table is by construction
+ * exactly the message column's width, which the alignment relation compares
+ * every other table against.
  * @param stops - the measured stops, in sweep order.
  * @param wrapTighter - per table name, whether the block grew taller at the
  * narrowest stop than at the widest (the proof wrapping engaged).
@@ -241,15 +243,12 @@ function renderGeometry(stops: TableStop[], wrapTighter: Map<string, boolean>): 
   return [
     '# Markdown wide-table relations',
     '',
-    '| viewport | table | fills the column | scrolls | breaks out past the column |',
-    '| --- | --- | --- | --- | --- |',
-    ...stops.flatMap((stop) => {
-      const columnWidth = stop.tables[0]!.clientWidth
-      return stop.tables.map((table, index) =>
-        `| ${String(stop.width)}px | ${TABLE_NAMES[index]} | ${String(table.overflow <= 1)} `
-        + `| ${String(table.overflow > 1)} | ${String(table.clientWidth > columnWidth + 8)} |`,
-      )
-    }),
+    '| viewport | table | fills the column | scrolls |',
+    '| --- | --- | --- | --- |',
+    ...stops.flatMap(stop => stop.tables.map((table, index) =>
+      `| ${String(stop.width)}px | ${TABLE_NAMES[index]} | ${String(table.overflow <= 1)} `
+      + `| ${String(table.overflow > 1)} |`,
+    )),
     '',
     'Wrap-first engagement (taller at the narrowest stop than at the widest):',
     '',
@@ -257,7 +256,7 @@ function renderGeometry(stops: TableStop[], wrapTighter: Map<string, boolean>): 
   ].join('\n')
 }
 
-describe('web e2e: markdown tables fill the column, wide ones break out and scroll', () => {
+describe('web e2e: markdown tables wrap inside the column and scroll only when they cannot', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -283,11 +282,10 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     // sweep: classic-scrollbar platforms (Linux CI) lose ~15px of layout
     // width, which shifts how much of a narrow viewport the panes leave the
     // transcript and lands the narrow stop's readings far from the macOS
-    // ones — and an expanded right column alone pins the transcript to
-    // exactly the message column, which would make every breakout relation
-    // vacuous. With both out of the equation the transcript follows the
-    // viewport identically on every platform, which is what keeps one
-    // committed golden true for all lanes.
+    // ones — and an expanded right column moves the message column's width
+    // axis, which the alignment relation reads. With both out of the equation
+    // the transcript follows the viewport identically on every platform,
+    // which is what keeps one committed golden true for all lanes.
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
     await awaitTableLayout(page)
   }, 180_000)
@@ -321,34 +319,31 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     return swept
   }
 
-  it('fills narrow tables, scrolls wide ones, and breaks them out where the transcript is wider', async () => {
+  it('wraps tables inside the message column, scrolling only the ones whose columns cannot fit', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-wide-table'))
     const stops = await sweep()
     for (const stop of stops) {
-      const [fill, wide, longCell] = stop.tables
-      const columnWidth = fill!.clientWidth
+      const [fill, wide, longCell, prose] = stop.tables
       // #520: an ordinary wide table fills the message column and wraps…
       expect(fill!.overflow, `fill viewport ${String(stop.width)}`).toBeLessThanOrEqual(1)
       // …a long unbroken token and long CJK prose wrap instead of forcing a scroll…
       expect(longCell!.overflow, `long-cell viewport ${String(stop.width)}`).toBeLessThanOrEqual(1)
-      // …and a many-column table keeps its natural width behind the scroll fallback.
+      // …a four-column table whose cells can wrap does the same instead of
+      // keeping its natural width and running past the column…
+      expect(prose!.overflow, `prose viewport ${String(stop.width)}`).toBeLessThanOrEqual(1)
+      // …and only a many-column table, whose 100px readable floors add up to
+      // more than the column, keeps the horizontal scroll fallback.
       expect(wide!.overflow, `wide viewport ${String(stop.width)}`).toBeGreaterThan(1)
       // The hook is column-count static, present at every stop.
       expect(wide!.wideHook).toBe(true)
+      expect(prose!.wideHook).toBe(true)
       expect(fill!.wideHook).toBe(false)
       expect(longCell!.wideHook).toBe(false)
-      if (stop.width > 748) {
-        // Breakout: the wide wrapper spans past the message column, and its
-        // lead padding keeps the table content starting at the message
-        // column's left edge (compared to the fill table's content).
-        expect(wide!.clientWidth, `wide breakout at ${String(stop.width)}`).toBeGreaterThan(columnWidth + 8)
-        expect(wide!.paddingLeft, `lead at ${String(stop.width)}`).toBeGreaterThan(0)
-        expect(Math.abs(wide!.tableLeft - fill!.tableLeft), `alignment at ${String(stop.width)}`).toBeLessThan(1.5)
-      } else {
-        // Below the message column there is no spare width: the breakout
-        // clamps to neutral and the wrapper stays the column's width.
-        expect(Math.abs(wide!.clientWidth - columnWidth), `neutral at ${String(stop.width)}`).toBeLessThan(1.5)
-        expect(wide!.paddingLeft, `no lead at ${String(stop.width)}`).toBeLessThan(1.5)
+      // Every table's content starts on the message column's left edge: no
+      // table reaches the transcript edges on its own.
+      for (const table of stop.tables) {
+        expect(Math.abs(table.tableLeft - fill!.tableLeft), `${table.marker} alignment at ${String(stop.width)}`)
+          .toBeLessThan(1.5)
       }
     }
     // Wrap-first engaged for real: the filling tables grow taller as the
@@ -357,6 +352,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     const narrowest = stops[stops.length - 1]!
     expect(narrowest.tables[0]!.height).toBeGreaterThan(widest.tables[0]!.height)
     expect(narrowest.tables[2]!.height).toBeGreaterThan(widest.tables[2]!.height)
+    expect(narrowest.tables[3]!.height).toBeGreaterThan(widest.tables[3]!.height)
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
@@ -470,7 +466,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
-  it('gives the gutter to painted table content, not transparent breakout padding', async () => {
+  it('keeps the transcript gutter free of table content', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-width-handle-hit'))
     await settleAt(1680)
     const hitAtHandle = async (marker: string) => {
@@ -488,23 +484,17 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
         const y = tableRect.top + tableRect.height / 2
         const hit = document.elementFromPoint(x, y)
         return {
-          tableCoversHandle: tableRect.left <= x && tableRect.right >= x,
           hitTable: hit !== null && table.contains(hit),
           hitHandle: hit !== null && handle.contains(hit),
         }
       }, marker)
     }
 
-    expect(await hitAtHandle(WIDE_MARKER)).toEqual({
-      tableCoversHandle: true,
-      hitTable: true,
-      hitHandle: false,
-    })
-    expect(await hitAtHandle(SHORT_MARKER)).toEqual({
-      tableCoversHandle: false,
-      hitTable: false,
-      hitHandle: true,
-    })
+    // No table reaches the resize strip beside the message column — a
+    // many-column table clips inside its own wrapper — so the handle stays the
+    // pointer target next to every table.
+    expect(await hitAtHandle(WIDE_MARKER)).toEqual({ hitTable: false, hitHandle: true })
+    expect(await hitAtHandle(SHORT_MARKER)).toEqual({ hitTable: false, hitHandle: true })
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
@@ -515,8 +505,8 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     try {
       await page.evaluate(() => { document.documentElement.style.zoom = '1.25' })
       await expect.poll(async () => {
-        const [fill, wide, longCell] = await readTables(page)
-        return fill!.overflow <= 1 && longCell!.overflow <= 1 && wide!.overflow > 1
+        const [fill, wide, longCell, prose] = await readTables(page)
+        return fill!.overflow <= 1 && longCell!.overflow <= 1 && prose!.overflow <= 1 && wide!.overflow > 1
       }, { timeout: 10_000 }).toBe(true)
     } finally {
       await page.evaluate(() => { document.documentElement.style.zoom = '' })
@@ -549,7 +539,8 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
       const relations = (tables: TableReading[]) => tables.map(table => ({
         marker: table.marker,
         fills: table.overflow <= 1,
-        breaksOut: table.clientWidth > tables[0]!.clientWidth + 8,
+        aligned: Math.abs(table.tableLeft - tables[0]!.tableLeft) < 1.5,
+        wideHook: table.wideHook,
       }))
       expect(relations(readings)).toEqual(relations(baseline.tables))
       expect(hidpiTripwire.pageErrors).toEqual([])
@@ -566,6 +557,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     const wrapTighter = new Map<string, boolean>([
       ['fill', narrowest.tables[0]!.height > widest.tables[0]!.height],
       ['long-cell', narrowest.tables[2]!.height > widest.tables[2]!.height],
+      ['prose', narrowest.tables[3]!.height > widest.tables[3]!.height],
     ])
     await compareOrRefreshGolden(GEOMETRY_EXPECTED, renderGeometry(stops, wrapTighter), MODE)
     expect(tripwire.pageErrors).toEqual([])
