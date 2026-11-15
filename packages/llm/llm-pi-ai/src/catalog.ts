@@ -216,10 +216,17 @@ function servesChat(provider: Provider): boolean {
  * second billing surface. Its paid models stay reachable through an OpenAI-compatible
  * custom model API at `https://opencode.ai/inference/v1`; its free-tier models
  * require the OpenCode client, and its System One entries are classifier models
- * rather than chat routes. The Cerebras, Moonshot, Xiaomi, Qwen, and Hugging
- * Face routes speak OpenAI-compatible chat completions and the gateway speaks
- * Anthropic Messages, so a deployment that needs one can add it as a custom
- * model API.
+ * rather than chat routes. `minimax` is MiniMax's international platform
+ * endpoint and `minimax-cn` its China platform endpoint: both serve the same
+ * three models with identical capabilities and catalog costs, from separate
+ * accounts billed in separate currencies, so this build keeps the China route and
+ * withholds the international one; an international account can still be used
+ * through an Anthropic Messages custom model API at
+ * `https://api.minimax.io/anthropic`.
+ * The Cerebras, Moonshot, Xiaomi, Qwen, and Hugging Face routes speak
+ * OpenAI-compatible chat completions, and the gateway and MiniMax endpoints
+ * speak Anthropic Messages, so a deployment that needs one can add it as a
+ * custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -232,6 +239,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
   'huggingface',
+  'minimax',
   'moonshotai',
   'moonshotai-cn',
   'opencode',

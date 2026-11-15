@@ -1267,6 +1267,7 @@ describe('configurable-provider directory', () => {
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
       'huggingface',
+      'minimax',
       'moonshotai',
       'moonshotai-cn',
       'opencode',
