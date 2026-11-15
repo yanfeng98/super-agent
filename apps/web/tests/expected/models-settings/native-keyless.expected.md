@@ -43,7 +43,6 @@
       - option "together"
       - option "vercel-ai-gateway"
       - option "xai"
-      - option "xiaomi"
       - option "xiaomi-token-plan-cn"
       - option "zai"
       - option "zai-coding-cn"
