@@ -209,9 +209,17 @@ function servesChat(provider: Provider): boolean {
  * carrying two open-weight models that this build already reaches on other
  * routes (`gpt-oss-120b` under an `openai/` prefix on four routes, Qwen3.8 27B
  * on two), so withholding it removes a serving surface rather than model
- * coverage. The Cerebras, Moonshot, Xiaomi, Qwen, and Hugging Face routes speak
- * OpenAI-compatible chat completions and the gateway speaks Anthropic
- * Messages, so a deployment that needs one can add it as a custom model API.
+ * coverage. `opencode` is OpenCode's pay-as-you-go Console gateway: this build
+ * keeps the same vendor's subscription route `opencode-go`, both resolve the one
+ * `OPENCODE_API_KEY` credential, and most of Zen's closed-source models also
+ * appear on other routes, so withholding it leaves the vendor served without a
+ * second billing surface. Its paid models stay reachable through an OpenAI-compatible
+ * custom model API at `https://opencode.ai/inference/v1`; its free-tier models
+ * require the OpenCode client, and its System One entries are classifier models
+ * rather than chat routes. The Cerebras, Moonshot, Xiaomi, Qwen, and Hugging
+ * Face routes speak OpenAI-compatible chat completions and the gateway speaks
+ * Anthropic Messages, so a deployment that needs one can add it as a custom
+ * model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -226,6 +234,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'huggingface',
   'moonshotai',
   'moonshotai-cn',
+  'opencode',
   'qwen-token-plan',
   'qwen-token-plan-cn',
   'qwen-token-plan-individual',
