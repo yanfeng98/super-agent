@@ -100,6 +100,7 @@ describe('withheld catalog providers', () => {
     'qwen-token-plan',
     'qwen-token-plan-cn',
     'qwen-token-plan-individual',
+    'radius',
     'vercel-ai-gateway',
     'xiaomi',
     'xiaomi-token-plan-sgp',

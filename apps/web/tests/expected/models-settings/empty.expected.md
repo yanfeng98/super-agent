@@ -35,7 +35,6 @@
       - option "openai-codex"
       - option "opencode-go"
       - option "openrouter"
-      - option "radius"
       - option "together"
       - option "xai"
       - option "xiaomi-token-plan-cn"
