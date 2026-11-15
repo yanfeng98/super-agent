@@ -31,7 +31,6 @@
       - option "google"
       - option "google-vertex"
       - option "groq"
-      - option "huggingface"
       - option "kimi-coding"
       - option "meta"
       - option "minimax"

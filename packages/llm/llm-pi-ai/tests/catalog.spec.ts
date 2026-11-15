@@ -1264,6 +1264,7 @@ describe('configurable-provider directory', () => {
       'azure',
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
+      'huggingface',
       'moonshotai',
       'moonshotai-cn',
       'qwen-token-plan',

@@ -201,10 +201,14 @@ function servesChat(provider: Provider): boolean {
  * exposes nine of those models from the Singapore endpoint, so the three
  * describe one subscription rather than three services. `vercel-ai-gateway` is
  * withheld as an aggregator: one third-party endpoint resells 301 models from
- * other vendors, 118 of which keep the same id on `openrouter`. The Moonshot,
- * Xiaomi, and Qwen routes speak
- * OpenAI-compatible chat completions and the gateway speaks Anthropic
- * Messages, so a deployment that needs one can add it as a custom model API.
+ * other vendors, 118 of which keep the same id on `openrouter`. `huggingface`
+ * is the Hugging Face router: its 78 entries are Hub repository names that a
+ * third-party inference provider serves, and 64 of those model names also
+ * appear on `openrouter`, so the route adds a routing and billing layer rather
+ * than another vendor's models. The Moonshot, Xiaomi, Qwen, and Hugging Face
+ * routes speak OpenAI-compatible chat completions and the gateway speaks
+ * Anthropic Messages, so a deployment that needs one can add it as a custom
+ * model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -215,6 +219,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'azure',
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
+  'huggingface',
   'moonshotai',
   'moonshotai-cn',
   'qwen-token-plan',
