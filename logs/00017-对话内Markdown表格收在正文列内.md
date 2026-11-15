@@ -42,6 +42,7 @@
 | `pnpm run test:gui` | 783/784 文件通过、13983 项通过；唯一失败为 `packages/host/open-in-app/tests/resolver.spec.ts`，在干净树上同样失败（本机 WSLg 带 `WAYLAND_DISPLAY`/`DISPLAY`），与本次无关 |
 | `pnpm run lint` | 7251 个文件、0 warning、0 error |
 | `pnpm run test:docs` | 21 个门禁全部通过（新增 Agent Note、README 与日志后各跑一次） |
+| `pnpm run doc-sync` | 43 个门禁全部通过；首次运行有 1 个失败（`verify-package-paths`），根因是本机残留的未跟踪目录 `packages/experimental/ptc-runtime-python`（该包已从仓库删除，只剩 `lib/` 与 `node_modules/`），被门禁当成存活包叶从而把历史升级指南里一条指向上游 tag 的绝对 URL 判为漂移；删除该残留后 43/43 |
 | 宽表 e2e（`DSH_SNAPSHOT=refresh` 后 `replay`） | 11/12 通过；唯一失败是 WebKit 触摸分支（宿主机缺 `libgtk-4.so.1` 等运行库），Chromium 分支与金标通过，金标重录后回放稳定 |
 | `thinking-markdown.e2e.ts`（思考行 6 列表格） | 通过：6 列表仍需内部滚动，`wideContentBounded` 等断言不变 |
 | `math-rendering.e2e.ts`、`markdown-cjk-strong.e2e.ts` | 3 项全部通过 |
@@ -86,6 +87,7 @@
 ## 6. 已知限制与后续
 
 - `127.0.0.1:3080` 只需刷新即可看到修复（资源为 `no-cache` 且文件名哈希已更新）；若浏览器复用了旧 index，用强制刷新。
+- 本机曾残留 `packages/experimental/ptc-runtime-python`（已删除包的未跟踪构建产物与 `node_modules`），会让 `verify-package-paths` 把历史指南里指向上游 tag 的绝对 URL 误判为漂移；该目录已删除，全新 clone 不会出现，`pnpm run clean` 也会清掉同类残渣。
 - WebKit 下的表格几何未在本机验证；接续验证方式是在装有 WebKit 运行库的机器上给 `markdown-wide-table.e2e.ts` 增加一个 WebKit 视口扫描。
 - ≤390px 时 3–4 列表格仍在表格内部横向滚动；若要在手机上让四列完全放下，需要下调 100px 可读下限或减小单元格内边距，属于独立的移动端密度决定。
 - 若将来要恢复「宽表用满页面」，需要重新引入突破规则、恢复 e2e 的突破断言与金标列，并新增一条取代本决定的 Agent Note。
