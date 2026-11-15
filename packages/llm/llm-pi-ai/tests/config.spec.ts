@@ -89,6 +89,7 @@ describe('withheld catalog providers', () => {
   it.each([
     'amazon-bedrock',
     'azure',
+    'cerebras',
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',
     'huggingface',

@@ -1262,6 +1262,7 @@ describe('configurable-provider directory', () => {
     for (const provider of [
       'amazon-bedrock',
       'azure',
+      'cerebras',
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
       'huggingface',
