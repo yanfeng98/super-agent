@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "dsh-llm-pi-ai 的目录不再提供 amazon-bedrock、azure、cloudflare-ai-gateway、cloudflare-workers-ai、moonshotai、moonshotai-cn、qwen-token-plan、qwen-token-plan-cn、qwen-token-plan-individual、vercel-ai-gateway、xiaomi、xiaomi-token-plan-sgp 与 xiaomi-token-plan-ams。"
+description: "dsh-llm-pi-ai 的目录不再提供 amazon-bedrock、azure、cloudflare-ai-gateway、cloudflare-workers-ai、huggingface、moonshotai、moonshotai-cn、qwen-token-plan、qwen-token-plan-cn、qwen-token-plan-individual、vercel-ai-gateway、xiaomi、xiaomi-token-plan-sgp 与 xiaomi-token-plan-ams。"
 ---
 
 # 已移除的 pi-ai 提供方路由
@@ -9,11 +9,11 @@ description: "dsh-llm-pi-ai 的目录不再提供 amazon-bedrock、azure、cloud
 
 ## 变更
 
-`dsh-llm-pi-ai` 的提供方目录不再提供 `amazon-bedrock`、`azure`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`moonshotai`、`moonshotai-cn`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`vercel-ai-gateway`、`xiaomi`、`xiaomi-token-plan-sgp` 与 `xiaomi-token-plan-ams`。它们不会出现在提供方选择器、模型发现、登录与模型解析中。已安装的 pi-ai 包仍随包提供这些路由，是本构建主动移除。
+`dsh-llm-pi-ai` 的提供方目录不再提供 `amazon-bedrock`、`azure`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`huggingface`、`moonshotai`、`moonshotai-cn`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`vercel-ai-gateway`、`xiaomi`、`xiaomi-token-plan-sgp` 与 `xiaomi-token-plan-ams`。它们不会出现在提供方选择器、模型发现、登录与模型解析中。已安装的 pi-ai 包仍随包提供这些路由，是本构建主动移除。
 
 点名这些路由的存量 `llm-pi-ai` profile 会以 `provider "<id>" is removed from this build; delete the route or select another provider` 加载失败。由于解析会拒绝整份 `providers` 字典，删除该条目之前，插件中的其他路由也不可用。两条 DeepSeek 路由 `deepseek-official` 与 `deepseek-account` 来自独立插件，不受影响。
 
-`bedrock-converse-stream` 与 `azure-openai-responses` 不是自定义模型 API 的协议选项，因此手工声明的路由无法选择这两种传输。两条 Cloudflare 路由、`moonshotai`、`moonshotai-cn`、三条 Qwen token 套餐路由与三条 Xiaomi 路由使用的是 OpenAI 兼容协议，你自有的 OpenAI 兼容端点仍可通过自定义模型 API 接入——Xiaomi 开放平台端点同样如此，它与 `xiaomi-token-plan-cn` 提供相同的四个 MiMo 模型，另有两个 UltraSpeed 变体；SGP 与 AMS token 套餐端点亦然，它们与 `xiaomi-token-plan-cn` 提供相同的四个 MiMo 模型；Moonshot 开放平台端点与阿里云 token 套餐端点同样适用。`vercel-ai-gateway` 使用 Anthropic Messages，可用该协议重新接入为自定义模型 API。`moonshotai` 与 `moonshotai-cn` 是同一个 Kimi 服务的国际站与中国站端点；Kimi 编码套餐（`kimi-coding`）仍然提供；`xiaomi` 是按量计费的开放平台，同一厂商的中国区 token 套餐（`xiaomi-token-plan-cn`）仍然提供。它携带的六个模型中有两个在该套餐里没有对应项：`openrouter` 以 `xiaomi/mimo-v2.6-pro-ultraspeed` 列出 MiMo-V2.6-Pro-UltraSpeed，而 MiMo-V2.5-Pro-UltraSpeed 已无任何内置路由提供。`qwen-token-plan` 与 `qwen-token-plan-cn` 从新加坡与北京端点提供相同的二十个模型，`qwen-token-plan-individual` 则开放其中的九个。
+`bedrock-converse-stream` 与 `azure-openai-responses` 不是自定义模型 API 的协议选项，因此手工声明的路由无法选择这两种传输。两条 Cloudflare 路由、`huggingface`、`moonshotai`、`moonshotai-cn`、三条 Qwen token 套餐路由与三条 Xiaomi 路由使用的是 OpenAI 兼容协议，你自有的 OpenAI 兼容端点仍可通过自定义模型 API 接入——Xiaomi 开放平台端点同样如此，它与 `xiaomi-token-plan-cn` 提供相同的四个 MiMo 模型，另有两个 UltraSpeed 变体；SGP 与 AMS token 套餐端点亦然，同样提供这四个 MiMo 模型；Moonshot 开放平台端点、阿里云 token 套餐端点与 Hugging Face 的路由端点 `router.huggingface.co/v1` 同样适用。`vercel-ai-gateway` 使用 Anthropic Messages，可用该协议重新接入为自定义模型 API。`moonshotai` 与 `moonshotai-cn` 是同一个 Kimi 服务的国际站与中国站端点；`kimi-coding` 仍然提供；`xiaomi` 是按量计费的开放平台，同一厂商的中国区 token 套餐（`xiaomi-token-plan-cn`）仍然提供。它携带的六个模型中有两个在该套餐里没有对应项：`openrouter` 以 `xiaomi/mimo-v2.6-pro-ultraspeed` 列出 MiMo-V2.6-Pro-UltraSpeed；MiMo-V2.5-Pro-UltraSpeed 已无任何内置路由提供。`qwen-token-plan` 与 `qwen-token-plan-cn` 从新加坡与北京端点提供相同的二十个模型，`qwen-token-plan-individual` 则开放其中的九个。`huggingface` 把 78 个 Hub 模型名路由给第三方推理服务商，其中 64 个出现在 `openrouter` 上（29 个换了厂商前缀）、1 个出现在 `nvidia` 上，其余 13 个没有其他内置路由。
 
 ## 迁移
 
