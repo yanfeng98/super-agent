@@ -24,7 +24,6 @@
       - option "ant-ling"
       - option "anthropic"
       - option "baseten"
-      - option "cerebras"
       - option "deepseek"
       - option "fireworks"
       - option "github-copilot"

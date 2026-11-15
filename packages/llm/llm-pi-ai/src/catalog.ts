@@ -205,10 +205,13 @@ function servesChat(provider: Provider): boolean {
  * is the Hugging Face router: its 78 entries are Hub repository names that a
  * third-party inference provider serves, and 64 of those model names also
  * appear on `openrouter`, so the route adds a routing and billing layer rather
- * than another vendor's models. The Moonshot, Xiaomi, Qwen, and Hugging Face
- * routes speak OpenAI-compatible chat completions and the gateway speaks
- * Anthropic Messages, so a deployment that needs one can add it as a custom
- * model API.
+ * than another vendor's models. `cerebras` is a chip vendor's inference cloud
+ * carrying two open-weight models that this build already reaches on other
+ * routes (`gpt-oss-120b` under an `openai/` prefix on four routes, Qwen3.8 27B
+ * on two), so withholding it removes a serving surface rather than model
+ * coverage. The Cerebras, Moonshot, Xiaomi, Qwen, and Hugging Face routes speak
+ * OpenAI-compatible chat completions and the gateway speaks Anthropic
+ * Messages, so a deployment that needs one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -217,6 +220,7 @@ function servesChat(provider: Provider): boolean {
 const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'amazon-bedrock',
   'azure',
+  'cerebras',
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
   'huggingface',
