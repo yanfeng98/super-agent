@@ -41,7 +41,6 @@
       - option "openrouter"
       - option "radius"
       - option "together"
-      - option "vercel-ai-gateway"
       - option "xai"
       - option "xiaomi-token-plan-cn"
       - option "zai"
