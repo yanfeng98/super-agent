@@ -199,9 +199,12 @@ function servesChat(provider: Provider): boolean {
  * token-plan service as well: `qwen-token-plan` and `-cn` serve the same twenty
  * models from the Singapore and Beijing endpoints, and the individual route
  * exposes nine of those models from the Singapore endpoint, so the three
- * describe one subscription rather than three services. The Moonshot, Xiaomi,
- * and Qwen routes speak OpenAI-compatible chat completions, so a deployment
- * that needs one can add it as a custom model API.
+ * describe one subscription rather than three services. `vercel-ai-gateway` is
+ * withheld as an aggregator: one third-party endpoint resells 301 models from
+ * other vendors, 118 of which keep the same id on `openrouter`. The Moonshot,
+ * Xiaomi, and Qwen routes speak
+ * OpenAI-compatible chat completions and the gateway speaks Anthropic
+ * Messages, so a deployment that needs one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -217,6 +220,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'qwen-token-plan',
   'qwen-token-plan-cn',
   'qwen-token-plan-individual',
+  'vercel-ai-gateway',
   'xiaomi',
   'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
