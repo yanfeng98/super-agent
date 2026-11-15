@@ -187,9 +187,11 @@ function servesChat(provider: Provider): boolean {
  * through provider environment, and both Cloudflare routes resolve account- or
  * gateway-scoped catalog endpoints from placeholders pi-ai fills using that
  * same environment — provider-specific wiring the route profile does not model.
- * `xiaomi-token-plan-sgp` and `xiaomi-token-plan-ams` duplicate
- * `xiaomi-token-plan-cn`: all three serve the same four MiMo models and differ
- * only in the endpoint region the subscription resolves. `moonshotai` and
+ * `xiaomi` and `xiaomi-token-plan-sgp`/`xiaomi-token-plan-ams` are withheld
+ * while `xiaomi-token-plan-cn` stays served: the two token-plan routes
+ * duplicate the CN one, which serves the same four MiMo models, and `xiaomi`
+ * is the pay-as-you-go open platform whose two extra models are UltraSpeed
+ * variants of models that the token plan already carries. `moonshotai` and
  * `moonshotai-cn` are one Kimi service's global and China endpoints, both
  * withheld: this build offers Kimi through `kimi-coding` and through a custom
  * OpenAI-compatible route for the open platform. `qwen-token-plan`,
@@ -198,8 +200,8 @@ function servesChat(provider: Provider): boolean {
  * models from the Singapore and Beijing endpoints, and the individual route
  * exposes nine of those models from the Singapore endpoint, so the three
  * describe one subscription rather than three services. The Moonshot, Xiaomi,
- * and Qwen token-plan routes speak OpenAI-compatible chat completions, so a
- * deployment that needs one can add it as a custom model API.
+ * and Qwen routes speak OpenAI-compatible chat completions, so a deployment
+ * that needs one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -215,6 +217,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'qwen-token-plan',
   'qwen-token-plan-cn',
   'qwen-token-plan-individual',
+  'xiaomi',
   'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
 ])
