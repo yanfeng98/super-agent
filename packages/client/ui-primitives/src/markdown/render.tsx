@@ -531,10 +531,11 @@ function renderTable(node: Md.Table, key: Key, context: MarkdownRenderContext): 
   const [headRow, ...bodyRows] = node.children
   const columns = align === null ? headRow?.children.length ?? 0 : align.length
   // Four or more columns read as a comparison matrix: the block keeps the
-  // table at natural width and exposes the stable `md-table-wide` hook so a
-  // hosting layout (the chat transcript) can widen it past the message
-  // column. Narrower tables — and any table inside a blockquote — fill the
-  // column and wrap instead (deepsuite chat TableWrapper parity).
+  // table's natural width up to the width its surface offers and exposes the
+  // stable `md-table-wide` hook, which also reveals the horizontal scroll the
+  // cells' readable floors may still need. Narrower tables — and any table
+  // inside a blockquote — fill the column and wrap instead (deepsuite chat
+  // TableWrapper parity).
   const wide = columns >= 4 && context.inBlockquote !== true
   return (
     // On hover-capable inputs, wide tables rest with overflow-x hidden (the

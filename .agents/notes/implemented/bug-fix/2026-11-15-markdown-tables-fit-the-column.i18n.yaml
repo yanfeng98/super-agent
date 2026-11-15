@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-11-15-markdown-tables-fit-the-column.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-15-markdown-tables-fit-the-column.md
+/agent-note-markdown-tables-fit-the-reading-column:
+  en: db7bb6ad8e5b562a
+  zh: 6393575637ffd1c5
+/agent-note-markdown-tables-fit-the-reading-column/problem:
+  en: 9e897404137a252d
+  zh: fca22b634394e057
+/agent-note-markdown-tables-fit-the-reading-column/decision:
+  en: cc5c72b90c2007e4
+  zh: 70085b15cfc522db
+/agent-note-markdown-tables-fit-the-reading-column/alternatives-considered:
+  en: 188606ccb034d812
+  zh: 801180d700b12de4
+/agent-note-markdown-tables-fit-the-reading-column/consequences:
+  en: 5087ab3b94603df9
+  zh: 7823188ae7622eaa
+/agent-note-markdown-tables-fit-the-reading-column/testing:
+  en: 838e33d4e928c29b
+  zh: c1cc17c32a27737c
+/agent-note-markdown-tables-fit-the-reading-column/related:
+  en: 85338523d330d0f0
+  zh: 2d9351aaee6ed45c

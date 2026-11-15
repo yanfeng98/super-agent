@@ -236,13 +236,17 @@
   box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
-/* Many-column tables (the renderer's `md-table-wide` hook) keep their
-   natural width and scroll inside the wrapper; a hosting layout may widen
-   the wrapper through the hook (deepsuite chat TableWrapper parity). */
+/* Many-column tables (the renderer's `md-table-wide` hook) take their natural
+   width up to the width their surface offers. `fit-content` clamps a long
+   table at the available width — down to the sum of the cells' 100px readable
+   floors, which is what the wrapper then scrolls — and `max-width` states the
+   same bound so the clamp survives an engine resolving either keyword
+   differently for table boxes. A table that already fits keeps its natural
+   width instead of stretching. */
 .tableScroll table {
   border-collapse: collapse;
-  width: max-content;
-  max-width: max-content;
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Tables under four columns, and any table inside a blockquote, fill the
