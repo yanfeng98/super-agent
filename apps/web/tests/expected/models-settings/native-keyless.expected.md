@@ -34,7 +34,6 @@
       - option "nvidia"
       - option "openai"
       - option "openai-codex" [selected]
-      - option "opencode"
       - option "opencode-go"
       - option "openrouter"
       - option "radius"

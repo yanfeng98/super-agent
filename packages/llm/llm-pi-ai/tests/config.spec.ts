@@ -95,6 +95,7 @@ describe('withheld catalog providers', () => {
     'huggingface',
     'moonshotai',
     'moonshotai-cn',
+    'opencode',
     'qwen-token-plan',
     'qwen-token-plan-cn',
     'qwen-token-plan-individual',

@@ -128,7 +128,7 @@ describe('llm-pi-ai real dormant composition', () => {
       baseURLEnv: ['GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION'],
     })
     expect(directory.find(entry => entry.provider === 'radius')?.defaultBaseURL).toBe('https://radius.pi.dev/v1')
-    expect(directory.find(entry => entry.provider === 'opencode')?.defaultBaseURL).toBeUndefined()
+    expect(directory.find(entry => entry.provider === 'opencode-go')?.defaultBaseURL).toBeUndefined()
 
     // Exactly what the web Models page leaves on disk.
     await writeFile(settingsPath, [
