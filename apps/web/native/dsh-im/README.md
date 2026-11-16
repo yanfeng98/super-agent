@@ -419,7 +419,7 @@ npm run check
 node bin/dsh-im.mjs install --source .
 ```
 
-`npm run check` 运行单元测试、构建 Host/Client 产物，并验证发布包不包含凭据或独立渠道设置页注册。
+`npm run check` 运行单元测试并构建 Host/Client 产物（原生构建不发布 npm 包，因此不再执行发布包校验）。
 
 构建后运行 `node scripts/verify-injected-context.mjs /path/to/built/deepseek-harness`，验证发布产物中的上下文钩子能通过真实 DSH v4 JSONL 持久化，覆盖普通消息、来源信息、引导词、引用、组合和多段文本，以及关闭后重新读取、继续写入下一轮。脚本从指定宿主加载组件，使用并清理临时会话目录，无需机器人凭据或模型请求。
 
@@ -465,7 +465,6 @@ dsh web --trusted-host dsh.example.com
 
 输入框旁的蓝色 **Menu 按钮**不受机器人控制，也不会跟随该设置：dsh-im 将其设为 `MenuButtonCommands`，而 Bot API 中该类型没有文本字段，因此按钮文案由 Telegram 按**阅读者客户端自身的语言**渲染。只有 `MenuButtonWebApp` 带有文本字段，但它需要一个 Web App URL。
 
-端到端验证可运行 `node scripts/verify-interface-language.mjs /path/to/deepseek-harness`：脚本使用原版 DSH CLI 与独立临时 home，通过真实 `/api` 通道逐层校验语言解析顺序，并验证重启后与运维固定 `language` 时的行为。设置 `DSH_IM_TELEGRAM_TOKEN` 可额外接入真实机器人，断言 Telegram 侧实际存储的命令菜单，检查结束后会恢复其原有菜单。
 
 如需固定一种语言、不随阅读者的界面语言变化，可在插件配置中设置 `language`（也接受 `en-US`、`english`），或设置环境变量 `DSH_IM_LANGUAGE=en`：
 

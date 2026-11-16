@@ -4,7 +4,7 @@
 
 Proactive delivery lets an application send a text message through a bot connected to DSH-IM without waiting for a new user message. The caller stores only a stable `botId + targetId` pair—never a Harness `sessionId`, chat reference, message ID, or temporary webhook.
 
-All nine built-in channels support proactive delivery: Weixin, Feishu, DingTalk, WeCom, QQ, Slack, Telegram, Discord, and WhatsApp.
+All nine built-in channels support proactive delivery: WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, Matrix, and email.
 
 ## Quick start
 
@@ -80,7 +80,7 @@ If the group Chat ID is edited later, callers can continue using the same `botId
 
 ## Two-way sync for any Session conversation
 
-Session sync needs no delivery target in advance: the address comes from the Session's current chat binding, that is, the conversation key this Session has in a connected chat (a direct message, a group, a Slack thread, a Telegram forum topic, a Discord channel). **General settings → Delivery** is the only place where the sync is switched on; the delivery-targets page is only for manual delivery and for the candidate range of synced approvals and questions.
+Session sync needs no delivery target in advance: the address comes from the Session's current chat binding, that is, the conversation key this Session has in a connected chat (a direct message, a group, a topic, or a thread). **General settings → Delivery** is the only place where the sync is switched on; the delivery-targets page is only for manual delivery and for the candidate range of synced approvals and questions.
 
 1. Ordinary prompts and `/steer` inside that chat keep using the normal reply path. They are neither duplicated nor forwarded to another target.
 2. After a successful turn from another source, only the **final answer** is sent to the chat — the text after the last tool call, not every step joined together and not the talk that precedes the tools: a turn submitted in the DSH Web GUI, a scheduled task (`schedule`, `deliveryMode: host`), an answered-question receipt, or a turn started by an internal notice such as `subagent-settled`.
@@ -91,7 +91,7 @@ Session sync needs no delivery target in advance: the address comes from the Ses
 
 A service injection never decides where the turn came from: the context snapshot the Host prepends, a schedule reminder or an internal notice is only "one message of this turn", never proof that a service started it. The answer is delivered as a service turn only when no message of the turn came from the reader (the Web GUI or this chat); as soon as one message came from this chat, the chat answers for itself and the sync delivers nothing at all.
 
-The **Two-way Session sync** switch on a delivery target now only affects the candidate range of synced approvals and questions; it is no longer a precondition for Session sync. That candidate range stays private-chat only: mirrored text follows any route the channel persisted (a group, a Slack thread, a Telegram forum topic, a Discord channel), but a question or an approval is offered in a private chat only, because in a group any member could answer it. The first version mirrors current-Host text only—no images, files, cards, tool progress, approvals, or history. A channel with an explicit remote `harnessBaseUrl` is still unsupported.
+The **Two-way Session sync** switch on a delivery target now only affects the candidate range of synced approvals and questions; it is no longer a precondition for Session sync. That candidate range stays private-chat only: mirrored text follows any route the channel persisted (a group, a topic, or a thread), but a question or an approval is offered in a private chat only, because in a group any member could answer it. The first version mirrors current-Host text only—no images, files, cards, tool progress, approvals, or history. A channel with an explicit remote `harnessBaseUrl` is still unsupported.
 
 ## Delivery settings
 
@@ -130,13 +130,6 @@ Choose a known conversation whenever possible. Obtain and enter a platform-nativ
 | WeCom | `group` | Group Chat ID (`chatId`) | Enter the group's `chatid` |
 | QQ | `user` | User Open ID (`userOpenId`) | The platform's `user_openid` |
 | QQ | `group` | Group Open ID (`groupOpenId`) | The platform's `group_openid` |
-| Slack | `conversation` | Channel ID (`channelId`) | For example, `C0123456789` |
-| Slack | `thread` | Channel ID + thread timestamp (`channelId`, `threadTs`) | For example, `1712345678.123456` |
-| Telegram | `chat` | Chat ID (`chatId`) | A decimal string, such as `-1001234567890` |
-| Telegram | `topic` | Chat ID + Topic ID (`chatId`, `messageThreadId`) | Topic ID must be a positive integer |
-| Discord | `channel` | Channel ID (`channelId`) | DMs, channels, and Threads all use a messageable Channel ID |
-| WhatsApp | `user` | User JID (`jid`) | For example, `8613800000000@s.whatsapp.net` |
-| WhatsApp | `group` | Group JID (`jid`) | For example, `1234567890-123456@g.us` |
 
 Native ID strings must be nonempty and have no leading or trailing whitespace. A target accepts only the fields required by the selected channel and type; extra fields are rejected.
 
@@ -204,14 +197,10 @@ await ctx.dshIm.send(botId, targetId, '# Daily report\n\n**Checks complete**', {
 | Channel | Markdown presentation |
 | --- | --- |
 | Feishu/Lark | Native Markdown card |
-| Telegram | Rich Markdown, with the existing text fallback |
 | QQ | Markdown message; known format rejection falls back for the current chunk |
 | DingTalk | Proactive Markdown message; definite format rejection falls back to text |
-| Slack | Standard Markdown block with top-level notification text; explicit block rejection falls back to the existing text sender |
 | WeCom bot | Existing Markdown message type |
 | Matrix | Sanitized HTML with a text body |
-| Discord | Native Markdown in message content |
-| WhatsApp | Limited conversion of common formatting; code is protected and complex syntax stays literal |
 | WeCom app / Weixin | Full text, including code and link destinations |
 
 Channels apply their own message limits and splitting. Feishu proactive cards retain their existing unsplit behavior and do not automatically resend as text after rejection or an uncertain result. Other newly added fallback paths only handle local formatting errors or definite format rejection; they do not resend accepted chunks or retry ambiguous network outcomes. Older Hosts may ignore `format`; load the updated plugin on the Host.
@@ -236,7 +225,7 @@ await ctx.dshIm.createTarget(botId, {
 });
 ```
 
-Both `kind` and `route` must match the bot's channel; see [Native fields for all nine channels](#native-fields-for-all-nine-channels). For example, a Feishu group uses `kind: 'group'` with `route: { chatId: 'oc_xxx' }`. A Telegram direct message or group uses `kind: 'chat'` with `route: { chatId: '123456789' }`, where the Chat ID must be a decimal string.
+Both `kind` and `route` must match the bot's channel; see [Native fields for all nine channels](#native-fields-for-all-nine-channels). For example, a Feishu group uses `kind: 'group'` with `route: { chatId: 'oc_xxx' }`.
 
 An existing `targetId` is rejected with `target-conflict`; updating or deleting a saved target still goes through the management RPC's `target.update` / `target.delete`.
 
@@ -396,7 +385,7 @@ Send that bot a message on the platform, return to settings, and refresh. Sugges
 
 ### The Test button is disabled
 
-Make sure the bot is online and every native ID required by the current target type is present. A Slack Thread and a Telegram Topic both require two fields.
+Make sure the bot is online and every native ID required by the current target type is present. Target types that need two fields require both values.
 
 ### Can Target ID be changed after saving?
 

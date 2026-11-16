@@ -4,7 +4,7 @@
 
 主动投递让应用在没有用户新消息的情况下，通过已经接入 DSH-IM 的机器人发送文字消息。调用方只需保存一组稳定的 `botId + targetId`，不需要保存 Harness `sessionId`、聊天引用、消息 ID 或临时 Webhook。
 
-九个内置渠道均支持主动投递：微信、飞书、钉钉、企业微信、QQ、Slack、Telegram、Discord 和 WhatsApp。
+九个内置渠道支持主动投递：微信、飞书、钉钉、企业微信、企业微信应用、QQ、iMessage、Matrix 和邮箱。
 
 ## 快速开始
 
@@ -80,7 +80,7 @@
 
 ## 会话双向同步
 
-会话同步不需要预先创建投递目标：地址取自 Session 当前的聊天绑定，也就是这个 Session 在某个已接入聊天里的会话键（私聊、群聊、Slack Thread、Telegram Topic、Discord 频道等）。是否同步由「通用设置 → 投递」决定，这是唯一的开关位置；「投递目标」页只服务于手动投递，以及同步审批和同步提问的候选范围。
+会话同步不需要预先创建投递目标：地址取自 Session 当前的聊天绑定，也就是这个 Session 在某个已接入聊天里的会话键（私聊、群聊、话题或线程等）。是否同步由「通用设置 → 投递」决定，这是唯一的开关位置；「投递目标」页只服务于手动投递，以及同步审批和同步提问的候选范围。
 
 1. 在该聊天里的普通提问和 `/steer` 仍走原回复链，不会被同步逻辑重复发送或转发到其他目标。
 2. 其他来源的 Turn 成功完成后，只投递**最终回答**——最后一次工具调用之后的文字，而不是各 step 拼接的全文，也不是工具调用之前的寒暄：Web GUI 中提交的 Turn、定时任务（`schedule`、`deliveryMode: host`）、待答问题回执，以及 `subagent-settled` 等内部通知发起的 Turn。
@@ -91,7 +91,7 @@
 
 服务注入不会决定 Turn 的来源：Host 在每个 Turn 前注入的上下文快照、定时提醒与内部通知只是「这是本 Turn 的一条消息」，不会把 Turn 判成服务发起的。只有整个 Turn 都没有一条来自读者（Web 或本聊天）的消息时，才按服务发起的 Turn 投递回答；只要其中一条消息来自本聊天，该 Turn 就由聊天自己回答，同步逻辑完全不投递。
 
-投递目标行上原有的「会话双向同步」开关现在只影响同步审批与同步提问的候选范围，不再是会话同步的前提；这个候选范围仍然只限私聊：镜像文字可以跟随渠道持久化的任意路由（群聊、Slack Thread、Telegram Topic、Discord 频道），但同步审批与同步提问只在私聊中提出，因为在群里任何成员都能替读者作答。首版仅同步当前 Host 的文字，不同步图片、文件、卡片、工具过程、审批或历史消息。显式配置了远程 `harnessBaseUrl` 的渠道也不支持。
+投递目标行上原有的「会话双向同步」开关现在只影响同步审批与同步提问的候选范围，不再是会话同步的前提；这个候选范围仍然只限私聊：镜像文字可以跟随渠道持久化的任意路由（群聊、话题或线程），但同步审批与同步提问只在私聊中提出，因为在群里任何成员都能替读者作答。首版仅同步当前 Host 的文字，不同步图片、文件、卡片、工具过程、审批或历史消息。显式配置了远程 `harnessBaseUrl` 的渠道也不支持。
 
 ## 投递设置
 
@@ -130,13 +130,6 @@
 | 企业微信 | `group` | 群 Chat ID（`chatId`） | 群聊填写群 `chatid` |
 | QQ | `user` | 用户 Open ID（`userOpenId`） | 平台提供的 `user_openid` |
 | QQ | `group` | 群 Open ID（`groupOpenId`） | 平台提供的 `group_openid` |
-| Slack | `conversation` | Channel ID（`channelId`） | 例如 `C0123456789` |
-| Slack | `thread` | Channel ID + Thread 时间戳（`channelId`, `threadTs`） | 例如 `1712345678.123456` |
-| Telegram | `chat` | Chat ID（`chatId`） | 十进制字符串，例如 `-1001234567890` |
-| Telegram | `topic` | Chat ID + Topic ID（`chatId`, `messageThreadId`） | Topic ID 必须是正整数 |
-| Discord | `channel` | Channel ID（`channelId`） | 私信、频道和 Thread 都使用可发消息的 Channel ID |
-| WhatsApp | `user` | 用户 JID（`jid`） | 例如 `8613800000000@s.whatsapp.net` |
-| WhatsApp | `group` | 群 JID（`jid`） | 例如 `1234567890-123456@g.us` |
 
 平台 ID 字符串不能为空或带首尾空格。一个目标只接受所选渠道和类型要求的字段，额外字段会被拒绝。
 
@@ -204,14 +197,10 @@ await ctx.dshIm.send(botId, targetId, '# 每日报告\n\n**检查完成**', {
 | 渠道 | Markdown 呈现方式 |
 | --- | --- |
 | 飞书/Lark | 原生 Markdown 卡片 |
-| Telegram | Rich Markdown，复用既有文本回退 |
 | QQ | Markdown 消息；已知格式拒绝时仅当前分段回退文本 |
 | 钉钉 | 主动 Markdown 消息；明确格式拒绝时回退文本 |
-| Slack | 标准 Markdown block，保留通知文本；明确 block 拒绝时使用原有文本发送 |
 | 企业微信机器人 | 现有 Markdown 消息类型 |
 | Matrix | 清理后的 HTML，并附带文本正文 |
-| Discord | 消息正文的原生 Markdown |
-| WhatsApp | 有限转换常用格式，保护代码，复杂语法保留原文 |
 | 企业微信应用／微信 | 完整文本，保留代码和链接目标 |
 
 长消息按渠道限制分段。飞书主动卡片保留原有不自动分段的行为，平台拒绝或结果未知时不自动改发文本。其他新增回退仅针对本地格式处理错误或明确的格式拒绝，不重发已成功的分段，不因网络结果未知而改格式重试。旧 Host 可能忽略 `format`，需要加载更新后的插件。
@@ -236,7 +225,7 @@ await ctx.dshIm.createTarget(botId, {
 });
 ```
 
-`kind` 和 `route` 必须匹配机器人的渠道，参见[九渠道手动填写字段](#九渠道手动填写字段)。例如飞书群聊使用 `kind: 'group'` 和 `route: { chatId: 'oc_xxx' }`；Telegram 私聊或群聊使用 `kind: 'chat'` 和 `route: { chatId: '123456789' }`，Chat ID 必须是十进制字符串。
+`kind` 和 `route` 必须匹配机器人的渠道，参见[九渠道手动填写字段](#九渠道手动填写字段)。例如飞书群聊使用 `kind: 'group'` 和 `route: { chatId: 'oc_xxx' }`。
 
 `targetId` 已存在时以 `target-conflict` 拒绝；修改或删除已有目标仍走管理 RPC 的 `target.update` / `target.delete`。
 
@@ -396,7 +385,7 @@ Connection RPC 默认只允许当前 Host 的回环调用。若 Web profile 明�
 
 ### 测试按钮不可点击
 
-确认机器人在线，并填写当前目标类型要求的全部平台原生 ID。Slack Thread 和 Telegram Topic 都需要两个字段。
+确认机器人在线，并填写当前目标类型要求的全部平台原生 ID。需要两个字段的目标类型必须同时填写。
 
 ### 保存后能否修改 Target ID
 
