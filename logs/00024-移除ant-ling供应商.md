@@ -44,12 +44,24 @@
 |---|---|
 | `npx vitest run packages/llm/llm-pi-ai` | 22 个文件、**484** 个测试全部通过（移除前 482，`config.spec` 参数化多两条） |
 | `npx vitest run packages/llm` | 78 个文件、**1793** 个测试全部通过（移除前 1791） |
-| `pnpm run test:docs` | 21/21 通过 |
+| `pnpm run test:docs` | 移除轮与文档改动后均为 21/21；补入本节记录后重跑为 19/21，两处失败（`verify-repository-references` 的 10 处 commit-hash 与 `verify-translation-pairing` 的 3 个无配对 README）全部命中并行开发新出现的未跟踪目录 `apps/web/native/dsh-im/`，与本次改动无关 |
 | `pnpm run verify-upgrade-guides` | 通过（英文正文 496 词，未触及 500 词硬上限） |
 | `pnpm run verify-doc-budgets` | 通过（`7 budgeted docs within ceiling`） |
 | `pnpm run verify-provider-data` | 通过：`Provider metadata matches the installed pi-ai catalog.` |
 | `pnpm run verify-translation-pairing` | 1301 对全部一致（三个 i18n 文件重新录制后） |
 | 目录自检 | 21 个供应商、710 个模型；`isWithheldProvider('ant-ling')` 为 `true`，`catalogProvider('ant-ling')` 为 `undefined`，strict 与 deferred 均报移除错误 |
+| `npx vitest run packages/client/ui-settings-models` | 14 个文件、483 个测试通过（用例不枚举路由，无需改动） |
+| `pnpm run doc-sync` | 43/43 全部通过（一次通过） |
+| `pnpm run lint` | 0 warning、0 error（90 条规则、7302 个文件） |
+| `pnpm run typecheck` | 5/5 通过 |
+| `pnpm run build` | 10/10 通过（含 host/client 聚合检查与 Web build） |
+| `pnpm run test:snapshot -t pi-ai-conversation-updates` | 1 个录制会话回放通过 |
+| `npx vitest run --config vitest.expected.config.ts -t "pi-ai"` | 2 个 headless 场景通过，内联快照未变 |
+| Web e2e（`DSH_SNAPSHOT=replay`） | 只回放受影响的 `models-settings` 与 `onboarding-usable-provider` 两个文件：3 通过、19 失败；逐条核对失败堆栈，全部是并行开发中的启动动画覆盖层（`<div class="dsh-boot-archive-black">…</div> … intercepts pointer events`）拦截 `openSettings()` 的点击，尚未执行到供应商断言（用 `-t` 单独回放负责 golden 比对的用例可复现同一拦截点） |
+| golden 与目录一致性 | 三个 golden 的 option 行（含 `minimax-cn` 的 `[selected]`）与 `catalogProviderIds()` 逐项相等（21 项、同顺序） |
+| 文档一致性自检 | 6 个文档（用户指南、包 README、升级指南各中英）均完整枚举 20 条路由，脚本比对无缺失 |
+
+移除提交与其后的根 README 数字刷新已进入 `main` 并推送到 `origin/main`；本节的校验记录随后以独立提交补入。工作区另有并行开发的未提交改动（`apps/web/native/`、`pnpm-workspace.yaml`、`packages/bundle/web-app/package.json`），不属于本次移除。
 
 ## 5. 复查记录
 
