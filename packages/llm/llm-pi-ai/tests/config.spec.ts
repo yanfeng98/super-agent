@@ -107,6 +107,7 @@ describe('withheld catalog providers', () => {
     'xiaomi',
     'xiaomi-token-plan-sgp',
     'xiaomi-token-plan-ams',
+    'zai',
   ])('refuses a profile that names the removed %s route', (provider) => {
     for (const validation of ['strict', 'deferred'] as const) {
       expect(() => resolveProfiles({ [provider]: {} }, validation))
