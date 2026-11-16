@@ -14,7 +14,7 @@
 | `tests/loader-composition.spec.ts` | 该用例原本借 `radius` 断言「固定目录端点进入目录」，改用仍提供的 `openrouter` |
 | `docs/user/guide/providers.md` / `.zh.md` / `.i18n.yaml` | 未提供路由清单增加 Radius；自定义路由清单增加 `radius.pi.dev/v1`；补覆盖说明；把「网关的 301 个模型 id」改为「Vercel AI Gateway 的 301 个模型 id」，消除出现两个网关后的指代歧义；重录 i18n 哈希 |
 | `packages/llm/llm-pi-ai/README.md` / `.zh.md` / `.i18n.yaml` | Known Limitations 的被移除路由清单与说明同步，重录 i18n 哈希 |
-| `docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/` | 描述、变更清单与覆盖说明加入 `radius`，并给出 OpenAI 兼容重新接入方式；英文正文 473 词 |
+| `docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/` | 描述、变更清单与覆盖说明加入 `radius`，并给出 OpenAI 兼容重新接入方式；英文正文 475 词 |
 | `apps/web/tests/expected/` 三个 golden | 删除 `option "radius"`（24 → 23 项） |
 | `apps/web/tests/models-settings.e2e.ts` | 供应商选择器下界断言 24 → 23 |
 
@@ -58,15 +58,16 @@
 | 目录自检 | 23 个供应商、733 个模型；`radius` 不在可配置列表、无 provider、无模型；strict/deferred 均报移除错误 |
 | golden 与目录一致性 | 三个 golden 的 option 列表与排序后的 `catalogProviderIds()` 逐项相等（23 个、同顺序） |
 | Web e2e（`DSH_SNAPSHOT=replay`） | 只回放受影响的 `models-settings` 与 `onboarding-usable-provider` 两个文件：2 个文件 5 通过、17 失败，失败全部来自并行开发中的 `ui-boot-animation`（全窗口启动视频拦截指针事件导致 `locator.fill` 超时，且设置导航新增 `button "启动片头"`）。两个完成真实比对的 golden 与预期差异**只有该按钮一行**，供应商 option 列表逐项一致（23 项） |
-| 升级指南词数 | 英文正文 **473** 词（硬上限 500、仓库实践 475），中英双语结构一致 |
+| 升级指南词数 | 英文正文 **475** 词（硬上限 500、仓库实践 475），中英双语结构一致 |
 
 ## 5. 复查记录
 
 - `tests/loader-composition.spec.ts` 原先用 `radius` 断言「固定目录端点会进入可配置列表」。加入移除后该断言必失败（条目已不存在），改用仍提供且端点固定的 `openrouter`，保持用例意图不变。`tests/native-auth.spec.ts` 对 `PROVIDER_DATA.radius` 的断言保留：`provider-data.generated.ts` 仍覆盖全部 42 个已安装 id，与可售路由无关。
 - 出现第二个「网关」后，`catalog.ts` 注释与 `providers.md` 里单独出现的「the gateway」会把读者指向 `vercel-ai-gateway` 还是 `radius` 变得不确定，已分别改为「the Vercel AI Gateway」和「Vercel AI Gateway 的 301 个模型 id」。
-- 升级指南加入 `radius` 后英文正文一度到 483 词，超出仓库 475 词实践上限（硬上限 500）。做了等义收紧：把 SGP、AMS、Moonshot、阿里云四个端点收成一处枚举，删去「个人版开放其中九个」「Moonshot 的两个端点属于同一个 Kimi 服务」「目录无法恢复该路由」等与用户指南重复的细节，`cerebras` 句去掉 «that remain»，`xiaomi` 句去掉 «left»，最终 **473 词**；中文指南逐句同步同样的删减。
+- 升级指南加入 `radius` 后英文正文一度到 483 词，超出仓库 475 词实践上限（硬上限 500）。做了等义收紧：把 SGP、AMS、Moonshot、阿里云四个端点收成一处枚举，删去「个人版开放其中九个」「目录无法恢复该路由」等与用户指南重复的细节，`cerebras` 句与 `xiaomi` 句各去掉一个冗余限定词，随后审计轮把补回的 `kimi-coding` 指引计入，最终 **475 词**；中文指南逐句同步同样的删减。
 - `pi-messages` 不是可配置协议，因此「可用自定义模型 API 重新接入」不能照抄其他路由的写法。改为给出网关实际提供的 OpenAI 兼容对话补全端点，并实测 `POST /v1/chat/completions`、`/v1/completions`、`/v1/messages` 均返回 401 `Missing gateway API key`（端点存在、只缺凭据），避免写出一个不存在的接入方式。
 - 「26 of 29 保持同 id」这一覆盖结论由脚本按「末段名称相同且模型 id 不含前缀」的口径统计得出（同 id 26 个、仅换厂商前缀 0 个、无同 id 3 个），而不是只按名称模糊匹配，避免把 `zai-org/GLM-5.3` 之类的换前缀条目算成同 id。
+- 审计轮（提交并推送后）复核：运行时仍是 23 个供应商、733 个模型，`isWithheldProvider('radius')` 为 `true`，`catalogProvider('radius')` 为 `undefined`，strict 与 deferred 都抛移除错误；三个 golden 的 23 项与 `catalogProviderIds()` 排序逐项一致；三个意图别名的等价性改为**全字段比对**（除 id、name、provider、baseUrl、providers 外无任何差异），比原先只比上下文与价格更强。发现并修复两处问题：`logs/00009` 的控制点表格仍写「十七个路由的元数据」（已改十八）；上一轮为压词数把升级指南里的 `kimi-coding` 指引一并删掉，属于迁移信息缺失，已补回一句并把正文重新压回 475 词。
 - e2e 首轮 17 个失败先被怀疑与本次 golden 改动有关；逐条比对后确认全部来自并行包的启动视频覆盖层与新增设置按钮，golden 侧只有 `option "radius"` 一处删除，且删除后列表与目录一致。
 
 ## 6. 已知限制
