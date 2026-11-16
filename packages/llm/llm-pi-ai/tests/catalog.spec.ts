@@ -1281,6 +1281,7 @@ describe('configurable-provider directory', () => {
       'xiaomi',
       'xiaomi-token-plan-sgp',
       'xiaomi-token-plan-ams',
+      'zai',
     ]) {
       expect(getBuiltinProviders()).toContain(provider)
       expect(catalogProviderIds()).not.toContain(provider)

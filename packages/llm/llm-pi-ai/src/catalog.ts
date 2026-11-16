@@ -243,8 +243,17 @@ function servesChat(provider: Provider): boolean {
  * withholding it removes model coverage rather than only a routing layer. It
  * speaks OpenAI-compatible chat completions, so a deployment that needs those
  * models can add the endpoint as an `openai-completions` custom model API
- * under a different provider id.
- * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, and Ant Ling
+ * under a different provider id. `zai` is Z.AI's international coding-plan
+ * endpoint and `zai-coding-cn` its China platform endpoint: both serve GLM
+ * models through the same protocol from separate subscription accounts, so this
+ * build keeps the China route and withholds the international one. The kept
+ * route carries three of `zai`'s seven model ids — `glm-5.3`, `glm-5.3-flash`,
+ * and `glm-5.3-highspeed` — with identical capabilities and catalog costs;
+ * `glm-5.2` also appears on `opencode-go`, while `glm-4.7`, `glm-5-turbo`, and
+ * `glm-5.2-highspeed` appear on no other served route. An international
+ * account stays reachable through an `openai-completions` custom model API at
+ * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
+ * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, Z.AI, and Ant Ling
  * routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
  * and MiniMax endpoints speak Anthropic Messages, so a deployment that needs
  * one can add it as a custom model API.
@@ -274,6 +283,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'xiaomi',
   'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
+  'zai',
 ])
 
 /**

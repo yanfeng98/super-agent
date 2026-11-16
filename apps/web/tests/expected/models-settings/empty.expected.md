@@ -36,7 +36,6 @@
       - option "together"
       - option "xai"
       - option "xiaomi-token-plan-cn"
-      - option "zai"
       - option "zai-coding-cn"
     - text: API 密钥
     - button "认证说明": "?"

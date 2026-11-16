@@ -36,7 +36,6 @@
       - option "together"
       - option "xai"
       - option "xiaomi-token-plan-cn"
-      - option "zai"
       - option "zai-coding-cn"
     - group: 自定义设置
     - button "取消"
