@@ -56,7 +56,7 @@ pnpm dsh web
 
 ## 与上游的差异
 
-对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-13 的 `master`（`0.2.2-rc.3` 发布线），对比时间为 2026-11-16。截至 `nvidia` 移除提交，`main` 相对上游有 37 个提交、361 个文件（+19,858/−895 行）；下表按当前分支统计，不含本次 README 更新。上游继续前进后需要重新比对。逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
+对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-13 的 `master`（`0.2.2-rc.3` 发布线），对比时间为 2026-11-16。截至 `ant-ling` 移除提交，`main` 相对上游有 43 个提交、362 个文件（+19,979/−895 行）；下表按当前分支统计，不含本次 README 更新。上游继续前进后需要重新比对。逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
 
 ### 新增与行为调整
 
@@ -73,7 +73,7 @@ pnpm dsh web
 
 | 项目 | 变化 | 影响与替代 |
 |---|---|---|
-| 19 个 pi-ai 内置路由 | `amazon-bedrock`、`azure`、`cerebras`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`huggingface`、`minimax`、`moonshotai`、`moonshotai-cn`、`nvidia`、`opencode`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`radius`、`vercel-ai-gateway`、`xiaomi`、`xiaomi-token-plan-sgp`、`xiaomi-token-plan-ams` 不再出现在提供商目录、发现、登录与模型解析中。 | pi-ai 目录仍提供 22 个路由、713 个模型；pi-ai 包本身仍带这些路由的元数据，本构建只是屏蔽。存量 profile 点名被移除路由会使 `llm-pi-ai` 加载失败，删除该条目后其余路由恢复；需要继续使用原服务时可按[升级指南](docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/guide.zh.md)改用其他路由，或把兼容端点添加为自定义模型 API。`nvidia` 的 20 个模型中部分 Nemotron/Cosmos 等模型没有其他内置路由，`huggingface` 的无其他内置路由模型数也由 13 变为 14。`deepseek-official` 与 `deepseek-account` 原生路由不受影响。 |
+| 20 个 pi-ai 内置路由 | `amazon-bedrock`、`ant-ling`、`azure`、`cerebras`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`huggingface`、`minimax`、`moonshotai`、`moonshotai-cn`、`nvidia`、`opencode`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`radius`、`vercel-ai-gateway`、`xiaomi`、`xiaomi-token-plan-sgp`、`xiaomi-token-plan-ams` 不再出现在提供商目录、发现、登录与模型解析中。 | pi-ai 目录仍提供 21 个路由、710 个模型；pi-ai 包本身仍带这些路由的元数据，本构建只是屏蔽。存量 profile 点名被移除路由会使 `llm-pi-ai` 加载失败，删除该条目后其余路由恢复；需要继续使用原服务时可按[升级指南](docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/guide.zh.md)改用其他路由，或把兼容端点添加为自定义模型 API。`nvidia` 的 20 个模型中部分 Nemotron/Cosmos 等模型没有其他内置路由，`huggingface` 的无其他内置路由模型数也由 13 变为 14；`ant-ling` 的 3 个模型（`Ling-2.6-1T`、`Ling-2.6-flash`、`Ring-2.6-1T`）同样没有其他内置路由，`openrouter` 仅收有同族 Ling 3.x Flash 变体。`deepseek-official` 与 `deepseek-account` 原生路由不受影响。 |
 | 宽表突破布局 | 4 列及以上 Markdown 表格不再横向撑满 transcript；`md-table-wide` 只保留滚动条揭示与键盘聚焦语义，不再决定宽度。 | 表格与段落、标题使用同一条宽度轴；长表换行，极多列或窄视口才在表格内部滚动。相关 e2e 与金标已改为断言该几何。 |
 
 ### 工程、测试与文档
@@ -82,7 +82,7 @@ pnpm dsh web
 |---|---|
 | 新包与集成 | 新增 `@deepseek-ai/dsh-client-ui-boot-animation`（78 个文件，Host + Client 双面，自带 locales 与 assets），加入 `dsh-web-app` bundle 的启动项与 workspace 资产约束（`assets/`）。 |
 | 持久化契约 | `SessionPersistence` 新增必需抽象方法 `remove` 与 `SessionPersistenceBusyError`；JSONL 后端删除整个 session 目录并持有 write lease；共享契约新增删除用例。自定义后端需实现该方法。 |
-| 测试 | 新增 `session-delete.e2e.ts` 与 `composer-input-history.e2e.ts`；更新 `message-actions`、`markdown-wide-table`、`models-settings`、`sidebar-alignment` 等 e2e，以及大量 Client 单测与 Web 金标（用户消息新增 Edit、设置页移除 19 个 option 等）。 |
+| 测试 | 新增 `session-delete.e2e.ts` 与 `composer-input-history.e2e.ts`；更新 `message-actions`、`markdown-wide-table`、`models-settings`、`sidebar-alignment` 等 e2e，以及大量 Client 单测与 Web 金标（用户消息新增 Edit、设置页移除 20 个 option 等）。 |
 | 文档与记录 | 新增 2 组中英双语升级指南、3 篇 Agent Note 与多项 `logs/` 变更记录；更新 session、persistence、workspace、web-client 子系统页，config/persistence 生成目录，providers 与 Web UI 用户指南，以及开发指南。 |
 | 仓库发布面 | 根 README 改为中文单语：原英文 `README.md` 被中文版替换，删除 `README.zh.md` 与 `README.i18n.yaml`，不再保留上游的 Community、Contributing、Citation 与 npm 运行章节，并改写为本仓库的 clone/build/run 流程。删除根 `LICENSE`、`CONTRIBUTING.md`、`CONTRIBUTING.zh.md` 及配对记录；根 `package.json` 仍声明 MIT，第三方依赖许可保留在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。包级 README 仍按中英成对维护，根 README 在 `scripts/translation-pairing.manifest.json` 中排除。 |
 | 权限与兼容性 | LiveShare 将 `session/delete` 归类为 `owner-only`，viewer 角色不可调用。改动未触及 agent loop、模型可见工具或 Session 日志格式；启动片头不注册工具、prompt 段或 Session 事件，输入历史只存在浏览器。 |
