@@ -42,6 +42,10 @@ pnpm dsh web
 
 需要后台常驻时用 `make web-bg`（tmux 会话 `dsh-web`，启动后打印带 token 的 URL），停止用 `make web-stop`。
 
+## 查找插件
+
+社区插件目录：[DSH Marketplace](https://dshmarketplace.dev/)。它汇总 DeepSeek Harness 的第三方插件，提供安装命令、安装验证与公开 API；DSH 0.2.1+ 还可将其索引 `https://dshmarketplace.dev/market/index.json` 添加到 Plugins 的 Discover 中。列表不代表安全审查，安装前请阅读源码，并优先在一次性 profile 中验证。
+
 ## 开发
 
 请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
