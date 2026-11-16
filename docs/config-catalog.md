@@ -614,7 +614,7 @@ export interface Config {
 
 - `inject`: `webServer`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/ui-boot-animation/src/index.ts:58`](../packages/client/ui-boot-animation/src/index.ts)
+- `source`: [`packages/client/ui-boot-animation/src/index.ts:59`](../packages/client/ui-boot-animation/src/index.ts)
 
 ```ts config-catalog
 /** The archive sequence's settings, as mutable runtime values. */

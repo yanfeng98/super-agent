@@ -83,7 +83,6 @@ describe('createArchiveAudio', () => {
     const audio = createArchiveAudio(settings(), null, ASSET)
     await expect(audio.line('line-1', 'hello')).resolves.toEqual({ milliseconds: 0, played: false })
     audio.cue('tick')
-    audio.prelude()
     audio.stop()
   })
 
@@ -149,18 +148,34 @@ describe('createArchiveAudio', () => {
     expect(off.elements).toHaveLength(0)
   })
 
-  it('plays the prelude only when asked for, and nothing before a cue', () => {
+  it('plays the cue before a line only when asked for', async () => {
     const on = factory()
-    const audio = createArchiveAudio(settings(), on.audioFactory, ASSET)
-    audio.prelude()
-    expect(on.elements).toHaveLength(1)
-    audio.stop()
-    audio.prelude()
-    expect(on.elements).toHaveLength(1)
+    await createArchiveAudio(settings(), on.audioFactory, ASSET).line('line-1', 'hello')
+    expect(on.elements.some(element => element.played > 0)).toBe(true)
+    expect(on.elements).toHaveLength(2)
 
     const off = factory()
-    createArchiveAudio(settings({ screenVoiceCue: false }), off.audioFactory, ASSET).prelude()
-    expect(off.elements).toHaveLength(0)
+    await createArchiveAudio(settings({ screenVoiceCue: false }), off.audioFactory, ASSET).line('line-1', 'hello')
+    expect(off.elements).toHaveLength(1)
+
+    const muted = factory()
+    await createArchiveAudio(settings({ screenVoice: false }), muted.audioFactory, ASSET).line('line-1', 'hello')
+    expect(muted.elements).toHaveLength(0)
+  })
+
+  it('leaves the configured pause before a synthesized line', async () => {
+    vi.useFakeTimers()
+    const speech = speechPort('end')
+    const audio = createArchiveAudio(
+      settings({ screenVoiceSource: 'tts', screenVoiceLead: 500, screenVoiceCue: false }),
+      { element: () => { throw new Error('unused') }, speech: () => speech.port, voices: () => [] },
+      ASSET,
+    )
+    const pending = audio.line(null, 'hello')
+    expect(speech.requests).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(500)
+    await pending
+    expect(speech.requests).toHaveLength(1)
   })
 
   it('stops every element and the synthesizer in one call, and again on a second call', () => {
@@ -320,7 +335,7 @@ describe('synth voice selection and utterance settling', () => {
       resume: () => undefined,
     }
     const audio = createArchiveAudio(
-      settings({ screenVoiceSource: 'tts' }),
+      settings({ screenVoiceSource: 'tts', screenVoiceLead: 0, screenVoiceCue: false }),
       { element: () => { throw new Error('unused') }, speech: () => speech, voices: () => [] },
       ASSET,
     )
@@ -369,7 +384,7 @@ describe('synth voice selection and utterance settling', () => {
     }
     const audio = createArchiveAudio(settings(), { element: () => element, speech: () => null, voices: () => [] }, ASSET)
     const pending = audio.line('line-1', 'hello')
-    await vi.advanceTimersByTimeAsync(12_000)
+    await vi.runAllTimersAsync()
     await expect(pending).resolves.toEqual({ milliseconds: 0, played: false })
   })
 })

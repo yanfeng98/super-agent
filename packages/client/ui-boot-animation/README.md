@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-client-ui-boot-animation` plays a two-stage startup experience over the client at launch, or when you enter a new conversation: a six-act archive sequence, then a short intro clip. Its Startup intro page owns the stage order, every sequence preference, the clip library, and the moment it plays. Four clips and six recorded lines ship with the package; MP4, M4V, MOV, and WebM files in the user video directory join the library. Each conversation can replay the experience or pin its own clip, and Skip or Esc dismisses the stage on screen. It is on by default for Web and Desktop.
+`@deepseek-ai/dsh-client-ui-boot-animation` plays a two-stage startup experience over the client at launch, or when you enter a new conversation: a six-act archive sequence, then a short intro clip. Its Startup intro page owns the stage order, every sequence preference, the clip library, and the moment it plays. Four clips and six recorded lines ship with the package; MP4, M4V, MOV, and WebM files in the user video directory join the library. Each conversation can replay the experience or pin its own clip, and Skip or Esc ends the whole experience. It is on by default for Web and Desktop.
 
 ## Table of Contents
 
@@ -33,7 +33,7 @@ The first stage is six acts of full-window authorization theatre: a black prolog
 
 Each of the five lines is a Chinese headline with an English monospace subtitle that types itself in, plus a bottom log line. Two of them wait for you: the first asks to grant access, the second to confirm the identity card that appears beside the button, and both continue on the button, Enter, or Space. The other three advance on their own. Every line is also spoken: the package ships six recorded takes, and a line waits for its take to finish before advancing, so answering quickly never cuts the voice off. When a take is missing, or `screenVoiceSource` is `'tts'`, the same line is spoken by the system voice instead. Interface cues (a tick, a two-tone confirm, a closing chime) accompany the acts; they play only while `screenSound` is on.
 
-`screenSpeed` multiplies every fixed duration, and a line still waits for its spoken take before advancing. `screenRequireInteraction` turns the two confirmation gates off, and `screenAllowSkip` controls the skip control and Escape. The letters, the brand block, the prologue wordmark, the closing box, the footer, the identity, and the three colors are all settings rather than constants.
+`screenSpeed` multiplies every fixed duration, and a line still waits for its spoken take before advancing. `screenRequireInteraction` turns the two confirmation gates off, and `screenAllowSkip` controls the skip control and Escape; skipping ends the whole experience rather than continuing with the clip. The letters, the brand block, the prologue wordmark, the closing box, the footer, the identity, and the three colors are all settings rather than constants.
 
 ### The clip stage
 

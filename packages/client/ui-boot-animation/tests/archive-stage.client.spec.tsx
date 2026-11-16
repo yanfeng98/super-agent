@@ -4,7 +4,7 @@
  * teardown path. Timers are faked, so each act is reached by advancing the clock
  * rather than waiting.
  */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArchiveStage, INITIAL_FRAME } from '../src/client/archive/ArchiveStage.tsx'
 import type { ArchiveLabels } from '../src/client/archive/ArchiveStage.tsx'
@@ -55,12 +55,19 @@ function mount(
   override: Partial<IntroSettings> = {},
   onFinished = vi.fn(),
   factory: AudioFactory | null = silentFactory(),
+  onSkip = vi.fn(),
 ) {
   const settings: IntroSettings = { ...DEFAULT_SETTINGS, ...override }
   const view = render(
-    <ArchiveStage settings={settings} labels={LABELS} onFinished={onFinished} audioFactory={factory} />,
+    <ArchiveStage
+      settings={settings}
+      labels={LABELS}
+      onFinished={onFinished}
+      onSkip={onSkip}
+      audioFactory={factory}
+    />,
   )
-  return { ...view, onFinished }
+  return { ...view, onFinished, onSkip }
 }
 
 /** Advance the fake clock, running the promise chain the sequence is built from. */
@@ -124,15 +131,17 @@ describe('ArchiveStage', () => {
     expect(onFinished).toHaveBeenCalledOnce()
   })
 
-  it('finishes on Escape and stops both timers and audio', async () => {
-    const { onFinished } = mount()
+  it('ends the whole experience on Escape, without continuing to the clip', async () => {
+    const { onFinished, onSkip } = mount()
     fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onFinished).toHaveBeenCalledOnce()
+    expect(onSkip).toHaveBeenCalledOnce()
+    expect(onFinished).not.toHaveBeenCalled()
   })
 
   it('ignores Escape when skipping is turned off', async () => {
-    const { onFinished } = mount({ screenAllowSkip: false })
+    const { onFinished, onSkip } = mount({ screenAllowSkip: false })
     fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onSkip).not.toHaveBeenCalled()
     expect(onFinished).not.toHaveBeenCalled()
   })
 
@@ -148,11 +157,27 @@ describe('ArchiveStage', () => {
     const { container } = mount()
     await runFor(6_000)
     expect(container.querySelector('.dsh-boot-archive-card')?.hasAttribute('hidden')).toBe(true)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(container.querySelector('.dsh-boot-archive-btn') as Element)
     await runFor(3_000)
     expect(container.textContent).toContain('身份资料确认')
     expect(container.querySelector('.dsh-boot-archive-card')?.hasAttribute('hidden')).toBe(false)
     expect(container.textContent).toContain('0087')
+  })
+
+  it('accepts the confirmation as soon as the button appears', async () => {
+    const { container } = mount()
+    let clicked = false
+    for (let elapsed = 0; elapsed < 15_000 && !clicked; elapsed += 50) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(50) })
+      const button = container.querySelector('.dsh-boot-archive-btn')
+      if (container.querySelector('.dsh-boot-archive-action')?.className.includes('dsh-boot-archive-in') && button !== null) {
+        fireEvent.click(button)
+        clicked = true
+      }
+    }
+    expect(clicked).toBe(true)
+    await runFor(2_000)
+    expect(container.querySelector('.dsh-boot-archive-stepcount')?.textContent).toContain('IDENTITY')
   })
 
   it('continues on Enter and on Space', async () => {
@@ -167,6 +192,26 @@ describe('ArchiveStage', () => {
     expect(container.querySelector('.dsh-boot-archive-stepcount')?.textContent).toMatch(/\[ 0[3-6] \/ 06 \]/)
   })
 
+  it('keeps the whale mark from the request line until the reticle line', async () => {
+    const { container } = mount({ screenRequireInteraction: false })
+    const mark = (): string => container.querySelector('.dsh-boot-archive-logo')?.className ?? ''
+    const reticle = (): string => container.querySelector('.dsh-boot-archive-reticle')?.className ?? ''
+    const step = (): string => container.querySelector('.dsh-boot-archive-stepcount')?.textContent ?? ''
+    let markDuringRead = ''
+    let markDuringVerify = ''
+    for (let elapsed = 0; elapsed < 20_000 && markDuringVerify === ''; elapsed += 100) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+      if (step().includes('REQUEST')) expect(mark()).toContain('dsh-boot-archive-in')
+      if (step().includes('READ') && !step().includes('VERIFY')) markDuringRead = mark()
+      if (step().includes('VERIFY')) {
+        markDuringVerify = mark()
+        expect(reticle()).toContain('dsh-boot-archive-in')
+      }
+    }
+    expect(markDuringRead).toContain('dsh-boot-archive-in')
+    expect(markDuringVerify).not.toContain('dsh-boot-archive-in')
+  })
+
   it('runs the hexadecimal readout and the welcome act', async () => {
     const { container, onFinished } = mount({ screenRequireInteraction: false })
     // The readout is one of the five lines; catch it while it runs.
@@ -175,6 +220,12 @@ describe('ArchiveStage', () => {
     await runFor(8_000)
     expect(container.querySelector('.dsh-boot-archive-welcome')?.className).toContain('dsh-boot-archive-in')
     expect(container.textContent).toContain('WELCOME TO')
+    // The chromatic split needs both classes: the glitch layer exists, the on-class runs it.
+    const welcomeLine = container.querySelector('.dsh-boot-archive-w4')?.className ?? ''
+    expect(welcomeLine).toContain('dsh-boot-archive-glitch')
+    expect(welcomeLine).toContain('dsh-boot-archive-on')
+    expect(container.querySelector('.dsh-boot-archive-w2')?.className).toContain('dsh-boot-archive-glitch-box')
+    expect(container.querySelector('.dsh-boot-archive-w1')?.className).toContain('dsh-boot-archive-glitch')
     await runFor(6_000)
     expect(onFinished).toHaveBeenCalledOnce()
   })
@@ -229,19 +280,21 @@ describe('ArchiveStage', () => {
   })
 
   it('leaves on the skip control', async () => {
-    const { container, onFinished } = mount()
+    const { container, onFinished, onSkip } = mount()
     await runFor(5_000)
     const skip = container.querySelector('.dsh-boot-archive-skip')
-    expect(skip).toBeTruthy()
+    expect(skip?.tagName).toBe('BUTTON')
     fireEvent.click(skip as Element)
-    expect(onFinished).toHaveBeenCalledOnce()
+    expect(onSkip).toHaveBeenCalledOnce()
+    expect(onFinished).not.toHaveBeenCalled()
   })
 
-  it('ignores a second skip after the sequence finished', async () => {
-    const { onFinished } = mount({ screenRequireInteraction: false })
+  it('ignores a skip after the sequence finished', async () => {
+    const { onFinished, onSkip } = mount({ screenRequireInteraction: false })
     await runFor(60_000)
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onFinished).toHaveBeenCalledOnce()
+    expect(onSkip).not.toHaveBeenCalled()
   })
 
   it('shows the highlight and hands off at the very end', async () => {

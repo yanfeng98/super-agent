@@ -111,8 +111,6 @@ export interface ArchiveAudio {
   line(name: string | null, fallback: string): Promise<Spoken>
   /** Play one interface cue, when interface sound is on. */
   cue(name: CueName): void
-  /** The hint played before a spoken line, when the user asked for one. */
-  prelude(): void
   /** Release every element and stop the synthesizer. */
   stop(): void
 }
@@ -121,7 +119,6 @@ export interface ArchiveAudio {
 export const SILENT_AUDIO: ArchiveAudio = {
   line: () => Promise.resolve({ milliseconds: 0, played: false }),
   cue: () => undefined,
-  prelude: () => undefined,
   stop: () => undefined,
 }
 
@@ -148,7 +145,14 @@ export function createArchiveAudio(
   const playCue = (name: CueName): void => {
     if (!settings.screenSound) return
     const file = name === 'ticks' ? 'sfx-ticks-run' : 'sfx-tick'
-    const element = factory.element(assetUrl(file))
+    let element: MediaElementPort
+    try {
+      element = factory.element(assetUrl(file))
+    } catch (error) {
+      // An environment that cannot hand out an element simply has no cue.
+      void error
+      return
+    }
     element.volume = settings.screenSoundVolume
     elements.push(element)
     try {
@@ -193,6 +197,9 @@ export function createArchiveAudio(
   return {
     async line(name, fallback) {
       if (!settings.screenVoice) return { milliseconds: 0, played: false }
+      // The hint belongs to the line, not to the caller: an audible line always
+      // gets it first when the user asked for one.
+      if (settings.screenVoiceCue) playCue('tick')
       if (settings.screenVoiceSource === 'asset' && name !== null) {
         const element = factory.element(assetUrl(name))
         element.volume = settings.screenVoiceVolume
@@ -200,16 +207,15 @@ export function createArchiveAudio(
         const played = await playToEnd(element, LINE_TIMEOUT_MS)
         if (played !== null) return played
       }
+      // The lead is a pause of the synthesized voice only; a recorded take carries
+      // its own room before the first word.
+      if (settings.screenVoiceLead > 0) await new Promise<void>((resolve) => { setTimeout(resolve, settings.screenVoiceLead) })
       const lang = settings.screenVoiceLang === 'zh' ? 'zh-CN' : 'en-US'
       return spokenBySpeech(fallback, lang)
     },
     cue: (name) => {
       if (stopped) return
       playCue(name)
-    },
-    prelude: () => {
-      if (stopped || !settings.screenVoiceCue) return
-      playCue('tick')
     },
     stop: () => {
       stopped = true

@@ -56,7 +56,10 @@ describe('normalizeScreenValue', () => {
     expect(normalizeScreenValue('screenGlass', 'true')).toBe(true)
     expect(normalizeScreenValue('screenGlass', 1)).toBe(true)
     expect(normalizeScreenValue('screenGlass', 'false')).toBe(false)
-    expect(normalizeScreenValue('screenGlass', null)).toBe(false)
+    expect(normalizeScreenValue('screenGlass', 0)).toBe(false)
+    // An absent value keeps the field's default instead of flipping it off.
+    expect(normalizeScreenValue('screenGlass', null)).toBe(true)
+    expect(normalizeScreenValue('screenGlass', undefined)).toBe(true)
   })
 
   it('clamps numbers and falls back when they are not finite', () => {

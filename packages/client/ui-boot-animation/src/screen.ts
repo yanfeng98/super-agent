@@ -115,6 +115,12 @@ export const SCREEN_RANGES: Partial<Record<ScreenKey, readonly [number, number]>
   screenGlassBackdropBlur: [0, 80],
 }
 
+/** A screen-settings projection: any field may be absent or carry an unusable value. */
+export type ScreenProjection = { readonly [K in keyof ScreenSettings]?: unknown }
+
+/** The startup sequence's stage orders, shared by the Host schema and the browser. */
+export const SEQUENCE_MODES = ['archive-then-video', 'video-then-archive', 'archive-only', 'video-only'] as const
+
 /** Text fields, all clipped to this many characters. */
 export const SCREEN_TEXT_LIMIT = 64
 
@@ -154,7 +160,10 @@ export function isScreenChoice(key: ScreenKey, value: unknown): boolean {
  */
 export function normalizeScreenValue(key: ScreenKey, value: unknown): string | number | boolean {
   const fallback = SCREEN_DEFAULTS[key]
-  if (typeof fallback === 'boolean') return value === true || value === 'true' || value === 1 || value === '1'
+  if (typeof fallback === 'boolean') {
+    if (value === undefined || value === null) return fallback
+    return value === true || value === 'true' || value === 1 || value === '1'
+  }
   if (typeof fallback === 'number') {
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return fallback
@@ -170,4 +179,17 @@ export function normalizeScreenValue(key: ScreenKey, value: unknown): string | n
     return COLOR_PATTERN.test(text.trim()) ? text.trim() : fallback
   }
   return text.slice(0, SCREEN_TEXT_LIMIT)
+}
+
+/**
+ * Read a full set of screen settings from a possibly stale projection.
+ * @param raw - the Host projection, or null before one arrives.
+ * @returns every screen field, with absent or unusable values replaced by defaults.
+ */
+export function screenSettingsOf(raw: ScreenProjection | null | undefined): ScreenSettings {
+  if (raw === null || raw === undefined) return { ...SCREEN_DEFAULTS }
+  const fields = Object.fromEntries(
+    SCREEN_KEYS.map(key => [key, normalizeScreenValue(key, raw[key])]),
+  )
+  return { ...SCREEN_DEFAULTS, ...fields }
 }

@@ -126,6 +126,7 @@ export function IntroOverlay({
         settings={settings}
         labels={archiveLabels(t)}
         onFinished={advance}
+        onSkip={stop}
       />,
       document.body,
     )

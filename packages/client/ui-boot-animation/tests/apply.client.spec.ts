@@ -293,6 +293,18 @@ describe('boot-animation apply', () => {
     expect(h.current.listenerCount()).toBe(0)
   })
 
+  it('keeps the normalized settings snapshot stable between changes', async () => {
+    const h = await bench()
+    const face = h.overlay().hooks.settings
+    const first = face.getSnapshot()
+    expect(face.getSnapshot()).toBe(first)
+    h.form.publish({ value: { ...DEFAULT_SETTINGS, sequence: 'video-only' } })
+    const second = face.getSnapshot()
+    expect(second.sequence).toBe('video-only')
+    expect(face.getSnapshot()).toBe(second)
+    expect(second).not.toBe(first)
+  })
+
   it('uses the defaults until the settings projection answers, then mirrors it', async () => {
     const h = await bench()
     expect(h.overlay().hooks.settings.getSnapshot()).toEqual(DEFAULT_SETTINGS)
