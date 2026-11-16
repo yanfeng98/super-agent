@@ -25,10 +25,15 @@ import { IntroRecords, decidePlay, sessionStorageOrNull } from './decide.ts'
 import { SettingsSection } from './SettingsSection.tsx'
 import { NS } from './contract.ts'
 import { DEFAULT_SETTINGS } from './contract.ts'
-import type { CatalogState, IntroReason, IntroSettings, PlaybackState, SessionBinding } from './contract.ts'
+import type { CatalogState, IntroReason, IntroSettings, PlaybackState, StartupSessionBinding } from './contract.ts'
 import { createSource } from './source.ts'
 import { de, en, es, fr, ja, pt, ru, zh } from './locales.ts'
-import type { FitMode, PlayTiming } from '../types.ts'
+import type { FitMode, PlayTiming, ScreenSettings, SequenceMode } from '../types.ts'
+
+/** One stage of the running plan, carrying everything that stage needs. */
+type PlanStage =
+  | { readonly kind: 'archive' }
+  | { readonly kind: 'video'; readonly clipId: string; readonly url: string; readonly how: IntroReason }
 
 /** Stable Cordis plugin name. */
 export const name = 'dsh-client-ui-boot-animation'
@@ -40,7 +45,9 @@ export const inject = ['slots', 'locale', 'uiSession', 'configForms']
 const SETTINGS_ID = 'ui-boot-animation'
 
 /** Nothing is playing. */
-const IDLE: PlaybackState = { phase: 'idle', clipId: null, url: null, reason: 'none', nonce: 0, preview: false }
+const IDLE: PlaybackState = {
+  phase: 'idle', stage: 'none', clipId: null, url: null, reason: 'none', nonce: 0, preview: false,
+}
 
 /** The conversation binding shape this plugin reads. */
 interface SessionFace {
@@ -80,15 +87,53 @@ export function apply(ctx: Context): void {
   })
   const playback = createSource<PlaybackState>(IDLE)
   const bindingSource = ctx.uiSession.adapter.current as BindingSource
-  const session = createSource<SessionBinding>({ sessionId: null, blank: false })
+  const session = createSource<StartupSessionBinding>({ sessionId: null, blank: false })
   const records = new IntroRecords(sessionStorageOrNull())
   const lifetime = new AbortController()
   let lastSessionId: string | null = null
   let mirroredFace: SessionFace | undefined
   let nestedStop: (() => void) | null = null
   let inFlight = false
+  /** The stages the current answer asked for, in order, with everything each one needs. */
+  let plan: readonly PlanStage[] = []
+  /** Index into {@link plan} of the stage on screen. */
+  let planIndex = 0
+  /** The reason this plan started with, kept for every stage it runs through. */
+  let planReason: IntroReason = 'none'
+  /** Whether the running plan is the settings page's preview. */
+  let planPreview = false
 
-  const stop = (): void => { playback.set(IDLE) }
+  const stop = (): void => {
+    plan = []
+    planIndex = 0
+    planReason = 'none'
+    planPreview = false
+    playback.set(IDLE)
+  }
+
+  /** Put one stage of the plan on screen. */
+  const startStage = (index: number): void => {
+    const stage = plan[index]
+    if (stage === undefined) { stop(); return }
+    planIndex = index
+    const nonce = playback.getSnapshot().nonce + 1
+    if (stage.kind === 'archive') {
+      playback.set({ phase: 'playing', stage: 'archive', clipId: null, url: null, reason: planReason, nonce, preview: planPreview })
+      return
+    }
+    playback.set({
+      phase: 'loading',
+      stage: 'video',
+      clipId: stage.clipId,
+      url: stage.url,
+      reason: planPreview ? 'preview' : stage.how === 'none' ? planReason : stage.how,
+      nonce,
+      preview: planPreview,
+    })
+  }
+
+  /** Finish the stage on screen and start the next one. */
+  const advance = (): void => { startStage(planIndex + 1) }
   /** The first frame arrived: only `loading` may become `playing`. */
   const markPlaying = (): void => {
     const current = playback.getSnapshot()
@@ -126,28 +171,38 @@ export function apply(ctx: Context): void {
     publishSession()
   }
 
-  /** Ask the Host for the clip that should play and point the overlay at it. */
+  /** Ask the Host which stages should play now, then start the first one. */
   const play = async (reason: IntroReason, sessionId: string | null, previewClipId?: string): Promise<void> => {
     if (inFlight) return
     if (previewClipId !== undefined) {
       const clip = catalog.getSnapshot().clips.find(candidate => candidate.id === previewClipId)
       if (clip === undefined) return
-      playback.set({ phase: 'loading', clipId: clip.id, url: mediaUrlFor(clip), reason: 'preview', nonce: playback.getSnapshot().nonce + 1, preview: true })
+      plan = [{ kind: 'video', clipId: clip.id, url: mediaUrlFor(clip), how: 'selected' }]
+      planIndex = 0
+      planReason = 'preview'
+      planPreview = true
+      startStage(0)
       return
     }
     inFlight = true
     try {
       /* v8 ignore next -- decidePlay never yields "random" and preview is handled above, so this always asks for "active" */
       const answer = await fetchActive(sessionId, reason === 'random' ? 'random' : 'active', lifetime.signal)
-      if (answer === null || answer.clipId === null || answer.version === null) return
-      playback.set({
-        phase: 'loading',
-        clipId: answer.clipId,
-        url: mediaUrlFor({ id: answer.clipId, version: answer.version }),
-        reason: answer.how === 'none' ? reason : answer.how,
-        nonce: playback.getSnapshot().nonce + 1,
-        preview: false,
-      })
+      if (answer === null) return
+      const clip = answer.clipId === null || answer.version === null
+        ? null
+        : { clipId: answer.clipId, url: mediaUrlFor({ id: answer.clipId, version: answer.version }), how: answer.how }
+      const stages: PlanStage[] = []
+      for (const stage of answer.stages) {
+        if (stage === 'archive') { stages.push({ kind: 'archive' }); continue }
+        if (clip !== null) stages.push({ kind: 'video', ...clip })
+      }
+      if (stages.length === 0) return
+      plan = stages
+      planIndex = 0
+      planReason = reason
+      planPreview = false
+      startStage(0)
       records.markLaunch()
       if (sessionId !== null) records.markSession(sessionId)
     } catch (error) {
@@ -158,6 +213,15 @@ export function apply(ctx: Context): void {
     } finally {
       inFlight = false
     }
+  }
+
+  /** Play the archive sequence alone, for the settings page's preview button. */
+  const previewArchive = (): void => {
+    plan = [{ kind: 'archive' }]
+    planIndex = 0
+    planReason = 'preview'
+    planPreview = true
+    startStage(0)
   }
 
   /** Apply the when-to-play rule to the current facts. */
@@ -201,7 +265,7 @@ export function apply(ctx: Context): void {
   }
 
   /** Write one preference through the Host-backed settings form. */
-  const patchSetting = (key: keyof IntroSettings, value: boolean | string): void => {
+  const patchSetting = (key: keyof IntroSettings, value: boolean | string | number): void => {
     settings.set({ ...(settings.getSnapshot() ?? DEFAULT_SETTINGS), [key]: value })
     void form.set(key, value).catch(() => undefined)
   }
@@ -259,6 +323,7 @@ export function apply(ctx: Context): void {
         settings: deriveSettings(settings),
       },
       markPlaying,
+      advance,
       stop,
     }),
   }, IntroOverlay))
@@ -273,11 +338,14 @@ export function apply(ctx: Context): void {
       hooks: { catalog, settings: deriveSettings(settings), session },
       refresh,
       preview: (clipId: string) => { void play('preview', session.getSnapshot().sessionId, clipId) },
+      previewArchive,
       setEnabled: (enabled: boolean) => { patchSetting('enabled', enabled) },
       setTiming: (timing: PlayTiming) => { patchSetting('timing', timing) },
       setFit: (fit: FitMode) => { patchSetting('fit', fit) },
       setRandom: (random: boolean) => { patchSetting('random', random) },
       setSelectedClip: (clipId: string) => { patchSetting('selectedClip', clipId) },
+      setSequence: (sequence: SequenceMode) => { patchSetting('sequence', sequence) },
+      setScreen: (key: keyof ScreenSettings, value: string | number | boolean) => { patchSetting(key, value) },
       setSessionReplay: (replay: boolean) => { writeSession({ replay }) },
       setSessionClip: (clipId: string | null) => { writeSession({ clipId }) },
       sessionStorageAvailable: catalog.getSnapshot().overridesAvailable,

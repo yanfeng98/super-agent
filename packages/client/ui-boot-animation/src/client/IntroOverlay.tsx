@@ -1,17 +1,18 @@
 /**
- * The intro itself: one full-screen video over the whole client window.
+ * The startup experience: one full-window overlay that runs the archive
+ * sequence and/or a clip, in the order the Host asked for.
  *
  * It renders what the store says is playing and reports what happened; every
  * decision lives in `decidePlay` and the plugin body. It portals to `body` so
- * ancestor clipping and stacking contexts cannot shrink it, and sits below the
- * shared overlay primitives (Modal is 1000) so an approval or dialog raised
- * during the intro still wins.
+ * ancestor clipping and stacking contexts cannot shrink it.
  * @module @deepseek-ai/dsh-client-ui-boot-animation/src/client/IntroOverlay
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import type { IntroOverlayProps } from './contract.ts'
+import { ArchiveStage } from './archive/ArchiveStage.tsx'
+import { archiveLabels } from './archive/labels.ts'
 import css from './IntroOverlay.module.css'
 
 /** Give up when no frame arrives in this long. */
@@ -35,9 +36,11 @@ function releaseVideo(video: HTMLVideoElement): void {
  * @param props - composed slot props plus the injected playback face.
  * @returns the overlay, or null when nothing is playing.
  */
-export function IntroOverlay({ usePlayback, useSettings, markPlaying, stop, t }: IntroOverlayProps): ReactNode {
+export function IntroOverlay({
+  usePlayback, useSettings, markPlaying, advance, stop, t,
+}: IntroOverlayProps): ReactNode {
   const playback = usePlayback(value => value)
-  const fit = useSettings(value => value.fit)
+  const settings = useSettings(value => value)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [needsTap, setNeedsTap] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -47,6 +50,7 @@ export function IntroOverlay({ usePlayback, useSettings, markPlaying, stop, t }:
   /** The pending "leave after a stall" timer, cancelled if a frame finally arrives. */
   const leaveTimer = useRef<number | null>(null)
   const url = playback.url
+  const archive = playback.stage === 'archive'
 
   const schedule = (ms: number, run: () => void): void => {
     timers.current.push(window.setTimeout(() => { run() }, ms))
@@ -65,7 +69,7 @@ export function IntroOverlay({ usePlayback, useSettings, markPlaying, stop, t }:
     let timer = window.setTimeout(() => {
       // No frame at all: say so before leaving, instead of vanishing silently.
       setStalled(true)
-      leaveTimer.current = window.setTimeout(() => { stop() }, 3_000)
+      leaveTimer.current = window.setTimeout(() => { advance() }, 3_000)
     }, STALL_TIMEOUT_MS)
     const onPlaying = (): void => {
       window.clearTimeout(timer)
@@ -85,7 +89,16 @@ export function IntroOverlay({ usePlayback, useSettings, markPlaying, stop, t }:
       video.removeEventListener('playing', onPlaying)
       releaseVideo(video)
     }
-  }, [url, playback.nonce, stop])
+  }, [url, playback.nonce, advance, markPlaying])
+
+  // A desktop shell reads this attribute to hide its caption buttons with the
+  // chrome the sequence covers; a browser ignores it entirely.
+  useEffect(() => {
+    if (playback.stage === 'none') return undefined
+    const root = document.documentElement
+    root.setAttribute('data-dsh-splash', '')
+    return () => { root.removeAttribute('data-dsh-splash') }
+  }, [playback.stage])
 
   useEffect(() => () => {
     for (const timer of timers.current) window.clearTimeout(timer)
@@ -106,6 +119,18 @@ export function IntroOverlay({ usePlayback, useSettings, markPlaying, stop, t }:
     return () => { window.removeEventListener('keydown', onKey) }
   }, [url, onKey])
 
+  if (archive && typeof document !== 'undefined') {
+    return createPortal(
+      <ArchiveStage
+        key={playback.nonce}
+        settings={settings}
+        labels={archiveLabels(t)}
+        onFinished={advance}
+      />,
+      document.body,
+    )
+  }
+
   if (url === null || typeof document === 'undefined') return null
 
   const activate = (): void => {
@@ -123,15 +148,15 @@ export function IntroOverlay({ usePlayback, useSettings, markPlaying, stop, t }:
     <div className={css.root} onClick={activate} role="presentation">
       <video
         ref={videoRef}
-        className={fit === 'cover' ? `${css.video} ${css.cover}` : css.video}
+        className={settings.fit === 'cover' ? `${css.video} ${css.cover}` : css.video}
         muted
         autoPlay
         playsInline
         preload="auto"
-        onEnded={stop}
+        onEnded={advance}
         onError={() => {
           setFailed(true)
-          schedule(4_000, stop)
+          schedule(4_000, advance)
         }}
       />
       {playback.preview ? <div className={css.badge}>{t('overlay.preview')}</div> : null}

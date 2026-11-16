@@ -9,6 +9,7 @@ import type { IntroOverlayProps, PlaybackState } from '../src/client/contract.ts
 
 const PLAYING: PlaybackState = {
   phase: 'loading',
+  stage: 'video',
   clipId: 'builtin:brand',
   url: '/dsh-boot-animation/media/builtin%3Abrand?v=1',
   reason: 'app-start',

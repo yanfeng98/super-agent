@@ -7,14 +7,16 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntroOverlay } from '../src/client/IntroOverlay.tsx'
-import type { IntroOverlayProps, PlaybackState } from '../src/client/contract.ts'
+import { DEFAULT_SETTINGS } from '../src/client/contract.ts'
+import type { IntroOverlayProps, IntroSettings, PlaybackState } from '../src/client/contract.ts'
 
 const IDLE: PlaybackState = {
-  phase: 'idle', clipId: null, url: null, reason: 'none', nonce: 0, preview: false,
+  phase: 'idle', stage: 'none', clipId: null, url: null, reason: 'none', nonce: 0, preview: false,
 }
 
 const PLAYING: PlaybackState = {
   phase: 'loading',
+  stage: 'video',
   clipId: 'builtin:brand',
   url: '/dsh-boot-animation/media/builtin%3Abrand?v=1',
   reason: 'app-start',
@@ -34,14 +36,16 @@ function makeProps(
   fit: 'cover' | 'contain' = 'cover',
 ) {
   const markPlaying = vi.fn()
+  const advance = vi.fn()
   const props = {
     usePlayback: <T,>(selector: (value: PlaybackState) => T): T => selector(playback),
-    useSettings: <T,>(selector: (value: { fit: 'cover' | 'contain' }) => T): T => selector({ fit }),
+    useSettings: <T,>(selector: (value: IntroSettings) => T): T => selector({ ...DEFAULT_SETTINGS, fit }),
     markPlaying,
+    advance,
     stop,
     t: (key: string) => key,
   } as IntroOverlayProps
-  return { props, stop, markPlaying }
+  return { props, stop, markPlaying, advance }
 }
 
 /** The one video the portal mounted. */
@@ -70,6 +74,22 @@ afterEach(() => {
 })
 
 describe('IntroOverlay', () => {
+  it('mounts the archive stage instead of a video when that stage is playing', () => {
+    vi.useFakeTimers()
+    const { props } = makeProps({ ...PLAYING, stage: 'archive', clipId: null, url: null })
+    render(<IntroOverlay {...props} />)
+    expect(document.querySelector('video')).toBeNull()
+    expect(document.querySelector('.dsh-boot-archive-root')).toBeTruthy()
+  })
+
+  it('marks the document while it owns the window, and clears the mark on unmount', () => {
+    const { props } = makeProps(PLAYING)
+    const view = render(<IntroOverlay {...props} />)
+    expect(document.documentElement.hasAttribute('data-dsh-splash')).toBe(true)
+    view.unmount()
+    expect(document.documentElement.hasAttribute('data-dsh-splash')).toBe(false)
+  })
+
   it('renders nothing until a clip is playing', () => {
     const { props } = makeProps(IDLE)
     render(<IntroOverlay {...props} />)
@@ -95,15 +115,15 @@ describe('IntroOverlay', () => {
 
   it('reports the stall, then leaves once no frame arrives', () => {
     vi.useFakeTimers()
-    const { props, stop } = makeProps(PLAYING)
+    const { props, advance } = makeProps(PLAYING)
     render(<IntroOverlay {...props} />)
     act(() => { vi.advanceTimersByTime(24_999) })
-    expect(stop).not.toHaveBeenCalled()
+    expect(advance).not.toHaveBeenCalled()
     act(() => { vi.advanceTimersByTime(1) })
     expect(document.body.textContent).toContain('overlay.stalled')
-    expect(stop).not.toHaveBeenCalled()
+    expect(advance).not.toHaveBeenCalled()
     act(() => { vi.advanceTimersByTime(3_000) })
-    expect(stop).toHaveBeenCalledOnce()
+    expect(advance).toHaveBeenCalledOnce()
   })
 
   it('lets a late first frame cancel the stall exit', () => {
@@ -155,24 +175,24 @@ describe('IntroOverlay', () => {
     expect(stop).not.toHaveBeenCalled()
   })
 
-  it('stops on the end of the clip', () => {
-    const { props, stop } = makeProps(PLAYING)
+  it('leaves for the next stage when the clip ends', () => {
+    const { props, advance } = makeProps(PLAYING)
     render(<IntroOverlay {...props} />)
     fireEvent(video(), new Event('ended'))
-    expect(stop).toHaveBeenCalledOnce()
+    expect(advance).toHaveBeenCalledOnce()
   })
 
-  it('reports a broken clip and stops after four seconds', () => {
+  it('reports a broken clip and leaves after four seconds', () => {
     vi.useFakeTimers()
-    const { props, stop } = makeProps(PLAYING)
+    const { props, advance } = makeProps(PLAYING)
     render(<IntroOverlay {...props} />)
     fireEvent(video(), new Event('error'))
     expect(screen.getByText('overlay.error')).toBeTruthy()
     expect(screen.queryByText('overlay.loading')).toBeNull()
     act(() => { vi.advanceTimersByTime(3_999) })
-    expect(stop).not.toHaveBeenCalled()
+    expect(advance).not.toHaveBeenCalled()
     act(() => { vi.advanceTimersByTime(1) })
-    expect(stop).toHaveBeenCalledOnce()
+    expect(advance).toHaveBeenCalledOnce()
   })
 
   it('stops on Escape only while the intro is mounted', () => {

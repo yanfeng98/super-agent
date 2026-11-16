@@ -3,23 +3,26 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-boot-animation/README.md
 /:
-  en: b038c3f4a2099254
-  zh: b1c4fe6f29daa6cf
+  en: 7f68e9bfe6dfc611
+  zh: ea9ceda41fe96377
 /deepseek-ai-dsh-client-ui-boot-animation:
   en: 5aa8a7e6092f4b41
   zh: 581521d2516bdc2f
 /deepseek-ai-dsh-client-ui-boot-animation/summary:
-  en: efaa7cad01e955ea
-  zh: d3931b95890d7fa2
+  en: 0ceb47f9b137e87a
+  zh: 067490fabb511f94
 /deepseek-ai-dsh-client-ui-boot-animation/table-of-contents:
   en: d152484eb41ac6b4
   zh: 405b30feaf48c087
 /deepseek-ai-dsh-client-ui-boot-animation/use-this-package:
   en: 9524f99bfa7a5306
   zh: ddfefd41651270d1
-/deepseek-ai-dsh-client-ui-boot-animation/use-this-package/playback:
-  en: cde3c84b8734a3dd
-  zh: 2faf9bc3c160e901
+/deepseek-ai-dsh-client-ui-boot-animation/use-this-package/the-archive-sequence:
+  en: 2facfe433057d512
+  zh: 2a8477c253c4e8fd
+/deepseek-ai-dsh-client-ui-boot-animation/use-this-package/the-clip-stage:
+  en: 2de84aea911977bc
+  zh: 3137828f6eb8cf18
 /deepseek-ai-dsh-client-ui-boot-animation/use-this-package/when-the-intro-plays:
   en: 434edba3451c87e0
   zh: 57470d97e32ecf86
@@ -27,14 +30,14 @@
   en: d55c3879da2dc7b6
   zh: 5310c4ec69f5bc7a
 /deepseek-ai-dsh-client-ui-boot-animation/use-this-package/preferences:
-  en: dee095c48fd2895d
-  zh: 0f38d755d6dfc189
+  en: 85b019d7b2efac6b
+  zh: cea7d461cc146f17
 /deepseek-ai-dsh-client-ui-boot-animation/use-this-package/per-conversation-override:
   en: 2ab3f9d718348600
   zh: b9138ac043f44c31
 /deepseek-ai-dsh-client-ui-boot-animation/understand-the-implementation:
-  en: 076d05dad4927a2b
-  zh: ce378029f7f994de
+  en: 68095c83c8dd8773
+  zh: 57a510ee7c75b5c1
 /deepseek-ai-dsh-client-ui-boot-animation/further-exploration:
   en: 36ca08cf6ea9c769
   zh: d3990b2a02d84887
@@ -45,8 +48,8 @@
   en: 42b0a30f774226f3
   zh: dec694b35e345d4e
 /deepseek-ai-dsh-client-ui-boot-animation/known-limitations-and-deferred-work:
-  en: 6aed3cb67928d16e
-  zh: 857bf3c94a84ecfc
+  en: 92b38114febcbe3f
+  zh: 300e52f73c281672
 /deepseek-ai-dsh-client-ui-boot-animation/known-limitations-and-deferred-work/dev-note:
   en: 18a59ce211e19bbd
   zh: a4b126f9a4eaca6f

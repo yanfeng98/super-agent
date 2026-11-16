@@ -7,7 +7,7 @@
  * unloading the plugin cancels them.
  * @module @deepseek-ai/dsh-client-ui-boot-animation/src/client/api
  */
-import type { ActiveReason, ActiveResponse, CatalogResponse, ClipInfo, SessionIntro } from '../types.ts'
+import type { ActiveReason, CatalogResponse, ClipInfo, SessionIntro, StartupStage } from '../types.ts'
 
 /** Route prefix owned by this plugin. */
 const BASE = '/dsh-boot-animation'
@@ -73,29 +73,49 @@ export async function fetchCatalog(sessionId: string | null, signal: AbortSignal
   return { clips, session: asSessionIntro(record.session), overridesAvailable: record.overridesAvailable === true }
 }
 
+/** The stages this conversation plays, and the clip the video stage uses when it runs. */
+export interface ActivePlan {
+  readonly stages: readonly StartupStage[]
+  readonly clipId: string | null
+  readonly version: string | null
+  readonly how: ActiveReason
+}
+
 /**
- * Ask the Host which clip plays now.
+ * Ask the Host which stages play now, and which clip the video stage uses.
  * @param sessionId - the conversation, or null.
  * @param mode - `random` forces a random pick.
  * @param signal - cancels the request when the plugin unloads.
- * @returns the answer, or null when the Host named no clip.
+ * @returns the plan, or null when the Host named no stage at all.
  */
 export async function fetchActive(
   sessionId: string | null,
   mode: 'active' | 'random',
   signal: AbortSignal,
-): Promise<ActiveResponse | null> {
+): Promise<ActivePlan | null> {
   const response = await fetch(withSession(`${BASE}/active.json?mode=${mode}`, sessionId), { cache: 'no-store', signal })
   if (!response.ok) throw new Error(`active request failed with ${String(response.status)}`)
   const body: unknown = await response.json()
   if (typeof body !== 'object' || body === null) return null
   const record = body as Record<string, unknown>
+  const stages = Array.isArray(record.stages)
+    ? record.stages.filter((stage): stage is StartupStage => stage === 'archive' || stage === 'video')
+    : ['video' as const]
+  if (stages.length === 0) return null
   const clipId = typeof record.clipId === 'string' && record.clipId !== '' ? record.clipId : null
   const version = typeof record.version === 'string' && record.version !== '' ? record.version : null
   const how = record.how
   const reason: ActiveReason = how === 'session' || how === 'random' || how === 'selected' ? how : 'none'
-  if (clipId === null || version === null) return null
-  return { clipId, version, how: reason }
+  return { stages, clipId, version, how: reason }
+}
+
+/**
+ * The URL of one shipped sequence audio file.
+ * @param name - the file name, without its extension.
+ * @returns the absolute path the audio element loads.
+ */
+export function audioUrlFor(name: string): string {
+  return `${BASE}/audio/${encodeURIComponent(name)}.mp3`
 }
 
 /**

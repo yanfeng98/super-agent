@@ -616,11 +616,84 @@ export interface Config {
 
 - `inject`: `webServer`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/ui-boot-animation/src/index.ts:55`](../packages/client/ui-boot-animation/src/index.ts)
+- `source`: [`packages/client/ui-boot-animation/src/index.ts:58`](../packages/client/ui-boot-animation/src/index.ts)
 
 ```ts config-catalog
-/** Intro preferences projected to the browser settings page. */
+/** The archive sequence's settings, as mutable runtime values. */
 export interface Config {
+  /** Color scheme of the sequence: 'light' is the warm paper plinth, 'dark' the dark one. */
+  readonly screenTheme: Volatile<'light' | 'dark'>
+  /** Multiplier for every fixed duration in the sequence; 0.35 is slow, 3 is fast. */
+  readonly screenSpeed: Volatile<number>
+  /** Whether the first two lines wait for a click, Enter, or Space. */
+  readonly screenRequireInteraction: Volatile<boolean>
+  /** Whether the skip control is shown and Escape dismisses the sequence. */
+  readonly screenAllowSkip: Volatile<boolean>
+  /** Whether interface cues play at all. */
+  readonly screenSound: Volatile<boolean>
+  /** Volume of the interface cues, 0 to 1. */
+  readonly screenSoundVolume: Volatile<number>
+  /** Whether the five lines are spoken. */
+  readonly screenVoice: Volatile<boolean>
+  /** Where the voice comes from: 'asset' prefers the recorded takes, 'tts' always synthesizes. */
+  readonly screenVoiceSource: Volatile<'asset' | 'tts'>
+  /** Language spoken: 'en', 'zh', or 'both'. */
+  readonly screenVoiceLang: Volatile<'en' | 'zh' | 'both'>
+  /** Exact installed voice name, or an empty string to pick one automatically. */
+  readonly screenVoiceName: Volatile<string>
+  /** Speaking rate for synthesized lines. */
+  readonly screenVoiceRate: Volatile<number>
+  /** Pitch for synthesized lines; below 1 is deeper. */
+  readonly screenVoicePitch: Volatile<number>
+  /** Volume of the spoken lines, 0 to 1. */
+  readonly screenVoiceVolume: Volatile<number>
+  /** Whether a short cue plays before a spoken line. */
+  readonly screenVoiceCue: Volatile<boolean>
+  /** Silence in milliseconds between the cue and the spoken line. */
+  readonly screenVoiceLead: Volatile<number>
+  /** Source of the interface cues: 'audio' plays the shipped files, 'synth' synthesizes them. */
+  readonly screenSfx: Volatile<'audio' | 'synth'>
+  /** Name in the closing welcome line and on the identity card. */
+  readonly screenIdentity: Volatile<string>
+  /** Identity number on the identity card and the confirmation line. */
+  readonly screenIdentityId: Volatile<string>
+  /** Access level shown on the identity card. */
+  readonly screenAccessLevel: Volatile<string>
+  /** First line of the brand block in the top-left corner. */
+  readonly screenBrand1: Volatile<string>
+  /** Second line of the brand block. */
+  readonly screenBrand2: Volatile<string>
+  /** Letter-spaced mark in the third brand line. */
+  readonly screenBrand3a: Volatile<string>
+  /** Suffix after the brand mark. */
+  readonly screenBrand3b: Volatile<string>
+  /** First line of the black prologue wordmark. */
+  readonly screenOrgZh: Volatile<string>
+  /** Second line of the black prologue wordmark. */
+  readonly screenOrgEn: Volatile<string>
+  /** Subtitle under the prologue wordmark. */
+  readonly screenOrgSub: Volatile<string>
+  /** Text in the black box of the closing act. */
+  readonly screenWelcomeBox: Volatile<string>
+  /** Text in the bottom-right footer. */
+  readonly screenFooter: Volatile<string>
+  /** Accent color for the status bar, progress bar, and reticle. */
+  readonly screenAccent: Volatile<string>
+  /** First color of the chromatic split during the reveal. */
+  readonly screenGlitchA: Volatile<string>
+  /** Second color of the chromatic split during the reveal. */
+  readonly screenGlitchB: Volatile<string>
+  /** Whether the plinth and prologue become translucent frosted glass. */
+  readonly screenGlass: Volatile<boolean>
+  /** Opacity of the glass layers, 0.15 to 0.95. */
+  readonly screenGlassOpacity: Volatile<number>
+  /** Frosted blur radius in pixels. */
+  readonly screenGlassBlur: Volatile<number>
+  /** Saturation percentage behind the glass. */
+  readonly screenGlassSaturate: Volatile<number>
+  /** Blur radius in pixels applied behind the overlay. */
+  readonly screenGlassBackdropBlur: Volatile<number>
+
   /** Whether the intro plays at all. */
   enabled: Volatile<boolean>
   /** Which moment auto-plays it. */
@@ -631,6 +704,8 @@ export interface Config {
   random: Volatile<boolean>
   /** The clip id played when random playback is off. */
   selectedClip: Volatile<string>
+  /** Which stages run, and in which order. */
+  sequence: Volatile<SequenceMode>
 }
 
 /** Which moment auto-plays the intro. */
@@ -638,6 +713,9 @@ export type PlayTiming = 'app-start' | 'entry'
 
 /** How the intro pixel-fits the window. */
 export type FitMode = 'cover' | 'contain'
+
+/** Which stages run, and in which order. */
+export type SequenceMode = 'archive-then-video' | 'video-then-archive' | 'archive-only' | 'video-only'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-boot-animation -->
 

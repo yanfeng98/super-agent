@@ -153,19 +153,64 @@ function userClipOf(body: CatalogResponse) {
   return body.clips.find(clip => clip.kind === 'file')
 }
 
+/**
+ * Read one shipped sequence file through the audio route.
+ * @param harness - the booted plugin.
+ * @param target - request path after the prefix.
+ * @param init - request overrides.
+ * @returns the fake response.
+ */
+async function audio(
+  harness: FakeContextHarness,
+  target: string,
+  init: FakeRequestInit & { peer?: typeof OWNER | null } = {},
+): Promise<Awaited<ReturnType<typeof callRoute>>> {
+  return callRoute(harness.route(`${ROUTE}/audio`), { url: `${ROUTE}/audio${target}`, ...init })
+}
+
+describe('audio route', () => {
+  it('streams a shipped file with its media type', async () => {
+    const { harness } = boot()
+    const res = await audio(harness, '/line-1.mp3')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('audio/mpeg')
+    expect(Number(res.headers['content-length'])).toBeGreaterThan(0)
+  })
+
+  it('answers ranges so a player can seek', async () => {
+    const { harness } = boot()
+    const res = await audio(harness, '/line-1.mp3', { headers: { range: 'bytes=0-9' } })
+    expect(res.status).toBe(206)
+    expect(res.headers['content-range']).toMatch(/^bytes 0-9\/\d+$/)
+  })
+
+  it('refuses anything outside the shipped name set', async () => {
+    const { harness } = boot()
+    expect((await audio(harness, '')).status).toBe(404)
+    expect((await audio(harness, '/../../package.json')).status).toBe(404)
+    expect((await audio(harness, '/line-9.mp3')).status).toBe(404)
+  })
+
+  it('refuses a caller that is not the owner', async () => {
+    const { harness } = boot()
+    expect((await audio(harness, '/line-1.mp3', { peer: STRANGER })).status).toBe(403)
+  })
+})
+
 describe('apply route registration', () => {
   it('registers every owner-only route and disposes them with the effect', () => {
     const { harness } = boot()
 
     expect(harness.routes.map(route => ({ kind: route.kind, path: route.path, auth: route.auth }))).toEqual([
       { kind: 'prefix', path: `${ROUTE}/media`, auth: 'required' },
+      { kind: 'prefix', path: `${ROUTE}/audio`, auth: 'required' },
       { kind: 'exact', path: `${ROUTE}/catalog.json`, auth: 'required' },
       { kind: 'exact', path: `${ROUTE}/active.json`, auth: 'required' },
       { kind: 'exact', path: `${ROUTE}/session`, auth: 'required' },
     ])
 
     harness.disposeEffects()
-    expect(harness.routeDisposers).toHaveLength(4)
+    expect(harness.routeDisposers).toHaveLength(5)
     for (const dispose of harness.routeDisposers) expect(dispose).toHaveBeenCalledTimes(1)
   })
 
@@ -308,7 +353,12 @@ describe('active.json', () => {
 
     const { res, body } = await active(harness)
     expect(res.status).toBe(200)
-    expect(body).toEqual({ clipId: 'builtin:awakening', version: expected?.version, how: 'selected' })
+    expect(body).toEqual({
+      stages: ['archive', 'video'],
+      clipId: 'builtin:awakening',
+      version: expected?.version,
+      how: 'selected',
+    })
   })
 
   it('falls back to the first clip when nothing is selected', async () => {

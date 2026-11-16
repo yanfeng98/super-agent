@@ -8,6 +8,7 @@ import { packageFiles, parseRules } from './stylesheet-scan.ts'
  * repo-relative suffix.
  */
 const EXEMPT_FILES: Record<string, string> = {
+  'packages/client/ui-boot-animation/src/client/archive/archive.css': 'startup sequence artwork palette',
   'packages/client/ui-primitives/src/FileTypeIcon.module.css': 'file-type artwork palette',
   'packages/client/ui-primitives/src/FileTypeIcon.tsx': 'file-type artwork palette',
   'packages/client/ui-primitives/src/ansi.ts': 'ANSI SGR palette mapping',

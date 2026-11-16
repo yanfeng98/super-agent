@@ -7,8 +7,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsSection } from '../src/client/SettingsSection.tsx'
+import { DEFAULT_SETTINGS } from '../src/client/contract.ts'
 import type {
-  CatalogState, IntroSettings, SessionBinding, SettingsSectionProps,
+  CatalogState, IntroSettings, StartupSessionBinding, SettingsSectionProps,
 } from '../src/client/contract.ts'
 import type { ClipInfo } from '../src/types.ts'
 
@@ -20,7 +21,7 @@ const CLIPS: readonly ClipInfo[] = [
 ]
 
 const SETTINGS: IntroSettings = {
-  enabled: true, timing: 'app-start', fit: 'cover', random: false, selectedClip: 'builtin:brand',
+  ...DEFAULT_SETTINGS,
 }
 
 const CATALOG: CatalogState = {
@@ -31,12 +32,12 @@ const CATALOG: CatalogState = {
   overridesAvailable: true,
 }
 
-const SESSION: SessionBinding = { sessionId: 's1', blank: true }
+const SESSION: StartupSessionBinding = { sessionId: 's1', blank: true }
 
 interface Overrides {
   readonly catalog?: Partial<CatalogState>
   readonly settings?: Partial<IntroSettings>
-  readonly session?: Partial<SessionBinding>
+  readonly session?: Partial<StartupSessionBinding>
   readonly sessionStorageAvailable?: boolean
 }
 
@@ -44,7 +45,7 @@ interface Overrides {
 function makeProps(overrides: Overrides = {}) {
   const catalog: CatalogState = { ...CATALOG, ...overrides.catalog }
   const settings: IntroSettings = { ...SETTINGS, ...overrides.settings }
-  const session: SessionBinding = { ...SESSION, ...overrides.session }
+  const session: StartupSessionBinding = { ...SESSION, ...overrides.session }
   const spies = {
     refresh: vi.fn(),
     preview: vi.fn(),
@@ -53,13 +54,16 @@ function makeProps(overrides: Overrides = {}) {
     setFit: vi.fn(),
     setRandom: vi.fn(),
     setSelectedClip: vi.fn(),
+    previewArchive: vi.fn(),
+    setSequence: vi.fn(),
+    setScreen: vi.fn(),
     setSessionReplay: vi.fn(),
     setSessionClip: vi.fn(),
   }
   const props = {
     useCatalog: <T,>(selector: (value: CatalogState) => T): T => selector(catalog),
     useSettings: <T,>(selector: (value: IntroSettings) => T): T => selector(settings),
-    useSession: <T,>(selector: (value: SessionBinding) => T): T => selector(session),
+    useSession: <T,>(selector: (value: StartupSessionBinding) => T): T => selector(session),
     ...spies,
     sessionStorageAvailable: overrides.sessionStorageAvailable ?? true,
     t: (key: string) => key,
@@ -202,5 +206,58 @@ describe('SettingsSection conversation', () => {
     expect(clipSelect().value).toBe('file:mine')
     fireEvent.click(replaySwitch())
     expect(h.setSessionReplay).toHaveBeenCalledExactlyOnceWith(false)
+  })
+})
+
+describe('sequence and archive settings', () => {
+  it('offers the four sequence choices and writes the picked one', () => {
+    const { props, setSequence } = makeProps()
+    render(<SettingsSection {...props} />)
+    const select = screen.getByRole('combobox', { name: /sequence\.label/ })
+    expect(within(select).getAllByRole('option')).toHaveLength(4)
+    fireEvent.change(select, { target: { value: 'archive-only' } })
+    expect(setSequence).toHaveBeenCalledWith('archive-only')
+  })
+
+  it('falls back to the default when an unknown sequence value arrives', () => {
+    const { props, setSequence } = makeProps()
+    render(<SettingsSection {...props} />)
+    fireEvent.change(screen.getByRole('combobox', { name: /sequence\.label/ }), { target: { value: 'nonsense' } })
+    expect(setSequence).toHaveBeenCalledWith('archive-then-video')
+  })
+
+  it('previews the archive sequence from the sequence header', () => {
+    const { props, previewArchive } = makeProps()
+    render(<SettingsSection {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'action.previewSequence' }))
+    expect(previewArchive).toHaveBeenCalledOnce()
+  })
+
+  it('writes a toggle, a select, a range, a colour, and a text field', () => {
+    const { props, setScreen } = makeProps()
+    render(<SettingsSection {...props} />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /screen\.allowSkip\.label/ }))
+    expect(setScreen).toHaveBeenCalledWith('screenAllowSkip', false)
+
+    fireEvent.change(screen.getByRole('combobox', { name: /screen\.theme\.label/ }), { target: { value: 'dark' } })
+    expect(setScreen).toHaveBeenCalledWith('screenTheme', 'dark')
+
+    fireEvent.change(screen.getByRole('slider', { name: /screen\.speed\.label/ }), { target: { value: '2.5' } })
+    expect(setScreen).toHaveBeenCalledWith('screenSpeed', 2.5)
+
+    fireEvent.change(screen.getByLabelText(/screen\.identity\.label/), { target: { value: 'ADA' } })
+    expect(setScreen).toHaveBeenCalledWith('screenIdentity', 'ADA')
+
+    fireEvent.change(screen.getByLabelText(/screen\.accent\.label/), { target: { value: '#123456' } })
+    expect(setScreen).toHaveBeenCalledWith('screenAccent', '#123456')
+  })
+
+  it('bounds a range by the field it writes', () => {
+    const { props } = makeProps()
+    render(<SettingsSection {...props} />)
+    const speed = screen.getByRole('slider', { name: /screen\.speed\.label/ })
+    expect(speed.getAttribute('min')).toBe('0.35')
+    expect(speed.getAttribute('max')).toBe('3')
   })
 })

@@ -16,7 +16,7 @@ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import { NS } from '../src/client/contract.ts'
+import { DEFAULT_SETTINGS, NS } from '../src/client/contract.ts'
 import type {
   IntroSettings, OverlayInjected, PlaybackState, SettingsInjected,
 } from '../src/client/contract.ts'
@@ -32,15 +32,7 @@ const RootSeat: SlotComponent<
 > = () => null
 
 const IDLE: PlaybackState = {
-  phase: 'idle', clipId: null, url: null, reason: 'none', nonce: 0, preview: false,
-}
-
-const DEFAULT_SETTINGS: IntroSettings = {
-  enabled: true,
-  timing: 'app-start',
-  fit: 'cover',
-  random: false,
-  selectedClip: 'builtin:brand',
+  phase: 'idle', stage: 'none', clipId: null, url: null, reason: 'none', nonce: 0, preview: false,
 }
 
 const BRAND: ClipInfo = { id: 'builtin:brand', name: null, kind: 'builtin', bytes: 10, version: 'v1' }
@@ -306,7 +298,7 @@ describe('boot-animation apply', () => {
     expect(h.overlay().hooks.settings.getSnapshot()).toEqual(DEFAULT_SETTINGS)
 
     const projected: IntroSettings = {
-      enabled: false, timing: 'entry', fit: 'contain', random: true, selectedClip: 'file:mine',
+      ...DEFAULT_SETTINGS, enabled: false, timing: 'entry', fit: 'contain', random: true, selectedClip: 'file:mine',
     }
     h.form.publish({ value: projected })
     expect(h.overlay().hooks.settings.getSnapshot()).toEqual(projected)
@@ -336,6 +328,74 @@ describe('boot-animation apply', () => {
     ])
     expect(sessionStorage.getItem(LAUNCH_KEY)).toBe('1')
     expect(sessionStorage.getItem(`${SESSION_PREFIX}s1`)).toBe('1')
+  })
+
+  it('runs the configured plan stage by stage and then goes idle', async () => {
+    const h = await bench({
+      active: () => answer({ stages: ['archive', 'video'], clipId: BRAND.id, version: BRAND.version, how: 'selected' }),
+    })
+    await vi.waitFor(() => { expect(playbackOf(h).stage).toBe('archive') })
+    expect(playbackOf(h)).toMatchObject({ phase: 'playing', stage: 'archive', clipId: null, url: null })
+
+    h.overlay().advance()
+    expect(playbackOf(h)).toMatchObject({
+      phase: 'loading',
+      stage: 'video',
+      clipId: 'builtin:brand',
+      url: '/dsh-boot-animation/media/builtin%3Abrand?v=v1',
+      reason: 'selected',
+    })
+
+    h.overlay().advance()
+    expect(playbackOf(h)).toEqual(IDLE)
+  })
+
+  it('starts with the video when the plan says so', async () => {
+    const h = await bench({
+      active: () => answer({ stages: ['video', 'archive'], clipId: BRAND.id, version: BRAND.version, how: 'none' }),
+    })
+    await vi.waitFor(() => { expect(playbackOf(h).stage).toBe('video') })
+    expect(playbackOf(h).phase).toBe('loading')
+  })
+
+  it('drops the video stage when the Host names no clip', async () => {
+    const h = await bench({
+      active: () => answer({ stages: ['video', 'archive'], clipId: null, version: null, how: 'none' }),
+    })
+    await vi.waitFor(() => { expect(playbackOf(h).stage).toBe('archive') })
+    h.overlay().advance()
+    expect(playbackOf(h)).toEqual(IDLE)
+  })
+
+  it('plays nothing when the Host names no stage at all', async () => {
+    const h = await bench({ active: () => answer({ stages: [], clipId: null, version: null, how: 'none' }) })
+    await flush()
+    expect(playbackOf(h)).toEqual(IDLE)
+    expect(sessionStorage.getItem(LAUNCH_KEY)).toBeNull()
+  })
+
+  it('previews the archive sequence without recording a launch', async () => {
+    const h = await bench({ active: () => answer({ stages: [], clipId: null, version: null, how: 'none' }) })
+    await flush()
+    h.settings().previewArchive()
+    expect(playbackOf(h)).toMatchObject({ stage: 'archive', preview: true, reason: 'preview' })
+    expect(sessionStorage.getItem(LAUNCH_KEY)).toBeNull()
+  })
+
+  it('writes the sequence and each screen field through the settings form', async () => {
+    const h = await bench()
+    await flush()
+    h.settings().setSequence('archive-only')
+    h.settings().setScreen('screenTheme', 'dark')
+    h.settings().setScreen('screenSpeed', 2)
+    expect(h.form.set.mock.calls).toEqual([
+      ['sequence', 'archive-only'],
+      ['screenTheme', 'dark'],
+      ['screenSpeed', 2],
+    ])
+    expect(h.overlay().hooks.settings.getSnapshot()).toMatchObject({
+      sequence: 'archive-only', screenTheme: 'dark', screenSpeed: 2,
+    })
   })
 
   it('moves playback to playing only from the loading phase', async () => {
@@ -563,6 +623,7 @@ describe('boot-animation apply', () => {
       ['selectedClip', 'file:mine'],
     ])
     expect(h.overlay().hooks.settings.getSnapshot()).toEqual({
+      ...DEFAULT_SETTINGS,
       enabled: true, timing: 'entry', fit: 'contain', random: true, selectedClip: 'file:mine',
     })
 

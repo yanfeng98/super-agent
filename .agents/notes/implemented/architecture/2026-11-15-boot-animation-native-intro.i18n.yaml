@@ -2,18 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-15-boot-animation-native-intro.md
-/agent-note-startup-intro-as-a-native-client-feature:
-  en: 3a3e58a15967b5e3
-  zh: 5d241c906d1252eb
-/agent-note-startup-intro-as-a-native-client-feature/problem:
-  en: 52382f1409f75203
-  zh: 46b4bd03def2b539
-/agent-note-startup-intro-as-a-native-client-feature/decision:
-  en: 7f17f09638cc264c
-  zh: 957b67d1b65d4e82
-/agent-note-startup-intro-as-a-native-client-feature/consequences:
-  en: ee52c79684f2294f
-  zh: 84977906301cff21
-/agent-note-startup-intro-as-a-native-client-feature/alternatives-considered:
-  en: 694c3550dd25758b
-  zh: 79525a11dcabe9d5
+/agent-note-startup-experience-as-a-native-client-feature:
+  en: e7566a6a906864e5
+  zh: 70b250e6cb74ab2c
+/agent-note-startup-experience-as-a-native-client-feature/problem:
+  en: 9432cbfdc4e3e528
+  zh: 602124f51fae524d
+/agent-note-startup-experience-as-a-native-client-feature/decision:
+  en: 70ec233c846dc196
+  zh: a78542ed29bbcef1
+/agent-note-startup-experience-as-a-native-client-feature/consequences:
+  en: c2961e12a9adb205
+  zh: 76f853396e4c078d
+/agent-note-startup-experience-as-a-native-client-feature/alternatives-considered:
+  en: 4f909989df5cba19
+  zh: 034b7eca690d9e06
