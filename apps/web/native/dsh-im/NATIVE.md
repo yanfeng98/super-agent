@@ -4,6 +4,8 @@ This directory is the source-vendored copy of [`xmanrui/dsh-im`](https://github.
 
 This native build excludes Slack, Telegram, Discord, and WhatsApp entirely: their Host/Client directories, command wiring, settings tabs, dependencies, and tests were removed. The remaining channels are WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, Matrix, email, and the AI Office connector.
 
+Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (integration) and [`logs/00028`](../../../../logs/00028-移除四渠道.md) (the four-channel removal and audit fixes).
+
 ## Baseline
 
 - Upstream version: `5.10.0`
@@ -24,6 +26,7 @@ This native build excludes Slack, Telegram, Discord, and WhatsApp entirely: thei
 3. `plugin-src/host/host-scope.mjs`: resolve the Cordis root through `Symbol.for('cordis.root')`; Cordis 4.1 rejects reading the plain `ctx.root` property on contexts that do not inject a service named `root`.
 4. `/goal` and `/plan`: delegated from the shared `TextHarnessBridge` and from the Feishu, DingTalk, WeCom, WeCom app, and QQ bridges to the bound Session's Host command gateway. Help text, command catalogs, and the Feishu slash-command manifest include both commands. Upstream already supported them in Weixin only.
 5. Removed the standalone installer `bin/`, the Cloudflare badge `worker/`, `poll*.mjs`, `wrangler.jsonc`, and their tests. Tests for the disabled npm updater were removed; behavior tests were extended for the native build and the two new commands.
+6. Removed Slack, Telegram, Discord, and WhatsApp end to end (source, Host/Client wiring, command catalogs, delivery/access definitions, i18n dictionaries, Baileys, scripts, and channel-specific tests). The remaining test suite has 3,680 passing cases; helper scripts that referenced the deleted channels were removed or updated.
 
 ## Syncing upstream
 

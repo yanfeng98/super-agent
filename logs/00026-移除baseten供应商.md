@@ -4,6 +4,8 @@
 - **背景**：`baseten` 是 pi-ai 目录里的第三方推理云路由，托管其他厂商的开源权重模型（DeepSeek、Kimi、GLM、Nemotron、gpt-oss、Thinking Machines 系列），以 `openai-completions` 接入 `https://inference.baseten.co/v1`，该路由只用 API key（环境变量 `BASETEN_API_KEY`），没有内置 OAuth 登录或订阅套餐入口。目录快照 22 个模型，全部支持推理；思考参数走该路由特有的 `chat_template_args` 形式（`thinkingFormat: 'baseten'`）。用户要求移除该供应商，且不能破坏项目现有功能，因此沿用既有的 `WITHHELD_PROVIDERS` 机制：目录、模型解析、发现、登录与可配置供应商列表全部不再出现该路由，而不是修改 `node_modules` 里的 pi-ai 包。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、`docs/user/guide/providers.md`、`packages/llm/llm-pi-ai/README.md`、升级指南、Web golden、根 README 与 `logs/`。
 
+> **后续变更**：`verify-concrete-terms` 并非仅靠删除文件消失；[00028](00028-移除四渠道.md) 为 `apps/web/native/` 增加了 vendored 子树例外，`test:docs` 与 `doc-sync` 已恢复全绿。原生 IM 的前因后果见 [00027](00027-原生集成dsh-im.md)。
+
 ## 1. 变更
 
 | 位置 | 变更 |

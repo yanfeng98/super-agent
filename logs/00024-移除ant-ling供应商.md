@@ -4,6 +4,8 @@
 - **背景**：`ant-ling` 是 pi-ai 目录中的第一方路由（名称 Ant Ling），以 `openai-completions` 接入 `https://api.ant-ling.com/v1`，只有 API key 鉴权（`ANT_LING_API_KEY`），没有 OAuth。目录快照 3 个聊天模型：非推理的 `Ling-2.6-1T` 与 `Ling-2.6-flash`，以及推理模型 `Ring-2.6-1T`；三者上下文均为 262,144、最大输出 65,536，目录价格为每百万 token $0.06/$0.25、$0.01/$0.02、$0.06/$0.25。三个 id 只出现在这一条路由上。用户要求移除，按既有 `WITHHELD_PROVIDERS` 机制处理。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、`docs/user/guide/providers.md`、`packages/llm/llm-pi-ai/README.md`、升级指南、Web golden 与 `logs/`；根 README 的差异表另行刷新。
 
+> **后续变更**：`apps/web/native/dsh-im/` 已由 [00027](00027-原生集成dsh-im.md) 与 [00028](00028-移除四渠道.md) 正式纳入原生 IM；仓库文档门禁已为该 vendored 子树增加例外，本记录中提到的相关失败已不再出现。
+
 ## 1. 变更
 
 | 位置 | 变更 |
