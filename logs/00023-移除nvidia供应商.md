@@ -52,17 +52,23 @@
 | `npx vitest run packages/llm/llm-pi-ai` | 22 个文件、**483** 个测试全部通过（移除前 482，`config.spec` 参数化多一条） |
 | `npx vitest run packages/llm` | 78 个文件、**1792** 个测试全部通过（移除前 1791） |
 | `npx vitest run packages/client/ui-settings-models` | 14 个文件、**483** 个测试全部通过（用例不涉及 `nvidia`，无需改动） |
-| `pnpm run test:docs` | 21/21 通过 |
+| `pnpm run test:docs` | 21/21 通过（审计轮在最终内容上重跑仍 21/21） |
 | `pnpm run verify-upgrade-guides` | 通过（英文正文 475 词，未触及 500 词硬上限） |
 | `pnpm run verify-doc-budgets` | 通过（`7 budgeted docs within ceiling`） |
 | `pnpm run verify-provider-data` | 通过：`Provider metadata matches the installed pi-ai catalog.` |
+| `pnpm run verify-translation-pairing` | 1301 对全部一致（审计轮改动 README 与升级指南后重新录制） |
+| `pnpm run lint` | 0 warning、0 error（90 条规则、7302 个文件；pre-commit 用 49 条规则的精简配置另报一条与本次无关的旧 disable 告警，见第 5 节） |
 | `pnpm run typecheck` | 5/5 通过 |
 | `pnpm run build` | 10/10 通过（含 host/client 聚合检查与 Web build） |
-| `pnpm run doc-sync` | 43/43 全部通过 |
+| `pnpm run doc-sync` | 43/43 全部通过（移除轮与审计轮各跑一次，均一次通过） |
 | 目录自检 | 22 个供应商、713 个模型；`isWithheldProvider('nvidia')` 为 `true`，`catalogProvider('nvidia')` 为 `undefined`，strict 与 deferred 均报移除错误 |
 | Web e2e（`DSH_SNAPSHOT=replay`） | 只回放受影响的 `models-settings` 与 `onboarding-usable-provider` 两个文件：3 通过、19 失败；逐条核对失败堆栈，全部是并行开发中的启动动画覆盖层拦截指针事件（`<div class="dsh-boot-archive-black">…</div> … intercepts pointer events`），尚未走到供应商断言 |
 | golden 与目录一致性 | 三个 golden 的 option 列表与排序后的 `catalogProviderIds()` 逐项相等（22 个、同顺序） |
+| `pnpm run test:snapshot -t pi-ai-conversation-updates` | 1 个录制会话回放通过 |
+| `npx vitest run --config vitest.expected.config.ts -t "pi-ai"` | 2 个 headless 场景通过，内联快照未变 |
 | 升级指南词数 | 英文正文 **475** 词（硬上限 500、仓库实践 475），中英双语结构一致 |
+
+**最终状态**：本次移除与审计修正已拆成两个提交（移除在前，措辞修正随后），工作区无遗留改动；根 README 的「与上游的差异」表由并行的根 README 提交另行记录，其中 19 条路由、22 个路由、713 个模型与 `huggingface` 13 → 14 的数字与本节一致。
 
 ## 5. 复查记录
 
@@ -72,6 +78,8 @@
 - `packages/experimental/webworker-runtime` 的 pi-ai stub 有一个固定的 `BUILTIN_PROVIDER_IDS` 预览列表，里面仍列着 `nvidia`。该列表是「合法已安装 id」的静态子集（且早已不含 `radius`），stub 返回的 provider 没有模型，`servesChat` 会把它们全部过滤，因此不需要随本次移除改动。
 - `logs/00022` 的 `cheap` 别名行仍把 `nvidia` 列为 `deepseek-v4.1-flash` 的路由之一。那是 radius 移除时的历史记录，当时确实如此；该模型现在仍在 `baseten`、`opencode-go`、`openrouter`、`together` 上，结论不变，故不改写历史日志。
 - Web e2e 的 19 个失败先被怀疑与本次 golden 改动有关；用 `-t` 单独回放负责 golden 比对的用例后确认，失败点是 `openSettings()` 的点击被 `dsh-boot-archive-black` 覆盖层拦截，还没执行到列表断言。随后用脚本把三个 golden 的 `option` 行与 `catalogProviderIds()` 逐项 diff，结果完全一致（22 项、同顺序）。
+- 审计轮（提交后）复核：脚本把 6 个文档的 19 条 id 清单与 `WITHHELD_PROVIDERS` 逐项比对，无缺失且顺序一致；把第 3 节「9 个模型 × 声明的每条路由」逐格验证，9/9 成立；把三个 golden 的 option 行与 `catalogProviderIds()` 全量 diff，22 项完全一致；重跑 `packages/llm`（1792）、`test:docs`、`doc-sync`（43/43）、`verify-translation-pairing`（1301 对）、`verify-upgrade-guides`、`verify-doc-budgets` 均通过。发现并修复 3 处：`nine of its twenty ids` 把「8 个同 id + 1 个换前缀」写成九个同 id，JSDoc、两个 README、两份升级指南与两份日志一并改为 `models` 并写明换前缀的那一条；第 6 节误称移除后端点仍读 `NVIDIA_API_KEY`，已改为自定义路由需自带凭据、可用 `apiKeyEnv` 指向同名变量；汇总日志把第 5 节记作「复查 5 处」，实为 7 条，已改。
+- pre-commit 钩子在 `catalog.ts` 报一条「unused oxlint-disable」：用同一份 `.oxlintrc.staged.json`（49 条规则）跑移除前的同一文件同样报警，是精简配置把类型感知的 disable 判成无用，与本次改动无关；仓库级 `pnpm run lint`（90 条规则）为 0 warning、0 error。
 - 本次与之前几次聚合层移除不同：`nvidia` 有 11 个独有模型，移除确实减少模型覆盖。文档与日志据此如实写明「失去的模型」与重新接入方式，没有套用「只是少了路由层」的说法。
 
 ## 6. 已知限制
