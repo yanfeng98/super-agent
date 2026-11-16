@@ -30,7 +30,6 @@
       - option "meta"
       - option "minimax-cn"
       - option "mistral"
-      - option "nvidia"
       - option "openai"
       - option "openai-codex" [selected]
       - option "opencode-go"

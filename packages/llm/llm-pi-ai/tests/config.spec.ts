@@ -96,6 +96,7 @@ describe('withheld catalog providers', () => {
     'minimax',
     'moonshotai',
     'moonshotai-cn',
+    'nvidia',
     'opencode',
     'qwen-token-plan',
     'qwen-token-plan-cn',
