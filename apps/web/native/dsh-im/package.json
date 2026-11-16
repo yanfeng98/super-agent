@@ -3,7 +3,7 @@
   "version": "5.10.0",
   "private": true,
   "icon": "./assets/logo-plugin-message-link-gradient.webp",
-  "description": "把微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix接入DSH。 Connect Telegram, WhatsApp, Slack, Discord, Matrix, WeChat, Feishu, WeCom, DingTalk, and QQ to DSH.",
+  "description": "把微信、飞书、企微、钉钉、QQ、企业微信应用、iMessage、Matrix、邮箱接入DSH。 Connect WeChat, Feishu, WeCom, DingTalk, QQ, WeCom app, iMessage, Matrix, and email to DSH.",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -18,10 +18,6 @@
     "wecom",
     "dingtalk",
     "qq",
-    "slack",
-    "telegram",
-    "discord",
-    "whatsapp",
     "imessage",
     "matrix",
     "ai-office"
@@ -108,7 +104,6 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
     "@larksuiteoapi/node-sdk": "1.73.0",
-    "@whiskeysockets/baileys": "7.0.0-rc14",
     "esbuild": "0.25.9",
     "https-proxy-agent": "5.0.1",
     "react": "18.3.1",

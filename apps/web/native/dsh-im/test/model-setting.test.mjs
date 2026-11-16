@@ -30,10 +30,6 @@ import { createFeishuRpcHandler, FEISHU_ENDPOINTS } from '../plugin-src/host/cha
 import { createDingtalkRpcHandler, DINGTALK_ENDPOINTS } from '../plugin-src/host/channels/dingtalk/rpc.mjs';
 import { createWecomRpcHandler, WECOM_ENDPOINTS } from '../plugin-src/host/channels/wecom/rpc.mjs';
 import { createQqRpcHandler, QQ_ENDPOINTS } from '../plugin-src/host/channels/qq/rpc.mjs';
-import { createSlackRpcHandler, SLACK_ENDPOINTS } from '../plugin-src/host/channels/slack/rpc.mjs';
-import { createTelegramRpcHandler, TELEGRAM_ENDPOINTS } from '../plugin-src/host/channels/telegram/rpc.mjs';
-import { createDiscordRpcHandler, DISCORD_ENDPOINTS } from '../plugin-src/host/channels/discord/rpc.mjs';
-import { createWhatsappRpcHandler, WHATSAPP_ENDPOINTS } from '../plugin-src/host/channels/whatsapp/rpc.mjs';
 
 const MODEL = Object.freeze({ provider: 'openai', model: 'gpt-5' });
 const REASONING_MODEL = Object.freeze({ ...MODEL, reasoningEffort: 'custom-max' });
@@ -348,17 +344,13 @@ function controllerFixture() {
   return { controller, calls };
 }
 
-test('all nine Host RPCs expose and execute the unified model-setting contract', async () => {
+test('all remaining Host RPCs expose and execute the unified model-setting contract', async () => {
   const factories = [
     ['weixin', createWeixinRpcHandler, WEIXIN_ENDPOINTS],
     ['feishu', createFeishuRpcHandler, FEISHU_ENDPOINTS],
     ['dingtalk', createDingtalkRpcHandler, DINGTALK_ENDPOINTS],
     ['wecom', createWecomRpcHandler, WECOM_ENDPOINTS],
     ['qq', createQqRpcHandler, QQ_ENDPOINTS],
-    ['slack', createSlackRpcHandler, SLACK_ENDPOINTS],
-    ['telegram', createTelegramRpcHandler, TELEGRAM_ENDPOINTS],
-    ['discord', createDiscordRpcHandler, DISCORD_ENDPOINTS],
-    ['whatsapp', createWhatsappRpcHandler, WHATSAPP_ENDPOINTS],
   ];
   for (const [channel, createHandler, endpoints] of factories) {
     const { controller, calls } = controllerFixture();

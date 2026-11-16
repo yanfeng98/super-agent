@@ -7,10 +7,6 @@ const CHANNELS = new Set([
   'wecom',
   'wecom-app',
   'qq',
-  'slack',
-  'telegram',
-  'discord',
-  'whatsapp',
   'imessage',
   'matrix',
 ]);

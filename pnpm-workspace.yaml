@@ -33,9 +33,6 @@ peerDependencyRules:
 allowBuilds:
   esbuild: true
   lefthook: true
-  # Baileys' preinstall only validates the Node.js engine before WhatsApp Web
-  # support is bundled into the native IM plugin.
-  '@whiskeysockets/baileys': true
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
   node-pty: true
   # Pulled in by @earendil-works/pi-ai (optional LLM API backend). pnpm lists

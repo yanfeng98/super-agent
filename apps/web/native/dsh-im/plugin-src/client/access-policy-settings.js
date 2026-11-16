@@ -8,7 +8,7 @@ import {
 import { h, localizeText } from './i18n.js';
 
 export const ACCESS_POLICY_ENDPOINT = 'bot.access-policy.set';
-const CONFIRMED_OWNER_CHANNELS = new Set(['weixin', 'feishu', 'qq', 'whatsapp', 'discord']);
+const CONFIRMED_OWNER_CHANNELS = new Set(['weixin', 'feishu', 'qq']);
 
 export const ACCESS_CHANNEL_DEFINITIONS = Object.freeze({
   weixin: Object.freeze({
@@ -45,30 +45,6 @@ export const ACCESS_CHANNEL_DEFINITIONS = Object.freeze({
     directPlaceholder: '填写 user_openid',
     groupUserLabel: '群成员 Open ID',
     groupPlaceholder: '填写 member_openid',
-  }),
-  slack: Object.freeze({
-    directUserLabel: 'Slack User ID',
-    directPlaceholder: 'U0123456789',
-    groupUserLabel: '群成员 User ID',
-    groupPlaceholder: 'U0123456789',
-  }),
-  telegram: Object.freeze({
-    directUserLabel: 'Telegram User ID',
-    directPlaceholder: '填写数字 User ID',
-    groupUserLabel: '群成员 User ID',
-    groupPlaceholder: '填写数字 User ID',
-  }),
-  discord: Object.freeze({
-    directUserLabel: 'Discord User ID',
-    directPlaceholder: '填写数字 User ID',
-    groupUserLabel: '群成员 User ID',
-    groupPlaceholder: '填写数字 User ID',
-  }),
-  whatsapp: Object.freeze({
-    directUserLabel: 'WhatsApp 电话号码或 JID',
-    directPlaceholder: '8613800000000 或完整 JID',
-    groupUserLabel: '群成员电话号码或 JID',
-    groupPlaceholder: '8613800000000 或完整 JID',
   }),
   imessage: Object.freeze({
     directUserLabel: 'iMessage Chat GUID',

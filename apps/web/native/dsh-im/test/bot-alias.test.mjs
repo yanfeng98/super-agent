@@ -11,8 +11,6 @@ const channels = [
   ['wecom', 'createWecomRpcHandler'], ['wecom-app', 'createWecomAppRpcHandler'],
   ['weixin', 'createWeixinRpcHandler'], ['feishu', 'createFeishuRpcHandler'],
   ['dingtalk', 'createDingtalkRpcHandler'], ['qq', 'createQqRpcHandler'],
-  ['slack', 'createSlackRpcHandler'], ['telegram', 'createTelegramRpcHandler'],
-  ['discord', 'createDiscordRpcHandler'], ['whatsapp', 'createWhatsappRpcHandler'],
   ['imessage', 'createIMessageRpcHandler'],
 ];
 async function fixture(t) {

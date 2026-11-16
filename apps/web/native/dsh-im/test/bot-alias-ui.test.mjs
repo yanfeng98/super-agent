@@ -14,8 +14,7 @@ const channels = [
   ['wecom', 'WecomSettingsTab'], ['wecom-app', 'WecomAppSettingsTab'],
   ['weixin', 'WeixinSettingsTab'], ['feishu', 'FeishuSettingsTab'],
   ['dingtalk', 'DingtalkSettingsTab'], ['qq', 'QqSettingsTab'],
-  ['slack', 'SlackSettingsTab'], ['telegram', 'TelegramSettingsTab'],
-  ['discord', 'DiscordSettingsTab'], ['whatsapp', 'WhatsappSettingsTab'], ['imessage', 'IMessageSettingsTab'],
+  ['imessage', 'IMessageSettingsTab'],
 ];
 function mockWindow(t) {
   const previous = globalThis.window;
