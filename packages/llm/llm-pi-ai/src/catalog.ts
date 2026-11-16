@@ -249,9 +249,10 @@ function servesChat(provider: Provider): boolean {
  * build keeps the China route and withholds the international one. The kept
  * route carries three of `zai`'s seven model ids — `glm-5.3`, `glm-5.3-flash`,
  * and `glm-5.3-highspeed` — with identical capabilities and catalog costs;
- * `glm-5.2` also appears on `opencode-go`, while `glm-4.7`, `glm-5-turbo`, and
- * `glm-5.2-highspeed` appear on no other served route. An international
- * account stays reachable through an `openai-completions` custom model API at
+ * `glm-5.2` also appears on `opencode-go`, `glm-4.7` and `glm-5-turbo` on
+ * `openrouter` (with `glm-4.7` on `baseten` too), and only `glm-5.2-highspeed`
+ * appears on no other served route. An international account keeps working
+ * through an `openai-completions` custom model API at
  * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
  * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, Z.AI, and Ant Ling
  * routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
