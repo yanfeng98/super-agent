@@ -44,7 +44,7 @@ pnpm dsh web
 
 ## 查找插件
 
-社区插件目录：[DSH Marketplace](https://dshmarketplace.dev/)。它汇总 DeepSeek Harness 的第三方插件，提供安装命令、安装验证与公开 API；DSH 0.2.1+ 还可将其索引 `https://dshmarketplace.dev/market/index.json` 添加到 Plugins 的 Discover 中。列表不代表安全审查，安装前请阅读源码，并优先在一次性 profile 中验证。
+社区插件目录：[DSH Marketplace](https://dshmarketplace.dev/)。它汇总 DeepSeek Harness 的第三方插件，提供安装命令、安装验证与公开 API。要在 DSH 内浏览：打开**插件**，在**实验性插件**下启用**自定义插件索引**，再到**发现**标签页点击**添加索引源**，填入 `https://dshmarketplace.dev/market/index.json`。列表不代表安全审查，安装前请阅读源码，并优先在一次性 profile 中验证；索引用法见[插件索引指南](docs/user/guide/plugin-market.zh.md)。
 
 ## 开发
 
