@@ -16,7 +16,7 @@
 | `docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/` | 描述与变更清单加入 `ant-ling`（19 → 20 条），迁移段给出端点与覆盖说明；正文 496 词（硬上限 500） |
 | `apps/web/tests/expected/` 三个 golden | 删除 `option "ant-ling"`（22 → 21 项） |
 | `apps/web/tests/models-settings.e2e.ts` | 供应商选择器下界断言 22 → 21 |
-| 根 `README.md` 差异表（后续提交） | 19 → 20 条移除路由、22 → 21 个路由、713 → 710 个模型、设置页移除 20 个 option，并补 `ant-ling` 覆盖句 |
+| 根 `README.md` 差异表（已由后续 `docs(readme)` 提交刷新） | 19 → 20 条移除路由、22 → 21 个路由、713 → 710 个模型、设置页移除 20 个 option，并补 `ant-ling` 覆盖句 |
 
 ## 2. 行为
 
@@ -59,9 +59,9 @@
 | `npx vitest run --config vitest.expected.config.ts -t "pi-ai"` | 2 个 headless 场景通过，内联快照未变 |
 | Web e2e（`DSH_SNAPSHOT=replay`） | 只回放受影响的 `models-settings` 与 `onboarding-usable-provider` 两个文件：3 通过、19 失败；抽查失败堆栈（含 `-t` 单独回放负责 golden 比对的用例），失败点都在 `openSettings()` 的点击处被并行开发中的启动动画覆盖层（`<div class="dsh-boot-archive-black">…</div> … intercepts pointer events`）拦截，尚未执行到供应商断言 |
 | golden 与目录一致性 | 三个 golden 的 option 行（含 `minimax-cn` 的 `[selected]`）与 `catalogProviderIds()` 逐项相等（21 项、同顺序） |
-| 文档一致性自检 | 6 个文档（用户指南、包 README、升级指南各中英）均完整枚举 20 条路由，脚本比对无缺失 |
+| 文档一致性自检 | 6 个中英文档（用户指南、包 README、升级指南各中英）与根 README 均完整枚举 20 条路由，脚本比对无缺失 |
 
-移除提交与其后的根 README 数字刷新已进入 `main` 并推送到 `origin/main`；本节的校验记录随后以独立提交补入。工作区另有并行开发的未提交改动（未跟踪的 `apps/web/native/`，以及 `pnpm-workspace.yaml`、`pnpm-lock.yaml`、`scripts/build.ts`、`packages/bundle/web-app/package.json`、`packages/bundle/web-app/cordis.patch.yml`），不属于本次移除。
+移除提交与其后的根 README 数字刷新已进入 `main` 并推送到 `origin/main`；本节的校验记录随后以独立提交补入，并在一轮复查后补正（见第 5 节）。工作区另有并行开发的未提交改动（未跟踪的 `apps/web/native/`，以及 `pnpm-workspace.yaml`、`pnpm-lock.yaml`、`scripts/build.ts`、`packages/bundle/web-app/package.json`、`packages/bundle/web-app/cordis.patch.yml`），不属于本次移除。
 
 ## 5. 复查记录
 
@@ -71,7 +71,7 @@
 - 根 README 由并行维护的差异表记录，本轮以独立提交刷新，避免与移除提交混杂。
 - 审计轮用 `git show` 复核移除提交只含预期文件，并复算前后测试数：`packages/llm/llm-pi-ai` 483 → 484、`packages/llm` 1792 → 1793。早先记为「移除前 482 / 1791」并把参数化写成「+2」，原因是没有注意 `it.each` 每条路由只产生一条用例、strict 与 deferred 在同一条里各验一次；已按实际计数更正。
 - 「第一方路由」这一表述的依据：上游 pi-ai README 的 Supported Providers 把它与 OpenAI、Anthropic、DeepSeek、NVIDIA NIM 等厂商并列；目录内它只托管 Ling/Ring 自家模型（3 个），没有转售第三方模型，也不具备聚合网关的多厂商目录特征。若上游日后把它改成聚合端点，用户指南与包 README 的这处描述需要同步改。
-- 审计轮共修正 5 处：§1 的「+2」与 §4 的两处「移除前」计数（实际 483/1792，各 +1）、§4 的 e2e 核对措辞（由「逐条」改为抽查加单独回放）、§3 的 `provider-data` 表述（它保留的是全部 42 个内置 id 的元数据，不只是被移除路由）。其余数字经脚本复核不变：21 个提供商 / 710 个模型、golden 22 → 21 项、升级指南 496 词、6 个文档各 20 条 id。
+- 审计轮共修正 6 处：§1 的「+2」与 §4 的两处「移除前」计数（实际 483/1792，各 +1）、§4 的 e2e 核对措辞（由「逐条」改为抽查加单独回放）、§3 的 `provider-data` 表述（它保留的是全部 42 个内置 id 的元数据，不只是被移除路由）、§6 的自定义路由推理指引（配置字段是 `reasoningEfforts`，而不是直接写 `thinkingLevelMap`）。其余数字经脚本复核不变：21 个提供商 / 710 个模型、golden 22 → 21 项、升级指南 496 词、6 个中英文档与根 README 各 20 条 id。
 
 ## 6. 已知限制
 
