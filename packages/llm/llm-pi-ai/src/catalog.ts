@@ -265,8 +265,8 @@ function servesChat(provider: Provider): boolean {
  * can add `https://inference.baseten.co/v1` as an `openai-completions` custom
  * model API under a different provider id; the `chat_template_args` thinking
  * format it uses stays nameable for such a route.
- * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, Z.AI, and Ant Ling
- * routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
+ * The Baseten, Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, Z.AI, and
+ * Ant Ling routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
  * and MiniMax endpoints speak Anthropic Messages, so a deployment that needs
  * one can add it as a custom model API.
  *
