@@ -402,7 +402,7 @@ npm run check
 node bin/dsh-im.mjs install --source .
 ```
 
-`npm run check` runs unit tests, builds the Host and Client artifacts, and verifies that the published package contains neither credentials nor standalone channel settings-page registrations.
+`npm run check` runs unit tests and builds the Host and Client artifacts (the native build is not published to npm, so package-publication checks are not part of it).
 
 After building, run `node scripts/verify-injected-context.mjs /path/to/built/deepseek-harness` to exercise the bundled context hook against real DSH V4 JSONL persistence. It covers plain messages, source details, guidance, quoted replies, combined blocks, and multipart text, including reopening the log and appending another turn. The script loads components from the supplied host and cleans up its temporary Session directory; no bot credentials or model requests are needed.
 
@@ -448,7 +448,6 @@ Bot messages switch from the next message onward. The Telegram command menu is r
 
 One Telegram label is outside a bot's control and does not follow this setting: the blue **Menu** button beside the input box. dsh-im sets it to `MenuButtonCommands`, which the Bot API defines with no text field, so Telegram renders that label in the *reader's own app language*. Only `MenuButtonWebApp` carries text, and it requires a Web App URL.
 
-Run `node scripts/verify-interface-language.mjs /path/to/deepseek-harness` to verify this end to end against an unmodified DSH CLI: it uses an isolated temporary home, asserts each resolution layer over the real `/api` carrier, and checks that a restart and an operator-pinned `language` both behave. Set `DSH_IM_TELEGRAM_TOKEN` to additionally bind a real bot and assert the command menu Telegram itself stores, which is restored when the check finishes.
 
 To pin one language regardless of who is reading the interface, set `language` in the plugin config (also accepts `en-US` or `english`), or set the `DSH_IM_LANGUAGE=en` environment variable:
 

@@ -688,6 +688,35 @@ test('Enterprise WeChat executes /compact for the bound Session without promptin
   assert.deepEqual(transport.active, []);
 });
 
+test('Enterprise WeChat delegates /goal and /plan for the bound Session without prompting the model', async () => {
+  const store = state();
+  const transport = testClient();
+  const executed = [];
+  const bridge = new WecomHarnessBridge({
+    client: transport.client,
+    generateStreamId: () => 'unused-stream',
+    harness: {
+      executeCommand: async (sessionId, line) => {
+        executed.push({ sessionId, line });
+        return { commandId: 'goal-wecom', result: { kind: 'success', text: `${line}: ok` } };
+      },
+      ask: async () => assert.fail('/goal and /plan must not be submitted to the model'),
+    },
+    state: store,
+  });
+
+  await bridge.accept(frame({ msgid: 'goal-wecom', text: { content: '/goal keep the service green' } }));
+  await bridge.accept(frame({ msgid: 'plan-wecom', text: { content: '/plan off' } }));
+
+  assert.deepEqual(executed, [
+    { sessionId: 'session-existing', line: '/goal keep the service green' },
+    { sessionId: 'session-existing', line: '/plan off' },
+  ]);
+  assert.equal(transport.streamed.at(-2).content, '/goal keep the service green: ok');
+  assert.equal(transport.streamed.at(-1).content, '/plan off: ok');
+  assert.deepEqual(transport.active, []);
+});
+
 test('Enterprise WeChat lists models and presets without prompting and advertises fast commands', async () => {
   const store = state();
   store.sessionFor = () => null;

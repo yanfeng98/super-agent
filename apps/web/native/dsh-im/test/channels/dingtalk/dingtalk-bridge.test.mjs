@@ -1266,6 +1266,36 @@ test('DingTalk executes /compact for the bound Session without prompting the mod
   assert.equal(sent.at(-1).text, '暂无可压缩的历史记录。');
 });
 
+test('DingTalk delegates /goal and /plan for the bound Session without prompting the model', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:staff-approved', 'session-goal');
+  const sent = [];
+  const executed = [];
+  const bridge = new DingtalkHarnessBridge({
+    api: { sendText: async (request) => sent.push(request) },
+    clientId: 'ding-client',
+    clientSecret: 'host-secret',
+    harness: {
+      executeCommand: async (sessionId, line) => {
+        executed.push({ sessionId, line });
+        return { commandId: 'goal-dingtalk', result: { kind: 'success', text: `${line}: ok` } };
+      },
+      ask: async () => assert.fail('/goal and /plan must not be submitted to the model'),
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message('goal-dingtalk', '/goal keep the service green'));
+  await bridge.accept(message('plan-dingtalk', '/plan off'));
+
+  assert.deepEqual(executed, [
+    { sessionId: 'session-goal', line: '/goal keep the service green' },
+    { sessionId: 'session-goal', line: '/plan off' },
+  ]);
+  assert.equal(sent.at(-2).text, '/goal keep the service green: ok');
+  assert.equal(sent.at(-1).text, '/plan off: ok');
+});
+
 test('DingTalk lists models and presets without prompting and advertises fast commands', async () => {
   const fixture = stateFixture();
   const sent = [];

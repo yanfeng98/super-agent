@@ -953,6 +953,35 @@ test('QQ executes /compact for the bound Session without prompting the model', a
   assert.equal(fixture.seen.has('compact-qq'), true);
 });
 
+test('QQ delegates /goal and /plan for the bound Session without prompting the model', async () => {
+  const fixture = stateFixture([['c2c:owner-openid', 'session-goal']]);
+  const sent = [];
+  const executed = [];
+  const bridge = new QqHarnessBridge({
+    bot: { sendText: async (_target, text) => sent.push(text) },
+    ownerUserOpenid: 'owner-openid',
+    harness: {
+      executeCommand: async (sessionId, line) => {
+        executed.push({ sessionId, line });
+        return { commandId: 'goal-qq', result: { kind: 'success', text: `${line}: ok` } };
+      },
+      ask: async () => assert.fail('/goal and /plan must not be submitted to the model'),
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message({ messageId: 'goal-qq', content: '/goal keep the service green' }));
+  await bridge.accept(message({ messageId: 'plan-qq', content: '/plan off' }));
+
+  assert.deepEqual(executed, [
+    { sessionId: 'session-goal', line: '/goal keep the service green' },
+    { sessionId: 'session-goal', line: '/plan off' },
+  ]);
+  assert.deepEqual(sent, ['/goal keep the service green: ok', '/plan off: ok']);
+  assert.equal(fixture.seen.has('goal-qq'), true);
+  assert.equal(fixture.seen.has('plan-qq'), true);
+});
+
 test('QQ lists models and presets without prompting and advertises fast commands', async () => {
   const fixture = stateFixture();
   const sent = [];
