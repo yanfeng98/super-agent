@@ -82,6 +82,15 @@ describe('IntroOverlay', () => {
     expect(document.querySelector('.dsh-boot-archive-root')).toBeTruthy()
   })
 
+  it('ends the whole experience when the archive stage is skipped', () => {
+    vi.useFakeTimers()
+    const { props, stop, advance } = makeProps({ ...PLAYING, stage: 'archive', clipId: null, url: null })
+    render(<IntroOverlay {...props} />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(stop).toHaveBeenCalledOnce()
+    expect(advance).not.toHaveBeenCalled()
+  })
+
   it('marks the document while it owns the window, and clears the mark on unmount', () => {
     const { props } = makeProps(PLAYING)
     const view = render(<IntroOverlay {...props} />)

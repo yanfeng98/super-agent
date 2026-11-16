@@ -16,6 +16,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { IntroSettings } from '../contract.ts'
 import { ARCHIVE_STEPS, ARCHIVE_TOTAL, dwellFor, scaleMs } from './script.ts'
 import type { ArchiveStep } from './script.ts'
+import { BRACKETS, GUIDE_DOTS, INNER_RING, OUTER_RING } from './reticle.ts'
 import { WHALE_PATH } from './whale.ts'
 import { createArchiveAudio, SILENT_AUDIO, browserAudioFactory } from './audio.ts'
 import { audioUrlFor } from '../api.ts'
@@ -165,7 +166,10 @@ class SequenceAborted extends Error {}
 export interface ArchiveStageProps {
   readonly settings: IntroSettings
   readonly labels: ArchiveLabels
+  /** The sequence reached its reveal: the next stage may run. */
   readonly onFinished: () => void
+  /** The user skipped: the whole experience ends here. */
+  readonly onSkip: () => void
   /** Test seam: audio primitives, or null for a silent run. */
   readonly audioFactory?: ReturnType<typeof browserAudioFactory>
 }
@@ -192,6 +196,14 @@ function typedChars(text: string, stagger: number): ReactNode[] {
   ))
 }
 
+/** The watermark's four panels, as fractions of the window. */
+const WATERMARK_BOXES: readonly (readonly [number, number, number, number])[] = [
+  [0.60, 0.02, 0.16, 0.96],
+  [0.78, 0.02, 0.16, 0.96],
+  [0.96, 0.02, 0.16, 0.96],
+  [0.05, 0.02, 0.10, 0.5],
+]
+
 /** Clock text for one instant. */
 function clockText(now: Date): string {
   const pad = (value: number): string => String(value).padStart(2, '0')
@@ -213,7 +225,7 @@ function hexRow(): string {
  * @param props - settings, localized chrome, and the finish callback.
  * @returns the overlay tree.
  */
-export function ArchiveStage({ settings, labels, onFinished, audioFactory }: ArchiveStageProps): ReactNode {
+export function ArchiveStage({ settings, labels, onFinished, onSkip, audioFactory }: ArchiveStageProps): ReactNode {
   const [frame, setFrame] = useState<Frame>(INITIAL_FRAME)
   const [clock, setClock] = useState(() => clockText(new Date()))
   const [hex, setHex] = useState<readonly string[]>([])
@@ -222,6 +234,8 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
   const skipRef = useRef<(() => void) | null>(null)
   const finishRef = useRef(onFinished)
   finishRef.current = onFinished
+  const skipCallbackRef = useRef(onSkip)
+  skipCallbackRef.current = onSkip
 
   useEffect(() => {
     const timer = window.setInterval(() => { setClock(clockText(new Date())) }, 1000)
@@ -284,9 +298,10 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
     const stopSequence = (): void => {
       if (aborted || finished) return
       aborted = true
+      finished = true
       releaseWaits()
       audio.stop()
-      finish()
+      skipCallbackRef.current()
     }
     skipRef.current = stopSequence
     const waitConfirm = (): Promise<void> => new Promise((resolve, reject) => {
@@ -309,8 +324,16 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
     }
     window.addEventListener('keydown', onKey)
 
+    /** The whale mark and its orbit survive later lines until the reticle line retires them. */
+    let logoOn = false
+    let dotsOn = false
+    /** Scanline replays: once over the plinth, once when the reticle appears. */
+    let sweeps = 1
+
     const runStep = async (step: ArchiveStep, index: number): Promise<void> => {
       const number = index + 1
+      if (step.assembleLogo === true) { logoOn = true; dotsOn = true }
+      if (step.reticle === true) { logoOn = false; dotsOn = false; sweeps += 1 }
       patch({
         stepIndex: number,
         stepCode: step.badge,
@@ -322,10 +345,11 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
         idOn: index < 2,
         caretOn: step.action !== 'auto',
         statusOn: false,
-        logoOn: step.assembleLogo === true ? true : step.reticle === true ? false : frame.logoOn,
-        dotsOn: step.assembleLogo === true,
+        logoOn,
+        dotsOn,
         reticleOn: step.reticle === true,
         hexOn: step.hex === true,
+        sweepKey: sweeps,
       })
       audio.cue('ticks')
       const spokenPromise = audio.line(step.audio, step.say)
@@ -333,9 +357,12 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
       patch({ statusOn: true, ruleOn: true })
       await type(step.en, 13, (value) => { patch({ statusEn: value }) })
       if (step.action !== 'auto') {
+        // Arm the confirmation before the button appears: a click on a visible
+        // button must never be dropped while the entrance animation runs.
+        const confirmed = waitConfirm()
         patch({ actionOn: true, cardOn: step.action === 'confirm' })
         await sleep(520)
-        await waitConfirm()
+        await confirmed
         audio.cue('confirm')
         patch({ actionOn: false, cardOn: false, caretOn: false })
       }
@@ -370,6 +397,7 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
         logZh: labels.selfCheck.zh,
         logEn: labels.selfCheck.en,
         logOn: true,
+        idOn: true,
         skipOn: settings.screenAllowSkip,
         sweepKey: 1,
       })
@@ -435,6 +463,9 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
     return () => { window.clearInterval(timer) }
   }, [frame.hexOn])
 
+  const glitch = (extra = ''): string => (frame.glitchOn
+    ? ` dsh-boot-archive-glitch dsh-boot-archive-on${extra}`
+    : '')
   const base = (name: string): string => `dsh-boot-archive-${name}`
   const on = (name: string, active: boolean): string => (active ? `${base(name)} dsh-boot-archive-in` : base(name))
   const go = (name: string, active: boolean): string => (active ? `${base(name)} dsh-boot-archive-go` : base(name))
@@ -453,7 +484,20 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
       style={stageVars(settings)}
     >
       <div className={on('vignette', frame.plateOn)} />
-      <div className={base('watermark')} style={{ opacity: frame.watermarkOn ? 1 : 0, transition: fade(1100, 'ease') }} />
+      <div className={base('watermark')} style={{ opacity: frame.watermarkOn ? 1 : 0, transition: fade(1100, 'ease') }}>
+        {WATERMARK_BOXES.map(([left, top, width, height], index) => (
+          <div
+            key={index}
+            className="dsh-boot-archive-wm"
+            style={{
+              left: `${String(left * 100)}%`,
+              top: `${String(top * 100)}%`,
+              width: `${String(width * 100)}%`,
+              height: `${String(height * 100)}%`,
+            }}
+          />
+        ))}
+      </div>
       <div className="dsh-boot-archive-grain" />
       <div className={base('black')} style={{ opacity: frame.blackOut ? 0 : 1, transition: fade(720, 'ease') }}>
         <div className={`dsh-boot-archive-black-inner${frame.blackIn ? ' dsh-boot-archive-in' : ''}${frame.blackOut ? ' dsh-boot-archive-out' : ''}`}>
@@ -489,22 +533,54 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
       </div>
       <div className={on('idline', frame.idOn)}>{labels.idLine(settings.screenIdentityId)}</div>
       <div className={on('reticle', frame.reticleOn)}>
-        <i className="dsh-boot-archive-ring-a" />
-        <i className="dsh-boot-archive-ring-b" />
+        <svg viewBox="0 0 400 400" aria-hidden>
+          <g className="dsh-boot-archive-ret-rot-a">
+            <path className="dsh-boot-archive-ring-a" d={OUTER_RING.path} />
+            <circle
+              className="dsh-boot-archive-dot-a"
+              cx={OUTER_RING.end[0]}
+              cy={OUTER_RING.end[1]}
+              r="7"
+            />
+          </g>
+          <g className="dsh-boot-archive-ret-rot-b">
+            <path className="dsh-boot-archive-ring-b" d={INNER_RING.path} />
+            <circle
+              className="dsh-boot-archive-dot-b"
+              cx={INNER_RING.start[0]}
+              cy={INNER_RING.start[1]}
+              r="4"
+            />
+          </g>
+          {BRACKETS.map((path, index) => (
+            <path key={index} className="dsh-boot-archive-bracket" d={path} />
+          ))}
+          {GUIDE_DOTS.map(([x, y]) => (
+            <circle key={`${String(x)}-${String(y)}`} className="dsh-boot-archive-dot-o" cx={x} cy={y} r="2.8" />
+          ))}
+        </svg>
       </div>
       <div className={on('hex', frame.hexOn)}>
         {hex.map((row, index) => <span key={index}>{row}</span>)}
       </div>
       <div className={on('welcome', frame.welcomeOn)}>
-        <div className="dsh-boot-archive-w1">{labels.welcomeTo}</div>
-        <div className={`dsh-boot-archive-w2${frame.glitchOn ? ' dsh-boot-archive-glitch' : ''}`} data-text={settings.screenWelcomeBox}>
+        <div className={`dsh-boot-archive-w1${glitch()}`} data-text={frame.glitchOn ? labels.welcomeTo : undefined}>
+          {labels.welcomeTo}
+        </div>
+        <div
+          className={`dsh-boot-archive-w2${glitch(' dsh-boot-archive-glitch-box')}`}
+          data-text={frame.glitchOn ? settings.screenWelcomeBox : undefined}
+        >
           {settings.screenWelcomeBox}
         </div>
         <div className="dsh-boot-archive-w3">
           <svg className="dsh-boot-archive-whale" viewBox="0 0 49 44" aria-hidden><path d={WHALE_PATH} /></svg>
           <span className="dsh-boot-archive-w3label">{labels.welcomeMark}</span>
         </div>
-        <div className={`dsh-boot-archive-w4${frame.glitchOn ? ' dsh-boot-archive-glitch' : ''}`} data-text={labels.welcome(settings.screenIdentity)}>
+        <div
+          className={`dsh-boot-archive-w4${glitch()}`}
+          data-text={frame.glitchOn ? labels.welcome(settings.screenIdentity) : undefined}
+        >
           {labels.welcome(settings.screenIdentity)}
         </div>
       </div>
@@ -547,7 +623,15 @@ export function ArchiveStage({ settings, labels, onFinished, audioFactory }: Arc
         <span className="dsh-boot-archive-meta-2">{clock}</span>
       </div>
       {frame.skipOn
-        ? <div className="dsh-boot-archive-skip dsh-boot-archive-in" onClick={() => { skipRef.current?.() }}>{labels.skip}</div>
+        ? (
+          <button
+            type="button"
+            className="dsh-boot-archive-skip dsh-boot-archive-in"
+            onClick={() => { skipRef.current?.() }}
+          >
+            {labels.skip}
+          </button>
+        )
         : null}
       <footer className={on('foot', frame.chromeOn)}><span>{settings.screenFooter}</span></footer>
       <div className="dsh-boot-archive-subtitle">

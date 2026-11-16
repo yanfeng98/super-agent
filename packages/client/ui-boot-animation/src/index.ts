@@ -26,6 +26,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import z from '@deepseek-ai/schemastery'
 import { isAudioName } from './audio-names.ts'
+import { SEQUENCE_MODES } from './screen.ts'
 import { AudioCatalog, audioDir } from './host/audio.ts'
 import { ClipCatalog } from './host/catalog.ts'
 import { serveClip } from './host/media.ts'
@@ -150,8 +151,7 @@ export const Config = z.object({
   fit: z.union(['cover', 'contain'] as const).default('cover').volatile(),
   random: z.boolean().default(false).volatile(),
   selectedClip: z.string().min(1).default('builtin:brand').volatile(),
-  sequence: z.union(['archive-then-video', 'video-then-archive', 'archive-only', 'video-only'] as const)
-    .default('archive-then-video').volatile(),
+  sequence: z.union(SEQUENCE_MODES).default('archive-then-video').volatile(),
   screenTheme: z.union(['light', 'dark'] as const).default('light').volatile(),
   screenSpeed: z.number().min(0.35).max(3).default(1).volatile(),
   screenRequireInteraction: z.boolean().default(true).volatile(),

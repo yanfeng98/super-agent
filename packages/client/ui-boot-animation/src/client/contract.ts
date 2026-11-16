@@ -5,7 +5,8 @@
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ClipInfo, FitMode, PlayTiming, ScreenSettings, SequenceMode, SessionIntro, StartupStage } from '../types.ts'
-import { SCREEN_DEFAULTS } from '../screen.ts'
+import { SCREEN_DEFAULTS, SEQUENCE_MODES, screenSettingsOf } from '../screen.ts'
+import type { ScreenProjection } from '../screen.ts'
 import type { BootAnimationLocaleKey } from './locales.ts'
 
 /** Locale namespace owned by this package. */
@@ -61,6 +62,45 @@ export const DEFAULT_SETTINGS: IntroSettings = {
   random: false,
   selectedClip: 'builtin:brand',
   sequence: 'archive-then-video',
+}
+
+/** The two moments the experience can start on its own. */
+const TIMINGS: readonly PlayTiming[] = ['app-start', 'entry']
+
+/** The two ways a clip fits the window. */
+const FITS: readonly FitMode[] = ['cover', 'contain']
+
+/** A preference projection: any field may be absent or carry an unusable value. */
+export type SettingsProjection = ScreenProjection & {
+  readonly enabled?: unknown
+  readonly timing?: unknown
+  readonly fit?: unknown
+  readonly random?: unknown
+  readonly selectedClip?: unknown
+  readonly sequence?: unknown
+}
+
+/**
+ * Read a full set of preferences from a possibly stale projection.
+ * @param raw - the Host projection, or null before one arrives.
+ * @returns every preference, with absent or unusable values replaced by defaults.
+ */
+export function normalizeIntroSettings(raw: SettingsProjection | null): IntroSettings {
+  const value = raw ?? DEFAULT_SETTINGS
+  const timing = TIMINGS.find(candidate => candidate === value.timing)
+  const fit = FITS.find(candidate => candidate === value.fit)
+  const sequence = SEQUENCE_MODES.find(candidate => candidate === value.sequence)
+  return {
+    ...screenSettingsOf(value),
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULT_SETTINGS.enabled,
+    timing: timing ?? DEFAULT_SETTINGS.timing,
+    fit: fit ?? DEFAULT_SETTINGS.fit,
+    random: typeof value.random === 'boolean' ? value.random : DEFAULT_SETTINGS.random,
+    selectedClip: typeof value.selectedClip === 'string' && value.selectedClip !== ''
+      ? value.selectedClip
+      : DEFAULT_SETTINGS.selectedClip,
+    sequence: sequence ?? DEFAULT_SETTINGS.sequence,
+  }
 }
 
 /** The clip list and the asking conversation's override. */

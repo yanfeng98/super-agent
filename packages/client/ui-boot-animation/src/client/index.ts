@@ -24,7 +24,7 @@ import { IntroOverlay } from './IntroOverlay.tsx'
 import { IntroRecords, decidePlay, sessionStorageOrNull } from './decide.ts'
 import { SettingsSection } from './SettingsSection.tsx'
 import { NS } from './contract.ts'
-import { DEFAULT_SETTINGS } from './contract.ts'
+import { DEFAULT_SETTINGS, normalizeIntroSettings } from './contract.ts'
 import type { CatalogState, IntroReason, IntroSettings, PlaybackState, StartupSessionBinding } from './contract.ts'
 import { createSource } from './source.ts'
 import { de, en, es, fr, ja, pt, ru, zh } from './locales.ts'
@@ -67,9 +67,10 @@ interface BindingSource {
   subscribe: (listener: () => void) => () => void
 }
 
-/** Read the settings projection's current value. */
+/** Read the settings projection's current value, normalized against the shared table. */
 function settingsOf(form: { getSnapshot: () => { value: IntroSettings | undefined } }): IntroSettings | null {
-  return form.getSnapshot().value ?? null
+  const value = form.getSnapshot().value
+  return value === undefined ? null : normalizeIntroSettings(value)
 }
 
 /**
@@ -306,11 +307,28 @@ export function apply(ctx: Context): void {
   settings.set(settingsOf(form))
   evaluate()
 
-  /** Render code never sees the "not projected yet" state; it renders the defaults. */
-  const deriveSettings = (source: typeof settings) => ({
-    getSnapshot: () => source.getSnapshot() ?? DEFAULT_SETTINGS,
-    subscribe: (listener: () => void) => source.subscribe(listener),
-  })
+  /**
+   * Render code never sees the "not projected yet" state; it renders the defaults.
+   *
+   * The normalized value is cached per projection snapshot: React subscribes with
+   * `useSyncExternalStore`, which requires the same reference until the fact
+   * changes, and normalizing on every read would hand it a new object forever.
+   */
+  const deriveSettings = (source: typeof settings) => {
+    let mirrored: IntroSettings | null = null
+    let normalized: IntroSettings = DEFAULT_SETTINGS
+    return {
+      getSnapshot: (): IntroSettings => {
+        const current = source.getSnapshot()
+        if (current !== mirrored) {
+          mirrored = current
+          normalized = normalizeIntroSettings(current)
+        }
+        return normalized
+      },
+      subscribe: (listener: () => void) => source.subscribe(listener),
+    }
+  }
 
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
