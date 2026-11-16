@@ -237,10 +237,17 @@ function servesChat(provider: Provider): boolean {
  * nowhere else. It speaks OpenAI-compatible chat completions, so a deployment
  * that needs those models can add `https://integrate.api.nvidia.com/v1` as an
  * `openai-completions` custom model API under a different provider id.
- * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, and NVIDIA routes speak
- * OpenAI-compatible chat completions, and the Vercel AI Gateway and MiniMax
- * endpoints speak Anthropic Messages, so a deployment that needs one can add it
- * as a custom model API.
+ * `ant-ling` serves the Ling and Ring model families from
+ * `https://api.ant-ling.com/v1`: this build carries three models, the Ling 2.6
+ * pair and the reasoning Ring 2.6 1T, and none appears on another route, so
+ * withholding it removes model coverage rather than only a routing layer. It
+ * speaks OpenAI-compatible chat completions, so a deployment that needs those
+ * models can add the endpoint as an `openai-completions` custom model API
+ * under a different provider id.
+ * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, and Ant Ling
+ * routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
+ * and MiniMax endpoints speak Anthropic Messages, so a deployment that needs
+ * one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -248,6 +255,7 @@ function servesChat(provider: Provider): boolean {
  */
 const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'amazon-bedrock',
+  'ant-ling',
   'azure',
   'cerebras',
   'cloudflare-ai-gateway',

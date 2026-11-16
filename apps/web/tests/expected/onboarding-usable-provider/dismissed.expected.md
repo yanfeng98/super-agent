@@ -21,7 +21,6 @@
   - tabpanel "第三方模型提供商":
     - text: 提供商
     - combobox "提供商":
-      - option "ant-ling"
       - option "anthropic"
       - option "baseten"
       - option "deepseek"
