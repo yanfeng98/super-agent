@@ -88,6 +88,7 @@ describe('modality schema boundary', () => {
 describe('withheld catalog providers', () => {
   it.each([
     'amazon-bedrock',
+    'ant-ling',
     'azure',
     'cerebras',
     'cloudflare-ai-gateway',

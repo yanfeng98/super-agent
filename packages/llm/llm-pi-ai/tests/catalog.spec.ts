@@ -1262,6 +1262,7 @@ describe('configurable-provider directory', () => {
     // reach the provider directory, model resolution, discovery, or sign-in.
     for (const provider of [
       'amazon-bedrock',
+      'ant-ling',
       'azure',
       'cerebras',
       'cloudflare-ai-gateway',
