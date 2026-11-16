@@ -529,14 +529,14 @@ describe('catalog routes with per-model configuration', () => {
     // Some catalog models carry provider-required request headers; overriding a
     // capacity must not drop them, because configuration has no way to restate
     // them.
-    const headered = (getBuiltinModels('nvidia') as { id: string; headers?: unknown }[])
+    const headered = (getBuiltinModels('github-copilot') as { id: string; headers?: unknown }[])
       .find(model => model.headers !== undefined)
-    if (headered === undefined) throw new Error('the installed catalog ships no nvidia model with headers')
+    if (headered === undefined) throw new Error('the installed catalog ships no github-copilot model with headers')
 
     const resolved = resolveProfiles({
-      nvidia: { models: [{ id: headered.id, contextWindow: 4096 }] },
+      'github-copilot': { models: [{ id: headered.id, contextWindow: 4096 }] },
     })
-    const [model] = resolved.get('nvidia')?.piProvider?.getModels() ?? []
+    const [model] = resolved.get('github-copilot')?.piProvider?.getModels() ?? []
     expect(model?.headers).toEqual(headered.headers)
     expect(model?.contextWindow).toBe(4096)
   })
@@ -1270,6 +1270,7 @@ describe('configurable-provider directory', () => {
       'minimax',
       'moonshotai',
       'moonshotai-cn',
+      'nvidia',
       'opencode',
       'qwen-token-plan',
       'qwen-token-plan-cn',
