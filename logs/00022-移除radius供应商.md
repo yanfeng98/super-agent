@@ -4,6 +4,8 @@
 - **背景**：`radius` 是 pi 项目自营的模型网关（`https://radius.pi.dev/v1`，首页自述 "Radius: a Pi-native API gateway"），用自有 `pi-messages` 协议把 Anthropic、OpenAI、DeepSeek、Moonshot、Z.ai、xAI 的 29 个模型聚合在一个端点后转售，并额外提供 `balanced`、`cheap`、`precise` 三个意图别名。它不直连任何厂商，而是与 `vercel-ai-gateway`、`huggingface` 同类的第三方聚合层：29 个模型 id 中有 26 个在其他内置路由上原样出现，剩下三个别名指向的也是其他路由已提供的模型。按本仓库既有的聚合层处理方式移除它。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点、测试）、`docs/user/guide/providers.md`、`packages/llm/llm-pi-ai/README.md`、升级指南、Web golden 与 `logs/`。
 
+- **后续变更**：`baseten` 已于 [00026](00026-移除baseten供应商.md) 移除，本记录中作为承接路由出现的 `baseten`（以及更早已移除的 `nvidia`）不再可用；`kimi-k3` 仍由 `fireworks`、`github-copilot`、`opencode-go`、`openrouter`、`together` 提供，`deepseek-v4.1-flash` 仍由 `opencode-go`、`openrouter`、`together` 提供，现行覆盖见该文件第 3 节。
+
 ## 1. 变更
 
 | 位置 | 变更 |

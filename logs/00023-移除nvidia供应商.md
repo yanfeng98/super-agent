@@ -4,6 +4,8 @@
 - **背景**：`nvidia` 是 NVIDIA 自建的托管推理服务（NVIDIA NIM，API Catalog 在 `build.nvidia.com`），以 `openai-completions` 接入 `https://integrate.api.nvidia.com/v1`，只有 API key 鉴权（`NVIDIA_API_KEY`），没有 OAuth。目录快照 20 个模型，id 一律带厂商前缀：NVIDIA 自家的 Nemotron 与 Cosmos 系列，加上代托管的其他厂商开源权重模型（DeepSeek、Google Gemma、Meta Llama、Mistral、Moonshot Kimi、OpenAI gpt-oss、Poolside、Z.ai GLM）。用户要求移除，按既有 `WITHHELD_PROVIDERS` 机制处理。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、`docs/user/guide/providers.md`、`packages/llm/llm-pi-ai/README.md`、升级指南、Web golden 与 `logs/`。
 
+- **后续变更**：`baseten` 已于 [00026](00026-移除baseten供应商.md) 移除，本记录中作为承接路由出现的 `baseten` 不再可用；9 个同名模型仍由 `groq`、`opencode-go`、`openrouter`、`together`、`zai-coding-cn` 提供，11 个独有模型的结论不变，现行覆盖见该文件第 3 节。
+
 ## 1. 变更
 
 | 位置 | 变更 |
