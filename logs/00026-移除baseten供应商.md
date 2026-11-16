@@ -70,11 +70,13 @@
 | `pnpm run typecheck` | 5 passed，0 failed（17.93s） |
 | `pnpm run verify-provider-data` | 与已安装 pi-ai 目录一致（生成文件仍保留 42 个 id 的元数据） |
 | `npx tsx scripts/verify-upgrade-guides.ts` | 通过，guide.md 471 词 |
-| `npx tsx scripts/verify-translation-pairing.ts` | 3 组改动文档重新记录后一致（`test:docs` 的 translation pairing 门禁通过） |
+| `npx tsx scripts/verify-translation-pairing.ts` | 3 组改动文档全部一致；审计轮改写用户指南后又重录 1 次，仍一致 |
 | `pnpm run test:docs` | 收尾重跑 21/21 全部通过（中间一次为 20/21，唯一失败是 `verify-concrete-terms` 命中当时尚未提交的并行 `apps/web/native/dsh-im/`；并行提交 `refactor(im)` 落地后消失） |
 | `pnpm run doc-sync` | 收尾重跑 43/43 全部通过（中间一次为 42/43，同一 `verify-concrete-terms` 失败，原因同上） |
 | `pnpm run build` | 11 个门禁全部通过（27.69s，含 host/client 聚合检查与 Web build） |
 | `pnpm run lint` | 0 warning、0 error（90 条规则、7303 个文件，85.2s）；`git diff --check` 通过 |
+| `npx tsx scripts/gen-config-catalog.ts --check` | 3 个生成产物均为最新（`catalog.ts` 的注释改动不影响生成内容）
+| 覆盖与计数审计脚本 | PASS：19 个供应商、681 个模型；22 条路由被移除；`baseten` 的 22 个模型按 10 / 10 / 2 分类，独有模型恰为 `DeepSeek-V4.1-Flash-Fast` 与 `GLM-5.2-Fast`；3 个 golden 各 19 项且与目录同序 |
 | Web e2e（`DSH_SNAPSHOT=replay`，`vitest.web.config.ts`） | 只回放受影响的 `models-settings` 与 `onboarding-usable-provider` 两个文件：3 通过、19 失败；失败全部来自并行开发已提交的 `ui-boot-animation` 覆盖层 `<div class="dsh-boot-archive-black">…</div> … intercepts pointer events`，单独回放 `opens the add card over the dormant directory vocabulary` 确认失败点 |
 | Web golden | 三个 golden 的 option 列表与 `catalogProviderIds()` 逐项相等（19 个、同顺序） |
 | 目录自检 | 19 个供应商、681 个模型；`baseten` 不在目录中，`catalogModels('baseten')` 为空 |
@@ -82,14 +84,20 @@
 
 ## 5. 复查记录
 
-- 本轮复核又修正 4 处：`-Fast` 被误写成「Baseten 的高速高价款」（`fireworks` 也以同价提供 `GLM 5.3 Fast`，它是上游变体，不是 Baseten 专有档位），改为「价格高于同名标准款」；`opencode-go` 的 `deepseek-ai/DeepSeek-V4-Pro` 承接 id 误写为「同 id 写法」，实际是 `deepseek-v4-pro`；背景段「没有 OAuth 或订阅计划」改为「没有内置 OAuth 登录或订阅套餐入口」；`catalog.ts` 协议枚举补上 `Baseten`。
-
 - 复查时发现初稿按「同一厂商前缀」比对，把 `nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B` 与 `zai-org/GLM-5.3-Fast` 误记为没有其他内置路由。逐路由按显示名、尺寸与价格核对后确认：前者与 `openrouter` 的 `nvidia/nemotron-3-ultra-550b-a55b` 同价同上下文，后者与 `fireworks` 的 `accounts/fireworks/routers/glm-5p3-fast` 同价同上下文，二者都仍可由其他内置路由提供。
 - 因此独有模型由初稿的 5 个修正为 2 个（`DeepSeek-V4.1-Flash-Fast`、`GLM-5.2-Fast`），并同步改写 `catalog.ts`、用户指南、包 README、升级指南与根 README 的覆盖句；`nvidia/Nemotron-120B-A12B` 在 `openrouter` 上有同一 Nemotron Super 120B-A12B，但上下文与价格不同，表格中如实标注两条路由的差异。
 - 交叉核对旧日志：`00019`、`00022`、`00023`、`00025` 曾把 `baseten` 列为承接路由，历史记录不重写，改为在各文件顶部加「后续变更」提示并指向本文件；`00009` 汇总日志刷新为现行数字。
 - 未改动 `packages/experimental/webworker-runtime` 的 stub 列表与 `docs/config-catalog.md` 的 `baseten` 思考格式说明：前者描述 pi-ai 已安装目录，后者描述仍可配置的协议选项。
 - 本轮进行中并行开发提交了 `refactor(im): drop Slack, Telegram, Discord, and WhatsApp`，清掉了触发 `verify-concrete-terms` 的 `apps/web/native/dsh-im/` 文件；本次改动基于该提交之上，未修改其内容。
 - 首次回放 Web e2e 时误用了真实 API 配置（`pnpm run test:e2e -- <两个文件>`），该配置的 `include` 不接受文件参数，实际执行了整个 e2e 套件（452 个测试、22 个失败，含本机缺少 `bubblewrap` 导致 headless sandbox 用例失败）；随后改用 `DSH_SNAPSHOT=replay` + `vitest.web.config.ts` 只回放两个受影响文件。
+
+## 5a. 审计轮修正
+
+- `-Fast` 的归属写错：初稿称其为「Baseten 的高速高价款」，但 `fireworks` 也以同价（2.1 / 6.6）提供 `accounts/fireworks/routers/glm-5p3-fast`（GLM 5.3 Fast），说明它是上游的快速变体而非 Baseten 专有档位；改为可验证的「`-Fast` 的价格高于同名标准款」，并核对三组价格：V4.1 Flash 0.3 / 1.2 → 0.6 / 2.4、GLM-5.2 1.4 / 4.4 → 2.1 / 6.6、GLM-5.3 1.4 / 4.4 → 2.1 / 6.6。
+- 日志表格把 `opencode-go` 承接 `deepseek-ai/DeepSeek-V4-Pro` 的 id 写成「同 id 写法」，实际为 `deepseek-v4-pro`，已改正。
+- 背景段「没有 OAuth 或订阅计划」容易被理解为厂商层面不提供预留容量，改为「该路由没有内置 OAuth 登录或订阅套餐入口」。
+- `catalog.ts` 末尾的 OpenAI 兼容协议枚举漏了 `Baseten`，已补上。
+- 复核上述改动后重跑 `test:docs`（21/21）、`doc-sync`（43/43）与 `gen-config-catalog --check`（3 个产物最新），并用审计脚本确认覆盖口径 10 / 10 / 2、独有模型 2 个、golden 19 项与目录同序。
 
 ## 6. 已知限制
 
