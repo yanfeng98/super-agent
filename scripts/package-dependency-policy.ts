@@ -67,7 +67,8 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
   // Messages and assembled blocks are plain data. Each caller owns its assembler.
   '@deepseek-ai/dsh-llm': ['BlockAssembler', 'callConfigEquals', 'createUserMessage'],
   '@deepseek-ai/dsh-session-format': ['sessionFormatLogFilename'],
-  '@deepseek-ai/dsh-storage-domain': ['defineDomain'],
+  // Declaring a domain is plain data; the consumer owns the open domain's lifetime.
+  '@deepseek-ai/dsh-storage-domain': ['defineDomain', 'domainTable'],
   '@deepseek-ai/dsh-timeout': ['MAX_TIMER_DELAY_MS'],
   // Both operate only on the caller's subprocess service and handle; the module memoizes only the binary path.
   '@deepseek-ai/dsh-util-ripgrep': ['readRipgrepLines', 'spawnRipgrep'],

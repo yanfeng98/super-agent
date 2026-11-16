@@ -1,0 +1,160 @@
+/* Startup intro settings page. Uses the shared settings card rhythm. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 0.5px solid var(--dsw-alias-border-neutral);
+  border-radius: var(--dsw-radius-lg);
+  background-color: var(--dsw-alias-bg-layer-2);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field > legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.clipList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-md);
+}
+
+@media (hover: hover) {
+  .clip:hover {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+}
+
+.clipCurrent {
+  border-color: var(--dsw-alias-state-business-primary);
+  background-color: var(--dsw-alias-interactive-bg-selected);
+}
+
+.clipName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.badge {
+  padding: 1px 7px;
+  border-radius: var(--dsw-radius-lg);
+  background-color: var(--dsw-alias-interactive-bg-selected);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.primary,
+.secondary {
+  padding: 4px 12px;
+  border-radius: var(--dsw-radius-md);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.primary {
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  background-color: var(--dsw-alias-interactive-bg-selected);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.secondary {
+  border: 0.5px solid var(--dsw-alias-border-neutral);
+  background-color: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .secondary:hover {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+}
+
+.primary[disabled] {
+  cursor: default;
+  opacity: 0.55;
+}

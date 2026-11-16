@@ -1,0 +1,23 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "files": [
+    "src/types.ts",
+    "src/index.ts",
+    "src/host/catalog.ts",
+    "src/host/media.ts",
+    "src/host/overrides.ts",
+    "src/host/resolve.ts"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../host/webserver" },
+    { "path": "../../settings/settings" },
+    { "path": "../../storage/storage-domain" }
+  ]
+}

@@ -609,6 +609,38 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-account-notifications -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-boot-animation -->
+<a id="deepseek-aidsh-client-ui-boot-animation"></a>
+
+## `@deepseek-ai/dsh-client-ui-boot-animation`
+
+- `inject`: `webServer`
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/client/ui-boot-animation/src/index.ts:55`](../packages/client/ui-boot-animation/src/index.ts)
+
+```ts config-catalog
+/** Intro preferences projected to the browser settings page. */
+export interface Config {
+  /** Whether the intro plays at all. */
+  enabled: Volatile<boolean>
+  /** Which moment auto-plays it. */
+  timing: Volatile<PlayTiming>
+  /** How the clip fits the window. */
+  fit: Volatile<FitMode>
+  /** Play a different clip each time instead of the selected one. */
+  random: Volatile<boolean>
+  /** The clip id played when random playback is off. */
+  selectedClip: Volatile<string>
+}
+
+/** Which moment auto-plays the intro. */
+export type PlayTiming = 'app-start' | 'entry'
+
+/** How the intro pixel-fits the window. */
+export type FitMode = 'cover' | 'contain'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-boot-animation -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-plugin-manager -->
 <a id="deepseek-aidsh-client-ui-plugin-manager"></a>
 
