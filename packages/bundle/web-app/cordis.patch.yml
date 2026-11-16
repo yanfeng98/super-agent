@@ -339,6 +339,11 @@
     - id: ui-settings-general
       name: '@deepseek-ai/dsh-client-ui-settings-general'
 
+    # Startup intro: a full-window overlay over the Host video route, on by
+    # default for both Web and Desktop (Desktop runs the Web profile).
+    - id: ui-boot-animation
+      name: '@deepseek-ai/dsh-client-ui-boot-animation'
+
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
