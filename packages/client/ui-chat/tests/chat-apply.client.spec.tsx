@@ -23,7 +23,7 @@ import {
   apply as applyChat, EMPTY_CHAT_SNAPSHOT, inject as injectChat,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
-  ChatFlowInjected, ChatNodeInjected, ChatSnapshot, TranscriptViewRowInjected, UseChatNodeTurnData, UseDisclosure,
+  ChatFlowInjected, ChatNodeInjected, ChatSnapshot, ChatViewInjected, TranscriptViewRowInjected, UseChatNodeTurnData, UseDisclosure,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { QuotaNoticeInjected } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PerformanceUsageRowInjected } from '../src/client/settings/PerformanceUsageRow.tsx'
@@ -92,7 +92,7 @@ async function bench() {
   const chat = await runtime.mount({ inject: [...injectChat], apply: applyChat })
   const sourceDescriptor = provide.mock.calls[0]?.[0]
   if (sourceDescriptor === undefined) throw new Error('ui-chat did not provide its standard source')
-  return { runtime, conversation, chat, chatSettings, sourceDescriptor }
+  return { runtime, conversation, chat, chatSettings, sourceDescriptor, openSession }
 }
 
 function storeOf(runtime: SlotTestRuntime, key: 'conversation.session' | 'conversation.session.header' | 'conversation.view') {
@@ -131,6 +131,26 @@ describe('Chat apply wiring', () => {
     } finally {
       await b.runtime.dispose()
     }
+  })
+
+  it('routes edit-and-resend through the Conversation Session face', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.add({
+      id: SID,
+      session: {
+        prompt: async () => ({ ok: true, value: { accepted: true } }),
+      },
+    })
+    using _reference = b.runtime.sessions.retain(SID)
+    const entry = b.runtime.slots.entries('conversation.view')[0]
+    const inject = entry?.inject as ((sessionId: SessionId) => ChatViewInjected) | undefined
+    if (inject === undefined) throw new Error('ui-chat did not register its view inject face')
+    const face = inject(SID)
+
+    await face.resendEditedMessage({ text: 'corrected', boundarySeq: 3, runningTurn: false })
+
+    expect(b.openSession).toHaveBeenCalledExactlyOnceWith(SID)
   })
 
   it('contributes Chat View, node renderers, and stats', async () => {

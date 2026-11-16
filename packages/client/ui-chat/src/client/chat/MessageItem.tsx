@@ -330,12 +330,40 @@ export function PendingSubmissionBubble({ submission, loadImage, renderFactorySl
  * bubble without asking for it.
  */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderFactorySlot, loadImage, renderSlotChain, t,
+  node, renderFactorySlot, loadImage, renderSlotChain, editUserMessage, editMessageAccess, t,
 }: ChatNodeViewProps<'user' | 'steering'> & {
   /** Bound by the `user` keyed registration, the only entry that declares the seat. */
   renderSlotChain: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain']
 }) {
   const data = node.data
+  const turn = node.location.kind === 'turn' || node.location.kind === 'step'
+    ? node.location.turn
+    : undefined
+  const runningTurn = turn?.status === 'open'
+  const boundarySeq = turn?.start === undefined || turn.start.seq === 0
+    ? undefined
+    : turn.start.seq - 1
+  const content = useMemo(() => contentParts(data.content), [data.content])
+  const textOnly = content.attachments.length === 0 && content.rest.length === 0
+    && content.text.trim() !== ''
+  const editAllowed = node.kind === 'user'
+    && editUserMessage !== undefined
+    && editMessageAccess?.enabled === true
+    && editMessageAccess.prompt
+    && (boundarySeq === undefined || editMessageAccess.fork)
+    && (!runningTurn || editMessageAccess.cancel)
+  const editUnavailable = turn?.start === undefined
+    ? t('message.editUnavailable.location')
+    : textOnly ? undefined : t('message.editUnavailable.text')
+  const editAction = editUserMessage === undefined || !editAllowed
+    ? undefined
+    : (text: string): void => {
+      editUserMessage({
+        text,
+        runningTurn,
+        ...boundarySeq === undefined ? {} : { boundarySeq },
+      })
+    }
   return (
     <UserStyleBubble
       node={node}
@@ -353,6 +381,8 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           time={data.time}
           clock="start"
           className={css.actions}
+          onEdit={editAction === undefined ? undefined : () => { editAction(text) }}
+          editUnavailable={editAction === undefined ? undefined : editUnavailable}
           t={t}
         />
       )}

@@ -68,6 +68,30 @@ export interface AssistantActionOwnerProps {
   messageId: MessageId
 }
 
+/** One sent user message offered for editing and resending in a new branch. */
+export interface EditUserMessageRequest {
+  /** Exact text the edited message should carry. */
+  readonly text: string
+  /**
+   * Inclusive source boundary immediately before the message. Omitted when the
+   * message opens the Session's first Turn and therefore has no prefix to inherit.
+   */
+  readonly boundarySeq?: number
+  /** The message belongs to the currently open Turn, which resending must stop. */
+  readonly runningTurn: boolean
+}
+
+/**
+ * Effective actions a Chat view may offer for editing sent user messages.
+ * `enabled` excludes conversation kinds that never branch, such as subagents.
+ */
+export interface MessageEditAccess {
+  readonly enabled: boolean
+  readonly prompt: boolean
+  readonly fork: boolean
+  readonly cancel: boolean
+}
+
 /** Stable quota failure codes retained in the Session log; both raise the frame-wide notice. */
 export type QuotaNoticeCode = 'QUOTA' | 'ACCOUNT_QUOTA'
 
@@ -242,6 +266,10 @@ export interface ChatNodeOwnerProps {
   openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: ((callId: ToolCallId) => void) | undefined
   forkAt: (seq: number) => void
+  /** Ask the Chat view to edit one sent user message; omission hides the action. */
+  editUserMessage?: ((request: EditUserMessageRequest) => void) | undefined
+  /** Effective edit permissions for the viewed Session. */
+  editMessageAccess?: MessageEditAccess | undefined
   /** Session-authorized image loader supplied by the Chat view. */
   loadImage: MessageImageLoader
   /** Turn-process state when this Node belongs to a projected Turn. */
@@ -359,6 +387,8 @@ export interface ChatViewInjected {
     read: () => ChatScrollPosition | null
   }
   forkAt: (seq: number) => void
+  /** Fork or replace the conversation before one sent user message and resend the edited text. */
+  resendEditedMessage: (request: EditUserMessageRequest) => Promise<void>
 }
 
 /** Session-owned node sources shared with the view, plus the flow's connection state. */
@@ -371,7 +401,7 @@ export type ChatFlowDataInjected = Pick<ChatViewInjected, 'keyedHooks'> & {
 
 /** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */
 export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,
-  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'loadImage'> {
+  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'editUserMessage' | 'editMessageAccess' | 'loadImage'> {
   readonly entries: readonly RenderEntry[]
   readonly pendingInputs: readonly (PendingSubmission | InboxState['next-step'][number])[]
   readonly lastInputTurn: number | undefined
