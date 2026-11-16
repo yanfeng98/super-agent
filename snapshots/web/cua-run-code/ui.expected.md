@@ -9,6 +9,7 @@
   - button "More conversation views"
 - text: Use cua_run_code to select test.fixture, retain its application and window objects, click Increment, and capture the window. In a second call reuse those objects and a retained counter, increment again, and report the observed count and available program tools. {{clock}}
 - button "Copy"
+- button "Edit and resend"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Called tools and ran code" [expanded]

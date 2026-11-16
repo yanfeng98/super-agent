@@ -9,6 +9,7 @@
   - button "More conversation views"
 - text: "Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt catching its error in the program. Use `inspect(...)` to display an object with both outcomes. Then reply DONE and stop. {{clock}}"
 - button "Copy"
+- button "Edit and resend"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Ran code, ran commands, read files" [expanded]

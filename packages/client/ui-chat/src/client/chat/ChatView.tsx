@@ -12,9 +12,12 @@ import {
   type MarkdownDelegateFenceInfo, type MarkdownMenuTarget,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isAtOrOutside } from '../contract/group-tree.ts'
-import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
+import type {
+  ChatFlowHookContext, ChatViewSlotProps, EditUserMessageRequest, MessageEditAccess, OpenFileOptions,
+} from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { markdownLabels } from '../markdown-labels.ts'
+import { EditMessageDialog } from './EditMessageDialog.tsx'
 import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems } from './turn-rail-items.ts'
 import { useTextInteraction } from './text-interaction.ts'
@@ -61,10 +64,10 @@ const MOTION_TAIL_MS = 800
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useChat, useConversation, useSessions, renderSlot,
+  useSession, useChat, useConversation, useSessions, renderSlot, useAccess,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
   loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
-  usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
+  resendEditedMessage, usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
   const getMarkdownTriggerProps = useCallback((target: MarkdownMenuTarget) => getTriggerProps(() => {
@@ -118,6 +121,27 @@ export function ChatView({
     ),
   }), [renderSlot, codeLabels])
   const running = useSession(s => s.running)
+  const ordinaryConversation = useSession(s => s.subagent === null)
+  const promptAllowed = useAccess('session/prompt')
+  const forkAllowed = useAccess('session/fork')
+  const cancelAllowed = useAccess('session/cancel')
+  const editMessageAccess = useMemo<MessageEditAccess>(() => ({
+    enabled: ordinaryConversation,
+    prompt: promptAllowed,
+    fork: forkAllowed,
+    cancel: cancelAllowed,
+  }), [ordinaryConversation, promptAllowed, forkAllowed, cancelAllowed])
+  const [editRequest, setEditRequest] = useState<EditUserMessageRequest | null>(null)
+  useEffect(() => { setEditRequest(null) }, [sessionId])
+  const openEditUserMessage = useCallback((request: EditUserMessageRequest) => {
+    setEditRequest(request)
+  }, [])
+  const closeEditUserMessage = useCallback(() => { setEditRequest(null) }, [])
+  const submitEditedMessage = useCallback(async (text: string): Promise<void> => {
+    if (editRequest === null) return
+    await resendEditedMessage({ ...editRequest, text })
+    setEditRequest(null)
+  }, [editRequest, resendEditedMessage])
   // Fold transitions run while a Turn is live, while an input is pending, and briefly after settling.
   const [motionTail, setMotionTail] = useState(false)
   useEffect(() => {
@@ -280,7 +304,8 @@ export function ChatView({
             >
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
-                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage,
+                cwd, openFile: requestOpenFile, inspectCall, forkAt,
+                editUserMessage: openEditUserMessage, editMessageAccess, loadImage,
               }, { hookContext: flowContext })}
             </MarkdownDelegateProvider>
             <div ref={interactionSurfaceRef} className={css.textInteraction} data-text-interaction-surface=""
@@ -316,6 +341,14 @@ export function ChatView({
           busy={fileOpenBusy}
           onClose={closeFileOpenError}
           onRetry={() => { requestOpenFile(fileOpenError.path) }}
+          t={t}
+        />
+      )}
+      {editRequest !== null && (
+        <EditMessageDialog
+          request={editRequest}
+          onClose={closeEditUserMessage}
+          onSubmit={submitEditedMessage}
           t={t}
         />
       )}

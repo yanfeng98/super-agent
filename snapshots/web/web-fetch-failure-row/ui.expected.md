@@ -8,6 +8,7 @@
   - button "More conversation views"
 - text: Use the web_fetch tool exactly once to fetch http://public.test:43117/menu.html, then reply with exactly DONE. Do not describe the content. 7/26 {{clock}}
 - button "Copy"
+- button "Edit and resend"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Visited web pages" [expanded]

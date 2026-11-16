@@ -232,7 +232,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     }
   })
 
-  it.skipIf(MODE === 'record')('enables branch only on the completed transcript tail', async () => {
+  it.skipIf(MODE === 'record')('enables branch only on the completed transcript tail and edits user messages', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-message-actions'))
     const groupRow = page.locator('[role="treeitem"]').first()
     await groupRow.waitFor({ timeout: 15_000 })
@@ -248,8 +248,9 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     ).toBe(0)
 
     // Focus-reveal the footers (hover:hover keeps them opacity-hidden until
-    // hover/focus-within). Branch renders only under assistant answers — user
-    // bubbles carry none — and only a completed transcript tail enables it.
+    // hover/focus-within). Branch renders only under assistant answers; user
+    // bubbles carry the edit action, and only a completed transcript tail
+    // enables branch.
     const copyButtons = page.getByRole('button', { name: 'Copy' })
     await expect.poll(() => copyButtons.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(4)
     await copyButtons.first().focus()
@@ -263,7 +264,10 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     await page.keyboard.press('Tab')
     await expect.poll(() => page.getByRole('tooltip').allTextContents(), { timeout: 5_000 })
       .toEqual(['Available only on the last message of a completed turn'])
-    await expect.poll(() => page.getByRole('button', { name: 'Edit' }).count(), { timeout: 5_000 }).toBe(0)
+    await expect.poll(
+      () => page.getByRole('button', { name: 'Edit and resend', exact: true }).count(),
+      { timeout: 5_000 },
+    ).toBe(3)
   }, 60_000)
 
   it.skipIf(MODE === 'record')('keeps an action tooltip above the sticky composer', async () => {

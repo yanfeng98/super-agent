@@ -1,0 +1,33 @@
+/* The default dialog width is tuned for short confirmations; message editing
+   needs room for long prose without becoming a full-screen sheet. */
+div.dialog {
+  width: min(560px, 100%);
+}
+
+.editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 120px;
+  max-height: min(40vh, 320px);
+  margin: 0;
+  padding: 8px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  outline: none;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-14);
+  font-family: var(--dsw-font-family);
+  overflow-y: auto;
+  resize: vertical;
+}
+
+.editor:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xs-13);
+}

@@ -12,6 +12,8 @@
   - img "reference-1.png"
 - text: Read the attached file with the read tool, reply with exactly the single word it contains, and stop. {{clock}}
 - button "Copy"
+- button "Edit and resend" [disabled]
+- text: Only text messages can be edited
 - status: Completed
 - button "Completed in {{duration}}"
 - paragraph: UPLOAD_ROUND_OK

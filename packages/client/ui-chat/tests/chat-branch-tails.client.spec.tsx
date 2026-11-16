@@ -8,7 +8,13 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type {
   ChatConversationViewNode, ConversationNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { ChatNodeViewProps, UserContentInput } from '../src/client/contract/slots.ts'
+import type {
+  ConversationLocationDataStore, ConversationTurnDataMap,
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import type {
+  ChatNodeViewProps, EditUserMessageRequest, MessageEditAccess, UserContentInput,
+} from '../src/client/contract/slots.ts'
 import {
   formatMessageClock, msUntilNextLocalMidnight, startOfLocalDay,
 } from '../src/client/chat/message-chrome.ts'
@@ -43,6 +49,28 @@ let renderUserContent: ReturnType<typeof createUserContentFixture>
 beforeEach(() => { renderUserContent = createUserContentFixture() })
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
+const EMPTY_TURN_DATA: ConversationLocationDataStore<ConversationTurnDataMap> = {
+  get: () => undefined,
+  source: () => ({
+    getSnapshot: () => undefined,
+    subscribe: () => () => {},
+  }),
+}
+
+function turnLocation(startSeq: number): ChatConversationViewNode['location'] {
+  return {
+    kind: 'turn',
+    turn: {
+      turn: 1,
+      start: { type: 'turn/start', seq: SessionSeq(startSeq), time: 1_000, data: { turn: 1 } },
+      end: undefined,
+      status: 'closed',
+      steps: [],
+      data: EMPTY_TURN_DATA,
+    },
+  }
+}
+
 // Recency scans the whole transcript; a detached fixture is its own latest row.
 const useDetachedChat: ChatNodeViewProps['useChat'] = bindSnapshotSelector({
   subscribe: () => () => {},
@@ -54,10 +82,15 @@ interface MessageItemProps {
   readonly t: ChatNodeViewProps['t']
   readonly referenceLabels?: readonly string[]
   readonly skillNames?: readonly string[]
+  readonly location?: ChatConversationViewNode['location']
+  readonly editUserMessage?: (request: EditUserMessageRequest) => void
+  readonly editMessageAccess?: MessageEditAccess
 }
 
 /** Legacy-node fixture adapter for the independently registered renderers. */
-function MessageItem({ node, t: translate, referenceLabels, skillNames }: MessageItemProps) {
+function MessageItem({
+  node, t: translate, referenceLabels, skillNames, location, editUserMessage, editMessageAccess,
+}: MessageItemProps) {
   const kind = node.kind === 'assistant' ? 'assistant-step' : node.kind
   const viewNode: ChatConversationViewNode = {
     key: `fixture:${node.kind}:${node.seq}`,
@@ -65,7 +98,7 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
     id: String(node.seq),
     target: 'chat',
     anchorSeq: node.seq,
-    location: { kind: 'session' },
+    location: location ?? { kind: 'session' },
     visibility: 'visible',
     data: node.kind === 'model-retry'
       ? { attempts: [node], current: node }
@@ -87,9 +120,13 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
   }
   switch (node.kind) {
     case 'user':
-      return <UserMessageNodeView {...props as ChatNodeViewProps<'user'>} {...userSlots} />
+      return <UserMessageNodeView {...props as ChatNodeViewProps<'user'>} {...userSlots}
+        {...editUserMessage === undefined ? {} : { editUserMessage }}
+        {...editMessageAccess === undefined ? {} : { editMessageAccess }} />
     case 'steering':
-      return <UserMessageNodeView {...props as ChatNodeViewProps<'steering'>} renderSlotChain={() => null} />
+      return <UserMessageNodeView {...props as ChatNodeViewProps<'steering'>} renderSlotChain={() => null}
+        {...editUserMessage === undefined ? {} : { editUserMessage }}
+        {...editMessageAccess === undefined ? {} : { editMessageAccess }} />
     case 'context':
       return <ContextMessageNodeView {...props as ChatNodeViewProps<'context'>} />
     case 'compaction':
@@ -175,7 +212,7 @@ describe('MessageItem arms', () => {
     expect(resolved.container.textContent).toContain('/123 then ')
   })
 
-  it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {
+  it('user bubbles expose clock and copy without branch or edit when the view offers neither; copy writes the text', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -200,9 +237,33 @@ describe('MessageItem arms', () => {
     expect(stack?.contains(screen.getByRole('button', { name: '复制' }))).toBe(false)
     expect(stack?.nextElementSibling?.contains(screen.getByRole('button', { name: '复制' }))).toBe(true)
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '编辑并重新发送' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '复制' }))
     expect(writeText).toHaveBeenCalledWith('hello bubble')
+  })
+
+  it('offers edit with the boundary before the Turn and passes the row text', () => {
+    const editUserMessage = vi.fn<(request: EditUserMessageRequest) => void>()
+    const view = render(
+      <MessageItem
+        t={t}
+        location={turnLocation(5)}
+        editUserMessage={editUserMessage}
+        editMessageAccess={{ enabled: true, prompt: true, fork: true, cancel: true }}
+        node={{
+          kind: 'user', seq: 4, time: 4_000,
+          content: [{ type: 'text', text: 'correct this' }],
+          source: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(view.getByRole('button', { name: '编辑并重新发送' }))
+    expect(editUserMessage).toHaveBeenCalledExactlyOnceWith({
+      text: 'correct this',
+      boundarySeq: 4,
+      runningTurn: false,
+    })
   })
 
   it('user copy falls back to execCommand when clipboard.writeText is unavailable', () => {

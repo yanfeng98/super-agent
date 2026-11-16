@@ -3,7 +3,7 @@
 
 import { useId, type ReactNode } from 'react'
 import {
-  IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, Tooltip, useClipboardCopy,
+  IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, IconEditOutlineRegular, Tooltip, useClipboardCopy,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -17,6 +17,10 @@ export interface MessageIconActionsProps {
   time?: number | undefined
   /** Clock before icons (user) or after (assistant). */
   clock: 'start' | 'end'
+  /** Edit and resend this message; omission hides the edit action. */
+  onEdit?: (() => void) | undefined
+  /** Localized reason the edit action is disabled; omitted means the action is available. */
+  editUnavailable?: string | undefined
   /** Fork the session at this message; omission hides the branch action. */
   onBranch?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
@@ -43,11 +47,12 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, branchUnavailable = false, className,
+  text, time, clock, onEdit, editUnavailable, onBranch, branchUnavailable = false, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
-  const reasonId = useId()
+  const editReasonId = useId()
+  const branchReasonId = useId()
   const { copied, onCopy } = useClipboardCopy(text)
   const clockEl = time === undefined ? null : (
     <span className={clock === 'start' ? css.timeStart : css.timeEnd}>
@@ -62,6 +67,25 @@ export function MessageIconActions({
           {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}
         </button>
       </Tooltip>
+      {onEdit !== undefined && (
+        <Tooltip label={editUnavailable ?? t('message.edit')} side="bottom" openOnClick={editUnavailable !== undefined}>
+          {/* Native disabled buttons do not deliver the hover/focus events Tooltip needs. */}
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.edit')}
+            aria-disabled={editUnavailable !== undefined || undefined}
+            aria-describedby={editUnavailable === undefined ? undefined : editReasonId}
+            data-unavailable={editUnavailable !== undefined || undefined}
+            onClick={editUnavailable === undefined ? onEdit : undefined}
+          >
+            <IconEditOutlineRegular />
+          </button>
+        </Tooltip>
+      )}
+      {onEdit !== undefined && editUnavailable !== undefined && (
+        <span id={editReasonId} className={css.visuallyHidden}>{editUnavailable}</span>
+      )}
       {extraActions}
       {onBranch !== undefined && (
         <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom" openOnClick={branchUnavailable}>
@@ -71,7 +95,7 @@ export function MessageIconActions({
             className={css.action}
             aria-label={t('message.branch')}
             aria-disabled={branchUnavailable || undefined}
-            aria-describedby={branchUnavailable ? reasonId : undefined}
+            aria-describedby={branchUnavailable ? branchReasonId : undefined}
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onBranch}
           >
@@ -80,7 +104,7 @@ export function MessageIconActions({
         </Tooltip>
       )}
       {onBranch !== undefined && branchUnavailable && (
-        <span id={reasonId} className={css.visuallyHidden}>{t('message.branchUnavailable')}</span>
+        <span id={branchReasonId} className={css.visuallyHidden}>{t('message.branchUnavailable')}</span>
       )}
       {clock === 'end'
         ? <span className={css.endInfo}>{usageAction}{clockEl}</span>

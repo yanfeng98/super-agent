@@ -10,7 +10,7 @@ Desktop product events use the optional [product analytics service](../product-a
 
 ## Summary
 
-Use this package to render a browser chat from recorded Session conversations, including historical images, localized actions, and restored scroll position. Work-details modes control reasoning previews and process visibility without hiding Assistant replies; Verbose keeps completed-turn process rows visible. Local transcript and steering submissions appear immediately, remain in their original surface, and disappear atomically when authoritative Session records arrive, while queued submissions stay outside Chat. The package does not assemble or modify model requests.
+Use this package to render a browser chat from recorded Session conversations, including historical images, localized actions, and restored scroll position. Work-details modes control reasoning previews and process visibility without hiding Assistant replies; Verbose keeps completed-turn process rows visible. Local transcript and steering submissions appear immediately, remain in their original surface, and disappear atomically when authoritative Session records arrive, while queued submissions stay outside Chat. Edit-and-resend sends edited text through the ordinary Session prompt path.
 
 File-mention providers receive the viewed Session ID with the closing-turn owner, so links into inherited history can address the fork itself.
 
@@ -22,6 +22,7 @@ File-mention providers receive the viewed Session ID with the closing-turn owner
 - [Inherited history divider](#inherited-history-divider)
 - [Turn token usage](#turn-token-usage)
 - [Completed-turn footer](#completed-turn-footer)
+- [Edit and resend](#edit-and-resend)
 - [Turn Process Folding](#turn-process-folding)
 - [Grouped rendering](#grouped-rendering)
 - [Scroll ownership](#scroll-ownership)
@@ -104,6 +105,11 @@ Preference menus restore focus to their trigger without scrolling before publish
 Artifact extensions can subscribe to one Turn and Node kind through `ChatNodeStore.turnDataSource`. The source includes hidden Nodes and exposes their business data in anchor order. Membership updates incrementally; only observed collections materialize ordered arrays, and unrelated Turns or kinds do not notify them.
 
 The completed-turn action footer follows the recorded Turn end. Its action row starts 20px below preceding prose or extension content. Actions remain visible only on the latest Turn when its final visible content is a reply; other endings and historical Turns reveal actions on hover or keyboard focus. Devices without hover keep actions visible. An unavailable branch action opens its explanation on click or tap without creating a branch.
+
+<a id="edit-and-resend"></a>
+## Edit and resend
+
+A durable text-only user message offers **Edit and resend** beside Copy. Confirming forks the Session immediately before that message's Turn and sends the edited text as the child's first prompt. The child inherits everything before the Turn, receives an incremented title, and is revealed when the Host accepts the prompt. The original Session and every later message remain unchanged. The first user message has no prefix to inherit, so resending creates a new Session in the same Workspace with the source Session's working directory and Agent preset. An open target Turn is cancelled before branching. Attachments, unknown content blocks, a message outside the loaded Turn start, subagent Sessions, and missing `session/prompt`, `session/fork`, or `session/cancel` permission keep the action unavailable. If admission fails after branch creation, the branch opens with the edited text restored in its composer and the failure is reported.
 
 -----
 
@@ -222,6 +228,8 @@ None; Chat presentation does not assemble or mutate provider requests.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Manual paging during an active gesture** — manual consumption captures a persistent anchor when its page arrives, even if a touch gesture is already in progress. Subsequent movement can be restored to that anchor, constraining the gesture or its momentum until a new reading input releases it. The automatic touch deferral does not protect this explicit manual path.
+
+- **Editing is text-only and branch-based** — resending does not rewrite the original Session or carry attachments, and messages after the edited one remain only in the original conversation.
 
 - **Running-icon resolution** — the animated whale uses a 28×28 image at a default 14×14 CSS size. Larger content fonts or device pixel ratios above 2 can soften the raster stroke; the static fallback remains vector-based. Browser image caching owns the animation clock, so remounting does not guarantee playback restarts at the first frame.
 

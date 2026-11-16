@@ -454,6 +454,8 @@ function makeHarness(
     read: () => savedScroll,
   }
   const forkAt = vi.fn()
+  const resendEditedMessage = vi.fn<(request: { text: string; boundarySeq?: number; runningTurn: boolean }) => Promise<void>>()
+    .mockResolvedValue(undefined)
   // Rows and the harness must observe the same chat-store instance.
   const chat = createChatStore().create()
   const transcriptView = createSnapshotStore<TranscriptViewMode>('compact')
@@ -581,6 +583,7 @@ function makeHarness(
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     chatScroll,
     forkAt,
+    resendEditedMessage,
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
     t,
@@ -608,7 +611,7 @@ function makeHarness(
     setConnection: (state: ConnectionState) => { connection.set(state) },
     openFile, openUserFile, loadOlder, consumeOlder, prepareOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
-    chatScroll, forkAt, toolOwners, fenceCalls,
+    chatScroll, forkAt, resendEditedMessage, toolOwners, fenceCalls,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
     setGrouped: (value: ConversationGroupedView<ProcessGroupData> | undefined) => {
       grouped = value
@@ -2119,6 +2122,98 @@ describe('ChatView', () => {
     // Host boundary), not the assistant node seq.
     expect(h.forkAt).toHaveBeenCalledWith(3)
   }))
+
+  it('edits a sent user message and resends it from the boundary before its Turn', async () => {
+    const h = makeHarness({
+      nodes: [userInTurn(1, 'typo', 1), assistant(2, 'reply', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 2_000 }]]),
+      turnEnds: new Map([[1, 4]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+
+    fireEvent.click(view.getByRole('button', { name: '编辑并重新发送' }))
+    expect(view.getByRole('dialog', { name: '编辑并重新发送' })).toBeTruthy()
+    const editor = view.getByRole('textbox', { name: '消息内容' })
+    fireEvent.change(editor, { target: { value: 'corrected' } })
+    fireEvent.click(view.getByRole('button', { name: '重新发送' }))
+
+    await waitFor(() => {
+      expect(h.resendEditedMessage).toHaveBeenCalledExactlyOnceWith({
+        text: 'corrected',
+        boundarySeq: 2,
+        runningTurn: false,
+      })
+    })
+    await waitFor(() => {
+      expect(view.queryByRole('dialog', { name: '编辑并重新发送' })).toBeNull()
+    })
+  })
+
+  it('disables editing for non-text messages and messages without a loaded Turn start', () => {
+    const nonText = {
+      ...userInTurn(1, 'caption', 1),
+      content: [{ type: 'text', text: 'caption' }, { type: 'image', data: 'x' }] as never,
+    }
+    const h = makeHarness({
+      nodes: [nonText, user(2, 'outside history')],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 2_000 }]]),
+      turnEnds: new Map([[1, 4]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+
+    const buttons = view.getAllByRole('button', { name: '编辑并重新发送' })
+    expect(buttons).toHaveLength(2)
+    expect(buttons.every(button => button.getAttribute('aria-disabled') === 'true')).toBe(true)
+    fireEvent.click(buttons[0]!)
+    expect(view.queryByRole('dialog', { name: '编辑并重新发送' })).toBeNull()
+  })
+
+  it('hides editing without prompt permission or in a subagent conversation', () => {
+    const h = makeHarness({
+      nodes: [userInTurn(1, 'question', 1), assistant(2, 'reply', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 2_000 }]]),
+      turnEnds: new Map([[1, 4]]),
+    })
+    h.props.useAccess = action => action !== 'session/prompt'
+    const denied = render(<h.ChatView {...h.props} />)
+    expect(denied.queryByRole('button', { name: '编辑并重新发送' })).toBeNull()
+    denied.unmount()
+
+    const subagent = makeHarness({
+      nodes: [userInTurn(1, 'question', 1), assistant(2, 'reply', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 2_000 }]]),
+      turnEnds: new Map([[1, 4]]),
+    }, {
+      subagent: { address: { parentSessionId: SID, childSessionId: SID, mode: 'one-shot' } },
+    })
+    const child = render(<subagent.ChatView {...subagent.props} />)
+    expect(child.queryByRole('button', { name: '编辑并重新发送' })).toBeNull()
+  })
+
+  it('marks a running Turn in the edit request and requires cancel permission', async () => {
+    const h = makeHarness({
+      nodes: [userInTurn(1, 'typo', 1), assistant(2, 'partial', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    }, { running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(view.getByRole('button', { name: '编辑并重新发送' }))
+    fireEvent.click(view.getByRole('button', { name: '重新发送' }))
+    await waitFor(() => {
+      expect(h.resendEditedMessage).toHaveBeenCalledExactlyOnceWith({
+        text: 'typo',
+        runningTurn: true,
+      })
+    })
+    view.unmount()
+
+    const denied = makeHarness({
+      nodes: [userInTurn(1, 'typo', 1), assistant(2, 'partial', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    }, { running: true })
+    denied.props.useAccess = action => action !== 'session/cancel'
+    const blocked = render(<denied.ChatView {...denied.props} />)
+    expect(blocked.queryByRole('button', { name: '编辑并重新发送' })).toBeNull()
+  })
 
   it('keeps pending file mentions non-interactive until admission enables the reference injector', () => {
     const pending: InboxState['next-step'][number] = {
