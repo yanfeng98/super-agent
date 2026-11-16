@@ -27,7 +27,7 @@
 
 ## 3. 模型覆盖
 
-20 个模型 id 中，**9 个在其他内置路由上以同名提供**：
+20 个模型 id 中，**9 个在其他内置路由上以同名提供**（其中 8 个 id 完全相同，`deepseek-ai/deepseek-v4.1-flash` 在 `baseten`、`opencode-go`、`openrouter` 上前缀不同）：
 
 | 模型 id | 其他内置路由 |
 |---|---|
@@ -76,7 +76,7 @@
 
 ## 6. 已知限制
 
-- 11 个模型失去全部内置路由（见第 3 节）；要继续使用需以 `openai-completions` 自定义模型 API 接入 `https://integrate.api.nvidia.com/v1`，Provider ID 需避开 `nvidia`。NVIDIA 端点同时接受 `NVIDIA_API_KEY` 环境变量与设置页保存的凭据。
+- 11 个模型失去全部内置路由（见第 3 节）；要继续使用需以 `openai-completions` 自定义模型 API 接入 `https://integrate.api.nvidia.com/v1`，Provider ID 需避开 `nvidia`。该路由原本从 `NVIDIA_API_KEY` 环境变量或设置页保存的凭据取 key；自定义路由需在自身配置里指定凭据（`apiKeyEnv` 可继续指向同名变量）。
 - 该路由只有 API key 鉴权，没有 OAuth；移除不影响其他路由的登录流程。
 - 目录中除 `nvidia/nemotron-3-ultra-550b-a55b`（$0.5 / $2.5 每百万 token）外各模型价格均记为 0，对应 build.nvidia.com 的免费试用额度；移除后这些「零价」条目也从选择器中消失，不再出现「免费」的误导性价格。
 - pi-ai 的目录是静态快照，本适配器不调用 `refreshModels`：实测未带凭据的 `https://integrate.api.nvidia.com/v1/models` 公开返回 33 条，而随包只有 20 条（12 条仍在远端、8 条已下线），另有 21 条新条目从未收录。移除该路由后本构建不再具备这份可刷新来源；自定义模型 API 的模型列表是静态的。

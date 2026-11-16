@@ -232,7 +232,7 @@ function servesChat(provider: Provider): boolean {
  * OpenAI-compatible chat completions at `https://radius.pi.dev/v1`, so a
  * deployment that needs the gateway can add it as an `openai-completions`
  * custom model API under a different provider id. `nvidia` is NVIDIA's own
- * inference cloud: nine of its twenty ids also appear on built-in routes, while
+ * inference cloud: nine of its twenty models also appear on built-in routes, while
  * the remaining eleven, including its Nemotron and Cosmos entries, appear
  * nowhere else. It speaks OpenAI-compatible chat completions, so a deployment
  * that needs those models can add `https://integrate.api.nvidia.com/v1` as an
