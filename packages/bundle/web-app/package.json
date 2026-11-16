@@ -204,6 +204,7 @@
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@deepseek-ai/dsh-workspace-changes": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
+    "@xmanrui/dsh-im": "workspace:*",
     "commander": "^15.0.0",
     "open": "^11.0.2"
   },

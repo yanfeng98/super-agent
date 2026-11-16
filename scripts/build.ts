@@ -99,7 +99,11 @@ export function buildGates(
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push(libraryGate(step, step.id === 'host-src' ? ['native', ...step.needs] : step.needs, env))
     }
-    gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle'], env))
+    // The native IM plugin ships a pre-bundled Host entry and browser client
+    // from its own package scripts; the Web shell serves the client bundle at
+    // runtime, so build it before the shell's artifact step.
+    gates.push(pnpmGate('dsh-im', 'IM bots plugin', ['--filter', '@xmanrui/dsh-im', 'run', 'build'], [], env))
+    gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle', 'dsh-im'], env))
   }
   if (scope === 'typecheck') {
     for (const step of contractSteps(root, 'all')) gates.push(libraryGate(step, step.needs, env))
