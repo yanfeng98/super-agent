@@ -25,11 +25,14 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import z from '@deepseek-ai/schemastery'
+import { isAudioName } from './audio-names.ts'
+import { AudioCatalog, audioDir } from './host/audio.ts'
 import { ClipCatalog } from './host/catalog.ts'
 import { serveClip } from './host/media.ts'
 import { bootAnimationDomain, SessionOverrides, normalizeSessionId } from './host/overrides.ts'
+import { stagesOf } from './host/plan.ts'
 import { IntroResolver } from './host/resolve.ts'
-import type { FitMode, PlayTiming } from './types.ts'
+import type { FitMode, PlayTiming, SequenceMode } from './types.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'dsh-client-ui-boot-animation'
@@ -51,8 +54,81 @@ const BUILTINS = [
   { key: 'startup', fileName: 'deepseek-startup-intro.mp4' },
 ] as const
 
-/** Intro preferences projected to the browser settings page. */
+/** The archive sequence's settings, as mutable runtime values. */
 export interface Config {
+  /** Color scheme of the sequence: 'light' is the warm paper plinth, 'dark' the dark one. */
+  readonly screenTheme: Volatile<'light' | 'dark'>
+  /** Multiplier for every fixed duration in the sequence; 0.35 is slow, 3 is fast. */
+  readonly screenSpeed: Volatile<number>
+  /** Whether the first two lines wait for a click, Enter, or Space. */
+  readonly screenRequireInteraction: Volatile<boolean>
+  /** Whether the skip control is shown and Escape dismisses the sequence. */
+  readonly screenAllowSkip: Volatile<boolean>
+  /** Whether interface cues play at all. */
+  readonly screenSound: Volatile<boolean>
+  /** Volume of the interface cues, 0 to 1. */
+  readonly screenSoundVolume: Volatile<number>
+  /** Whether the five lines are spoken. */
+  readonly screenVoice: Volatile<boolean>
+  /** Where the voice comes from: 'asset' prefers the recorded takes, 'tts' always synthesizes. */
+  readonly screenVoiceSource: Volatile<'asset' | 'tts'>
+  /** Language spoken: 'en', 'zh', or 'both'. */
+  readonly screenVoiceLang: Volatile<'en' | 'zh' | 'both'>
+  /** Exact installed voice name, or an empty string to pick one automatically. */
+  readonly screenVoiceName: Volatile<string>
+  /** Speaking rate for synthesized lines. */
+  readonly screenVoiceRate: Volatile<number>
+  /** Pitch for synthesized lines; below 1 is deeper. */
+  readonly screenVoicePitch: Volatile<number>
+  /** Volume of the spoken lines, 0 to 1. */
+  readonly screenVoiceVolume: Volatile<number>
+  /** Whether a short cue plays before a spoken line. */
+  readonly screenVoiceCue: Volatile<boolean>
+  /** Silence in milliseconds between the cue and the spoken line. */
+  readonly screenVoiceLead: Volatile<number>
+  /** Source of the interface cues: 'audio' plays the shipped files, 'synth' synthesizes them. */
+  readonly screenSfx: Volatile<'audio' | 'synth'>
+  /** Name in the closing welcome line and on the identity card. */
+  readonly screenIdentity: Volatile<string>
+  /** Identity number on the identity card and the confirmation line. */
+  readonly screenIdentityId: Volatile<string>
+  /** Access level shown on the identity card. */
+  readonly screenAccessLevel: Volatile<string>
+  /** First line of the brand block in the top-left corner. */
+  readonly screenBrand1: Volatile<string>
+  /** Second line of the brand block. */
+  readonly screenBrand2: Volatile<string>
+  /** Letter-spaced mark in the third brand line. */
+  readonly screenBrand3a: Volatile<string>
+  /** Suffix after the brand mark. */
+  readonly screenBrand3b: Volatile<string>
+  /** First line of the black prologue wordmark. */
+  readonly screenOrgZh: Volatile<string>
+  /** Second line of the black prologue wordmark. */
+  readonly screenOrgEn: Volatile<string>
+  /** Subtitle under the prologue wordmark. */
+  readonly screenOrgSub: Volatile<string>
+  /** Text in the black box of the closing act. */
+  readonly screenWelcomeBox: Volatile<string>
+  /** Text in the bottom-right footer. */
+  readonly screenFooter: Volatile<string>
+  /** Accent color for the status bar, progress bar, and reticle. */
+  readonly screenAccent: Volatile<string>
+  /** First color of the chromatic split during the reveal. */
+  readonly screenGlitchA: Volatile<string>
+  /** Second color of the chromatic split during the reveal. */
+  readonly screenGlitchB: Volatile<string>
+  /** Whether the plinth and prologue become translucent frosted glass. */
+  readonly screenGlass: Volatile<boolean>
+  /** Opacity of the glass layers, 0.15 to 0.95. */
+  readonly screenGlassOpacity: Volatile<number>
+  /** Frosted blur radius in pixels. */
+  readonly screenGlassBlur: Volatile<number>
+  /** Saturation percentage behind the glass. */
+  readonly screenGlassSaturate: Volatile<number>
+  /** Blur radius in pixels applied behind the overlay. */
+  readonly screenGlassBackdropBlur: Volatile<number>
+
   /** Whether the intro plays at all. */
   enabled: Volatile<boolean>
   /** Which moment auto-plays it. */
@@ -63,15 +139,55 @@ export interface Config {
   random: Volatile<boolean>
   /** The clip id played when random playback is off. */
   selectedClip: Volatile<string>
+  /** Which stages run, and in which order. */
+  sequence: Volatile<SequenceMode>
 }
 
-/** Defaults: on, once per launch, filling the window, always the brand clip. */
+/** Defaults: on, once per launch, the archive sequence followed by the brand clip. */
 export const Config = z.object({
   enabled: z.boolean().default(true).volatile(),
   timing: z.union(['app-start', 'entry'] as const).default('app-start').volatile(),
   fit: z.union(['cover', 'contain'] as const).default('cover').volatile(),
   random: z.boolean().default(false).volatile(),
   selectedClip: z.string().min(1).default('builtin:brand').volatile(),
+  sequence: z.union(['archive-then-video', 'video-then-archive', 'archive-only', 'video-only'] as const)
+    .default('archive-then-video').volatile(),
+  screenTheme: z.union(['light', 'dark'] as const).default('light').volatile(),
+  screenSpeed: z.number().min(0.35).max(3).default(1).volatile(),
+  screenRequireInteraction: z.boolean().default(true).volatile(),
+  screenAllowSkip: z.boolean().default(true).volatile(),
+  screenSound: z.boolean().default(true).volatile(),
+  screenSoundVolume: z.number().min(0).max(1).default(0.5).volatile(),
+  screenVoice: z.boolean().default(true).volatile(),
+  screenVoiceSource: z.union(['asset', 'tts'] as const).default('asset').volatile(),
+  screenVoiceLang: z.union(['en', 'zh', 'both'] as const).default('en').volatile(),
+  screenVoiceName: z.string().default('').volatile(),
+  screenVoiceRate: z.number().min(0.5).max(2).default(0.88).volatile(),
+  screenVoicePitch: z.number().min(0).max(2).default(0.85).volatile(),
+  screenVoiceVolume: z.number().min(0).max(1).default(0.9).volatile(),
+  screenVoiceCue: z.boolean().default(true).volatile(),
+  screenVoiceLead: z.number().min(0).max(1200).default(240).volatile(),
+  screenSfx: z.union(['audio', 'synth'] as const).default('audio').volatile(),
+  screenIdentity: z.string().default('JOYCE MOORE').volatile(),
+  screenIdentityId: z.string().default('0087').volatile(),
+  screenAccessLevel: z.string().default('3').volatile(),
+  screenBrand1: z.string().default('DEEPSEEK').volatile(),
+  screenBrand2: z.string().default('SYNTHESIZE INTELLIGENCE').volatile(),
+  screenBrand3a: z.string().default('HARNESS').volatile(),
+  screenBrand3b: z.string().default('OS').volatile(),
+  screenOrgZh: z.string().default('深度求索').volatile(),
+  screenOrgEn: z.string().default('DEEPSEEK').volatile(),
+  screenOrgSub: z.string().default('DEEPSEEK HARNESS').volatile(),
+  screenWelcomeBox: z.string().default('DEEPSEEK HARNESS').volatile(),
+  screenFooter: z.string().default('POWERED BY DEEPSEEK').volatile(),
+  screenAccent: z.string().default('#ff7500').volatile(),
+  screenGlitchA: z.string().default('#ff3b30').volatile(),
+  screenGlitchB: z.string().default('#2971b8').volatile(),
+  screenGlass: z.boolean().default(true).volatile(),
+  screenGlassOpacity: z.number().min(0.15).max(0.95).default(0.75).volatile(),
+  screenGlassBlur: z.number().min(0).max(60).default(22).volatile(),
+  screenGlassSaturate: z.number().min(100).max(200).default(160).volatile(),
+  screenGlassBackdropBlur: z.number().min(0).max(80).default(28).volatile(),
 })
 
 /** Absolute path of one shipped clip, resolved beside the built entry. */
@@ -170,6 +286,7 @@ export function apply(ctx: Context, config: Config): void {
     BUILTINS.map(builtin => ({ key: builtin.key, path: builtinPath(builtin.fileName) })),
     [userDir],
   )
+  const audio = new AudioCatalog(audioDir(import.meta.url))
   let overrides: SessionOverrides | null = null
   const resolver = new IntroResolver(
     catalog,
@@ -230,6 +347,24 @@ export function apply(ctx: Context, config: Config): void {
   }), 'boot-animation: clip media')
 
   ctx.effect(() => ctx.webServer.register({
+    kind: 'prefix',
+    path: `${ROUTE}/audio`,
+    auth: 'required',
+    handler: (req, res, peer) => {
+      if (!ownerOnly(peer)) { sendText(res, 403, 'forbidden'); return }
+      const prefix = `${ROUTE}/audio/`
+      const raw = pathOf(req)
+      if (!raw.startsWith(prefix)) { sendText(res, 404, 'dsh-boot-animation: no such audio file'); return }
+      const name = raw.slice(prefix.length).replace(/\.mp3$/u, '')
+      if (!isAudioName(name)) { sendText(res, 404, 'dsh-boot-animation: no such audio file'); return }
+      const file = audio.get(name)
+      /* v8 ignore next 2 -- every shipped name has a file; this only guards a damaged install. */
+      if (file === null) { sendText(res, 404, 'dsh-boot-animation: no such audio file'); return }
+      serveClip(req, res, file)
+    },
+  }), 'boot-animation: sequence audio')
+
+  ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
     path: `${ROUTE}/catalog.json`,
     auth: 'required',
@@ -248,7 +383,10 @@ export function apply(ctx: Context, config: Config): void {
       if (!ownerOnly(peer)) { sendText(res, 403, 'forbidden'); return }
       const query = queryOf(req)
       const mode = query.get('mode') === 'random' ? 'random' : 'active'
-      sendJson(res, 200, resolver.active(normalizeSessionId(query.get('session')), mode))
+      sendJson(res, 200, {
+        stages: stagesOf(config.sequence.get()),
+        ...resolver.active(normalizeSessionId(query.get('session')), mode),
+      })
     },
   }), 'boot-animation: active clip')
 

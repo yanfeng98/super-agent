@@ -8,6 +8,8 @@
   },
   "include": [
     "src/types.ts",
+    "src/audio-names.ts",
+    "src/screen.ts",
     "src/client",
     "src/css-modules.d.ts"
   ],

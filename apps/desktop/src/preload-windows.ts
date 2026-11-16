@@ -4,6 +4,16 @@ import { ipcRenderer } from 'electron'
 import { DESKTOP_IPC } from './ipc.ts'
 import { installWindowsMenu } from './preload-menu.ts'
 
+/**
+ * Document attribute a full-window startup sequence sets while it owns the
+ * window, so the caption buttons hide with it. The startup package sets and
+ * clears it; this file only reads it.
+ */
+const SPLASH_ATTRIBUTE = 'data-dsh-splash'
+
+/** Caption colour used while the startup sequence owns the window. */
+const TRANSPARENT = 'rgba(0, 0, 0, 0)'
+
 /** Install the Windows-only titlebar marker and observe application language and palette changes. */
 export function syncWindowsAppearance(): void {
   if (process.platform !== 'win32') return
@@ -34,9 +44,12 @@ export function syncWindowsAppearance(): void {
     }
     let previous = ''
     const send = (): void => {
+      // A startup sequence paints the whole window, captions included: while it
+      // owns the window the buttons must vanish with the chrome they sit on.
+      const splash = root.hasAttribute(SPLASH_ATTRIBUTE)
       const style = getComputedStyle(probe)
-      const color = nativeColor(style.backgroundColor)
-      const symbolColor = nativeColor(style.color)
+      const color = splash ? TRANSPARENT : nativeColor(style.backgroundColor)
+      const symbolColor = splash ? TRANSPARENT : nativeColor(style.color)
       const values = [root.lang, color, symbolColor]
       const current = JSON.stringify(values)
       if (current === previous) return
@@ -45,7 +58,7 @@ export function syncWindowsAppearance(): void {
       ipcRenderer.send(DESKTOP_IPC.windowsAppearance, ...values)
     }
     const observer = new MutationObserver(send)
-    observer.observe(root, { attributes: true, attributeFilter: ['lang'] })
+    observer.observe(root, { attributes: true, attributeFilter: ['lang', SPLASH_ATTRIBUTE] })
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'style'] })
     observer.observe(document.head, { childList: true, subtree: true, characterData: true })
     document.head.addEventListener('load', send, true)

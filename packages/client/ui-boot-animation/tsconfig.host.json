@@ -7,10 +7,14 @@
   },
   "files": [
     "src/types.ts",
+    "src/audio-names.ts",
+    "src/screen.ts",
     "src/index.ts",
+    "src/host/audio.ts",
     "src/host/catalog.ts",
     "src/host/media.ts",
     "src/host/overrides.ts",
+    "src/host/plan.ts",
     "src/host/resolve.ts"
   ],
   "references": [

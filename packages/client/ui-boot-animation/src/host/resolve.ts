@@ -13,7 +13,7 @@
  */
 import type { ClipCatalog, DiscoveredClip } from './catalog.ts'
 import type { SessionOverrides } from './overrides.ts'
-import type { ActiveResponse, ClipInfo, SessionIntro } from '../types.ts'
+import type { ActiveClip, ClipInfo, SessionIntro } from '../types.ts'
 
 /** The settings the chain reads, resolved per request. */
 export interface ResolverConfig {
@@ -22,7 +22,7 @@ export interface ResolverConfig {
 }
 
 /** Why a clip was chosen, for diagnostics. */
-type Reason = ActiveResponse['how']
+type Reason = ActiveClip['how']
 
 /**
  * Choose one clip from a pool, avoiding the previous choice.
@@ -65,7 +65,7 @@ export class IntroResolver {
    * @param mode - `random` forces a random pick; `active` follows the settings.
    * @returns the answer plus why it was chosen.
    */
-  active(sessionId: string | null, mode: 'active' | 'random' = 'active'): ActiveResponse {
+  active(sessionId: string | null, mode: 'active' | 'random' = 'active'): ActiveClip {
     const clips = this.catalog.list()
     if (clips.length === 0) return { clipId: null, version: null, how: 'none' }
     const override = this.#override(sessionId)
@@ -106,7 +106,7 @@ export class IntroResolver {
     return store === null ? { replay: false, clipId: null } : store.read(sessionId)
   }
 
-  #answer(clip: DiscoveredClip, how: Reason): ActiveResponse {
+  #answer(clip: DiscoveredClip, how: Reason): ActiveClip {
     return { clipId: clip.info.id, version: clip.info.version, how }
   }
 }

@@ -23,6 +23,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
   '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
 }
 
 /** A byte range resolved against the clip's current length. */

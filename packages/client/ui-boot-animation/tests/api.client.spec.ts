@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  fetchActive, fetchCatalog, mediaUrlFor, writeSessionOverride,
+  audioUrlFor, fetchActive, fetchCatalog, mediaUrlFor, writeSessionOverride,
 } from '../src/client/api.ts'
 
 const BASE = '/dsh-boot-animation'
@@ -139,9 +139,9 @@ describe('fetchCatalog', () => {
 
 describe('fetchActive', () => {
   it('asks in the requested mode and keeps the Host reason', async () => {
-    const fetchMock = fetchAnswering({ clipId: 'builtin:brand', version: 'v2', how: 'session' })
+    const fetchMock = fetchAnswering({ stages: ['video'], clipId: 'builtin:brand', version: 'v2', how: 'session' })
     await expect(fetchActive(null, 'active', signal)).resolves.toEqual({
-      clipId: 'builtin:brand', version: 'v2', how: 'session',
+      stages: ['video'], clipId: 'builtin:brand', version: 'v2', how: 'session',
     })
     expect(fetchMock.mock.calls[0]).toEqual([
       `${BASE}/active.json?mode=active`,
@@ -156,9 +156,34 @@ describe('fetchActive', () => {
 
     fetchAnswering({ clipId: 'file:x', version: 'v1', how: 'other' })
     await expect(fetchActive(null, 'active', signal)).resolves.toMatchObject({ how: 'none' })
+  })
 
-    fetchAnswering({ clipId: 'file:x', version: 'v1' })
-    await expect(fetchActive(null, 'active', signal)).resolves.toMatchObject({ how: 'none' })
+  it('reads the stage plan, ignoring stages it does not know', async () => {
+    fetchAnswering({ stages: ['archive', 'nope', 'video'], clipId: 'builtin:brand', version: 'v2', how: 'none' })
+    await expect(fetchActive(null, 'active', signal)).resolves.toMatchObject({ stages: ['archive', 'video'] })
+    // An older Host sends no plan: the clip stage is what it could play.
+    fetchAnswering({ clipId: 'builtin:brand', version: 'v2', how: 'none' })
+    await expect(fetchActive(null, 'active', signal)).resolves.toMatchObject({ stages: ['video'] })
+    fetchAnswering({ stages: [], clipId: 'builtin:brand', version: 'v2', how: 'none' })
+    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
+  })
+
+  it('keeps an incomplete clip out of the plan instead of failing the request', async () => {
+    fetchAnswering({ stages: ['archive'], clipId: null, version: null, how: 'none' })
+    await expect(fetchActive(null, 'active', signal)).resolves.toEqual({
+      stages: ['archive'], clipId: null, version: null, how: 'none',
+    })
+    fetchAnswering({ stages: ['video'], clipId: '', version: '', how: 'none' })
+    await expect(fetchActive(null, 'active', signal)).resolves.toMatchObject({ clipId: null, version: null })
+    fetchAnswering({ stages: ['video'], clipId: 1, version: 2, how: 'none' })
+    await expect(fetchActive(null, 'active', signal)).resolves.toMatchObject({ clipId: null, version: null })
+  })
+
+  it('answers null when the answer is not an object at all', async () => {
+    fetchAnswering(null)
+    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
+    fetchAnswering('nope')
+    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
   })
 
   it('appends the session parameter with the right separator', async () => {
@@ -167,26 +192,16 @@ describe('fetchActive', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/active.json?mode=random&session=s%201`)
   })
 
-  it('answers null when the Host names no complete clip', async () => {
-    fetchAnswering(null)
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-    fetchAnswering('nope')
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-    fetchAnswering({ clipId: null, version: 'v1', how: 'none' })
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-    fetchAnswering({ clipId: '', version: 'v1', how: 'none' })
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-    fetchAnswering({ clipId: 'file:x', version: null, how: 'none' })
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-    fetchAnswering({ clipId: 'file:x', version: '', how: 'none' })
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-    fetchAnswering({ clipId: 1, version: 2, how: 'none' })
-    await expect(fetchActive(null, 'active', signal)).resolves.toBeNull()
-  })
-
   it('rejects a non-2xx answer with its status', async () => {
     fetchAnswering({}, { ok: false, status: 404 })
     await expect(fetchActive(null, 'active', signal)).rejects.toThrow('active request failed with 404')
+  })
+})
+
+describe('audioUrlFor', () => {
+  it('addresses one shipped file and escapes its name', () => {
+    expect(audioUrlFor('line-1')).toBe(`${BASE}/audio/line-1.mp3`)
+    expect(audioUrlFor('a b/c')).toBe(`${BASE}/audio/a%20b%2Fc.mp3`)
   })
 })
 

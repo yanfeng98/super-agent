@@ -1,0 +1,1187 @@
+/* ============================================================================
+ * dsh-startup-screen — 启动界面 / 启动动画样式
+ * ----------------------------------------------------------------------------
+ * 风格取自参考片（Hypergryph 式开机序列）：黑色序幕 → 灰白过曝洗白 → 暖白
+ * "技术档案" 底板 → 等宽字距状态行 → 环形准星扫描 → WELCOME 版式 → 色散故障。
+ *
+ * 全部字体都取系统自带字体，零网络依赖：
+ *   --dba-din   Bahnschrift（Windows 10+ 自带 DIN 1451 风格，对应参考片里
+ *               "RHINE LAB / SYNTHESIZE INFORMATION" 那种窄体技术字）
+ *   --dba-mono  Cascadia Mono / Consolas（对应参考片里的等宽字距小字）
+ *   --dba-zh    微软雅黑（对应参考片底部中文小字幕）
+ * ========================================================================== */
+
+.dsh-boot-archive-root,
+.dsh-boot-archive-root *,
+.dsh-boot-archive-root *::before,
+.dsh-boot-archive-root *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.dsh-boot-archive-root {
+  /* —— 配色（浅色 / 参考片色板）—— */
+  --dba-bg: #e5e3df;
+  --dba-bg-2: #eceae6;
+  --dba-ink: #0a0a0a;
+  --dba-ink-soft: #3a3936;
+  --dba-muted: #7a7873;
+  --dba-hair: rgba(10, 10, 10, 0.16);
+  --dba-hair-soft: rgba(10, 10, 10, 0.07);
+  --dba-accent: #ff7500;
+  --dba-glitch-a: #ff3b30;
+  --dba-glitch-b: #2971b8;
+  --dba-box-bg: #0a0a0a;
+  --dba-box-ink: #ffffff;
+  --dba-sub-glow: 0 0 6px rgba(255, 255, 255, 0.9);
+
+  /* 字体全部取系统自带，不下发 webfont（启动零抖动）。
+     三档回退链覆盖 Win / macOS / Linux：
+       DIN 风格窄体重黑：Bahnschrift(Win) → DIN Alternate(macOS) → Ubuntu/Roboto Condensed(Linux)
+       等宽：Cascadia Mono(Win) → SFMono/Consolas → DejaVu Sans Mono(Linux)
+       中文：微软雅黑(Win) → 苹方(macOS) → 思源/Noto/WQY(Linux)
+     完全没有时退到通用 sans-serif —— 版式不变，只是字面观感略有差异。 */
+  --dba-din: "Bahnschrift", "DIN Alternate", "DIN Condensed", "Archivo", "Oswald",
+    "Arial Narrow", "Liberation Sans Narrow", "Ubuntu Condensed", "Roboto Condensed",
+    "Noto Sans Display", "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --dba-mono: "Cascadia Mono", "SFMono-Regular", "Consolas", "Menlo", "DejaVu Sans Mono",
+    "Liberation Mono", "Noto Sans Mono", ui-monospace, monospace;
+  --dba-zh: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "HarmonyOS Sans SC",
+    "Source Han Sans SC", "Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+    sans-serif;
+
+  --dba-speed: 1;
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  overflow: hidden;
+  background: #000;
+  color: var(--dba-ink);
+  font-family: var(--dba-din);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+  /* 注意：这里不能写 contain: paint —— 它会把本节点变成 backdrop 根，
+     里面的 backdrop-filter 就只能采到自己内部，页面内容全被排除，
+     表现是「底板透明了但背景一点没糊」。layout/style 不影响采样。 */
+  contain: layout style;
+}
+
+/* 逐字渐显（typeIn）：用不透明度而非截断，居中排版不会左右抖动 */
+.dsh-boot-archive-status .dsh-boot-archive-ch,
+.dsh-boot-archive-sub-en .dsh-boot-archive-ch {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.16em);
+  transition: opacity 340ms ease, transform 340ms ease;
+}
+.dsh-boot-archive-sub-en .dsh-boot-archive-ch { transform: translateY(0.1em); transition-duration: 300ms; }
+.dsh-boot-archive-status.dsh-boot-archive-in .dsh-boot-archive-ch,
+.dsh-boot-archive-sub-en.dsh-boot-archive-in .dsh-boot-archive-ch { opacity: 1; transform: none; }
+
+/* 中央标识与终幕标识统一取当前文字色 */
+.dsh-boot-archive-logo svg,
+.dsh-boot-archive-w3 svg { fill: currentColor; }
+
+/* 深色主题：同一套版式，换成暗底板 */
+.dsh-boot-archive-root.dsh-boot-archive-dark {
+  --dba-bg: #0b0b0c;
+  --dba-bg-2: #131315;
+  --dba-ink: #f2f1ee;
+  --dba-ink-soft: #cfcecb;
+  --dba-muted: #85847f;
+  --dba-hair: rgba(255, 255, 255, 0.18);
+  --dba-hair-soft: rgba(255, 255, 255, 0.07);
+  --dba-box-bg: #f2f1ee;
+  --dba-box-ink: #0b0b0c;
+  --dba-sub-glow: 0 0 6px rgba(0, 0, 0, 0.9);
+  background: #000;
+}
+
+/* 首屏兜底：脚本还没跑起来时也要先糊住整个窗口，避免闪出应用本体 */
+.dsh-boot-archive-root.dsh-boot-archive-boot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #000;
+  z-index: 90;
+}
+
+.dsh-boot-archive-root.dsh-boot-archive-gone {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 620ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── 底板 ───────────────────────────────────────────────────────────────── */
+.dsh-boot-archive-plate {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 78% 12%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(168deg, var(--dba-bg-2) 0%, var(--dba-bg) 42%, var(--dba-bg) 100%);
+  opacity: 0;
+}
+
+.dsh-boot-archive-dark .dsh-boot-archive-plate {
+  background:
+    radial-gradient(120% 90% at 78% 12%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(168deg, var(--dba-bg-2) 0%, var(--dba-bg) 42%, var(--dba-bg) 100%);
+}
+
+/* 背景里若隐若现的档案面板（参考片右侧极淡的方块群） */
+.dsh-boot-archive-watermark {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.dsh-boot-archive-wm {
+  position: absolute;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  border: 1px solid var(--dba-hair-soft);
+}
+.dsh-boot-archive-dark .dsh-boot-archive-wm {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
+}
+
+/* 细颗粒噪点，让大色块不"塑料" */
+.dsh-boot-archive-grain {
+  position: absolute;
+  inset: -50%;
+  opacity: 0.05;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.6'/></svg>");
+}
+
+/* ── 第一幕：黑幕 + DeepSeek 标识 ─────────────────────────────────────── */
+.dsh-boot-archive-black {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  display: grid;
+  place-items: center;
+  z-index: 40;
+  opacity: 1;
+}
+.dsh-boot-archive-black-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 560ms ease, transform 560ms ease;
+}
+.dsh-boot-archive-black-inner.dsh-boot-archive-in {
+  opacity: 1;
+  transform: none;
+}
+.dsh-boot-archive-black-inner.dsh-boot-archive-out {
+  opacity: 0;
+  transform: scale(1.045);
+  transition: opacity 620ms ease, transform 620ms ease;
+}
+.dsh-boot-archive-whale {
+  display: block;
+  fill: currentColor;
+}
+.dsh-boot-archive-black .dsh-boot-archive-whale {
+  width: 122px;
+  height: 122px;
+  color: #fff;
+  margin-bottom: 18px;
+}
+.dsh-boot-archive-black-zh {
+  font-family: var(--dba-zh);
+  font-size: 33px;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: #fff;
+}
+.dsh-boot-archive-black-en {
+  margin-top: 9px;
+  font-family: var(--dba-din);
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 0.62em;
+  text-indent: 0.62em;
+  color: #fff;
+  transition: letter-spacing 1300ms cubic-bezier(0.16, 0.84, 0.24, 1);
+}
+.dsh-boot-archive-black-en.dsh-boot-archive-tighten {
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+}
+.dsh-boot-archive-black-sub {
+  margin-top: 12px;
+  font-family: var(--dba-mono);
+  font-size: 10px;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: rgba(255, 255, 255, 0.5);
+}
+/* 扫光：一条极淡的白色横条掠过标识 */
+.dsh-boot-archive-sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 42%;
+  left: -50%;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.055) 42%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.055) 58%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+}
+.dsh-boot-archive-sweep.dsh-boot-archive-go {
+  animation: dba-sweep 1150ms cubic-bezier(0.32, 0, 0.2, 1) forwards;
+}
+@keyframes dba-sweep {
+  from { left: -50%; }
+  to { left: 118%; }
+}
+
+/* 过曝洗白：黑 → 灰 → 白 → 底板 */
+.dsh-boot-archive-wash {
+  position: absolute;
+  inset: 0;
+  background: #8b8a88;
+  opacity: 0;
+  z-index: 35;
+  pointer-events: none;
+}
+.dsh-boot-archive-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ── 品牌块（左上角）──────────────────────────────────────────────────── */
+/* 黑幕结束后统一"滑到位"：左侧文字从 -22px 滑入，右侧元素从 +18px 滑入，
+   按 60ms 一档错开；不再用裁剪式擦除 */
+.dsh-boot-archive-brand {
+  position: absolute;
+  left: 46px;
+  top: 44px;
+  z-index: 20;
+  color: var(--dba-ink);
+}
+.dsh-boot-archive-brand-1,
+.dsh-boot-archive-brand-2,
+.dsh-boot-archive-brand-3 {
+  opacity: 0;
+  transform: translateX(-22px);
+  transition: opacity 560ms cubic-bezier(0.16, 0.84, 0.24, 1),
+    transform 560ms cubic-bezier(0.16, 0.84, 0.24, 1);
+}
+.dsh-boot-archive-brand-1 {
+  font-size: 33px;
+  font-weight: 700;
+  letter-spacing: 0.012em;
+  line-height: 0.98;
+}
+.dsh-boot-archive-brand-2 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.012em;
+  margin-top: 3px;
+}
+.dsh-boot-archive-brand-3 {
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.06;
+  letter-spacing: 0.012em;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.dsh-boot-archive-brand-3 b { font-weight: 700; }
+.dsh-boot-archive-brand.dsh-boot-archive-in .dsh-boot-archive-brand-1 { opacity: 1; transform: none; transition-delay: 60ms; }
+.dsh-boot-archive-brand.dsh-boot-archive-in .dsh-boot-archive-brand-2 { opacity: 1; transform: none; transition-delay: 150ms; }
+.dsh-boot-archive-brand.dsh-boot-archive-in .dsh-boot-archive-brand-3 { opacity: 1; transform: none; transition-delay: 240ms; }
+
+/* 中央状态区 */
+.dsh-boot-archive-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 47%;
+  transform: translateY(-50%);
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: none;
+  transition: opacity 340ms ease;
+}
+/* 终幕时整块中央区（状态行 / 分隔线 / 鲸鱼 / 虚线）必须整体退场，
+   否则会和 WELCOME 版式叠在一起 */
+.dsh-boot-archive-center.dsh-boot-archive-off { opacity: 0; }
+
+.dsh-boot-archive-status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--dba-din);
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--dba-ink);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  white-space: nowrap;
+}
+.dsh-boot-archive-status.dsh-boot-archive-in { opacity: 1; }
+.dsh-boot-archive-status.dsh-boot-archive-zhline {
+  font-family: var(--dba-zh);
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  font-size: 40px;
+}
+.dsh-boot-archive-caret {
+  display: inline-block;
+  width: 15px;
+  height: 4px;
+  background: var(--dba-accent);
+  transform: translateY(3px);
+  opacity: 0;
+}
+.dsh-boot-archive-caret.dsh-boot-archive-on {
+  opacity: 1;
+  animation: dba-blink 1s steps(1, end) infinite;
+}
+@keyframes dba-blink { 50% { opacity: 0; } }
+
+.dsh-boot-archive-sub-en {
+  margin-top: 14px;
+  font-family: var(--dba-mono);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+  color: var(--dba-ink-soft);
+  opacity: 0;
+  white-space: nowrap;
+}
+.dsh-boot-archive-sub-en.dsh-boot-archive-in { opacity: 1; }
+
+.dsh-boot-archive-rule {
+  margin-top: 22px;
+  height: 1px;
+  width: 0;
+  background: var(--dba-hair);
+  transition: width 620ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.dsh-boot-archive-rule.dsh-boot-archive-in { width: min(560px, 42vw); }
+
+/* 中央标识（鲸鱼）装配区 */
+.dsh-boot-archive-logo {
+  margin-top: 26px;
+  height: 0;
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: opacity 420ms ease, height 420ms ease, margin-top 420ms ease;
+}
+.dsh-boot-archive-logo.dsh-boot-archive-in {
+  opacity: 1;
+  height: 118px;
+}
+.dsh-boot-archive-logo svg {
+  width: 84px;
+  height: 84px;
+  color: var(--dba-ink);
+}
+.dsh-boot-archive-logolabel {
+  margin-top: 10px;
+  font-family: var(--dba-mono);
+  font-size: 10px;
+  letter-spacing: 0.58em;
+  text-indent: 0.58em;
+  color: var(--dba-ink-soft);
+}
+.dsh-boot-archive-dots {
+  margin-top: 9px;
+  height: 2px;
+  width: 96px;
+  background-image: radial-gradient(circle, var(--dba-ink) 40%, transparent 42%);
+  background-size: 12px 2px;
+  background-repeat: repeat-x;
+  opacity: 0.5;
+}
+
+/* 右下角等宽信息行（对应参考片 "· ID CONFIRMED : JOYC"）
+   挂在页脚正上方、右边缘与页脚对齐（页脚 right:46px / bottom:52px），
+   和左下角的声纹条左右对称。原定位紧贴居中大标题右侧，身份编号一长或窗口一窄
+   就会和版心文字叠字，只能靠 @media 在窄窗口整行藏掉 —— 挪出版心后，碰撞在
+   几何上不再可能，窄窗口也就不必再牺牲这条读数。 */
+.dsh-boot-archive-idline {
+  position: absolute;
+  right: 46px;
+  bottom: 104px;
+  transform: translateX(16px);
+  z-index: 22;
+  text-align: right;
+  font-family: var(--dba-mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--dba-ink-soft);
+  opacity: 0;
+  transition: opacity 520ms ease, transform 520ms cubic-bezier(0.16, 0.84, 0.24, 1);
+  transition-delay: 520ms;
+  white-space: nowrap;
+}
+.dsh-boot-archive-idline.dsh-boot-archive-in { opacity: 1; transform: none; }
+
+/* ── 环形准星（验证通过）───────────────────────────────────────────────── */
+/* 照原片：环居中、直径约 56vw，状态字就落在环心里，两者是一个整体。
+   关键是把两段弧的缺口都留在正下方 6 点钟方向，底部字幕永远不会被压到。 */
+.dsh-boot-archive-reticle {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(56vw, 86vh, 1040px);
+  height: min(56vw, 86vh, 1040px);
+  transform: translate(-50%, -50%);
+  z-index: 16;
+  opacity: 0;
+  transition: opacity 500ms ease;
+  pointer-events: none;
+}
+.dsh-boot-archive-reticle.dsh-boot-archive-in { opacity: 1; }
+.dsh-boot-archive-reticle svg { width: 100%; height: 100%; overflow: visible; }
+.dsh-boot-archive-ret-rot-a { transform-origin: 50% 50%; animation: dba-spin 9s linear infinite; }
+.dsh-boot-archive-ret-rot-b { transform-origin: 50% 50%; animation: dba-spin 5.4s linear infinite reverse; }
+@keyframes dba-spin { to { transform: rotate(360deg); } }
+.dsh-boot-archive-reticle .dsh-boot-archive-ring-a { fill: none; stroke: var(--dba-ink); stroke-width: 6; }
+.dsh-boot-archive-reticle .dsh-boot-archive-ring-b { fill: none; stroke: var(--dba-box-ink); stroke-width: 2.2; opacity: 0.95; }
+.dsh-boot-archive-reticle .dsh-boot-archive-dot-a { fill: var(--dba-ink); }
+.dsh-boot-archive-reticle .dsh-boot-archive-dot-b { fill: var(--dba-box-ink); }
+.dsh-boot-archive-reticle .dsh-boot-archive-dot-o { fill: var(--dba-accent); }
+.dsh-boot-archive-reticle .dsh-boot-archive-bracket {
+  fill: none;
+  stroke: var(--dba-ink);
+  stroke-width: 1.6;
+  opacity: 0.85;
+}
+
+/* 读取阶段的十六进制瀑布：放到原片里最空的上右区，不去和主体挤中间 */
+.dsh-boot-archive-hex {
+  position: absolute;
+  right: 46px;
+  top: 22%;
+  width: 236px;
+  height: 148px;
+  overflow: hidden;
+  z-index: 19;
+  font-family: var(--dba-mono);
+  font-size: 10px;
+  line-height: 1.55;
+  letter-spacing: 0.06em;
+  color: var(--dba-ink-soft);
+  opacity: 0;
+  transition: opacity 320ms ease;
+  text-align: right;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 22%, #000 74%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 22%, #000 74%, transparent);
+}
+.dsh-boot-archive-hex.dsh-boot-archive-in { opacity: 0.6; }
+
+/* ── 交互区 ─────────────────────────────────────────────────────────────── */
+.dsh-boot-archive-action {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60%;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 320ms ease;
+}
+.dsh-boot-archive-action.dsh-boot-archive-in {
+  opacity: 1;
+  pointer-events: auto;
+}
+.dsh-boot-archive-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 26px;
+  border: 1.5px solid var(--dba-ink);
+  background: transparent;
+  color: var(--dba-ink);
+  font-family: var(--dba-din);
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+.dsh-boot-archive-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--dba-ink);
+  transform: translateX(-101%);
+  transition: transform 300ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+@media (hover: hover) {
+  .dsh-boot-archive-btn:hover::before { transform: none; }
+  .dsh-boot-archive-btn:hover { color: var(--dba-box-ink); }
+  .dsh-boot-archive-btn:hover .dsh-boot-archive-btn-en { color: var(--dba-box-ink); opacity: 1; }
+}
+.dsh-boot-archive-btn > * { position: relative; z-index: 1; }
+.dsh-boot-archive-btn:active { transform: translateY(1px); }
+.dsh-boot-archive-btn-zh { font-family: var(--dba-zh); font-weight: 500; }
+.dsh-boot-archive-btn-en { font-family: var(--dba-mono); font-size: 11px; letter-spacing: 0.24em; opacity: 0.62; }
+.dsh-boot-archive-btn.dsh-boot-archive-pulse { animation: dba-pulse 1.9s ease-in-out infinite; }
+@keyframes dba-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 117, 0, 0); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 117, 0, 0.14); }
+}
+.dsh-boot-archive-hint {
+  font-family: var(--dba-zh);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--dba-muted);
+}
+.dsh-boot-archive-hint kbd {
+  font-family: var(--dba-mono);
+  border: 1px solid var(--dba-hair);
+  padding: 1px 5px;
+  margin: 0 3px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+/* 身份卡（第二步）：纯中文标签 + 数字，去掉了英文双写与竖排表头，尽量干净 */
+.dsh-boot-archive-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 300px;
+  padding: 2px 0;
+  border-top: 1px solid var(--dba-hair);
+  border-bottom: 1px solid var(--dba-hair);
+}
+/* 作者样式里的 display:flex 会盖掉 [hidden] 的 UA display:none，必须显式补一条，
+   否则第一步（只要按钮、不要卡片）会露出一条空的边框 */
+.dsh-boot-archive-card[hidden] { display: none; }
+.dsh-boot-archive-card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 34px;
+  padding: 8px 2px;
+  font-family: var(--dba-zh);
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  color: var(--dba-muted);
+}
+.dsh-boot-archive-card-row + .dsh-boot-archive-card-row {
+  border-top: 1px solid var(--dba-hair-soft);
+}
+.dsh-boot-archive-card-row b {
+  font-family: var(--dba-din);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--dba-ink);
+}
+.dsh-boot-archive-card-row b.dsh-boot-archive-zhname { font-family: var(--dba-zh); letter-spacing: 0.1em; }
+
+/* ── 终幕：WELCOME ─────────────────────────────────────────────────────── */
+.dsh-boot-archive-welcome {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 45%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 420ms ease;
+}
+.dsh-boot-archive-welcome.dsh-boot-archive-in { opacity: 1; }
+.dsh-boot-archive-w1 {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  color: var(--dba-ink);
+}
+.dsh-boot-archive-w2 {
+  margin-top: 12px;
+  background: var(--dba-box-bg);
+  color: var(--dba-box-ink);
+  padding: 7px 16px 8px;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+}
+.dsh-boot-archive-w3 {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.dsh-boot-archive-w3 svg { width: 76px; height: 76px; color: var(--dba-ink); }
+.dsh-boot-archive-w3 span {
+  font-family: var(--dba-mono);
+  font-size: 10px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: var(--dba-ink-soft);
+}
+.dsh-boot-archive-w4 {
+  margin-top: 20px;
+  font-family: var(--dba-zh);
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--dba-ink);
+}
+
+/* 色散故障（参考片结尾的青蓝色偏）
+   做法：复制层带 0.5px 模糊 + 分片 clip-path 位移 + 混合模式，
+   读起来像镜头色散而不是"三个字叠一起"。常态必须 opacity:0，
+   否则动画跑完红蓝副本会一直压在文字上。 */
+.dsh-boot-archive-glitch { position: relative; }
+.dsh-boot-archive-glitch[data-text]::before,
+.dsh-boot-archive-glitch[data-text]::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(0.5px);
+  mix-blend-mode: multiply;      /* 浅底深字：做减色边缘 */
+  clip-path: inset(0 0 100% 0);
+}
+.dsh-boot-archive-glitch[data-text]::before { color: var(--dba-glitch-a); }
+.dsh-boot-archive-glitch[data-text]::after { color: var(--dba-glitch-b); }
+/* 黑底白字那块要换成加色，否则乘完是黑 */
+.dsh-boot-archive-glitch.dsh-boot-archive-glitch-box::before,
+.dsh-boot-archive-glitch.dsh-boot-archive-glitch-box::after { mix-blend-mode: screen; }
+
+.dsh-boot-archive-glitch.dsh-boot-archive-on::before { animation: dba-gx 430ms steps(3, end) 2 both; }
+.dsh-boot-archive-glitch.dsh-boot-archive-on::after { animation: dba-gy 430ms steps(3, end) 2 both; }
+@keyframes dba-gx {
+  0% { transform: translate(0, 0); opacity: 0; clip-path: inset(0 0 100% 0); }
+  14% { transform: translate(-3px, 0); opacity: 0.7; clip-path: inset(6% 0 68% 0); }
+  34% { transform: translate(2px, 0); opacity: 0.5; clip-path: inset(54% 0 28% 0); }
+  56% { transform: translate(-2px, 0); opacity: 0.6; clip-path: inset(22% 0 56% 0); }
+  80% { transform: translate(1px, 0); opacity: 0.32; clip-path: inset(72% 0 10% 0); }
+  100% { transform: none; opacity: 0; clip-path: inset(0 0 100% 0); }
+}
+@keyframes dba-gy {
+  0% { transform: translate(0, 0); opacity: 0; clip-path: inset(0 0 100% 0); }
+  14% { transform: translate(3px, 0); opacity: 0.7; clip-path: inset(62% 0 14% 0); }
+  34% { transform: translate(-2px, 0); opacity: 0.5; clip-path: inset(10% 0 66% 0); }
+  56% { transform: translate(2px, 0); opacity: 0.6; clip-path: inset(48% 0 34% 0); }
+  80% { transform: translate(-1px, 0); opacity: 0.32; clip-path: inset(30% 0 52% 0); }
+  100% { transform: none; opacity: 0; clip-path: inset(0 0 100% 0); }
+}
+
+/* ── 收尾：径向光晕 + 变形宽银幕光条 + 暗角 + 机位后撤 ─────────────────── */
+/* 暗角：给暖白底板一点纵深，别让大色块太平 */
+.dsh-boot-archive-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 13;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 900ms ease;
+  background:
+    radial-gradient(122% 104% at 50% 42%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.055) 100%),
+    radial-gradient(60% 40% at 50% 45%, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.dsh-boot-archive-dark .dsh-boot-archive-vignette {
+  background:
+    radial-gradient(122% 104% at 50% 42%, rgba(0, 0, 0, 0) 48%, rgba(0, 0, 0, 0.42) 100%),
+    radial-gradient(60% 40% at 50% 45%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.dsh-boot-archive-vignette.dsh-boot-archive-in { opacity: 1; }
+
+/* 径向光晕：不是整屏糊白，而是从中心炸开一朵光，边缘仍留暖色 */
+.dsh-boot-archive-bloom {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 128vmax;
+  height: 128vmax;
+  margin: -64vmax 0 0 -64vmax;
+  border-radius: 50%;
+  corner-shape: round;
+  z-index: 62;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.99) 0%,
+    rgba(255, 255, 255, 0.94) 22%,
+    rgba(255, 255, 255, 0.58) 44%,
+    rgba(255, 255, 255, 0.16) 62%,
+    rgba(255, 255, 255, 0) 78%
+  );
+}
+.dsh-boot-archive-bloom.dsh-boot-archive-go { animation: dba-bloom 1250ms cubic-bezier(0.22, 0.68, 0.2, 1) forwards; }
+@keyframes dba-bloom {
+  0% { opacity: 0; transform: scale(0.08); }
+  20% { opacity: 1; transform: scale(0.42); }
+  58% { opacity: 0.96; transform: scale(0.96); }
+  100% { opacity: 0; transform: scale(1.42); }
+}
+
+/* 变形宽银幕光条：横着抽出来的一条细光，光晕最亮那一刻扫过 */
+.dsh-boot-archive-streak {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  height: 3px;
+  width: 0;
+  z-index: 63;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  filter: blur(1px);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 34%,
+    rgba(255, 255, 255, 0.98) 50%,
+    rgba(255, 255, 255, 0.5) 66%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+.dsh-boot-archive-streak.dsh-boot-archive-go { animation: dba-streak 1000ms cubic-bezier(0.2, 0.78, 0.2, 1) forwards; }
+@keyframes dba-streak {
+  0% { opacity: 0; width: 0; height: 1px; }
+  26% { opacity: 1; width: 62vw; height: 3px; }
+  60% { opacity: 0.6; width: 96vw; height: 2px; }
+  100% { opacity: 0; width: 132vw; height: 1px; }
+}
+
+/* 光晕最亮那一刻：文字带一点青色光晕（halation），颗粒变粗。
+   注意别在 .dsh-boot-archive-welcome 上加 filter —— 那会新建层叠上下文，
+   把色散层的 mix-blend-mode 隔离掉，故障会在中途"啪"地变回去。 */
+.dsh-boot-archive-root.dsh-boot-archive-peak .dsh-boot-archive-w1,
+.dsh-boot-archive-root.dsh-boot-archive-peak .dsh-boot-archive-w4 {
+  color: var(--dba-glitch-b);
+  text-shadow: 0 0 14px rgba(41, 113, 184, 0.55);
+  transition: color 260ms ease, text-shadow 260ms ease;
+}
+.dsh-boot-archive-root.dsh-boot-archive-peak .dsh-boot-archive-w3 svg {
+  filter: drop-shadow(0 0 10px rgba(41, 113, 184, 0.45));
+}
+.dsh-boot-archive-root.dsh-boot-archive-peak .dsh-boot-archive-grain { opacity: 0.11; }
+
+/* 揭幕：整个机位后撤 + 轻微失焦，比单纯淡出更有镜头感 */
+.dsh-boot-archive-root.dsh-boot-archive-handoff {
+  transform: scale(1.035);
+  filter: blur(5px);
+  opacity: 0;
+  transition: opacity 780ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 780ms cubic-bezier(0.4, 0, 0.2, 1), filter 780ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── 页脚 / 字幕 / 进度条 ───────────────────────────────────────────────── */
+.dsh-boot-archive-foot {
+  position: absolute;
+  right: 46px;
+  bottom: 52px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--dba-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--dba-ink);
+  opacity: 0;
+  transform: translateX(18px);
+  transition: opacity 560ms ease, transform 560ms cubic-bezier(0.16, 0.84, 0.24, 1);
+  transition-delay: 300ms;
+}
+.dsh-boot-archive-foot.dsh-boot-archive-in { opacity: 1; transform: none; }
+.dsh-boot-archive-foot i {
+  display: block;
+  width: 0;
+  height: 7px;
+  background: var(--dba-ink);
+  transition: width 720ms cubic-bezier(0.2, 0.9, 0.2, 1) 460ms;
+}
+.dsh-boot-archive-foot.dsh-boot-archive-in i { width: 26px; }
+
+.dsh-boot-archive-subtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 50px;
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.dsh-boot-archive-sub-zh {
+  font-family: var(--dba-zh);
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  color: var(--dba-ink-soft);
+  text-shadow: var(--dba-sub-glow);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 420ms ease, transform 420ms cubic-bezier(0.16, 0.84, 0.24, 1);
+}
+.dsh-boot-archive-sub-zh.dsh-boot-archive-in { opacity: 1; transform: none; }
+.dsh-boot-archive-sub-en2 {
+  font-family: var(--dba-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--dba-muted);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 420ms ease, transform 420ms cubic-bezier(0.16, 0.84, 0.24, 1);
+}
+.dsh-boot-archive-sub-en2.dsh-boot-archive-in { opacity: 0.85; transform: none; }
+
+/* 底部进度：照原片收成中间一小段，不再横贯整屏跟字幕抢注意力 */
+.dsh-boot-archive-progress {
+  position: absolute;
+  left: 50%;
+  bottom: 11px;
+  width: min(420px, 32vw);
+  height: 3px;
+  transform: translateX(-50%);
+  z-index: 26;
+  background: var(--dba-hair-soft);
+}
+.dsh-boot-archive-progress::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 5px;
+  background-image: repeating-linear-gradient(90deg, var(--dba-hair) 0 1px, transparent 1px 30px);
+  background-size: auto 5px;
+  background-position: 0 100%;
+  background-repeat: repeat-x;
+  opacity: 0.8;
+}
+.dsh-boot-archive-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--dba-ink);
+  box-shadow: inset -2px 0 0 var(--dba-accent);
+  transition: width 460ms cubic-bezier(0.3, 0.9, 0.25, 1);
+}
+.dsh-boot-archive-progress.dsh-boot-archive-accent i { background: var(--dba-accent); }
+
+/* 阶段计数（左下） */
+.dsh-boot-archive-stepcount {
+  position: absolute;
+  left: 46px;
+  bottom: 52px;
+  z-index: 24;
+  font-family: var(--dba-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--dba-muted);
+  opacity: 0;
+  transform: translateX(-18px);
+  transition: opacity 560ms ease, transform 560ms cubic-bezier(0.16, 0.84, 0.24, 1);
+  transition-delay: 400ms;
+}
+.dsh-boot-archive-stepcount.dsh-boot-archive-in { opacity: 1; transform: none; }
+
+/* 跳过 */
+.dsh-boot-archive-skip {
+  position: absolute;
+  right: 46px;
+  top: 48px;
+  z-index: 30;
+  font-family: var(--dba-mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--dba-muted);
+  border: 1px solid transparent;
+  padding: 5px 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 400ms ease, color 200ms ease, border-color 200ms ease;
+}
+.dsh-boot-archive-skip.dsh-boot-archive-in { opacity: 1; }
+@media (hover: hover) {
+  .dsh-boot-archive-skip:hover { color: var(--dba-ink); border-color: var(--dba-hair); }
+}
+.dsh-boot-archive-skip[hidden] { display: none; }
+
+/* ── 机框装饰层（照原片的疏密：只贴边，不占中间）──────────────────────── */
+/* 四角定位标记 / 一次性扫描线 / 品牌块下单行小字（含时钟）/ 六个阶段格 */
+.dsh-boot-archive-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 17;
+  pointer-events: none;
+}
+
+.dsh-boot-archive-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  opacity: 0;
+  transition: opacity 640ms ease, transform 640ms cubic-bezier(0.16, 0.84, 0.24, 1);
+}
+.dsh-boot-archive-corner::before,
+.dsh-boot-archive-corner::after { content: ""; position: absolute; background: var(--dba-hair); }
+.dsh-boot-archive-corner::before { width: 100%; height: 1px; }
+.dsh-boot-archive-corner::after { width: 1px; height: 100%; }
+.dsh-boot-archive-c-tl { left: 26px; top: 26px; transform: translate(-10px, -10px); }
+.dsh-boot-archive-c-tl::before { top: 0; left: 0; }
+.dsh-boot-archive-c-tl::after { top: 0; left: 0; }
+.dsh-boot-archive-c-tr { right: 26px; top: 26px; transform: translate(10px, -10px); }
+.dsh-boot-archive-c-tr::before { top: 0; right: 0; }
+.dsh-boot-archive-c-tr::after { top: 0; right: 0; }
+.dsh-boot-archive-c-bl { left: 26px; bottom: 26px; transform: translate(-10px, 10px); }
+.dsh-boot-archive-c-bl::before { bottom: 0; left: 0; }
+.dsh-boot-archive-c-bl::after { bottom: 0; left: 0; }
+.dsh-boot-archive-c-br { right: 26px; bottom: 26px; transform: translate(10px, 10px); }
+.dsh-boot-archive-c-br::before { bottom: 0; right: 0; }
+.dsh-boot-archive-c-br::after { bottom: 0; right: 0; }
+.dsh-boot-archive-frame.dsh-boot-archive-in .dsh-boot-archive-corner { opacity: 1; transform: none; }
+.dsh-boot-archive-frame.dsh-boot-archive-in .dsh-boot-archive-c-tr { transition-delay: 90ms; }
+.dsh-boot-archive-frame.dsh-boot-archive-in .dsh-boot-archive-c-br { transition-delay: 180ms; }
+.dsh-boot-archive-frame.dsh-boot-archive-in .dsh-boot-archive-c-bl { transition-delay: 270ms; }
+
+/* 一次性扫描线：底板洗白之后自上而下扫一遍，验准时再扫一次 */
+.dsh-boot-archive-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -14%;
+  height: 96px;
+  opacity: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.045) 58%,
+    rgba(0, 0, 0, 0.1) 86%,
+    rgba(0, 0, 0, 0.16) 97%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+.dsh-boot-archive-dark .dsh-boot-archive-scanline {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 58%,
+    rgba(255, 255, 255, 0.11) 86%,
+    rgba(255, 255, 255, 0.18) 97%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+.dsh-boot-archive-scanline.dsh-boot-archive-go { animation: dba-scan 2600ms cubic-bezier(0.42, 0, 0.58, 1) 1; }
+@keyframes dba-scan {
+  0% { top: -14%; opacity: 0; }
+  10% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { top: 102%; opacity: 0; }
+}
+
+/* 品牌块下方的一行小字：版本 + 实时时钟（时钟点亮主题橙） */
+.dsh-boot-archive-meta {
+  position: absolute;
+  left: 46px;
+  top: 170px;
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--dba-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--dba-muted);
+  opacity: 0;
+  transform: translateX(-18px);
+  transition: opacity 560ms ease, transform 560ms cubic-bezier(0.16, 0.84, 0.24, 1);
+  transition-delay: 330ms;
+}
+.dsh-boot-archive-meta.dsh-boot-archive-in { opacity: 1; transform: none; }
+.dsh-boot-archive-meta-2 { color: var(--dba-accent); }
+
+/* 六个阶段格：横排在左栏小字下面，走过的压暗、当前的点亮并拉长 */
+.dsh-boot-archive-slats {
+  position: absolute;
+  left: 46px;
+  top: 196px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transform: translateX(-18px);
+  transition: opacity 560ms ease, transform 560ms cubic-bezier(0.16, 0.84, 0.24, 1);
+  transition-delay: 420ms;
+}
+.dsh-boot-archive-slats.dsh-boot-archive-in { opacity: 1; transform: none; }
+.dsh-boot-archive-slat {
+  width: 20px;
+  height: 2px;
+  background: var(--dba-hair);
+  transition: width 460ms cubic-bezier(0.3, 0.9, 0.25, 1), background-color 320ms ease,
+    opacity 320ms ease;
+}
+.dsh-boot-archive-slat.dsh-boot-archive-past { background: var(--dba-ink); opacity: 0.3; }
+.dsh-boot-archive-slat.dsh-boot-archive-on { width: 34px; background: var(--dba-accent); opacity: 1; }
+
+/* 女声播报指示条：出声时点亮主题橙并跳动（对应参考片里女声念状态行的时刻） */
+.dsh-boot-archive-voice {
+  position: absolute;
+  left: 46px;
+  bottom: 96px;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+  opacity: 0;
+  transition: opacity 560ms ease;
+  transition-delay: 480ms;
+}
+.dsh-boot-archive-voice.dsh-boot-archive-in { opacity: 1; }
+.dsh-boot-archive-voice i {
+  width: 2px;
+  height: 20%;
+  background: var(--dba-hair);
+  transition: height 140ms ease, background-color 240ms ease;
+}
+.dsh-boot-archive-voice.dsh-boot-archive-on i {
+  background: var(--dba-accent);
+  animation: dba-voice 560ms ease-in-out infinite;
+}
+.dsh-boot-archive-voice i:nth-child(1) { animation-delay: 0ms; }
+.dsh-boot-archive-voice i:nth-child(2) { animation-delay: 90ms; }
+.dsh-boot-archive-voice i:nth-child(3) { animation-delay: 180ms; }
+.dsh-boot-archive-voice i:nth-child(4) { animation-delay: 60ms; }
+.dsh-boot-archive-voice i:nth-child(5) { animation-delay: 140ms; }
+@keyframes dba-voice {
+  0%, 100% { height: 20%; }
+  50% { height: 100%; }
+}
+
+/* 无障碍：尊重系统"减少动态效果" */
+@media (prefers-reduced-motion: reduce) {
+  .dsh-boot-archive-root .dsh-boot-archive-ret-rot-a,
+  .dsh-boot-archive-root .dsh-boot-archive-ret-rot-b { animation: none; }
+  .dsh-boot-archive-root .dsh-boot-archive-scanline.dsh-boot-archive-go { animation: none; }
+}
+
+/* ── 液态玻璃（可选图层） ───────────────────────────────────────────────
+   .dsh-boot-archive-root 上加 .dsh-boot-archive-glass 时生效。只把「背景层」（底板 / 黑幕）
+   改成半透明 + 磨砂，文字、线条、鲸鱼标识、读数仍是实心 ——
+   所以稿面主体保留，只是能透过它看到后面的桌面壁纸或窗口。 */
+.dsh-boot-archive-root.dsh-boot-archive-glass { background: transparent !important; }
+
+.dsh-boot-archive-glass .dsh-boot-archive-plate {
+  background:
+    radial-gradient(120% 90% at 78% 12%,
+      rgba(255, 255, 255, calc(0.72 * var(--dba-glass-alpha, 0.55))) 0%,
+      rgba(255, 255, 255, 0) 58%),
+    linear-gradient(168deg,
+      rgba(252, 251, 249, calc(var(--dba-glass-alpha, 0.55) + 0.10)) 0%,
+      rgba(249, 247, 243, calc(var(--dba-glass-alpha, 0.55) + 0.02)) 42%,
+      rgba(246, 243, 239, var(--dba-glass-alpha, 0.55)) 100%);
+  -webkit-backdrop-filter: blur(var(--dba-glass-blur, 22px)) saturate(var(--dba-glass-sat, 150%));
+  backdrop-filter: blur(var(--dba-glass-blur, 22px)) saturate(var(--dba-glass-sat, 150%));
+}
+
+.dsh-boot-archive-dark.dsh-boot-archive-glass .dsh-boot-archive-plate {
+  background:
+    radial-gradient(120% 90% at 78% 12%,
+      rgba(255, 255, 255, calc(0.10 * var(--dba-glass-alpha, 0.55))) 0%,
+      rgba(255, 255, 255, 0) 55%),
+    linear-gradient(168deg,
+      rgba(16, 18, 22, calc(var(--dba-glass-alpha, 0.55) + 0.05)) 0%,
+      rgba(10, 11, 14, var(--dba-glass-alpha, 0.55)) 42%,
+      rgba(8, 9, 12, var(--dba-glass-alpha, 0.55)) 100%);
+}
+
+.dsh-boot-archive-glass .dsh-boot-archive-black {
+  background: rgba(4, 6, 10, calc(var(--dba-glass-alpha, 0.55) * 0.96)) !important;
+  -webkit-backdrop-filter: blur(var(--dba-glass-blur, 22px)) saturate(var(--dba-glass-sat, 150%));
+  backdrop-filter: blur(var(--dba-glass-blur, 22px)) saturate(var(--dba-glass-sat, 150%));
+}
+
+/* 液态感：一道缓慢漂移的斜向高光，叠在玻璃表面而不是文字上 */
+.dsh-boot-archive-glass::after {
+  content: '';
+  position: fixed;
+  inset: -12%;
+  z-index: 60;
+  pointer-events: none;
+  background: linear-gradient(112deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(255, 255, 255, 0) 66%,
+    rgba(255, 255, 255, 0.09) 100%);
+  mix-blend-mode: screen;
+  opacity: calc(0.25 + 0.55 * var(--dba-glass-alpha, 0.55));
+  animation: dba-glass-drift 12s ease-in-out infinite alternate;
+}
+
+@keyframes dba-glass-drift {
+  from { transform: translate3d(-2.4%, -1.2%, 0) scale(1.04); }
+  to   { transform: translate3d(2.4%, 1.2%, 0) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsh-boot-archive-glass::after { animation: none; }
+}
+
+/* ── 背景层（液态玻璃的「背景模糊」） ────────────────────────────────
+   独立一层：自身透明，只带 backdrop-filter，
+   专门糊「玻璃背后的画面」，与底板/黑幕自身的磨砂(--dba-glass-blur)互不影响。 */
+.dsh-boot-archive-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+  -webkit-backdrop-filter: blur(var(--dba-backdrop-blur, 22px)) saturate(var(--dba-glass-sat, 150%));
+  backdrop-filter: blur(var(--dba-backdrop-blur, 22px)) saturate(var(--dba-glass-sat, 150%));
+}
