@@ -46,19 +46,23 @@
 | `npx vitest run packages/llm/llm-pi-ai` | 22 个文件、**482** 个测试全部通过（移除前 481，`config.spec` 参数化多一条） |
 | `npx vitest run packages/llm` | 78 个文件、**1791** 个测试全部通过（移除前 1790） |
 | `npx vitest run packages/client/ui-settings-models` | 14 个文件、**483** 个测试全部通过（用例不涉及 `radius`，无需改动） |
-| `pnpm run test:docs` | **21/21** 通过（含 `upgrade guides`、`translation pairing`、`markdown wrap`、`markdown links`） |
+| `pnpm run test:docs` | **21/21** 通过（含 `upgrade guides`、`translation pairing`、`markdown wrap`、`markdown links`）；审计轮修改升级指南与日志后重跑仍为 21/21 |
+| `pnpm run verify-upgrade-guides` | 通过（英文正文 475 词，未触及 500 词硬上限） |
+| `pnpm run verify-doc-budgets` | 通过（`7 budgeted docs within ceiling`） |
 | `pnpm run verify-provider-data` | 通过：`Provider metadata matches the installed pi-ai catalog.` |
 | `pnpm run build:artifacts` | 8 个构建门禁全部通过（host/client 编译与打包、Desktop、Web，28.25s；e2e 回放依赖此步产物） |
 | `pnpm run typecheck` | **5/5** 通过（host/client 编译与聚合检查，8.24s） |
 | `pnpm run lint` | **0 warning、0 error**（90 条规则、7279 个文件，79.9s） |
 | `pnpm run build` | **10/10** 通过（31.30s，含 host/client 聚合检查与 Web build） |
-| `pnpm run doc-sync` | 42/43；唯一失败是 `Cordis inspect catalog`，报 `packages/extensions/cordis-client-runner/src/client/api-catalog.ts is stale`，来源是并行开发中的 `slot-catalog.ts`，与本次移除无关 |
+| `pnpm run doc-sync` | 移除轮 42/43（唯一失败是并行开发中的 `Cordis inspect catalog`，`api-catalog.ts` 过期）；审计轮重跑 **43/43 全部通过**，并行 agent 已重新生成该目录 |
 | `pnpm run test:snapshot -t pi-ai-conversation-updates` | 1 个录制会话回放通过（`replays pi-ai-conversation-updates through dsh --profile headless`） |
 | `npx vitest run --config vitest.expected.config.ts -t "pi-ai"` | 2 个 headless 场景通过，内联快照未变 |
 | 目录自检 | 23 个供应商、733 个模型；`radius` 不在可配置列表、无 provider、无模型；strict/deferred 均报移除错误 |
 | golden 与目录一致性 | 三个 golden 的 option 列表与排序后的 `catalogProviderIds()` 逐项相等（23 个、同顺序） |
 | Web e2e（`DSH_SNAPSHOT=replay`） | 只回放受影响的 `models-settings` 与 `onboarding-usable-provider` 两个文件：2 个文件 5 通过、17 失败，失败全部来自并行开发中的 `ui-boot-animation`（全窗口启动视频拦截指针事件导致 `locator.fill` 超时，且设置导航新增 `button "启动片头"`）。两个完成真实比对的 golden 与预期差异**只有该按钮一行**，供应商 option 列表逐项一致（23 项） |
 | 升级指南词数 | 英文正文 **475** 词（硬上限 500、仓库实践 475），中英双语结构一致 |
+
+**最终状态**：本次移除涉及的文件已全部提交（移除提交已在 `origin/main`；审计轮的修复因分支随后被并行开发推进，改为后续提交而不是改写原移除提交），工作区里其余改动属于并行开发的 `ui-boot-animation` 等，与本移除无关。
 
 ## 5. 复查记录
 
