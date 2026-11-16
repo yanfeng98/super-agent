@@ -4,6 +4,8 @@
 - **背景**：用户要求移除 `cerebras`（Cerebras Systems），且不能破坏项目现有功能。它是芯片厂商自建的托管推理云，不是路由聚合器：pi-ai 以 `openai-completions` 接入 `https://api.cerebras.ai/v1`，只用 API key（环境变量 `CEREBRAS_API_KEY`），没有 OAuth，也没有 baseURL 环境变量。目录快照只有 2 个模型，都是别人开源的权重、由它在自家硬件上托管：`gpt-oss-120b`（131,072 上下文 / 40,960 输出，$0.35/$0.75，纯文本）与 `qwen-3.8-27b`（同尺寸，$0.99/$1.49、缓存读 $0.99，文本加图片，图片入库前缩放到 2000×2000 ／ 4.5MB），两者都支持推理档位。按模型名（忽略大小写与厂商前缀）比对：`gpt-oss-120b` 以 `openai/gpt-oss-120b` 出现在 `baseten`、`groq`、`openrouter`、`together` 四条路由上；`qwen-3.8-27b` 没有同名条目；`groq` 与 `openrouter` 上另有 `qwen/qwen3.8-27b`（名称为 Qwen3.8 27B，`openrouter` 带 `Qwen:` 前缀），连字符写法与本路由不同，按 id 不计入重合。本机 Web profile 只配置了 `opencode-go`，未点名该路由。
 - **范围**：`packages/llm/llm-pi-ai` 的目录、测试与双语 README；Web 设置页与 onboarding golden；`docs/user/guide/providers.md` 与 `.zh.md`；既有升级指南；`logs/`。
 
+- **后续变更**：`baseten` 已于 [00026](00026-移除baseten供应商.md) 移除，本记录中作为承接路由出现的 `baseten` 不再可用；`gpt-oss-120b` 仍由 `groq`、`openrouter`、`together` 以 `openai/gpt-oss-120b` 提供，现行覆盖见该文件第 3 节。
+
 ## 1. 变更
 
 | 文件 | 变更 |

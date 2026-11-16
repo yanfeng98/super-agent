@@ -90,6 +90,7 @@ describe('withheld catalog providers', () => {
     'amazon-bedrock',
     'ant-ling',
     'azure',
+    'baseten',
     'cerebras',
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',

@@ -254,6 +254,17 @@ function servesChat(provider: Provider): boolean {
  * appears on no other served route. An international account keeps working
  * through an `openai-completions` custom model API at
  * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
+ * `baseten` is a third-party inference cloud that hosts other vendors'
+ * open-weight models behind one OpenAI-compatible endpoint: ten of its
+ * twenty-two model ids keep the same id on other built-in routes, ten more
+ * match another route under a different id spelling or display name, and the
+ * two that appear nowhere else are `deepseek-ai/DeepSeek-V4.1-Flash-Fast` and
+ * `zai-org/GLM-5.2-Fast`, so withholding it removes a serving surface plus
+ * those two ids rather than a vendor's own model family. It speaks
+ * OpenAI-compatible chat completions, so a deployment that needs those models
+ * can add `https://inference.baseten.co/v1` as an `openai-completions` custom
+ * model API under a different provider id; the `chat_template_args` thinking
+ * format it uses stays nameable for such a route.
  * The Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, Z.AI, and Ant Ling
  * routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
  * and MiniMax endpoints speak Anthropic Messages, so a deployment that needs
@@ -267,6 +278,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'amazon-bedrock',
   'ant-ling',
   'azure',
+  'baseten',
   'cerebras',
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',

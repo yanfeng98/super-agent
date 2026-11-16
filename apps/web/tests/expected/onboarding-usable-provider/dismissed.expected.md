@@ -22,7 +22,6 @@
     - text: 提供商
     - combobox "提供商":
       - option "anthropic"
-      - option "baseten"
       - option "deepseek"
       - option "fireworks"
       - option "github-copilot"

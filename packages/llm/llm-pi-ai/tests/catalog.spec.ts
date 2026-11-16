@@ -1264,6 +1264,7 @@ describe('configurable-provider directory', () => {
       'amazon-bedrock',
       'ant-ling',
       'azure',
+      'baseten',
       'cerebras',
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
