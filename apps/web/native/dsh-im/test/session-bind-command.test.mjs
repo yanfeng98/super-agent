@@ -228,10 +228,9 @@ test('all nine channel bridges advertise /session and pass their current convers
   }
 
   for (const file of [
-    '../src/channels/discord/discord-bridge.mjs',
-    '../src/channels/slack/slack-bridge.mjs',
-    '../src/channels/telegram/telegram-bridge.mjs',
-    '../src/channels/whatsapp/whatsapp-bridge.mjs',
+    '../src/channels/matrix/matrix-bridge.mjs',
+    '../src/channels/email/email-bridge.mjs',
+    '../src/channels/imessage/imessage-bridge.mjs',
   ]) {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
     assert.match(source, /extends TextHarnessBridge/);

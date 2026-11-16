@@ -15,9 +15,7 @@ const channels = await Promise.all([
   ['feishu', 'PluginConfigStore', 'plugin-config-store'],
   ['weixin', 'WeixinConfigStore'], ['dingtalk', 'DingtalkConfigStore'],
   ['wecom', 'WecomConfigStore'], ['wecom-app', 'WecomAppConfigStore'],
-  ['qq', 'QqConfigStore'], ['slack', 'SlackConfigStore'],
-  ['telegram', 'TelegramConfigStore'], ['discord', 'DiscordConfigStore'],
-  ['whatsapp', 'WhatsappConfigStore'],
+  ['qq', 'QqConfigStore'],
   ['matrix', 'MatrixConfigStore', 'matrix-config-store'],
   ['email', 'EmailConfigStore'], ['office', 'OfficeConfigStore'],
 ].map(async ([id, storeName, storeFile = 'config-store']) => ({
@@ -222,10 +220,10 @@ test('the composed host serves other real channels while Feishu is loading and a
     assert.equal((await f.call('feishu')).error.code, 'feishu-initializing');
     // Let the other channels finish their local workspace reconciliation.
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      if ((await f.call('telegram')).ok) break;
+      if ((await f.call('matrix')).ok) break;
       await new Promise(resolve => setTimeout(resolve, 5));
     }
-    assert.equal((await f.call('telegram')).ok, true);
+    assert.equal((await f.call('matrix')).ok, true);
     gate.resolve();
     await fiber.await();
     assert.equal((await f.call('feishu')).error.code, 'feishu-startup-config-invalid');

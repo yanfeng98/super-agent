@@ -2,16 +2,12 @@ import { installGroupHistoryTools } from '../../src/channels/shared/group-histor
 import manifest from '../../package.json' with { type: 'json' };
 import { hostScope } from './host-scope.mjs';
 import { apply as applyDingtalk } from './channels/dingtalk/index.mjs';
-import { apply as applyDiscord } from './channels/discord/index.mjs';
 import { apply as applyOffice } from './channels/office/index.mjs';
 import { apply as applyFeishu } from './channels/feishu/index.mjs';
 import { apply as applyQq } from './channels/qq/index.mjs';
-import { apply as applySlack } from './channels/slack/index.mjs';
-import { apply as applyTelegram } from './channels/telegram/index.mjs';
 import { apply as applyWecom } from './channels/wecom/index.mjs';
 import { apply as applyWecomApp } from './channels/wecom-app/index.mjs';
 import { apply as applyWeixin } from './channels/weixin/index.mjs';
-import { apply as applyWhatsapp } from './channels/whatsapp/index.mjs';
 import { apply as applyIMessage } from './channels/imessage/index.mjs';
 import { apply as applyEmail } from './channels/email/index.mjs';
 import { apply as applyMatrix } from './channels/matrix/index.mjs';
@@ -72,11 +68,7 @@ export function createImHostPlugin(internals = {}) {
   const startWecom = internals.applyWecom ?? applyWecom;
   const startWecomApp = internals.applyWecomApp ?? applyWecomApp;
   const startQq = internals.applyQq ?? applyQq;
-  const startSlack = internals.applySlack ?? applySlack;
-  const startTelegram = internals.applyTelegram ?? applyTelegram;
-  const startDiscord = internals.applyDiscord ?? applyDiscord;
   const startOffice = internals.applyOffice ?? applyOffice;
-  const startWhatsapp = internals.applyWhatsapp ?? applyWhatsapp;
   const startIMessage = internals.applyIMessage ?? applyIMessage;
   const startEmail = internals.applyEmail ?? applyEmail;
   const startMatrix = internals.applyMatrix ?? applyMatrix;
@@ -87,10 +79,6 @@ export function createImHostPlugin(internals = {}) {
     ['wecom', startWecom],
     ['wecomApp', startWecomApp],
     ['qq', startQq],
-    ['slack', startSlack],
-    ['telegram', startTelegram],
-    ['discord', startDiscord],
-    ['whatsapp', startWhatsapp],
     ['imessage', startIMessage],
     ['email', startEmail],
     ['matrix', startMatrix],

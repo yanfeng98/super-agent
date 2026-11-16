@@ -8,7 +8,6 @@ import { FeishuGroupSettingsPage } from './channels/feishu/group-settings.js';
 import { FeishuVoiceSettingsPage } from './channels/feishu/voice-settings.js';
 import { FeishuSlashPanelSettingsPage } from './channels/feishu/slash-panel-settings.js';
 import { FeishuConversationDirectorySettingsPage } from './channels/feishu/conversation-directory-settings.js';
-import { TelegramGroupTriggersSettings } from './channels/telegram/group-triggers-settings.js';
 import { h, imLocale, localizeTemplate, localizeText } from './i18n.js';
 
 export const DELIVERY_RPC_CHANNEL = '/dsh-im-delivery';
@@ -43,14 +42,8 @@ export const FEISHU_BOT_SETTINGS_TABS = Object.freeze([
   Object.freeze({ id: 'voice', label: '语音交互' }),
 ]);
 
-export const TELEGRAM_BOT_SETTINGS_TABS = Object.freeze([
-  ...BOT_SETTINGS_TABS,
-  Object.freeze({ id: 'groups', label: '机器人群聊行为' }),
-]);
-
 export function botSettingsTabsForChannel(channel) {
   if (channel === 'feishu') return FEISHU_BOT_SETTINGS_TABS;
-  if (channel === 'telegram') return TELEGRAM_BOT_SETTINGS_TABS;
   return BOT_SETTINGS_TABS;
 }
 
@@ -97,41 +90,6 @@ const CHANNEL_DEFINITIONS = Object.freeze({
     fields: {
       user: [{ key: 'userOpenId', label: '用户 Open ID', placeholder: '填写 user_openid' }],
       group: [{ key: 'groupOpenId', label: '群 Open ID', placeholder: '填写 group_openid' }],
-    },
-  },
-  slack: {
-    label: 'Slack',
-    kinds: [{ value: 'conversation', label: '会话' }, { value: 'thread', label: '线程' }],
-    fields: {
-      conversation: [{ key: 'channelId', label: 'Channel ID', placeholder: 'C0123456789' }],
-      thread: [
-        { key: 'channelId', label: 'Channel ID', placeholder: 'C0123456789' },
-        { key: 'threadTs', label: 'Thread 时间戳', placeholder: '1712345678.123456' },
-      ],
-    },
-  },
-  telegram: {
-    label: 'Telegram',
-    kinds: [{ value: 'chat', label: '聊天' }, { value: 'topic', label: '话题' }],
-    fields: {
-      chat: [{ key: 'chatId', label: 'Chat ID', placeholder: '-1001234567890', inputMode: 'numeric' }],
-      topic: [
-        { key: 'chatId', label: 'Chat ID', placeholder: '-1001234567890', inputMode: 'numeric' },
-        { key: 'messageThreadId', label: 'Topic ID', placeholder: '123', inputMode: 'numeric', integer: true },
-      ],
-    },
-  },
-  discord: {
-    label: 'Discord',
-    kinds: [{ value: 'channel', label: '频道或私信' }],
-    fields: { channel: [{ key: 'channelId', label: 'Channel ID', placeholder: '填写可发消息的 Channel ID', inputMode: 'numeric' }] },
-  },
-  whatsapp: {
-    label: 'WhatsApp',
-    kinds: [{ value: 'user', label: '用户' }, { value: 'group', label: '群聊' }],
-    fields: {
-      user: [{ key: 'jid', label: '用户 JID', placeholder: '8613800000000@s.whatsapp.net' }],
-      group: [{ key: 'jid', label: '群 JID', placeholder: '1234567890@g.us' }],
     },
   },
   imessage: {
@@ -818,12 +776,6 @@ export function DeliveryTargetSettingsPage({
       })
     : activeTab.id === 'conversation-directory' && channel === 'feishu'
       ? h(FeishuConversationDirectorySettingsPage, { account, rpcCall: accessRpcCall })
-    : activeTab.id === 'groups' && channel === 'telegram'
-      ? h(TelegramGroupTriggersSettings, {
-          key: `${channel}:${account.botId}:groups`,
-          account,
-          rpcCall: accessRpcCall,
-        })
     : activeTab.id === 'group' && channel === 'feishu'
       ? h(FeishuGroupSettingsPage, {
           account,

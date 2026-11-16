@@ -17,10 +17,6 @@ import wecom from './i18n-ru/wecom.mjs';
 import wecomApp from './i18n-ru/wecom-app.mjs';
 import qq from './i18n-ru/qq.mjs';
 import weixin from './i18n-ru/weixin.mjs';
-import slack from './i18n-ru/slack.mjs';
-import telegram from './i18n-ru/telegram.mjs';
-import discord from './i18n-ru/discord.mjs';
-import whatsapp from './i18n-ru/whatsapp.mjs';
 import matrix from './i18n-ru/matrix.mjs';
 import office from './i18n-ru/office.mjs';
 import email from './i18n-ru/email.mjs';
@@ -40,10 +36,6 @@ export const RU = Object.freeze(Object.assign(
   wecomApp,
   qq,
   weixin,
-  slack,
-  telegram,
-  discord,
-  whatsapp,
   matrix,
   office,
   email,

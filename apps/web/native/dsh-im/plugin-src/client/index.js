@@ -4,24 +4,17 @@ import manifest from '../../package.json' with { type: 'json' };
 
 import {
   DingtalkLogoGlyph,
-  DiscordLogoGlyph,
   FeishuLogoGlyph,
   OfficeLogoGlyph,
   QqLogoGlyph,
-  SlackLogoGlyph,
-  TelegramLogoGlyph,
   WecomLogoGlyph,
   WeixinLogoGlyph,
-  WhatsappLogoGlyph,
   IMessageLogoGlyph,
   EmailLogoGlyph,
   MatrixLogoGlyph,
 } from './channel-logos.js';
 import { DINGTALK_RPC_CHANNEL } from './channels/dingtalk/api.js';
 import { DingtalkSettingsTab } from './channels/dingtalk/index.js';
-import { DISCORD_RPC_CHANNEL } from './channels/discord/api.js';
-import { DiscordSettingsTab } from './channels/discord/index.js';
-import { installDiscordStyles } from './channels/discord/styles.js';
 import { FeishuSettingsTab } from './channels/feishu/index.js';
 import { FEISHU_RPC_CHANNEL } from './channels/feishu/api.js';
 import { installFeishuStyles } from './channels/feishu/styles.js';
@@ -31,12 +24,6 @@ import { installQqStyles } from './channels/qq/styles.js';
 import { OFFICE_RPC_CHANNEL } from './channels/office/api.js';
 import { OfficeSettingsTab } from './channels/office/index.js';
 import { installOfficeStyles } from './channels/office/styles.js';
-import { SLACK_RPC_CHANNEL } from './channels/slack/api.js';
-import { SlackSettingsTab } from './channels/slack/index.js';
-import { installSlackStyles } from './channels/slack/styles.js';
-import { TELEGRAM_RPC_CHANNEL } from './channels/telegram/api.js';
-import { TelegramSettingsTab } from './channels/telegram/index.js';
-import { installTelegramStyles } from './channels/telegram/styles.js';
 import { WECOM_RPC_CHANNEL } from './channels/wecom/api.js';
 import { WecomSettingsTab } from './channels/wecom/index.js';
 import { installWecomStyles } from './channels/wecom/styles.js';
@@ -46,9 +33,6 @@ import { installWecomAppStyles } from './channels/wecom-app/styles.js';
 import { WeixinSettingsTab } from './channels/weixin/index.js';
 import { WEIXIN_RPC_CHANNEL } from './channels/weixin/api.js';
 import { installWeixinStyles } from './channels/weixin/styles.js';
-import { WHATSAPP_RPC_CHANNEL } from './channels/whatsapp/api.js';
-import { WhatsappSettingsTab } from './channels/whatsapp/index.js';
-import { installWhatsappStyles } from './channels/whatsapp/styles.js';
 import { IMESSAGE_RPC_CHANNEL } from './channels/imessage/api.js';
 import { EMAIL_RPC_CHANNEL } from './channels/email/api.js';
 import { IMessageSettingsTab } from './channels/imessage/index.js';
@@ -112,10 +96,6 @@ const CHANNELS = Object.freeze([
   { id: 'dingtalk', label: '钉钉' },
   { id: 'wecom', label: '企业微信' },
   { id: 'qq', label: 'QQ' },
-  { id: 'slack', label: 'Slack' },
-  { id: 'telegram', label: 'Telegram' },
-  { id: 'discord', label: 'Discord' },
-  { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'wecomApp', label: '企业微信应用', note: '（实验功能）' },
   { id: 'imessage', label: 'iMessage', note: '（实验功能）' },
   { id: 'email', label: '邮箱', note: '（实验功能）' },
@@ -150,26 +130,6 @@ function WecomAppLogo() {
   return h('span', { className: 'dim-logo dim-logoWecomApp', 'aria-hidden': 'true' }, h(WecomLogoGlyph));
 }
 
-function TelegramLogo() {
-  return h('span', { className: 'dim-logo dim-logoTelegram', 'aria-hidden': 'true' },
-    h(TelegramLogoGlyph));
-}
-
-function SlackLogo() {
-  return h('span', { className: 'dim-logo dim-logoSlack', 'aria-hidden': 'true' },
-    h(SlackLogoGlyph));
-}
-
-function DiscordLogo() {
-  return h('span', { className: 'dim-logo dim-logoDiscord', 'aria-hidden': 'true' },
-    h(DiscordLogoGlyph));
-}
-
-function WhatsappLogo() {
-  return h('span', { className: 'dim-logo dim-logoWhatsapp', 'aria-hidden': 'true' },
-    h(WhatsappLogoGlyph));
-}
-
 function IMessageLogo() {
   return h('span', { className: 'dim-logo dim-logoIMessage', 'aria-hidden': 'true' },
     h(IMessageLogoGlyph));
@@ -197,10 +157,6 @@ function ChannelLogo({ channel }) {
   if (channel === 'wecom') return h(WecomLogo);
   if (channel === 'wecomApp') return h(WecomAppLogo);
   if (channel === 'qq') return h(QqLogo);
-  if (channel === 'slack') return h(SlackLogo);
-  if (channel === 'telegram') return h(TelegramLogo);
-  if (channel === 'discord') return h(DiscordLogo);
-  if (channel === 'whatsapp') return h(WhatsappLogo);
   if (channel === 'imessage') return h(IMessageLogo);
   if (channel === 'email') return h(EmailLogo);
   if (channel === 'matrix') return h(MatrixLogo);
@@ -225,18 +181,14 @@ export function LoopbackRecoveryNotice({ recovery, onNavigate = replacePageLocat
 
 export function IMSettingsTab({
   dingtalkRpcCall,
-  discordRpcCall,
   feishuRpcCall,
   imessageRpcCall,
   emailRpcCall,
   matrixRpcCall,
   qqRpcCall,
-  slackRpcCall,
-  telegramRpcCall,
   wecomRpcCall,
   wecomAppRpcCall,
   weixinRpcCall,
-  whatsappRpcCall,
   officeRpcCall,
   updateRpcCall,
   deliveryRpcCall,
@@ -284,16 +236,12 @@ export function IMSettingsTab({
   }, []);
   const rpcCalls = React.useMemo(() => createLoopbackAwareRpcCalls({
     dingtalkRpcCall,
-    discordRpcCall,
-    feishuRpcCall,
+      feishuRpcCall,
     qqRpcCall,
-    slackRpcCall,
-    telegramRpcCall,
-    wecomRpcCall,
+        wecomRpcCall,
     wecomAppRpcCall,
     weixinRpcCall,
-    whatsappRpcCall,
-    officeRpcCall,
+      officeRpcCall,
     updateRpcCall,
     deliveryRpcCall,
     globalSettingsRpcCall,
@@ -308,8 +256,7 @@ export function IMSettingsTab({
   }), [
     browserLocation,
     dingtalkRpcCall,
-    discordRpcCall,
-    deliveryRpcCall,
+      deliveryRpcCall,
     feishuRpcCall,
     globalSettingsRpcCall,
     deliverySyncRpcCall,
@@ -319,14 +266,11 @@ export function IMSettingsTab({
     officeRpcCall,
     qqRpcCall,
     reportLoopbackRecovery,
-    slackRpcCall,
-    telegramRpcCall,
-    updateRpcCall,
+        updateRpcCall,
     wecomRpcCall,
     wecomAppRpcCall,
     weixinRpcCall,
-    whatsappRpcCall,
-  ]);
+    ]);
   const botSettingsContext = React.useMemo(() => Object.freeze({
     openBotSettings: setDeliverySettings,
   }), []);
@@ -467,14 +411,6 @@ export function IMSettingsTab({
                   ? h(WecomAppSettingsTab, { rpcCall: rpcCalls.wecomAppRpcCall })
                   : active.id === 'qq'
                     ? h(QqSettingsTab, { rpcCall: rpcCalls.qqRpcCall })
-                    : active.id === 'slack'
-                      ? h(SlackSettingsTab, { rpcCall: rpcCalls.slackRpcCall })
-                    : active.id === 'telegram'
-                      ? h(TelegramSettingsTab, { rpcCall: rpcCalls.telegramRpcCall })
-                      : active.id === 'discord'
-                        ? h(DiscordSettingsTab, { rpcCall: rpcCalls.discordRpcCall })
-                        : active.id === 'whatsapp'
-                          ? h(WhatsappSettingsTab, { rpcCall: rpcCalls.whatsappRpcCall })
                           : active.id === 'imessage'
                             ? h(IMessageSettingsTab, { rpcCall: rpcCalls.imessageRpcCall })
                           : active.id === 'email'
@@ -529,10 +465,6 @@ export function apply(ctx) {
       installWecomStyles(),
       installWecomAppStyles(),
       installQqStyles(),
-      installSlackStyles(),
-      installTelegramStyles(),
-      installDiscordStyles(),
-      installWhatsappStyles(),
       installIMessageStyles(),
       installEmailStyles(),
       installMatrixStyles(),
@@ -567,20 +499,12 @@ export function apply(ctx) {
     managementRpc(ctx.connection, WECOM_RPC_CHANNEL, endpoint, payload, signal);
   const wecomAppRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, WECOM_APP_RPC_CHANNEL, endpoint, payload, signal);
-  const telegramRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, TELEGRAM_RPC_CHANNEL, endpoint, payload, signal);
-  const discordRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, DISCORD_RPC_CHANNEL, endpoint, payload, signal);
-  const whatsappRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, WHATSAPP_RPC_CHANNEL, endpoint, payload, signal);
   const imessageRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, IMESSAGE_RPC_CHANNEL, endpoint, payload, signal);
   const emailRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, EMAIL_RPC_CHANNEL, endpoint, payload, signal);
   const matrixRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, MATRIX_RPC_CHANNEL, endpoint, payload, signal);
-  const slackRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, SLACK_RPC_CHANNEL, endpoint, payload, signal);
   const officeRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, OFFICE_RPC_CHANNEL, endpoint, payload, signal);
   const updateRpcCall = (endpoint, payload, signal) =>
@@ -604,16 +528,12 @@ export function apply(ctx) {
 
   const panelDependencies = {
     dingtalkRpcCall,
-    discordRpcCall,
-    feishuRpcCall,
+      feishuRpcCall,
     qqRpcCall,
-    slackRpcCall,
-    telegramRpcCall,
-    wecomRpcCall,
+        wecomRpcCall,
     wecomAppRpcCall,
     weixinRpcCall,
-    whatsappRpcCall,
-    imessageRpcCall,
+      imessageRpcCall,
     officeRpcCall,
     emailRpcCall,
     matrixRpcCall,

@@ -19,8 +19,7 @@ import { en, setImTranslator } from '../plugin-src/client/i18n.js';
 const { act, create } = TestRenderer;
 const channels = await Promise.all([
   ['weixin', 'WeixinSettingsTab'], ['wecom', 'WecomSettingsTab'], ['feishu', 'FeishuSettingsTab'],
-  ['dingtalk', 'DingtalkSettingsTab'], ['qq', 'QqSettingsTab'], ['slack', 'SlackSettingsTab'],
-  ['telegram', 'TelegramSettingsTab'], ['discord', 'DiscordSettingsTab'], ['whatsapp', 'WhatsappSettingsTab'],
+  ['dingtalk', 'DingtalkSettingsTab'], ['qq', 'QqSettingsTab'],
 ].map(async ([name, component]) => {
   const api = await import(`../plugin-src/client/channels/${name}/api.js`);
   const ui = await import(`../plugin-src/client/channels/${name}/index.js`);

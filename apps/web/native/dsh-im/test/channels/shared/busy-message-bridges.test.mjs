@@ -8,8 +8,7 @@ import { WecomAppBridge } from '../../../src/channels/wecom-app/wecom-app-bridge
 import { DingtalkHarnessBridge } from '../../../src/channels/dingtalk/dingtalk-bridge.mjs';
 
 const shared = Object.fromEntries(await Promise.all([
-  ['slack', 'Slack'], ['telegram', 'Telegram'], ['discord', 'Discord'],
-  ['whatsapp', 'Whatsapp'], ['imessage', 'IMessage'], ['email', 'Email'], ['matrix', 'Matrix'],
+  ['imessage', 'IMessage'], ['email', 'Email'], ['matrix', 'Matrix'],
 ].map(async ([channel, name]) => [channel,
   (await import(`../../../src/channels/${channel}/${channel}-bridge.mjs`))[`${name}HarnessBridge`]])));
 const channels = [...Object.keys(shared), 'qq', 'feishu', 'weixin', 'wecom', 'wecom-app', 'dingtalk'];

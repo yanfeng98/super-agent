@@ -5,7 +5,7 @@ import { chmod, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'no
 import { dirname, join, resolve } from 'node:path';
 import { stageInboundFiles } from './inbound-file.mjs';
 
-export const GROUP_HISTORY_CHANNELS = Object.freeze(['whatsapp', 'feishu', 'telegram', 'discord', 'slack', 'qq']);
+export const GROUP_HISTORY_CHANNELS = Object.freeze(['feishu', 'qq']);
 export const DEFAULT_GROUP_HISTORY_DAYS = 14;
 const DAY = 86_400_000;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;

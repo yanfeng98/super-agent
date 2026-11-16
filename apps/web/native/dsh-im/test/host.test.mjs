@@ -9,7 +9,6 @@ import { createImHostPlugin, inject, name } from '../plugin-src/host/index.mjs';
 const NO_CHANNELS = Object.freeze({
   applyFeishu: async () => {}, applyWeixin: async () => {}, applyDingtalk: async () => {},
   applyWecom: async () => {}, applyWecomApp: async () => {}, applyQq: async () => {},
-  applySlack: async () => {}, applyDiscord: async () => {}, applyWhatsapp: async () => {},
   applyIMessage: async () => {}, applyOffice: async () => {},
 });
 
@@ -55,13 +54,13 @@ test('Host resolves the bot message language before channels start and serves it
     installSidebarSettingsRpc: (_ctx, { config }) => {
       order.push(['sidebar-rpc', config.rpcAuthority, config.language]);
     },
-    applyTelegram: async () => { order.push(['telegram', resolved]); },
+    applyMatrix: async () => { order.push(['matrix', resolved]); },
   });
 
   await plugin.apply({ connection: { fetch: {} } }, {
     language: 'en',
     rpcAuthority: 'trusted-host',
-    telegram: {},
+    matrix: {},
   });
 
   assert.deepEqual(order[0], ['language', 'en']);
@@ -69,13 +68,13 @@ test('Host resolves the bot message language before channels start and serves it
     ['language-rpc', true, 'trusted-host']);
   assert.deepEqual(order.find(([kind]) => kind === 'sidebar-rpc'),
     ['sidebar-rpc', 'trusted-host', 'en']);
-  assert.deepEqual(order.find(([kind]) => kind === 'telegram'), ['telegram', true]);
+  assert.deepEqual(order.find(([kind]) => kind === 'matrix'), ['matrix', true]);
 });
 
 test('Host-provided describeConversation delegates through ctx.provide', async () => {
   let provided;
   const described = {
-    channel: 'telegram',
+    channel: 'matrix',
     conversationKey: 'group:chat-1:thread-2',
     senderId: 'user-1',
   };
@@ -113,10 +112,6 @@ test('Host composes IM channels and the AI Office connector inside one plugin co
     applyDingtalk: async (ctx, config) => calls.push(['dingtalk', ctx, config]),
     applyWecom: async (ctx, config) => calls.push(['wecom', ctx, config]),
     applyQq: async (ctx, config) => calls.push(['qq', ctx, config]),
-    applySlack: async (ctx, config) => calls.push(['slack', ctx, config]),
-    applyTelegram: async (ctx, config) => calls.push(['telegram', ctx, config]),
-    applyDiscord: async (ctx, config) => calls.push(['discord', ctx, config]),
-    applyWhatsapp: async (ctx, config) => calls.push(['whatsapp', ctx, config]),
     applyIMessage: async (ctx, config) => calls.push(['imessage', ctx, config]),
     applyOffice: async (ctx, config) => calls.push(['office', ctx, config]),
   });
@@ -129,10 +124,6 @@ test('Host composes IM channels and the AI Office connector inside one plugin co
     dingtalk: { replyTimeoutMs: 60_000 },
     wecom: { replyTimeoutMs: 60_000 },
     qq: { replyTimeoutMs: 60_000 },
-    slack: { replyTimeoutMs: 60_000 },
-    telegram: { replyTimeoutMs: 60_000 },
-    discord: { replyTimeoutMs: 60_000 },
-    whatsapp: { replyTimeoutMs: 60_000 },
     imessage: { replyTimeoutMs: 60_000 },
     office: { heartbeatSeconds: 30 },
   };
@@ -151,10 +142,6 @@ test('Host composes IM channels and the AI Office connector inside one plugin co
     ['dingtalk', ctx, { groupByAgentPreset: true, ...config.dingtalk, rpcAuthority: 'trusted-host', deliveryService }],
     ['wecom', ctx, { groupByAgentPreset: true, ...config.wecom, rpcAuthority: 'trusted-host', deliveryService }],
     ['qq', ctx, { groupByAgentPreset: true, ...config.qq, rpcAuthority: 'trusted-host', deliveryService }],
-    ['slack', ctx, { groupByAgentPreset: true, ...config.slack, rpcAuthority: 'trusted-host', deliveryService }],
-    ['telegram', ctx, { groupByAgentPreset: true, ...config.telegram, rpcAuthority: 'trusted-host', deliveryService }],
-    ['discord', ctx, { groupByAgentPreset: true, ...config.discord, rpcAuthority: 'trusted-host', deliveryService }],
-    ['whatsapp', ctx, { groupByAgentPreset: true, ...config.whatsapp, rpcAuthority: 'trusted-host', deliveryService }],
     ['imessage', ctx, { groupByAgentPreset: true, ...config.imessage, rpcAuthority: 'trusted-host', deliveryService }],
     ['office', ctx, { groupByAgentPreset: true, ...config.office, rpcAuthority: 'trusted-host' }],
   ]);
@@ -173,13 +160,13 @@ test('Host provides #65 and installs #84 with the same delivery service', async 
     async historyChecked(...args) { historyReads.push(args); return {events:[],hasMore:false}; },
     async send(...args) { sent.push(args); return { sent: true }; },
     async listTargets(botId) {
-      return { botId, channel: 'telegram', targets: [{ targetId: 'target' }] };
+      return { botId, channel: 'matrix', targets: [{ targetId: 'target' }] };
     },
     async createTarget(...args) {
       created.push(args);
       return { targetId: args[1].targetId };
     },
-    async listBots() { return [{ botId: 'bot_one', channel: 'telegram' }]; },
+    async listBots() { return [{ botId: 'bot_one', channel: 'matrix' }]; },
   };
   const provided = [];
   const rpc = [];
@@ -219,7 +206,7 @@ test('Host provides #65 and installs #84 with the same delivery service', async 
     { targetId: 'new-target' },
   );
   assert.deepEqual(created, [['bot_one', { targetId: 'new-target', kind: 'chat', route: { chatId: '123456789' } }]]);
-  assert.deepEqual(await provided[0][1].listBots(), [{ botId: 'bot_one', channel: 'telegram' }]);
+  assert.deepEqual(await provided[0][1].listBots(), [{ botId: 'bot_one', channel: 'matrix' }]);
   assert.deepEqual(await provided[0][1].send('bot_one', 'target', 'hello'), { sent: true });
   assert.deepEqual(sent, [['bot_one', 'target', 'hello', undefined]]);
   assert.deepEqual(await provided[0][1].historyChecked('bot_one', {messageId:'anchor'}, {scope:'thread',limit:1}, {}), {events:[],hasMore:false});
@@ -385,10 +372,6 @@ const CHANNELS = [
   ['wecom', 'applyWecom'],
   ['wecomApp', 'applyWecomApp'],
   ['qq', 'applyQq'],
-  ['slack', 'applySlack'],
-  ['telegram', 'applyTelegram'],
-  ['discord', 'applyDiscord'],
-  ['whatsapp', 'applyWhatsapp'],
   ['imessage', 'applyIMessage'],
   ['email', 'applyEmail'],
   ['matrix', 'applyMatrix'],
