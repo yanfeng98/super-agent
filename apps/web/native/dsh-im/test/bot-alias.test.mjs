@@ -8,7 +8,7 @@ import { validateBotAlias, withBotAlias } from '../src/channels/shared/bot-alias
 import { validAliasPayload } from '../plugin-src/host/channels/shared/bot-alias-rpc.mjs';
 
 const channels = [
-  ['wecom', 'createWecomRpcHandler'], ['wecom-app', 'createWecomAppRpcHandler'],
+  ['wecom', 'createWecomRpcHandler'],
   ['weixin', 'createWeixinRpcHandler'], ['feishu', 'createFeishuRpcHandler'],
   ['dingtalk', 'createDingtalkRpcHandler'], ['qq', 'createQqRpcHandler'],
   ['imessage', 'createIMessageRpcHandler'],

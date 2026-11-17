@@ -13,7 +13,6 @@ import sharedD from './i18n-en/shared-d.mjs';
 import feishu from './i18n-en/feishu.mjs';
 import dingtalk from './i18n-en/dingtalk.mjs';
 import wecom from './i18n-en/wecom.mjs';
-import wecomApp from './i18n-en/wecom-app.mjs';
 import qq from './i18n-en/qq.mjs';
 import weixin from './i18n-en/weixin.mjs';
 import email from './i18n-en/email.mjs';
@@ -30,7 +29,6 @@ export const EN = Object.freeze(Object.assign(
   feishu,
   dingtalk,
   wecom,
-  wecomApp,
   qq,
   weixin,
   email,

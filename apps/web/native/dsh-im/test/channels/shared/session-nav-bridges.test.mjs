@@ -16,7 +16,6 @@ const BRIDGES = [
   'src/channels/feishu/bridge.mjs',
   'src/channels/dingtalk/dingtalk-bridge.mjs',
   'src/channels/wecom/wecom-bridge.mjs',
-  'src/channels/wecom-app/wecom-app-bridge.mjs',
   'src/channels/weixin/weixin-bridge.mjs',
   'src/channels/qq/qq-bridge.mjs',
 ];

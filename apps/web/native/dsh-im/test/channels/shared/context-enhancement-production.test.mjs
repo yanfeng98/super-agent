@@ -10,7 +10,7 @@ import {
   captureContextEnhancement,
 } from '../../../src/channels/shared/context-enhancement.mjs';
 
-for (const channel of ['wecom', 'weixin', 'feishu', 'dingtalk', 'qq', 'imessage', 'email', 'wecom-app']) {
+for (const channel of ['wecom', 'weixin', 'feishu', 'dingtalk', 'qq', 'imessage', 'email']) {
   test(`${channel} production passes live, isolated context settings without reconnecting or changing Harness options`, async (t) => {
     const dataDir = await mkdtemp(join(tmpdir(), `dsh-context-${channel}-`));
     t.after(() => rm(dataDir, { recursive: true, force: true }));

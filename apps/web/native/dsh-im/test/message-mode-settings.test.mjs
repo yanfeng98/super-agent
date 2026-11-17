@@ -8,7 +8,7 @@ import { SET_MESSAGE_MODE_ENDPOINT } from '../src/channels/shared/message-mode.m
 
 const CHANNELS = [
   ['wecom', 'Wecom'], ['weixin', 'Weixin'], ['feishu', 'Feishu'], ['dingtalk', 'Dingtalk'],
-  ['qq', 'Qq'], ['wecom-app', 'WecomApp'], ['imessage', 'IMessage'],
+  ['qq', 'Qq'], ['imessage', 'IMessage'],
   ['email', 'Email'],
 ];
 

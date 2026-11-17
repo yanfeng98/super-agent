@@ -1,4 +1,4 @@
-> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email. Slack, Telegram, Discord, WhatsApp, Matrix, and the AI Office connector are not included. Sections below that describe those channels apply to upstream dsh-im, not to this build.
+> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, QQ, iMessage, and email. Slack, Telegram, Discord, WhatsApp, Matrix, the WeCom self-built-app channel, and the AI Office connector are not included. Sections below that describe those channels apply to upstream dsh-im, not to this build.
 
 <p align="center">
   <img src="assets/logo-dsh-im-connecting-readme-3x2.png" alt="DSH-IM — Connecting DeepSeek Harness" width="420" height="280" align="middle">&nbsp;&nbsp;

@@ -7,7 +7,7 @@ import { toPosixPath } from './support/filesystem.mjs';
 
 const IM_CHANNELS = [
   'weixin', 'feishu', 'dingtalk', 'wecom', 'qq',
-  'wecom-app', 'imessage', 'email',
+  'imessage', 'email',
 ];
 
 function modernContext(extra = {}) {

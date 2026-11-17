@@ -1,4 +1,4 @@
-> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email. Slack, Telegram, Discord, WhatsApp, Matrix, and the AI Office connector are not included. Sections below that describe those channels apply to upstream dsh-im, not to this build.
+> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, QQ, iMessage, and email. Slack, Telegram, Discord, WhatsApp, Matrix, the WeCom self-built-app channel, and the AI Office connector are not included. Sections below that describe those channels apply to upstream dsh-im, not to this build.
 
 <p align="center">
   <img src="assets/logo-dsh-im-connecting-readme-3x2.png" alt="DSH-IM — Connecting DeepSeek Harness" width="420" height="280" align="middle">&nbsp;&nbsp;
@@ -126,7 +126,6 @@ WhatsApp 会保存最近 2,000 条机器人群消息的标识，重启后仍可�
 
 Matrix 加密目前仅供非敏感测试：默认 optional 模式尝试启动加密引擎，失败时跳过收到的加密消息；required 模式在引擎启动失败时拒绝连接。尚未实现交互式设备验证、密钥备份、SSSS 或媒体附件内容加密，本次发布未验证真实 homeserver／Element 互通，请勿将其视为完整的端到端保密保障。
 
-企业微信自建应用的回调基址、代理地址和企业可信 IP 配置，见[企业微信自建应用接入说明](docs/企业微信自建应用接入.md)。
 
 其他 IM 平台可继续按同一渠道适配器结构接入。
 

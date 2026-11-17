@@ -240,7 +240,6 @@ test('every non-text bridge lists the session-navigation commands in its help', 
   const files = [
     '../src/channels/dingtalk/dingtalk-bridge.mjs',
     '../src/channels/wecom/wecom-bridge.mjs',
-    '../src/channels/wecom-app/wecom-app-bridge.mjs',
     '../src/channels/weixin/weixin-bridge.mjs',
     '../src/channels/qq/qq-bridge.mjs',
     '../src/channels/feishu/feishu-cards.mjs',

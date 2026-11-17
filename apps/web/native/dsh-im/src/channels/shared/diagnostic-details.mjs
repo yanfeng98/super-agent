@@ -146,7 +146,7 @@ export function normalizeDiagnosticDetails(value) {
   return result;
 }
 
-export const DIAGNOSTIC_CHANNELS = Object.freeze(['weixin', 'feishu', 'dingtalk', 'wecom', 'qq', 'wecom-app', 'imessage', 'email']);
+export const DIAGNOSTIC_CHANNELS = Object.freeze(['weixin', 'feishu', 'dingtalk', 'wecom', 'qq', 'imessage', 'email']);
 
 export function diagnosticFields(value) {
   if (!value?.details) return {};

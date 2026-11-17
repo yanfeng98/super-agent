@@ -11,7 +11,7 @@ const button = (root, label) => root.findAllByType('button').find(node => text(n
 async function flush() { for (let i = 0; i < 15; i++) await Promise.resolve(); }
 
 const channels = [
-  ['wecom', 'WecomSettingsTab'], ['wecom-app', 'WecomAppSettingsTab'],
+  ['wecom', 'WecomSettingsTab'],
   ['weixin', 'WeixinSettingsTab'], ['feishu', 'FeishuSettingsTab'],
   ['dingtalk', 'DingtalkSettingsTab'], ['qq', 'QqSettingsTab'],
   ['imessage', 'IMessageSettingsTab'],

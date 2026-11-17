@@ -22,9 +22,6 @@ import { installQqStyles } from './channels/qq/styles.js';
 import { WECOM_RPC_CHANNEL } from './channels/wecom/api.js';
 import { WecomSettingsTab } from './channels/wecom/index.js';
 import { installWecomStyles } from './channels/wecom/styles.js';
-import { WECOM_APP_RPC_CHANNEL } from './channels/wecom-app/api.js';
-import { WecomAppSettingsTab } from './channels/wecom-app/index.js';
-import { installWecomAppStyles } from './channels/wecom-app/styles.js';
 import { WeixinSettingsTab } from './channels/weixin/index.js';
 import { WEIXIN_RPC_CHANNEL } from './channels/weixin/api.js';
 import { installWeixinStyles } from './channels/weixin/styles.js';
@@ -88,7 +85,6 @@ const CHANNELS = Object.freeze([
   { id: 'dingtalk', label: '钉钉' },
   { id: 'wecom', label: '企业微信' },
   { id: 'qq', label: 'QQ' },
-  { id: 'wecomApp', label: '企业微信应用', note: '（实验功能）' },
   { id: 'imessage', label: 'iMessage', note: '（实验功能）' },
   { id: 'email', label: '邮箱', note: '（实验功能）' },
 ]);
@@ -116,10 +112,6 @@ function WecomLogo() {
   return h('span', { className: 'dim-logo dim-logoWecom', 'aria-hidden': 'true' }, h(WecomLogoGlyph));
 }
 
-function WecomAppLogo() {
-  return h('span', { className: 'dim-logo dim-logoWecomApp', 'aria-hidden': 'true' }, h(WecomLogoGlyph));
-}
-
 function IMessageLogo() {
   return h('span', { className: 'dim-logo dim-logoIMessage', 'aria-hidden': 'true' },
     h(IMessageLogoGlyph));
@@ -135,7 +127,6 @@ function ChannelLogo({ channel }) {
   if (channel === 'feishu') return h(FeishuLogo);
   if (channel === 'dingtalk') return h(DingtalkLogo);
   if (channel === 'wecom') return h(WecomLogo);
-  if (channel === 'wecomApp') return h(WecomAppLogo);
   if (channel === 'qq') return h(QqLogo);
   if (channel === 'imessage') return h(IMessageLogo);
   if (channel === 'email') return h(EmailLogo);
@@ -165,7 +156,6 @@ export function IMSettingsTab({
   emailRpcCall,
   qqRpcCall,
   wecomRpcCall,
-  wecomAppRpcCall,
   weixinRpcCall,
   updateRpcCall,
   deliveryRpcCall,
@@ -216,7 +206,6 @@ export function IMSettingsTab({
       feishuRpcCall,
     qqRpcCall,
         wecomRpcCall,
-    wecomAppRpcCall,
     weixinRpcCall,
     updateRpcCall,
     deliveryRpcCall,
@@ -241,7 +230,6 @@ export function IMSettingsTab({
     reportLoopbackRecovery,
         updateRpcCall,
     wecomRpcCall,
-    wecomAppRpcCall,
     weixinRpcCall,
     ]);
   const botSettingsContext = React.useMemo(() => Object.freeze({
@@ -380,9 +368,7 @@ export function IMSettingsTab({
                 ? h(DingtalkSettingsTab, { rpcCall: rpcCalls.dingtalkRpcCall })
                 : active.id === 'wecom'
                   ? h(WecomSettingsTab, { rpcCall: rpcCalls.wecomRpcCall })
-                : active.id === 'wecomApp'
-                  ? h(WecomAppSettingsTab, { rpcCall: rpcCalls.wecomAppRpcCall })
-                  : active.id === 'qq'
+                : active.id === 'qq'
                     ? h(QqSettingsTab, { rpcCall: rpcCalls.qqRpcCall })
                           : active.id === 'imessage'
                             ? h(IMessageSettingsTab, { rpcCall: rpcCalls.imessageRpcCall })
@@ -434,7 +420,6 @@ export function apply(ctx) {
       installFeishuStyles(),
       installWeixinStyles(),
       installWecomStyles(),
-      installWecomAppStyles(),
       installQqStyles(),
       installIMessageStyles(),
       installEmailStyles(),
@@ -466,8 +451,6 @@ export function apply(ctx) {
     managementRpc(ctx.connection, QQ_RPC_CHANNEL, endpoint, payload, signal);
   const wecomRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, WECOM_RPC_CHANNEL, endpoint, payload, signal);
-  const wecomAppRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, WECOM_APP_RPC_CHANNEL, endpoint, payload, signal);
   const imessageRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, IMESSAGE_RPC_CHANNEL, endpoint, payload, signal);
   const emailRpcCall = (endpoint, payload, signal) =>
@@ -496,7 +479,6 @@ export function apply(ctx) {
       feishuRpcCall,
     qqRpcCall,
         wecomRpcCall,
-    wecomAppRpcCall,
     weixinRpcCall,
       imessageRpcCall,
     emailRpcCall,

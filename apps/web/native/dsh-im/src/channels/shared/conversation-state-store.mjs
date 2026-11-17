@@ -60,7 +60,7 @@ const EMPTY_STATE = Object.freeze({ version: 1, sessions: {}, seenMessageIds: []
  * (submitted: true, meaning the Harness inbox already owns it).
  *
  * Wired today by TextHarnessBridge (email, imessage) and QqHarnessBridge. The channels that run their
- * own queue path (weixin, dingtalk, wecom, wecom-app, feishu) still need the
+ * own queue path (weixin, dingtalk, wecom, feishu) still need the
  * same treatment.
  */
 function validPendingMessage(value) {

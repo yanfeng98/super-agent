@@ -4,7 +4,7 @@
 
 Proactive delivery lets an application send a text message through a bot connected to DSH-IM without waiting for a new user message. The caller stores only a stable `botId + targetId` pair—never a Harness `sessionId`, chat reference, message ID, or temporary webhook.
 
-All eight built-in channels support proactive delivery: WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email.
+All seven built-in channels support proactive delivery: WeChat, Feishu, DingTalk, WeCom, QQ, iMessage, and email.
 
 ## Quick start
 
@@ -200,7 +200,7 @@ await ctx.dshIm.send(botId, targetId, '# Daily report\n\n**Checks complete**', {
 | QQ | Markdown message; known format rejection falls back for the current chunk |
 | DingTalk | Proactive Markdown message; definite format rejection falls back to text |
 | WeCom bot | Existing Markdown message type |
-| WeCom app / Weixin | Full text, including code and link destinations |
+| WeCom bot / Weixin | Full text, including code and link destinations |
 
 Channels apply their own message limits and splitting. Feishu proactive cards retain their existing unsplit behavior and do not automatically resend as text after rejection or an uncertain result. Other newly added fallback paths only handle local formatting errors or definite format rejection; they do not resend accepted chunks or retry ambiguous network outcomes. Older Hosts may ignore `format`; load the updated plugin on the Host.
 

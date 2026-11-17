@@ -20,7 +20,7 @@ export const CHANNEL_CAPABILITIES = Object.freeze({
   // advertised here until it is actually wired.
   feishu: Object.freeze({ buttons: false, fileSend: false }),
   dingtalk: Object.freeze({ buttons: false, fileSend: false }),
-  // email, qq, wecom, wecom-app, weixin, imessage:
+  // email, qq, wecom, weixin, imessage:
   // no native message buttons and no document attachment path today.
 });
 

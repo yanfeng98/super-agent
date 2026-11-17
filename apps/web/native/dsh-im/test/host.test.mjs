@@ -8,7 +8,7 @@ import { createImHostPlugin, inject, name } from '../plugin-src/host/index.mjs';
 
 const NO_CHANNELS = Object.freeze({
   applyFeishu: async () => {}, applyWeixin: async () => {}, applyDingtalk: async () => {},
-  applyWecom: async () => {}, applyWecomApp: async () => {}, applyQq: async () => {},
+  applyWecom: async () => {}, applyQq: async () => {},
   applyIMessage: async () => {}, applyEmail: async () => {},
 });
 
@@ -367,7 +367,6 @@ const CHANNELS = [
   ['weixin', 'applyWeixin'],
   ['dingtalk', 'applyDingtalk'],
   ['wecom', 'applyWecom'],
-  ['wecomApp', 'applyWecomApp'],
   ['qq', 'applyQq'],
   ['imessage', 'applyIMessage'],
   ['email', 'applyEmail'],
