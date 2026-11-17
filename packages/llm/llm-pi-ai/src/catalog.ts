@@ -201,35 +201,46 @@ function servesChat(provider: Provider): boolean {
  * exposes nine of those models from the Singapore endpoint, so the three
  * describe one subscription rather than three services. `vercel-ai-gateway` is
  * withheld as an aggregator: one third-party endpoint resells 301 models from
- * other vendors, 118 of which keep the same id on `openrouter`. `huggingface`
+ * other vendors, 87 of which map to a model on a served route and 214 of which
+ * depend on a custom one. `huggingface`
  * is the Hugging Face router: its 78 entries are Hub repository names that a
- * third-party inference provider serves, and 64 of those model names also
- * appear on `openrouter`, so the route adds a routing and billing layer rather
- * than another vendor's models. `cerebras` is a chip vendor's inference cloud
- * carrying two open-weight models that this build already reaches on other
- * routes (`gpt-oss-120b` under an `openai/` prefix on `openrouter`, Qwen3.8 27B
- * on `openrouter`), so withholding it removes a serving surface rather than
- * model coverage. `groq` is another chip vendor's inference cloud in the same
- * position: all seven of its open-weight models — the Llama
- * pair, three GPT OSS entries, and two Qwen entries — also appear on served
- * routes: on `openrouter`, so withholding it removes a serving surface rather
- * than model coverage. Its endpoint answers OpenAI-compatible chat completions
+ * third-party inference provider serves, and 15 of those model names map to a
+ * model on a served route, so the route adds a routing and billing layer rather
+ * than another vendor's models. `openrouter` is the widest aggregator this
+ * build withholds: one OpenAI-compatible endpoint resells 396 vendor-prefixed
+ * model ids from other vendors. Dropping the vendor prefix and ignoring
+ * punctuation, 95 of those ids name a model another served route also carries,
+ * two more match by display name, and the remaining 299 have no other route —
+ * 18 floating `~…-latest` aliases, 14 `:free` free-tier variants, five
+ * `openrouter/*` router ids, one `unbiased/*` alias, the bare `auto` router,
+ * and 260 vendor-prefixed entries across 36 prefixes, 77 of them `:batch`
+ * siblings of a model a served route carries. Withholding it therefore removes
+ * model coverage as well as a serving surface, and its endpoint
+ * `https://openrouter.ai/api/v1` answers OpenAI-compatible chat completions for
+ * a deployment that adds it as a custom model API under a different provider
+ * id. `cerebras` is a chip vendor's inference cloud
+ * carrying two open-weight models, `gpt-oss-120b` and Qwen3.8 27B, that appear
+ * on no other served route, so withholding it removes model coverage as well as
+ * a serving surface. `groq` is another chip vendor's inference cloud in the
+ * same position: none of its seven open-weight models — the Llama
+ * pair, three GPT OSS entries, and two Qwen entries — appears on another served
+ * route, so withholding it removes model coverage as well as a serving surface.
+ * Its endpoint answers OpenAI-compatible chat completions
  * at `https://api.groq.com/openai/v1`, so a deployment that needs it can add
  * that as an `openai-completions` custom model API under a different provider
  * id. `together` is the inference cloud that hosts other vendors' open-weight
- * models behind one endpoint: its seventeen catalog entries all appear on a
- * served route — fifteen map to the same model on `openrouter`, and the Llama
- * 3.3 70B Instruct Turbo and Qwen2.5 7B Instruct Turbo entries match
- * `openrouter`'s non-Turbo `meta-llama/llama-3.3-70b-instruct` and
- * `qwen/qwen-2.5-7b-instruct` — so withholding it removes a serving surface
- * rather than model coverage. That endpoint answers OpenAI-compatible chat
+ * models behind one endpoint: seven of its seventeen catalog entries map to a
+ * model on a served route, and the other ten — its Llama 3.3 70B Instruct Turbo
+ * and Qwen2.5 7B Instruct Turbo entries among them — appear nowhere else, so
+ * withholding it removes a serving surface plus those ten ids. That endpoint
+ * answers OpenAI-compatible chat
  * completions at `https://api.together.ai/v1`, so a deployment that needs it
  * can add that as an `openai-completions` custom model API under a different
  * provider id.
  * `opencode` is OpenCode's pay-as-you-go Console gateway: this build
  * keeps the same vendor's subscription route `opencode-go`, both resolve the one
- * `OPENCODE_API_KEY` credential, and most of Zen's closed-source models also
- * appear on other routes, so withholding it leaves the vendor served without a
+ * `OPENCODE_API_KEY` credential, and 58 of Zen's 84 model ids map to a model on
+ * a served route, so withholding it leaves the vendor served without a
  * second billing surface. Its paid models stay reachable through an OpenAI-compatible
  * custom model API at `https://opencode.ai/inference/v1`; its free-tier models
  * require the OpenCode client, and its System One entries are classifier models
@@ -249,9 +260,9 @@ function servesChat(provider: Provider): boolean {
  * OpenAI-compatible chat completions at `https://radius.pi.dev/v1`, so a
  * deployment that needs the gateway can add it as an `openai-completions`
  * custom model API under a different provider id. `nvidia` is NVIDIA's own
- * inference cloud: nine of its twenty models also appear on built-in routes, while
- * the remaining eleven, including its Nemotron and Cosmos entries, appear
- * nowhere else. It speaks OpenAI-compatible chat completions, so a deployment
+ * inference cloud: three of its twenty models also appear on built-in routes,
+ * while the remaining seventeen, including its Nemotron and Cosmos entries,
+ * appear nowhere else. It speaks OpenAI-compatible chat completions, so a deployment
  * that needs those models can add `https://integrate.api.nvidia.com/v1` as an
  * `openai-completions` custom model API under a different provider id.
  * `ant-ling` serves the Ling and Ring model families from
@@ -266,18 +277,18 @@ function servesChat(provider: Provider): boolean {
  * build keeps the China route and withholds the international one. The kept
  * route carries three of `zai`'s seven model ids — `glm-5.3`, `glm-5.3-flash`,
  * and `glm-5.3-highspeed` — with identical capabilities and catalog costs;
- * `glm-5.2` also appears on `opencode-go`, `glm-4.7` and `glm-5-turbo` on
- * `openrouter`, and only `glm-5.2-highspeed` appears on no other served route.
+ * `glm-5.2` also appears on `opencode-go`, while `glm-4.7`, `glm-5-turbo`, and
+ * `glm-5.2-highspeed` appear on no other served route.
  * An international account keeps working
  * through an `openai-completions` custom model API at
  * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
  * `mistral` is Mistral AI's own platform endpoint rather than a reseller, so
- * withholding it removes model coverage as well as a serving surface: 29 of its
- * 40 entries map to the same model on a served route — the `mistralai/*`
- * entries on `openrouter`, with the Z.AI GLM pair it now hosts as well on
- * `opencode-go` — while eleven map to no other route. Those are
- * the Pixtral pair, Magistral Medium, Leanstral 1.5, Devstral Medium, its three
- * Devstral Small entries, Mistral Large 2.1, Mistral 7B, and Mixtral 8x7B. The
+ * withholding it removes model coverage as well as a serving surface: three of
+ * its 40 entries map to a model on a served route — the Z.AI GLM entries it
+ * hosts, `zai-glm-5-2`, `zai-glm-5-3`, and `glm-5-2`, all on `opencode-go` —
+ * while thirty-seven map to no other route. Those include the Pixtral pair,
+ * Magistral Medium, Leanstral 1.5, Devstral Medium, its three Devstral Small
+ * entries, Mistral Large 2.1, Mistral 7B, and Mixtral 8x7B. The
  * endpoint also answers OpenAI-compatible chat completions at
  * `https://api.mistral.ai/v1`, so a deployment that needs those models can add
  * that as an `openai-completions` custom model API under a different provider
@@ -291,12 +302,11 @@ function servesChat(provider: Provider): boolean {
  * API, or `https://api.fireworks.ai/inference/v1` as an `openai-completions`
  * one, under a different provider id.
  * `baseten` is a third-party inference cloud that hosts other vendors'
- * open-weight models behind one OpenAI-compatible endpoint: ten of its
- * twenty-two model ids keep the same id on other built-in routes, ten more
- * match another route under a different id spelling or display name, and the
- * two that appear nowhere else are `deepseek-ai/DeepSeek-V4.1-Flash-Fast` and
+ * open-weight models behind one OpenAI-compatible endpoint: seven of its
+ * twenty-two model ids map to a model on a served route, and the fifteen that
+ * appear nowhere else include `deepseek-ai/DeepSeek-V4.1-Flash-Fast` and
  * `zai-org/GLM-5.2-Fast`, so withholding it removes a serving surface plus
- * those two ids rather than a vendor's own model family. It speaks
+ * those fifteen ids rather than a vendor's own model family. It speaks
  * OpenAI-compatible chat completions, so a deployment that needs those models
  * can add `https://inference.baseten.co/v1` as an `openai-completions` custom
  * model API under a different provider id; the `chat_template_args` thinking
@@ -309,8 +319,9 @@ function servesChat(provider: Provider): boolean {
  * withholding it removes a serving surface rather than model coverage; the two
  * catalogs still differ in one output cap, one cache price, and the tiered
  * input pricing `google` records for three entries.
- * The Baseten, Cerebras, Together, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA,
- * Z.AI, and Ant Ling routes speak OpenAI-compatible chat completions, the Mistral
+ * The Baseten, Cerebras, Together, Moonshot, Xiaomi, Qwen, Hugging Face,
+ * OpenRouter, NVIDIA, Z.AI, and Ant Ling routes speak OpenAI-compatible chat
+ * completions, the Mistral
  * endpoint answers those requests beside its own protocol, and the Vercel AI
  * Gateway and MiniMax endpoints speak Anthropic Messages, so a deployment that
  * needs one can add it as a custom model API. The Vertex route speaks
@@ -339,6 +350,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'moonshotai-cn',
   'nvidia',
   'opencode',
+  'openrouter',
   'qwen-token-plan',
   'qwen-token-plan-cn',
   'qwen-token-plan-individual',

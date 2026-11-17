@@ -4,6 +4,8 @@
 - **背景**：用户要求移除 `huggingface`（Hugging Face），且不能破坏项目现有功能。它不是模型厂商，而是 Hugging Face Inference Providers 的路由：pi-ai 以 `openai-completions` 接入 `https://router.huggingface.co/v1`，把请求转发给第三方推理服务商；目录快照包含 78 个模型、12 个组织，id 是 Hub 仓库名（如 `Qwen/Qwen3.5-397B-A17B`）。其中 64 个模型名在 `openrouter` 上出现（29 个换了厂商前缀）、1 个出现在 `nvidia`，13 个在本构建内没有其他内置路由。凭据为 API key（Web 设置页存为 `HUGGINGFACE_API_KEY`；未配置 `apiKeyEnv` 时回落到环境变量 `HF_TOKEN`），没有 OAuth。本机 Web profile 只配置了 `opencode-go`，未点名该路由。
 - **范围**：`packages/llm/llm-pi-ai` 的目录、测试与双语 README；Web 设置页与 onboarding golden；`docs/user/guide/providers.md` 与 `.zh.md`；既有升级指南；`logs/`。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；78 个 Hub 名中 15 个仍能对应已提供路由上的模型，63 个没有其他内置路由。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 文件 | 变更 |

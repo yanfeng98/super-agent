@@ -1278,6 +1278,7 @@ describe('configurable-provider directory', () => {
       'moonshotai-cn',
       'nvidia',
       'opencode',
+      'openrouter',
       'qwen-token-plan',
       'qwen-token-plan-cn',
       'qwen-token-plan-individual',

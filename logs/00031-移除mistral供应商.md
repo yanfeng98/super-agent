@@ -6,6 +6,8 @@
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、`docs/user/guide/providers.md`、包 README、升级指南、Web golden 与 e2e 断言、根 README、`logs/`。
 - **后续变更**：`together` 已于 [00032](00032-移除together供应商.md) 移除，本记录中作为承接路由出现的 `together`（GLM 两条）不再可用；`glm-5.2` 仍由 `opencode-go` 与 `openrouter` 提供，`glm-5.3` 另见 `zai-coding-cn`、`opencode-go` 与 `openrouter`，现行覆盖见 [00009](00009-模型供应商清理汇总.md) 第 8 节。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；40 个条目中 3 个（它托管的 Z.AI GLM 条目）仍能对应已提供路由上的模型，37 个没有其他内置路由。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 位置 | 变更 |

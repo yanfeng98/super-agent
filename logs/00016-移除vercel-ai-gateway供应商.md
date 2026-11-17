@@ -4,6 +4,8 @@
 - **背景**：用户要求移除 `vercel-ai-gateway`（Vercel AI Gateway），且不能破坏项目现有功能。它是聚合网关而不是模型厂商：pi-ai 以 `anthropic-messages` 接入 `https://ai-gateway.vercel.sh`，目录快照包含 301 个模型、32 个厂商前缀，其中 118 个 id 与 `openrouter` 原样重合；网关把多家厂商的模型集中到一条第三方端点转售，其中一部分本构建已能从厂商原生路由获得。凭据为 API key（Web 设置页存为 `VERCEL_AI_GATEWAY_API_KEY`；未配置 `apiKeyEnv` 时回落到环境变量 `AI_GATEWAY_API_KEY`），没有 OAuth。本机 Web profile 只配置了 `opencode-go`，未点名该路由。
 - **范围**：`packages/llm/llm-pi-ai` 的目录、测试与双语 README；Web 设置页与 onboarding golden；`docs/user/guide/providers.md` 与 `.zh.md`；既有升级指南；`logs/`。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；301 个 id 中 87 个仍能对应已提供路由上的模型，214 个没有其他内置路由。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 文件 | 变更 |

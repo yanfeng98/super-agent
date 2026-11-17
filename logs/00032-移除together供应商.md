@@ -5,6 +5,8 @@
 - **判断依据**：与 `mistral`、`ant-ling` 这类原厂入口不同，`together` 是转售开源权重的托管层，移除它不减少模型覆盖——17 个条目全部能在其他已提供路由上取到同一模型：其中 15 个对应 `openrouter` 上的同一模型（厂商前缀不同，如 `zai-org/*` → `z-ai/*`、`deepseek-ai/*` → `deepseek/*`、`MiniMaxAI/*` → `minimax/*`），另外两个 Together 专有的 Turbo 条目对应 `openrouter` 的非 Turbo 版本 `meta-llama/llama-3.3-70b-instruct` 与 `qwen/qwen-2.5-7b-instruct`。用户要求移除该供应商且不能破坏现有功能，沿用既有的 `WITHHELD_PROVIDERS` 机制：目录、模型解析、发现、登录与可配置供应商列表都不再出现该路由，不修改 `node_modules` 里的 pi-ai 包。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、`docs/user/guide/providers.md`、包 README、升级指南、Web golden 与 e2e 断言、根 README、`logs/`。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；17 个条目中 7 个仍能对应已提供路由上的模型，10 个没有其他内置路由（含两个 Turbo id）。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 位置 | 变更 |

@@ -12,7 +12,7 @@ import {
 import { openSettings, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const EXPECTED = fileURLToPath(new URL('./expected/models-settings-recovery/stored-error.expected.md', import.meta.url))
-const FAILURE = 'llm-pi-ai: provider "openrouter" model "111" needs an api; '
+const FAILURE = 'llm-pi-ai: provider "github-copilot" model "111" needs an api; '
   + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
 const CUSTOM_FAILURE = 'llm-pi-ai: provider "acme-gateway" model "custom-model" needs an api; '
   + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
@@ -28,8 +28,8 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
     home = await mkdtemp(join(tmpdir(), 'dsh-models-recovery-'))
     await mkdir(join(home, 'profiles', 'scaffold'), { recursive: true })
     await writeFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), [
-      '- id: llm-pi-ai', '  config:', '    providers:', '      openrouter:', '        models:',
-      '          - id: "111"', '      zai: {}', '      acme-gateway:',
+      '- id: llm-pi-ai', '  config:', '    providers:', '      github-copilot:', '        models:',
+      '          - id: "111"', '      kimi-coding: {}', '      acme-gateway:',
       '        baseURL: https://gateway.example/v1', '        models:', '          - id: "custom-model"', '',
     ].join('\n'))
     scaffold = await launchWebScaffold({ harnessHome: home })
@@ -58,8 +58,8 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
   it('shows the failed provider beside healthy providers and keeps the add action usable', async () => {
     onTestFailed(() => saveFailureShot(page, 'models-settings-recovery'))
     const dialog = page.getByRole('dialog', { name: '设置' })
-    expect(await dialog.getByRole('button', { name: '编辑 openrouter', exact: true }).count()).toBe(1)
-    expect(await dialog.getByRole('button', { name: '编辑 zai', exact: true }).count()).toBe(1)
+    expect(await dialog.getByRole('button', { name: '编辑 github-copilot', exact: true }).count()).toBe(1)
+    expect(await dialog.getByRole('button', { name: '编辑 kimi-coding', exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '编辑 acme-gateway', exact: true }).count()).toBe(1)
     expect(await dialog.getByText(CUSTOM_FAILURE, { exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '添加模型提供商', exact: true }).isEnabled()).toBe(true)
@@ -78,7 +78,7 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
 
   it('rejects an invalid edit without persisting and accepts removal of the obsolete model', async () => {
     const dialog = page.getByRole('dialog', { name: '设置' })
-    await dialog.getByRole('button', { name: '编辑 openrouter', exact: true }).click()
+    await dialog.getByRole('button', { name: '编辑 github-copilot', exact: true }).click()
     await dialog.getByText('自定义设置', { exact: true }).click()
     await dialog.getByLabel('API 地址', { exact: true }).fill('https://gateway.example/v1')
     const before = await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
@@ -87,7 +87,7 @@ describe('web e2e: repairs a stored provider after catalog drift', () => {
     expect(await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toBe(before)
     await dialog.getByRole('button', { name: '删除模型 1', exact: true }).click()
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
-    await dialog.getByText('已保存 openrouter。', { exact: true }).waitFor()
+    await dialog.getByText('已保存 github-copilot。', { exact: true }).waitFor()
     expect(await dialog.getByText(FAILURE, { exact: true }).count()).toBe(0)
     const repaired = await readFile(join(home, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(repaired).not.toContain('111')

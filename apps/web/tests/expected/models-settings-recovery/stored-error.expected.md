@@ -11,14 +11,14 @@
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: openrouter
-      - button "编辑 openrouter": 编辑
-      - button "删除 openrouter": 删除
-      - alert: "llm-pi-ai: provider \"openrouter\" model \"111\" needs an api; the installed catalog does not describe it, so set the route's api to the wire protocol its endpoint speaks"
+      - text: github-copilot
+      - button "编辑 github-copilot": 编辑
+      - button "删除 github-copilot": 删除
+      - alert: "llm-pi-ai: provider \"github-copilot\" model \"111\" needs an api; the installed catalog does not describe it, so set the route's api to the wire protocol its endpoint speaks"
     - listitem:
-      - text: zai
-      - button "编辑 zai": 编辑
-      - button "删除 zai": 删除
+      - text: kimi-coding
+      - button "编辑 kimi-coding": 编辑
+      - button "删除 kimi-coding": 删除
     - listitem:
       - text: acme-gateway 自定义
       - button "编辑 acme-gateway": 编辑
