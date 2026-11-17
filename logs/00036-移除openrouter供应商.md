@@ -1,7 +1,7 @@
 # 00036 — 移除 openrouter 供应商
 
 - **日期**：2026-11-17
-- **背景**：`openrouter` 是 pi-ai 目录里的聚合路由（名称 OpenRouter，端点 `https://openrouter.ai/api/v1`，模型协议以 `openai-completions` 为主，凭据为 `apiKey` 与「Sign in with OpenRouter」OAuth 两种），内置 396 个带厂商前缀的模型 id，是全部 14 条提供路由里模型最多的一条。它不是模型厂商：一个 key 把 OpenAI、Anthropic、Google、Meta、Mistral、DeepSeek、Qwen、xAI 等几十家的模型转售在一条端点后，计费按量预充值，请求要多经一层第三方。
+- **背景**：`openrouter` 是 pi-ai 目录里的聚合路由（名称 OpenRouter，端点 `https://openrouter.ai/api/v1`，模型协议以 `openai-completions` 为主，凭据为 `apiKey` 与「Sign in with OpenRouter」OAuth 两种），内置 396 个模型 id（除裸 `auto` 外都带厂商前缀；381 个以 `openai-completions` 提供于 `https://openrouter.ai/api/v1`，15 个以 `anthropic-messages` 提供于 `https://openrouter.ai/api`），是全部 14 条提供路由里模型最多的一条。它不是模型厂商：一个 key 把 OpenAI、Anthropic、Google、Meta、Mistral、DeepSeek、Qwen、xAI 等几十家的模型转售在一条端点后，计费按量预充值，请求要多经一层第三方。
 - **判断依据**：用户要求移除该供应商且不能破坏现有功能。沿用既有的 `WITHHELD_PROVIDERS` 机制：目录、模型解析、发现、登录与可配置供应商列表都不再出现该路由，不修改 `node_modules` 里的 pi-ai 包。移除代价按目录逐条核算：396 个 id 中 95 个在去掉厂商前缀并忽略标点后与另一条已提供路由的模型 id 相同、2 个按显示名对应，其余 299 个没有其他内置路由——18 个 `~…-latest` 浮动别名、14 个 `:free` 变体、5 个 `openrouter/*` 路由 id、1 个 `unbiased/*` 别名、裸 `auto` 路由，以及 36 个厂商前缀下的 260 个条目（其中 77 个是 `:batch` 变体）。这是本系列里第一条「移除面同时包含模型覆盖」的聚合路由：此前移除 `vercel-ai-gateway`、`huggingface`、`together`、`groq` 时，承接方正是 `openrouter`，因此本轮同时重算了全部既有路由的覆盖口径。其端点仍可作 OpenAI 兼容自定义模型 API 接回。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、用户指南、包 README、升级指南、根 README、Web golden 与 e2e 断言、`logs/`（含全部旧日志的承接说明校正）。
 
@@ -9,7 +9,7 @@
 
 | 位置 | 变更 |
 |---|---|
-| `src/catalog.ts` | `WITHHELD_PROVIDERS` 增加 `openrouter`（27 → 28 条，字母序放在 `opencode` 之后）；注释新增 `openrouter` 段（396 个厂商前缀 id、95 + 2 个仍可在已提供路由上取到、299 个没有其他内置路由及其构成、端点可作 `openai-completions` 自定义模型 API），并把 `vercel-ai-gateway`、`huggingface`、`cerebras`、`groq`、`together`、`opencode`、`nvidia`、`zai`、`mistral`、`baseten` 各段中「在 `openrouter` 上可取」的承接说明改成重算后的数字；协议小结把 OpenRouter 并入 OpenAI 兼容一组 |
+| `src/catalog.ts` | `WITHHELD_PROVIDERS` 增加 `openrouter`（27 → 28 条，字母序放在 `opencode` 之后）；注释新增 `openrouter` 段（396 个 id 与两种协议端点、95 + 2 个仍可在已提供路由上取到、299 个没有其他内置路由及其构成、接回时按协议各加一条自定义模型 API），并把 `vercel-ai-gateway`、`huggingface`、`cerebras`、`groq`、`together`、`opencode`、`nvidia`、`zai`、`mistral`、`baseten` 各段中「在 `openrouter` 上可取」的承接说明改成重算后的数字；协议小结把 OpenRouter 并入 OpenAI 兼容一组 |
 | `tests/catalog.spec.ts`、`tests/config.spec.ts` | 被移除路由清单增加 `openrouter` |
 | `tests/loader-composition.spec.ts` | 原本借 `openrouter` 断言 `defaultBaseURL`，改为断言 `openrouter` 不在目录中（`google` 已覆盖元数据断言） |
 | `tests/config.spec.ts` | `resolveProfiles` 的异常传播用例把路由 key 由被移除的 `openrouter` 换成已提供的 `anthropic` |
@@ -30,7 +30,7 @@
 - `catalogProvider('openrouter')` 返回 `undefined`，`catalogModels('openrouter')` 为空；目录、模型解析、发现、登录与可配置供应商列表都不再出现该路由，设置页「添加模型提供商」由 14 项变为 13 项。
 - 存量 profile 点名 `openrouter` 时 `resolveProfiles()` 在 strict 与 deferred 下都抛 `llm-pi-ai: provider "openrouter" is removed from this build; delete the route or select another provider`，同一 `providers` 字典里的其他路由随之不可用，删除该条目即恢复。
 - 内置 id 现为 42 = 13 个提供 + `typesafe` + 28 个被移除；`provider-data.generated.ts` 仍保留 42 个 id 的元数据（`verify-provider-data` 要求与已安装目录一致），它不是可售路由。
-- 登录面：`openrouter` 的 OAuth 入口随路由消失，带登录流程的已提供路由由 7 条（含被本构建关闭 `openai` OAuth 的那条）变为 6 条（`anthropic`、`github-copilot`、`kimi-coding`、`meta`、`openai-codex`、`xai`）。
+- 登录面：`openrouter` 的 OAuth 入口随路由消失，目录中声明 OAuth 的已提供路由由 8 条变为 7 条（`anthropic`、`github-copilot`、`kimi-coding`、`meta`、`openai`、`openai-codex`、`xai`），其中 `openai` 的登录被本构建关闭，设置页实际出现登录按钮的仍是 6 条。
 - 模型覆盖：按模型 id（去掉厂商前缀、忽略标点）或显示名，`openrouter` 的 396 个条目中有 97 个仍能在已提供路由上找到同一模型，其余 **299 个失去内置入口**；这是本系列中第一轮同时削减模型覆盖的移除，也是范围最大的一轮（第二大为 `vercel-ai-gateway` 的 214 个 id）。
 - 连带更正：此前移除 `groq`、`cerebras`、`together` 时「只移除托管面」的结论不再成立（三者现分别为 0/7、0/2、7/17 有内置入口）；`mistral` 由 29/40 变为 3/40，`baseten` 由 20/22 变为 7/22，`nvidia` 由 9/20 变为 3/20，`huggingface` 由 78/78 变为 15/78，`vercel-ai-gateway` 的承接由 118 个 id 变为 87 个，`zai` 的 `glm-4.7` 与 `glm-5-turbo` 由「另见 `openrouter`」变为没有其他内置路由。
 - 未触及 agent loop、模型可见工具、Session 事件或持久化格式；`deepseek-official` 与 `deepseek-account` 原生路由不受影响。
@@ -67,9 +67,19 @@
 
 ## 5. 已知限制与恢复
 
-- 本次只屏蔽可售路由，不删除 pi-ai 包内 OpenRouter 的实现与目录元数据；手工声明同名路由仍会被 `resolveProfiles()` 拒绝。要接回原服务，只能以 `openai-completions` 自定义模型 API 接入 `https://openrouter.ai/api/v1` 并使用不同的 Provider ID。
+- 本次只屏蔽可售路由，不删除 pi-ai 包内 OpenRouter 的实现与目录元数据；手工声明同名路由仍会被 `resolveProfiles()` 拒绝。要接回原服务，需要按协议各加一条自定义模型 API：381 个 `openai-completions` 条目用 `https://openrouter.ai/api/v1`，15 个 `anthropic-messages` 条目用 `https://openrouter.ai/api`，均使用不同的 Provider ID。
 - 恢复时删除 `WITHHELD_PROVIDERS` 中的 `openrouter`，把可售路由与模型计数改回 14 / 581，并同步撤销第 1 节列出的 golden、断言与文档改动；`loader-composition.spec.ts` 的 `defaultBaseURL` 断言可改回 `openrouter`，`dynamic-config.spec.ts` 与恢复用例可分别改回 `openrouter` 与其 golden，重新记录 i18n 哈希并复核升级指南词数。
 - `openrouter` 的 299 个无其他内置路由条目里，263 个是厂商模型（36 个厂商前缀，OpenAI 62、Qwen 38、Mistral 25 居前），其余是 18 个 `~…-latest` 浮动别名、14 个 `:free` 免费档、5 个 `openrouter/*` 自有路由 id、1 个 `unbiased/*` 别名与裸 `auto`；`~…-latest` 与 `:free` 在自定义路由上需要逐条声明模型，不能沿用别名语义。
 - 计费与隐私随路由消失：原先经过 OpenRouter 转售的模型改为直连各自厂商，或继续走自定义路由；同一模型在两条路由上的上下文、输出上限与价格并不逐项相同，迁移前需按模型核对。
 - 并行开发留下的 Web 覆盖层仍会拦截设置入口点击：本机整套 Web e2e 在未处理该覆盖层时失败（与本轮无关），因此 golden 以临时 overlay 单独回放确认，回放后已还原。
 - 运行中的 `127.0.0.1:3080` 宿主仍是改动前启动的进程，重启 `pnpm dsh web` 后设置页才会显示 13 项且不含 `openrouter`。
+
+## 6. 第二轮复查（用户要求复核）
+
+用户要求复核本轮修复。逐条重算目录并对照 7 份文档、4 处测试与 2 份日志后，修正 3 处不准确：
+
+1. **「396 个带厂商前缀」不成立**：`openrouter` 里有一个裸 `auto` 路由 id，其余 395 个才带厂商前缀。7 处表述（`catalog.ts` 注释、包 README 中英、用户指南中英、升级指南中英、根 README）与两份日志统一改为「除裸 `auto` 外都带厂商前缀」。
+2. **端点只写了 OpenAI 兼容一面**：目录里 396 个条目实际分属两种协议——381 个 `openai-completions` 于 `https://openrouter.ai/api/v1`，15 个 `anthropic-messages` 于 `https://openrouter.ai/api`。原文只给前一个端点，会让只接一条自定义路由的读者以为 15 个 Claude 条目也能照此接回。已改为两个端点并列，并说明按协议各加一条自定义路由；`openai-completions` 与 `anthropic-messages` 都在自定义模型 API 的可选协议内，且 pi-ai 的 `getAnthropicCompat` 仍按 `baseUrl.includes('openrouter.ai')` 打开 OpenRouter 的会话亲和默认值，因此自定义路由不会丢这层兼容。
+3. **登录面计数错误**：目录中声明 OAuth 的已提供路由由 8 条（含 `openrouter`）变为 7 条（含被本构建关闭登录的 `openai`），设置页实际出现按钮的是 6 条；原日志写成「由 7 条变为 6 条」。已改正。
+
+复核同时用脚本重跑全部覆盖数字（95 / 2 / 299、260 个厂商条目、77 个 `:batch`、36 个厂商前缀、各路由覆盖数与 `baseten` 7/22、`fireworks` 6/22、`cloudflare-workers-ai` 5/18、`amazon-bedrock` 26/193 等）与 28 条 id 清单，均与文档一致；`gpt-5.1-codex`、`gpt-5.2-codex` 确认不在 `openai` 路由上，`opencode` 的 26 个未覆盖条目表述仍成立。

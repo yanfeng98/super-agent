@@ -207,18 +207,20 @@ function servesChat(provider: Provider): boolean {
  * third-party inference provider serves, and 15 of those model names map to a
  * model on a served route, so the route adds a routing and billing layer rather
  * than another vendor's models. `openrouter` is the widest aggregator this
- * build withholds: one OpenAI-compatible endpoint resells 396 vendor-prefixed
- * model ids from other vendors. Dropping the vendor prefix and ignoring
+ * build withholds: one routing service resells 396 model ids from other
+ * vendors, all vendor-prefixed but the bare `auto` router — 381 answer
+ * OpenAI-compatible chat completions at `https://openrouter.ai/api/v1` and
+ * fifteen Anthropic-shaped ones answer Anthropic Messages at
+ * `https://openrouter.ai/api`. Dropping the vendor prefix and ignoring
  * punctuation, 95 of those ids name a model another served route also carries,
  * two more match by display name, and the remaining 299 have no other route —
  * 18 floating `~…-latest` aliases, 14 `:free` free-tier variants, five
  * `openrouter/*` router ids, one `unbiased/*` alias, the bare `auto` router,
  * and 260 vendor-prefixed entries across 36 prefixes, 77 of them `:batch`
  * siblings of a model a served route carries. Withholding it therefore removes
- * model coverage as well as a serving surface, and its endpoint
- * `https://openrouter.ai/api/v1` answers OpenAI-compatible chat completions for
- * a deployment that adds it as a custom model API under a different provider
- * id. `cerebras` is a chip vendor's inference cloud
+ * model coverage as well as a serving surface; a deployment that needs the
+ * service again adds those two endpoints as custom model APIs, one per
+ * protocol, under different provider ids. `cerebras` is a chip vendor's inference cloud
  * carrying two open-weight models, `gpt-oss-120b` and Qwen3.8 27B, that appear
  * on no other served route, so withholding it removes model coverage as well as
  * a serving surface. `groq` is another chip vendor's inference cloud in the
