@@ -94,6 +94,8 @@ describe('withheld catalog providers', () => {
     'cerebras',
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',
+    'fireworks',
+    'groq',
     'huggingface',
     'minimax',
     'moonshotai',

@@ -1268,6 +1268,8 @@ describe('configurable-provider directory', () => {
       'cerebras',
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
+      'fireworks',
+      'groq',
       'huggingface',
       'minimax',
       'moonshotai',

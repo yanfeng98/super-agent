@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/llm-pi-ai-removed-providers/guide.md
 /:
-  en: 0d41d189e9bf20cc
-  zh: 96ba8b7e501aceda
+  en: 4b52211979900181
+  zh: 0ffbdee9fdbd70ad
 /removed-pi-ai-provider-routes:
   en: 02fc7b874a6b3cc6
   zh: b69670fb0f5d2c3f
 /removed-pi-ai-provider-routes/change:
-  en: 128e6287c949c0e4
-  zh: 5c93492488a51e3b
+  en: bf5be3f97d96b09d
+  zh: dcf34e78fe7ed609
 /removed-pi-ai-provider-routes/migration:
-  en: ea50d327c1d5f277
-  zh: 7ba4a601f2c23d35
+  en: 134ce64d2779fab2
+  zh: 916eab52fd5fc265
