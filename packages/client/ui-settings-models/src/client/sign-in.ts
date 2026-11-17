@@ -90,6 +90,12 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
   })
   /** Latest attempt's owner; a response for an older one is dropped instead of published. */
   let generation = 0
+  /**
+   * The generation whose `begin` is driving the store, or 0 when the page drives
+   * no attempt. A start that answers after it lost the store reads this to tell
+   * "nobody wants the key any more" from "a reopened dialog now owns it".
+   */
+  let activeOwner = 0
   let timer: ReturnType<typeof setInterval> | undefined
 
   const stopPolling = (): void => {
@@ -124,6 +130,19 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
     timer = setInterval(() => { void refresh(key, owner) }, POLL_INTERVAL_MS)
   }
 
+  /**
+   * Withdraw a start that lost the store. A newer `begin` owns the key when one
+   * is driving the store: the Host allows one attempt per key, so whatever the
+   * late start created either already settled or is the attempt that owner is
+   * watching, and cancelling it would silently end the sign-in the human just
+   * reopened.
+   * @param key - the credential key the stale start addressed.
+   */
+  const withdrawIfUnwatched = (key: string): void => {
+    if (activeOwner === generation) return
+    void ctx.remote.authorization.cancel(key)
+  }
+
   const fail = (message: string): void => {
     store.update((state) => {
       state.phase = 'failed'
@@ -148,6 +167,7 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
 
     async begin(key, method) {
       const owner = ++generation
+      activeOwner = owner
       stopPolling()
       store.update((state) => {
         Object.assign(state, {
@@ -161,7 +181,7 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
       // started (or adopted) would have no watcher and would hold the key until
       // its lifetime ran out, so withdraw it on the way out.
       if (owner !== generation) {
-        void ctx.remote.authorization.cancel(key)
+        withdrawIfUnwatched(key)
         return
       }
       if (current.ok && current.value !== null && current.value.phase === 'running') {
@@ -171,10 +191,24 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
       }
       const started = await ctx.remote.authorization.begin(key, method)
       if (owner !== generation) {
-        void ctx.remote.authorization.cancel(key)
+        withdrawIfUnwatched(key)
         return
       }
       if (!started.ok) {
+        // Another surface started the same key between the read and the start:
+        // that attempt is the one this dialog should show, not a failure.
+        if (started.error.code === 'authorization/in-flight') {
+          const latest = await ctx.remote.authorization.state(key)
+          if (owner !== generation) {
+            withdrawIfUnwatched(key)
+            return
+          }
+          if (latest.ok && latest.value !== null && latest.value.phase === 'running') {
+            publish(latest.value)
+            poll(key, owner)
+            return
+          }
+        }
         fail(started.error.message)
         return
       }
@@ -211,13 +245,19 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
       // attempt it is about to create has no watcher left; that continuation
       // withdraws it once the Host answers.
       const owner = ++generation
+      activeOwner = 0
       stopPolling()
       if (key === null) return
       await ctx.remote.authorization.cancel(key)
       if (owner !== generation) return
       const latest = await ctx.remote.authorization.state(key)
       if (owner !== generation) return
-      if (latest.ok && latest.value !== null) publish(latest.value)
+      if (latest.ok && latest.value !== null) {
+        publish(latest.value)
+        // The provider confirmed just as the human withdrew: the credential is
+        // stored, so keep that outcome instead of relabelling it as cancelled.
+        if (latest.value.phase !== 'running') return
+      }
       store.update((state) => {
         state.phase = 'cancelled'
         state.ended = false
@@ -226,6 +266,7 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
 
     reset() {
       generation += 1
+      activeOwner = 0
       stopPolling()
       store.update((state) => {
         Object.assign(state, {
@@ -236,6 +277,7 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
 
     dispose() {
       generation += 1
+      activeOwner = 0
       stopPolling()
     },
   }

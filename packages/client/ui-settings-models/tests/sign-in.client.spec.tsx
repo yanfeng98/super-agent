@@ -32,8 +32,8 @@ function ok<T>(value: T): RemoteResult<T> {
   return { ok: true, value }
 }
 
-function fail(message: string): RemoteResult<never> {
-  return { ok: false, error: { code: 'gateway/internal', message, details: {} } as never }
+function fail(message: string, code = 'gateway/internal'): RemoteResult<never> {
+  return { ok: false, error: { code, message, details: {} } as never }
 }
 
 /** A page context whose authorization namespace answers from the scripted calls. */
@@ -123,7 +123,7 @@ describe('the Models page sign-in store', () => {
   it('reports a refused call as the copy the card shows', async () => {
     const { ctx } = harness({
       state: () => Promise.resolve(ok(null)),
-      begin: () => Promise.resolve(fail('an authorization attempt for this key is already running')),
+      begin: () => Promise.resolve(fail('an authorization attempt for this key is already running', 'authorization/in-flight')),
     })
     const signIn = createProviderSignIn(ctx)
     await signIn.begin(KEY, undefined)
@@ -167,6 +167,67 @@ describe('the Models page sign-in store', () => {
 
     // Whatever the start created still has no watcher, so it is withdrawn.
     expect(calls.cancel).toContain(KEY)
+    signIn.dispose()
+  })
+
+  it('leaves a reopened sign-in alone when the earlier start answers late', async () => {
+    let releaseFirstRead: () => void = () => {}
+    const firstRead = new Promise<void>((resolve) => { releaseFirstRead = resolve })
+    let reads = 0
+    const { ctx, calls } = harness({
+      state: () => {
+        reads += 1
+        return reads === 1 ? firstRead.then(() => ok(null)) : Promise.resolve(ok(attempt()))
+      },
+    })
+    const signIn = createProviderSignIn(ctx)
+    const abandoned = signIn.begin(KEY, 'oauth')
+    await signIn.cancel()
+    // Reopening the dialog takes the key back before the first start answers.
+    await signIn.begin(KEY, 'oauth')
+    releaseFirstRead()
+    await abandoned
+
+    // Only the explicit cancel reached the Host; the late answer did not end
+    // the attempt the reopened dialog is now watching.
+    expect(calls.cancel).toEqual([KEY])
+    expect(signIn.store.getSnapshot().phase).toBe('running')
+    signIn.dispose()
+  })
+
+  it('adopts the attempt another surface started instead of reporting in-flight', async () => {
+    let reads = 0
+    const { ctx } = harness({
+      state: () => {
+        reads += 1
+        // Free when this page reads, running by the time its start is refused.
+        return Promise.resolve(ok(reads === 1 ? null : attempt({
+          notices: [{ message: 'Waiting for the browser' }],
+        })))
+      },
+      begin: () => Promise.resolve(fail('an authorization attempt for this key is already running', 'authorization/in-flight')),
+    })
+    const signIn = createProviderSignIn(ctx)
+    await signIn.begin(KEY, 'oauth')
+
+    expect(signIn.store.getSnapshot()).toMatchObject({
+      phase: 'running',
+      failure: null,
+      notices: [{ message: 'Waiting for the browser' }],
+    })
+    signIn.dispose()
+  })
+
+  it('keeps a confirmed sign-in when the human cancels at the same moment', async () => {
+    const { ctx } = harness({
+      state: () => Promise.resolve(ok(attempt({ phase: 'authorized' }))),
+      cancel: () => Promise.resolve(ok(undefined)),
+    })
+    const signIn = createProviderSignIn(ctx)
+    await signIn.begin(KEY, undefined)
+    await signIn.cancel()
+
+    expect(signIn.store.getSnapshot().phase).toBe('authorized')
     signIn.dispose()
   })
 
