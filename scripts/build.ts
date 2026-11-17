@@ -103,7 +103,10 @@ export function buildGates(
     // from its own package scripts; the Web shell serves the client bundle at
     // runtime, so build it before the shell's artifact step.
     gates.push(pnpmGate('dsh-im', 'IM bots plugin', ['--filter', '@xmanrui/dsh-im', 'run', 'build'], [], env))
-    gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle', 'dsh-im'], env))
+    // The native proactive coding agent ships the same kind of pre-bundled Host
+    // entry and browser client from its own package scripts.
+    gates.push(pnpmGate('superagent', 'Superagent plugin', ['--filter', 'dsh-superagent', 'run', 'build'], [], env))
+    gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle', 'dsh-im', 'superagent'], env))
   }
   if (scope === 'typecheck') {
     for (const step of contractSteps(root, 'all')) gates.push(libraryGate(step, step.needs, env))

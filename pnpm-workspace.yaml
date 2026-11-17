@@ -9,6 +9,8 @@ packages:
   - apps/*
   # Native IM bot plugin (vendored dsh-im) loaded by the Web/Desktop bundle.
   - apps/web/native/dsh-im
+  # Native proactive coding agent (vendored dsh-superagent) loaded by the Web/Desktop bundle.
+  - apps/web/native/dsh-superagent
   # Private package owning repository-level benchmark dependencies.
   - benchmarks
   - website

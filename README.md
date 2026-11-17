@@ -97,6 +97,15 @@ pnpm dsh web
 - `/goal` 与 `/plan` 已提升为所有内置渠道的原生命令：命令直接委派给当前会话绑定的 DSH Host 命令网关，复用 DSH 的持久化目标与自动续跑，不经过模型提示词。
 - 上游同步、构建与本地修改记录见 [`apps/web/native/dsh-im/NATIVE.md`](apps/web/native/dsh-im/NATIVE.md)；变更记录见 [`logs/00027`](logs/00027-原生集成dsh-im.md)、[`logs/00028`](logs/00028-移除四渠道.md)、[`logs/00033`](logs/00033-移除Matrix与Office.md) 与 [`logs/00037`](logs/00037-移除企业微信应用渠道.md)。
 
+### 原生 Superagent
+
+- 研究原型 `nano-dsh-superagent-prototype` 已以源码形式内置到 `apps/web/native/dsh-superagent/`（基线提交 `8c32a9d`），并作为 `dsh-web-app` bundle 的默认依赖挂载；`pnpm install && pnpm run build` 后 `dsh web` 与 Desktop 侧栏自动出现「Superagent」，不需要再 clone 原型仓库、单独 profile 或 `dsh plugin add`。
+- 使用步骤（专用 agent 账号、面板配置、发起请求、跟进/暂停/重试、主动模式与飞书启用）见 [内置副本快速开始](apps/web/native/dsh-superagent/docs/006-deployment.md#quick-start) 与 [NATIVE.md](apps/web/native/dsh-superagent/NATIVE.md)。
+- 默认启用 GitHub Source、关闭 Feishu Source；未配置仓库与 agent 账号时，面板显示 setup 待配置，运行时不轮询、不派工，也不影响其他功能。状态目录默认 `<DSH_HOME>/state/superagent`。
+- 内置副本适配 DSH `0.2.2-rc.3`：Session 转录优先读 live Agent、未加载时回退持久化日志；设置表单只读判断改用 `writable`；`stateDir` 默认 `<DSH_HOME>/state/superagent` 并兼容 Windows 绝对路径；模型选择测试按 0.2.2 流程重写；修复飞书事件消费的 health 竞态。
+- 管理 API 跟随 Web 绑定地址（默认 `127.0.0.1`，含 `127.0.0.2`、`::1`、容器/LAN 地址），仍受 DSH Web 认证、`x-orchestrator-request` 与同源检查保护。
+- 上游同步与本地修改记录见 [`apps/web/native/dsh-superagent/NATIVE.md`](apps/web/native/dsh-superagent/NATIVE.md)；变更记录见 [`logs/00038`](logs/00038-原生集成dsh-superagent.md)。
+
 ## 许可证
 
 第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
