@@ -175,6 +175,16 @@ export const en = {
   onboardingSave: 'Save and continue',
   onboardingSaving: 'Saving…',
   keyRequired: 'Enter an API key to continue.',
+  signIn: 'Sign in',
+  signInHint: 'This provider signs in on its own page. The credential is stored locally once the provider confirms it.',
+  signInTitle: 'Sign in to {provider}',
+  signInIntro: 'Complete the sign-in on the page this dialog opens. The panel follows the attempt and stores the credential the provider returns.',
+  signInWaiting: 'Waiting for the provider…',
+  signInSubmit: 'Continue',
+  signInRetry: 'Try again',
+  signInOpen: 'Open page',
+  signInDone: 'Signed in. The provider is ready to use.',
+  signInFailed: 'Sign-in failed.',
 }
 
 /** The settings.models namespace key union. */
@@ -355,6 +365,16 @@ export const zh: { [Key in keyof typeof en]: string } = {
   onboardingSave: '保存并继续',
   onboardingSaving: '保存中…',
   keyRequired: '请输入 API 密钥后继续。',
+  signIn: '登录',
+  signInHint: '该提供商通过自己的页面登录；提供商确认后，凭据会保存在本地。',
+  signInTitle: '登录 {provider}',
+  signInIntro: '在弹出的页面完成登录。此面板会跟踪本次登录，并在提供商返回凭据后保存。',
+  signInWaiting: '正在等待提供商…',
+  signInSubmit: '继续',
+  signInRetry: '重试',
+  signInOpen: '打开页面',
+  signInDone: '已登录，该提供商可以使用。',
+  signInFailed: '登录失败。',
 }
 
 /** Japanese copy, checked against the English keys. */
@@ -532,6 +552,16 @@ export const ja = {
   'onboardingSave': '保存して続ける',
   'onboardingSaving': '保存中…',
   'keyRequired': '続けるにはAPIキーを入力してください。',
+  signIn: 'サインイン',
+  signInHint: 'このプロバイダーは独自のページでサインインします。確認後、資格情報はローカルに保存されます。',
+  signInTitle: '{provider} にサインイン',
+  signInIntro: '開いたページでサインインを完了してください。このパネルは進行状況を追跡し、プロバイダーが返した資格情報を保存します。',
+  signInWaiting: 'プロバイダーを待機しています…',
+  signInSubmit: '続行',
+  signInRetry: '再試行',
+  signInOpen: 'ページを開く',
+  signInDone: 'サインインしました。このプロバイダーを利用できます。',
+  signInFailed: 'サインインに失敗しました。',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -709,6 +739,16 @@ export const es = {
   onboardingSave: 'Guardar y continuar',
   onboardingSaving: 'Guardando…',
   keyRequired: 'Ingrese una clave API para continuar.',
+  signIn: 'Iniciar sesión',
+  signInHint: 'Este proveedor inicia sesión en su propia página. La credencial se guarda de forma local cuando el proveedor la confirma.',
+  signInTitle: 'Iniciar sesión en {provider}',
+  signInIntro: 'Completa el inicio de sesión en la página que abre este panel. El panel sigue el intento y guarda la credencial que devuelve el proveedor.',
+  signInWaiting: 'Esperando al proveedor…',
+  signInSubmit: 'Continuar',
+  signInRetry: 'Reintentar',
+  signInOpen: 'Abrir página',
+  signInDone: 'Sesión iniciada. El proveedor está listo.',
+  signInFailed: 'No se pudo iniciar sesión.',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -886,6 +926,16 @@ export const fr = {
   onboardingSave: 'Enregistrer et continuer',
   onboardingSaving: 'Sauvegarde…',
   keyRequired: 'Entrez une clé API pour continuer.',
+  signIn: 'Se connecter',
+  signInHint: 'Ce fournisseur se connecte via sa propre page. L’identifiant est stocké localement une fois que le fournisseur le confirme.',
+  signInTitle: 'Se connecter à {provider}',
+  signInIntro: 'Terminez la connexion sur la page ouverte par ce panneau. Le panneau suit la tentative et enregistre l’identifiant renvoyé par le fournisseur.',
+  signInWaiting: 'En attente du fournisseur…',
+  signInSubmit: 'Continuer',
+  signInRetry: 'Réessayer',
+  signInOpen: 'Ouvrir la page',
+  signInDone: 'Connexion réussie. Le fournisseur est prêt.',
+  signInFailed: 'Échec de la connexion.',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -1063,6 +1113,16 @@ export const de = {
   onboardingSave: 'Speichern und fortfahren',
   onboardingSaving: 'Speichern…',
   keyRequired: 'Geben Sie einen API-Schlüssel ein, um fortzufahren.',
+  signIn: 'Anmelden',
+  signInHint: 'Dieser Anbieter meldet sich über seine eigene Seite an. Die Anmeldedaten werden lokal gespeichert, sobald der Anbieter sie bestätigt.',
+  signInTitle: 'Bei {provider} anmelden',
+  signInIntro: 'Schließe die Anmeldung auf der Seite ab, die dieses Fenster öffnet. Das Fenster verfolgt den Versuch und speichert die zurückgegebenen Anmeldedaten.',
+  signInWaiting: 'Warte auf den Anbieter…',
+  signInSubmit: 'Weiter',
+  signInRetry: 'Erneut versuchen',
+  signInOpen: 'Seite öffnen',
+  signInDone: 'Angemeldet. Der Anbieter ist einsatzbereit.',
+  signInFailed: 'Anmeldung fehlgeschlagen.',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -1240,6 +1300,16 @@ export const ru = {
   onboardingSave: 'Сохранить и продолжить',
   onboardingSaving: 'Сохранение…',
   keyRequired: 'Введите ключ API, чтобы продолжить.',
+  signIn: 'Войти',
+  signInHint: 'Этот провайдер выполняет вход на своей странице. Учётные данные сохраняются локально после подтверждения провайдером.',
+  signInTitle: 'Вход в {provider}',
+  signInIntro: 'Завершите вход на странице, которую открывает эта панель. Панель отслеживает попытку и сохраняет учётные данные, возвращённые провайдером.',
+  signInWaiting: 'Ожидание провайдера…',
+  signInSubmit: 'Продолжить',
+  signInRetry: 'Повторить',
+  signInOpen: 'Открыть страницу',
+  signInDone: 'Вход выполнен. Провайдер готов к работе.',
+  signInFailed: 'Не удалось войти.',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -1417,4 +1487,14 @@ export const pt = {
   onboardingSave: 'Salvar e continuar',
   onboardingSaving: 'Salvando…',
   keyRequired: 'Insira uma chave de API para continuar.',
+  signIn: 'Entrar',
+  signInHint: 'Este provedor entra pela própria página. A credencial é armazenada localmente quando o provedor a confirma.',
+  signInTitle: 'Entrar em {provider}',
+  signInIntro: 'Conclua o login na página que este painel abre. O painel acompanha a tentativa e guarda a credencial devolvida pelo provedor.',
+  signInWaiting: 'Aguardando o provedor…',
+  signInSubmit: 'Continuar',
+  signInRetry: 'Tentar novamente',
+  signInOpen: 'Abrir página',
+  signInDone: 'Sessão iniciada. O provedor está pronto.',
+  signInFailed: 'Falha ao entrar.',
 } satisfies Record<keyof typeof en, string>

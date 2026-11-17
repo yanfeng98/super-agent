@@ -132,6 +132,65 @@ async begin(request: AuthorizationRequest): Promise<AuthorizationOutcome>
 
 Source: [`packages/credentials/authorization/src/index.ts`](../../packages/credentials/authorization/src/index.ts)
 
+<a id="ctxauthorizationcontroller--authorizationcontroller"></a>
+
+### `ctx.authorizationController` — `AuthorizationController`
+
+Host service backing the generated `ctx.remote.authorization` namespace. It owns every lifecycle obligation the seam itself does not: the background run whose rejection has no caller, the pending question's release on cancel, replacement, and expiry, and the projection that keeps a `CredentialKey` brand and an `AbortSignal` off the wire.
+
+```ts cordis-catalog
+/**
+ * Every registered flow, for a page listing what can be authorized here.
+ * @returns one entry per flow, with the credential's own addressing units.
+ * @throws RemoteError when no authorization service is mounted.
+ */
+@Remote list(): AuthorizationFlowView[]
+
+/**
+ * Start one attempt and answer with the state it has already reached. The run
+ * continues in the background: the returned view is a snapshot the caller
+ * refreshes through {@link state}.
+ * @param key - joined `<scope>/<id>` credential key of a registered flow.
+ * @param method - method id to run; absent runs the flow's first.
+ * @returns the attempt's current state.
+ * @throws RemoteError when the key names no registered flow, the method is not offered, an attempt
+ *   for that key is already running, or no authorization service is mounted.
+ */
+@Remote begin(key: string, method: string | undefined): AuthorizationAttemptView
+
+/**
+ * Read the state a key's attempt reached, or the terminal state it settled
+ * into. A page that reloaded mid-sign-in rejoins through this call.
+ * @param key - joined `<scope>/<id>` credential key.
+ * @returns the attempt's current state, or null when this key has not been attempted since the
+ *   controller mounted.
+ * @throws RemoteError when the request is invalid.
+ */
+@Remote state(key: string): AuthorizationAttemptView | null
+
+/**
+ * Answer the question an attempt is waiting on. The prompt id guards against
+ * a page answering a question that has already been replaced or withdrawn.
+ * @param key - joined `<scope>/<id>` credential key.
+ * @param promptId - id of the question being answered, as last read.
+ * @param value - the typed text, or a `select` answer's option id.
+ * @returns the attempt's state after the answer was delivered.
+ * @throws RemoteError when the attempt is gone, has no pending question, or the id is stale.
+ */
+@Remote answer(key: string, promptId: number, value: string): AuthorizationAttemptView
+
+/**
+ * Withdraw the attempt running for a key, if any. Idempotent: cancelling a
+ * finished or unknown attempt is not an error, because a page may close after
+ * the flow already settled.
+ * @param key - joined `<scope>/<id>` credential key.
+ * @throws RemoteError when the request is invalid.
+ */
+@Remote cancel(key: string): void
+```
+
+Source: [`packages/api/settings-controller/src/authorization.ts`](../../packages/api/settings-controller/src/authorization.ts)
+
 <a id="ctxcredentials--credentialprovider-abstract-seam"></a>
 
 ### `ctx.credentials` — `CredentialProvider` (abstract seam)

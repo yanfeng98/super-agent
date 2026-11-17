@@ -62,6 +62,10 @@ export type {} from '@deepseek-ai/dsh-user-questions/remote'
 export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-web/remote'
 export type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
+export type {
+  AuthorizationAttemptView, AuthorizationFlowView, AuthorizationMethodView, AuthorizationNoticeView,
+  AuthorizationPhase, AuthorizationPromptOptionView, AuthorizationPromptView,
+} from '@deepseek-ai/dsh-api-settings-controller/types'
 export type {} from '@deepseek-ai/dsh-deepseek-account/remote'
 export type {} from '@deepseek-ai/dsh-goal/remote'
 export type {} from '@deepseek-ai/dsh-schedule/remote'

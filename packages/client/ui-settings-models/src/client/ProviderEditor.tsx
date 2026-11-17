@@ -23,7 +23,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CredentialInfo, LlmNativeAuth, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  AuthorizationFlowView, CredentialInfo, LlmNativeAuth, SettingsNamespaceView, SettingsPathOpView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -42,6 +44,8 @@ import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { en } from './locales.ts'
 import { ApiKeyInput } from './ApiKeyInput.tsx'
+import { ProviderSignIn } from './ProviderSignIn.tsx'
+import type { ProviderSignInView } from './ProviderSignIn.tsx'
 import { RetryPolicyEditor, retryPolicyDefaults, retryPolicyFailure } from './RetryPolicyEditor.tsx'
 import styles from './ModelsSection.module.css'
 
@@ -80,6 +84,10 @@ export interface ProviderEditorProps {
   baseURLEnv?: readonly string[]
   /** Authentication the route performs when its profile names no credential reference; absent when the adapter reports none. */
   nativeAuth?: LlmNativeAuth
+  /** The host sign-in flow that writes this route's credential, when the composition offers one. */
+  flow?: AuthorizationFlowView
+  /** The page's sign-in store and actions; absent when the page renders none. */
+  signIn?: ProviderSignInView
   /** Redacted state of the profile's named credential reference, from the page snapshot. */
   credential?: CredentialInfo
   /** Redacted checks for the profile's named reference or the provider's native variables. */
@@ -209,6 +217,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   useEffect(() => { onBusyChange?.(busy || listBusy) }, [busy, listBusy, onBusyChange])
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [customizedOpen, setCustomizedOpen] = useState(false)
+  const [signInOpen, setSignInOpen] = useState(false)
   // A settings success advances both retry baselines immediately. Keeping the
   // derived fields in the draft prevents a pushed namespace refresh from
   // turning them into deletions when the following credential write is retried.
@@ -461,8 +470,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         <button type="button" className={styles['helpButton']} aria-label={t('authHelp')}>?</button>
       </Tooltip>
     )
-    // A provider with no native key authentication has no key for this field to store.
+    // A provider with no native key authentication has no key for this field to
+    // store; its credential comes from signing in, which is why the card offers
+    // the host flow in place of the field.
     const keylessNativeAuth = nativeAuth?.env.length === 0 && nativeAuth.oauth
+    const signInFlow = keylessNativeAuth ? props.flow : undefined
+    const signIn = props.signIn
     const keyPlaceholder = keyHint === undefined || props.credentialRequired === true
       ? t('keyPlaceholder')
       : t('keyPlaceholderFallback').replace('{hint}', () => keyHint)
@@ -480,7 +493,42 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     return (
       <>
         {keylessNativeAuth
-          ? null
+          ? (signInFlow === undefined || signIn === undefined
+            ? null
+            : (
+              <div className={styles['field']}>
+                <span className={styles['fieldLabel']}>{t('signIn')}</span>
+                <div className={styles['signInActions']}>
+                  {signInFlow.methods.map(method => (
+                    <button
+                      key={method.id}
+                      type="button"
+                      className={styles['secondaryButton']}
+                      disabled={disabled}
+                      onClick={() => {
+                        setSignInOpen(true)
+                        signIn.begin(signInFlow.key, method.id)
+                      }}
+                    >
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+                <span className={styles['advancedHint']}>{t('signInHint')}</span>
+                <ProviderSignIn
+                  open={signInOpen}
+                  displayName={props.displayName}
+                  flow={signInFlow}
+                  signIn={signIn}
+                  t={t}
+                  closeLabel={t('close')}
+                  onClose={() => {
+                    setSignInOpen(false)
+                    signIn.reset()
+                  }}
+                />
+              </div>
+            ))
           : <div className={styles['field']}>
             <span className={styles['fieldLabel']}>
               {t('keyInput')}

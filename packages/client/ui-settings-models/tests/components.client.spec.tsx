@@ -7,13 +7,14 @@ import Schema from '@deepseek-ai/schemastery'
 import { Context } from '@deepseek-ai/cordis'
 import { bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type {
-  CredentialInfo, RemoteResult, SettingsNamespaceView,
+  AuthorizationFlowView, CredentialInfo, RemoteResult, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   ModelsSection, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
 } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
+import type { ProviderSignInState } from '../src/client/sign-in.ts'
 import { ApiKeyInput } from '../src/client/ApiKeyInput.tsx'
 import { ProviderEditor, pathOps } from '../src/client/ProviderEditor.tsx'
 import type { ProviderEditorProps } from '../src/client/ProviderEditor.tsx'
@@ -177,6 +178,17 @@ function remoteFail(message: string, code: RefusalCode = 'credential/rejected') 
   return { ok: false as const, error: REFUSALS[code](message) }
 }
 
+/** The attempt state the page renders when no sign-in has been started. */
+const IDLE_ATTEMPT: ProviderSignInState = { key: null, phase: 'idle', notices: [], prompt: null, failure: null }
+
+/** Bind an attempt to the selector a store hook would receive. */
+const useIdleAttempt = <T,>(selector: (state: ProviderSignInState) => T): T => selector(IDLE_ATTEMPT)
+
+/** Sign-in actions a card receives; a case that drives one replaces its member. */
+function signInActions() {
+  return { begin: vi.fn(), answer: vi.fn(), cancel: vi.fn(), reset: vi.fn() }
+}
+
 function scriptedFace(overrides: {
   update?: ReturnType<typeof vi.fn>
   mutate?: ReturnType<typeof vi.fn>
@@ -215,6 +227,13 @@ function scriptedFace(overrides: {
       describe: vi.fn(() => Promise.resolve(remoteOk({ writable: true, hasDocument: false, namespaces: wireNamespaces() }))),
       update,
       mutate,
+    },
+    authorization: {
+      list: vi.fn((): Promise<RemoteResult<AuthorizationFlowView[]>> => Promise.resolve(remoteOk([]))),
+      begin: vi.fn(() => Promise.resolve(remoteOk(IDLE_ATTEMPT))),
+      state: vi.fn(() => Promise.resolve(remoteOk(null))),
+      answer: vi.fn(() => Promise.resolve(remoteOk(IDLE_ATTEMPT))),
+      cancel: vi.fn(() => Promise.resolve(remoteOk(undefined))),
     },
     credentials: {
       // Typed as the Remote answer rather than the success branch alone: a
@@ -324,13 +343,15 @@ async function mountFace(scripted: ReturnType<typeof scriptedFace>) {
   const injected: ModelsSectionProps = {
     controller,
     useSnapshot: bindSnapshotSelector(controller.store),
+    useAttempt: useIdleAttempt,
+    signIn: signInActions(),
     operations: operationsWith(face),
     schema: settingsSchema,
     t,
     renderSlot: renderSlot as unknown as ModelsSectionProps['renderSlot'],
   }
   const view = render(<ModelsSection {...injected} />)
-  return { view, ctx, face, update, mutate, set, unset, controller, mirror, renderSlot }
+  return { view, ctx, face, update, mutate, set, unset, controller, mirror, renderSlot, signIn: injected.signIn! }
 }
 
 async function mountSection(overrides: Parameters<typeof scriptedFace>[0] = {}) {
@@ -393,6 +414,8 @@ describe('ModelsSection', () => {
       render(<ModelsSection
         controller={controller}
         useSnapshot={bindSnapshotSelector(controller.store)}
+        useAttempt={useIdleAttempt}
+        signIn={signInActions()}
         operations={operationsWith(face)}
         schema={settingsSchema}
         t={t}
@@ -754,6 +777,8 @@ describe('ModelsSection', () => {
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
+      useAttempt={useIdleAttempt}
+      signIn={signInActions()}
       operations={operationsWith(face)}
       schema={settingsSchema}
       t={t}
@@ -779,6 +804,8 @@ describe('ModelsSection', () => {
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
+      useAttempt={useIdleAttempt}
+      signIn={signInActions()}
       operations={operationsWith(face)}
       schema={settingsSchema}
       t={t}
@@ -1590,6 +1617,8 @@ describe('ModelsSection', () => {
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
+      useAttempt={useIdleAttempt}
+      signIn={signInActions()}
       operations={operationsWith(face)}
       schema={settingsSchema}
       t={t}
@@ -1713,6 +1742,8 @@ describe('ModelsSection', () => {
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
+      useAttempt={useIdleAttempt}
+      signIn={signInActions()}
       operations={operationsWith(face.face)}
       schema={settingsSchema}
       t={t}
@@ -1736,6 +1767,8 @@ describe('ModelsSection', () => {
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
+      useAttempt={useIdleAttempt}
+      signIn={signInActions()}
       operations={operationsWith(face)}
       schema={settingsSchema}
       t={t}
@@ -2059,6 +2092,8 @@ describe('ModelsSection', () => {
     render(<ModelsSection
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
+      useAttempt={useIdleAttempt}
+      signIn={signInActions()}
       operations={operationsWith(face)}
       schema={settingsSchema}
       t={t}
@@ -2666,4 +2701,63 @@ it.each([es, fr, de, ru, pt])('keeps capacity examples in translated validation 
       expect(parseCapacity(token!)).toBeGreaterThan(0)
     }
   }
+})
+
+describe('keyless provider sign-in', () => {
+  /** A face whose only keyless route is a codex-like provider with a host sign-in flow. */
+  function keylessFace(): ReturnType<typeof scriptedFace> {
+    const scripted = scriptedFace()
+    const flow: AuthorizationFlowView = {
+      key: 'llm-pi-ai/openai-codex',
+      scope: 'llm-pi-ai',
+      id: 'openai-codex',
+      label: 'OpenAI Codex',
+      methods: [{ id: 'oauth', label: 'OpenAI (ChatGPT Plus/Pro)' }],
+      inFlight: false,
+    }
+    scripted.face.llm.listConfigurableProviders.mockResolvedValue(remoteOk([
+      {
+        provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'],
+        active: true, defaultBaseURL: 'https://api.openai.com/v1', baseURLEnv: ['FIXTURE_ENDPOINT'],
+        nativeAuth: { env: ['OPENAI_API_KEY'], oauth: false },
+      },
+      {
+        provider: 'openai-codex', displayName: 'codex', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai-codex'],
+        active: false, defaultBaseURL: 'https://chatgpt.com/backend-api', baseURLEnv: [],
+        nativeAuth: { env: [], oauth: true },
+      },
+    ]))
+    scripted.face.authorization.list.mockResolvedValue(remoteOk([flow]))
+    // A stored profile is what makes the route a row rather than an add-card
+    // candidate; its content is irrelevant, since the route has no key to hold.
+    scripted.face.settings.describe.mockResolvedValue(remoteOk({
+      writable: true,
+      hasDocument: false,
+      namespaces: wireNamespaces().map(view => view.ns === 'llm-pi-ai' ? piAiNamespaceWith('openai-codex', {}) : view),
+    }))
+    return scripted
+  }
+
+  it('offers the host flow instead of a key field, and starts it when chosen', async () => {
+    const { signIn } = await mountFace(keylessFace())
+    fireEvent.click(screen.getByRole('button', { name: providerCopy(en.editProvider, { provider: 'openai-codex', displayName: 'codex' }) }))
+
+    // A route with no native key has no key field to store into.
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    const start = screen.getByRole('button', { name: 'OpenAI (ChatGPT Plus/Pro)' })
+    fireEvent.click(start)
+
+    expect(signIn.begin).toHaveBeenCalledWith('llm-pi-ai/openai-codex', 'oauth')
+    expect(screen.getByRole('dialog', { name: en.signInTitle.replace('{provider}', 'codex') })).toBeTruthy()
+  })
+
+  it('keeps the key field absent without a flow, so no card offers a dead button', async () => {
+    const scripted = keylessFace()
+    scripted.face.authorization.list.mockResolvedValue(remoteOk([]))
+    await mountFace(scripted)
+    fireEvent.click(screen.getByRole('button', { name: providerCopy(en.editProvider, { provider: 'openai-codex', displayName: 'codex' }) }))
+
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'OpenAI (ChatGPT Plus/Pro)' })).toBeNull()
+  })
 })
