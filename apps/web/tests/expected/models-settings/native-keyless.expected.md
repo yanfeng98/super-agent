@@ -29,7 +29,6 @@
       - option "openai-codex" [selected]
       - option "opencode-go"
       - option "openrouter"
-      - option "together"
       - option "xai"
       - option "xiaomi-token-plan-cn"
       - option "zai-coding-cn"

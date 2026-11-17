@@ -4,6 +4,7 @@
 - **背景**：`mistral` 是 pi-ai 目录里的第一方平台路由（Mistral AI），默认端点 `https://api.mistral.ai`，使用 Mistral 自家的 `mistral-conversations` 协议（对话补全路径为 `/v1/chat/completions`），凭据为 `MISTRAL_API_KEY`，没有 OAuth 登录或订阅套餐入口。目录快照 40 个模型：Mistral Large 4、Large 3 与 Large 2.1，Medium 3 / 3.1 / 3.5，Small 3.2 / 4，Codestral、Devstral、Ministral、Magistral、Pixtral、Voxtral 系列，`open-*` 开源权重条目，以及平台代管的三个 GLM 条目（`glm-5-2` 与 `zai-glm-5-2` 同为 GLM-5.2，`zai-glm-5-3` 为 GLM-5.3）。
 - **判断依据**：与之前移除的转售型或聚合型路由不同，`mistral` 是模型原厂入口。40 个条目里 29 个能在其他已提供路由上取到同一模型（`openrouter` 的 `mistralai/*` 条目，GLM 两条另有 `together` 与 `opencode-go` 提供），其余 11 个没有其他内置路由：Pixtral 两个、Magistral Medium、Leanstral 1.5、Devstral Medium、Devstral Small 两个、`labs-devstral-small-2512`、Mistral Large 2.1、Mistral 7B 与 Mixtral 8x7B。因此移除它拿掉的不只是托管入口，还有这 11 个模型的访问，文档与日志都如实记录这一点。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、`docs/user/guide/providers.md`、包 README、升级指南、Web golden 与 e2e 断言、根 README、`logs/`。
+- **后续变更**：`together` 已于 [00032](00032-移除together供应商.md) 移除，本记录中作为承接路由出现的 `together`（GLM 两条）不再可用；`glm-5.2` 仍由 `opencode-go` 与 `openrouter` 提供，`glm-5.3` 另见 `zai-coding-cn`、`opencode-go` 与 `openrouter`，现行覆盖见 [00009](00009-模型供应商清理汇总.md) 第 8 节。
 
 ## 1. 变更
 
