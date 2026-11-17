@@ -3,7 +3,7 @@
  *
  * A reply is a fact the platform states, not a guess, so it never consults the
  * ambient record: the channel injects a `fetch` that resolves one event id to
- * its text (Matrix: CS API single-event lookup, Feishu: OpenAPI message get).
+ * its text (Feishu: OpenAPI message get).
  * The walk is depth-bounded and loop-guarded because reply relations are
  * user-authored data; a cyclic chain terminates on the first repeat instead of
  * spinning. The result is oldest-first so the prompt reads cause before effect.

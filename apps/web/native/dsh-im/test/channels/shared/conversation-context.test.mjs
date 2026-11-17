@@ -13,7 +13,6 @@ import { WindowAmbientProvider } from '../../../src/channels/shared/conversation
 import { composeContextPrompt, contextBlockFor, dedupeContextEntries, renderContextEntries } from '../../../src/channels/shared/conversation/context-builder.mjs';
 import { CONTEXT_NOTE } from '../../../src/channels/shared/injected-context.mjs';
 import { ConversationStateStore } from '../../../src/channels/shared/conversation-state-store.mjs';
-import { MatrixRoomHistoryStore } from '../../../src/channels/matrix/matrix-room-history.mjs';
 
 const tempDirectories = new Set();
 
@@ -29,21 +28,6 @@ test.after(async () => {
 
 test('conversation key codecs reproduce the established on-disk keys byte for byte', () => {
   deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'matrix',
-    chatId: '@Rjd:el.weetar.com',
-    senderId: '@Rjd:EL.Weetar.com',
-    kind: 'direct',
-  })), 'direct:dm:@rjd:el.weetar.com');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'matrix',
-    chatId: '!BrESOucPXQfqxaQTiw:el.weetar.com',
-  })), 'group:room:!BrESOucPXQfqxaQTiw:el.weetar.com');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
-    channel: 'matrix',
-    chatId: '!BrESOucPXQfqxaQTiw:el.weetar.com',
-    threadId: '$FWLVNgabc:el.weetar.com',
-  })), 'group:room:!BrESOucPXQfqxaQTiw:el.weetar.com$$FWLVNgabc:el.weetar.com');
-  deepStrictEqual(encodeConversationRouteKey(buildConversationRoute({
     channel: 'feishu',
     chatId: 'oc_abc',
   })), 'group:oc_abc');
@@ -55,14 +39,14 @@ test('conversation key codecs reproduce the established on-disk keys byte for by
 });
 
 test('route building freezes the scope discriminant and refuses keys it cannot encode', () => {
-  deepStrictEqual(buildConversationRoute({ channel: 'matrix', chatId: '!r:x', threadId: '$t:x' }).scope, 'thread');
-  deepStrictEqual(buildConversationRoute({ channel: 'matrix', chatId: '!r:x' }).scope, 'group');
-  deepStrictEqual(buildConversationRoute({ channel: 'matrix', chatId: '@u:x', senderId: '@u:x', kind: 'dm' }).scope, 'dm');
-  throws(() => buildConversationRoute({ channel: '', chatId: '!r:x' }), TypeError);
-  throws(() => buildConversationRoute({ channel: 'matrix' }), TypeError);
+  deepStrictEqual(buildConversationRoute({ channel: 'feishu', chatId: 'oc_abc', threadId: 'om_root' }).scope, 'thread');
+  deepStrictEqual(buildConversationRoute({ channel: 'feishu', chatId: 'oc_abc' }).scope, 'group');
+  deepStrictEqual(buildConversationRoute({ channel: 'feishu', chatId: 'oc_abc', senderId: 'ou_abc', kind: 'dm' }).scope, 'dm');
+  throws(() => buildConversationRoute({ channel: '', chatId: 'oc_abc' }), TypeError);
+  throws(() => buildConversationRoute({ channel: 'feishu' }), TypeError);
   throws(() => encodeConversationRouteKey({ channel: 'nope', scope: 'group', chatId: 'x' }), TypeError);
   throws(() => encodeConversationRouteKey(buildConversationRoute({
-    channel: 'feishu', chatId: '@user:x', senderId: '@user:x', kind: 'direct',
+    channel: 'feishu', chatId: 'oc_abc', senderId: 'ou_abc', kind: 'dm',
   })), TypeError);
 });
 
@@ -107,31 +91,31 @@ test('the trigger table encodes the whole product rule set', () => {
 test('a semantic message validates identity fields and normalizes the rest', () => {
   const message = createSemanticMessage({
     id: '$e1:x',
-    channel: 'matrix',
-    chatId: '!r:x',
-    threadId: '$t:x',
-    sender: { id: ' @a:x ', name: '  ' },
+    channel: 'feishu',
+    chatId: 'oc_abc',
+    threadId: 'om_root',
+    sender: { id: ' ou_abc ', name: '  ' },
     timestamp: 0,
     content: '你好',
-    replyTo: { id: '$p:x', sender: '@b:x', timestamp: 5 },
+    replyTo: { id: '$p:x', sender: 'ou_b', timestamp: 5 },
     trigger: { mentionedBot: true },
     kind: 'group',
   });
-  deepStrictEqual(message.sender, Object.freeze({ id: '@a:x' }));
+  deepStrictEqual(message.sender, Object.freeze({ id: 'ou_abc' }));
   deepStrictEqual(message.trigger, Object.freeze({ mentionedBot: true, repliedToBot: false, commandLike: false }));
-  deepStrictEqual(message.replyTo, Object.freeze({ id: '$p:x', sender: '@b:x', timestamp: 5 }));
+  deepStrictEqual(message.replyTo, Object.freeze({ id: '$p:x', sender: 'ou_b', timestamp: 5 }));
   ok(message.timestamp > 0, 'a non-positive origin falls back to the ingestion time');
-  throws(() => createSemanticMessage({ channel: 'matrix', chatId: '!r:x', sender: { id: '@a:x' } }), TypeError);
-  throws(() => createSemanticMessage({ id: '$e', chatId: '!r:x', sender: { id: '@a:x' } }), TypeError);
-  throws(() => createSemanticMessage({ id: '$e', channel: 'matrix', sender: { id: '@a:x' } }), TypeError);
+  throws(() => createSemanticMessage({ channel: 'feishu', chatId: 'oc_abc', sender: { id: 'ou_a' } }), TypeError);
+  throws(() => createSemanticMessage({ id: '$e', chatId: 'oc_abc', sender: { id: 'ou_a' } }), TypeError);
+  throws(() => createSemanticMessage({ id: '$e', channel: 'feishu', sender: { id: 'ou_a' } }), TypeError);
 });
 
 test('the root context registry injects a root once and never consumes it on failure paths', async () => {
   const directory = await makeTempDirectory('dsh-im-conversation-root-');
   const state = await new ConversationStateStore(join(directory, 'state.json')).load();
   const registry = new RootContextRegistry({ state });
-  const routeKey = 'group:room:!r:x$$';
-  const rootId = '$root:x';
+  const routeKey = 'group:oc_abc:thread:om_root';
+  const rootId = 'om_root';
   deepStrictEqual(registry.plan({ routeKey, sessionId: 's1', rootId }), Object.freeze({ inject: true, reason: 'fresh' }));
   deepStrictEqual(registry.plan({ routeKey, sessionId: 's1', rootId: null }), Object.freeze({ inject: false, reason: 'no-root' }));
   // Lookups, commands, and rejected turns never call markInjected, so they keep offering the root.
@@ -139,7 +123,7 @@ test('the root context registry injects a root once and never consumes it on fai
   ok(await registry.markInjected({ routeKey, sessionId: 's1', rootId }));
   deepStrictEqual(registry.plan({ routeKey, sessionId: 's1', rootId }), Object.freeze({ inject: false, reason: 'consumed' }));
   deepStrictEqual(registry.plan({ routeKey, sessionId: 's2', rootId }), Object.freeze({ inject: true, reason: 'session-changed' }));
-  deepStrictEqual(registry.plan({ routeKey, sessionId: 's1', rootId: '$other:x' }), Object.freeze({ inject: true, reason: 'root-changed' }));
+  deepStrictEqual(registry.plan({ routeKey, sessionId: 's1', rootId: 'om_other' }), Object.freeze({ inject: true, reason: 'root-changed' }));
   ok(await registry.clearRoute(routeKey));
   deepStrictEqual(registry.plan({ routeKey, sessionId: 's1', rootId }), Object.freeze({ inject: true, reason: 'fresh' }));
   await registry.markInjected({ routeKey, sessionId: 's1', rootId });
@@ -153,10 +137,10 @@ test('the root context registry injects a root once and never consumes it on fai
 
 test('the root context registry works without an extension-capable state', () => {
   const registry = new RootContextRegistry({});
-  const routeKey = 'group:room:!r:x';
-  deepStrictEqual(registry.plan({ routeKey, sessionId: 's', rootId: '$r:x' }), Object.freeze({ inject: true, reason: 'fresh' }));
-  void registry.markInjected({ routeKey, sessionId: 's', rootId: '$r:x' });
-  deepStrictEqual(registry.plan({ routeKey, sessionId: 's', rootId: '$r:x' }), Object.freeze({ inject: false, reason: 'consumed' }));
+  const routeKey = 'group:oc_abc';
+  deepStrictEqual(registry.plan({ routeKey, sessionId: 's', rootId: 'om_root' }), Object.freeze({ inject: true, reason: 'fresh' }));
+  void registry.markInjected({ routeKey, sessionId: 's', rootId: 'om_root' });
+  deepStrictEqual(registry.plan({ routeKey, sessionId: 's', rootId: 'om_root' }), Object.freeze({ inject: false, reason: 'consumed' }));
 });
 
 test('the reply chain walks oldest first, honors depth, and survives cycles and lookup failures', async () => {
@@ -209,9 +193,44 @@ test('the event LRU evicts the least recently used entry and refreshes on read',
   deepStrictEqual(lru.size, 0);
 });
 
+class AmbientRecord {
+  #entries = new Map();
+
+  append(entry) {
+    this.#entries.set(entry.eventId, { ...entry });
+    return true;
+  }
+
+  search({ roomId, from, to }) {
+    return [...this.#entries.values()]
+      .filter((entry) => entry.roomId === roomId && entry.ts >= from && entry.ts <= to)
+      .sort((left, right) => right.ts - left.ts);
+  }
+
+  pending({ roomId, limit }) {
+    return [...this.#entries.values()]
+      .filter((entry) => entry.roomId === roomId && entry.kind === 'human' && entry.injected !== true)
+      .sort((left, right) => right.ts - left.ts)
+      .slice(0, limit);
+  }
+
+  async markInjected(roomId, eventIds) {
+    let marked = 0;
+    for (const eventId of eventIds) {
+      const entry = this.#entries.get(eventId);
+      if (entry && entry.roomId === roomId && entry.injected !== true) {
+        entry.injected = true;
+        marked += 1;
+      }
+    }
+    return marked;
+  }
+
+  async flush() {}
+}
+
 test('the ambient provider follows the same-sender burst run and falls back to the recent window', async () => {
-  const directory = await makeTempDirectory('dsh-im-conversation-ambient-');
-  const store = await new MatrixRoomHistoryStore(join(directory, 'matrix-history.json')).load();
+  const store = new AmbientRecord();
   const room = '!ambient:example.org';
   const now = 10_000_000;
   const seed = [

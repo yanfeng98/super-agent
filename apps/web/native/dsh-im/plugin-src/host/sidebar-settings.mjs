@@ -12,8 +12,6 @@ import { WecomAppConfigStore } from '../../src/channels/wecom-app/config-store.m
 import { QqConfigStore } from '../../src/channels/qq/config-store.mjs';
 import { IMessageConfigStore } from '../../src/channels/imessage/config-store.mjs';
 import { EmailConfigStore } from '../../src/channels/email/config-store.mjs';
-import { MatrixConfigStore } from '../../src/channels/matrix/matrix-config-store.mjs';
-import { OfficeConfigStore } from '../../src/channels/office/config-store.mjs';
 
 export const SIDEBAR_SETTINGS_RPC_CHANNEL = '/dsh-im-sidebar';
 export const SIDEBAR_SETTINGS_ENDPOINTS = Object.freeze({
@@ -25,7 +23,6 @@ const CHANNEL_STORES = [
   ['dingtalk', DingtalkConfigStore], ['wecom', WecomConfigStore],
   ['wecomApp', WecomAppConfigStore, 'wecom-app'], ['qq', QqConfigStore],
   ['imessage', IMessageConfigStore], ['email', EmailConfigStore],
-  ['matrix', MatrixConfigStore], ['office', OfficeConfigStore],
 ];
 
 function dshHome(config) {
@@ -40,7 +37,7 @@ export async function hasConfiguredChannel(config = {}) {
     const options = { dshHome: dshHome(config), ...config[key] };
     const root = resolve(options.dataDir ?? join(dshHome(options), 'integrations', `dsh-${channel}`));
     const store = await new Store(resolve(options.configPath ?? join(root, 'config.json'))).load();
-    return key === 'office' ? store.get() !== null : store.list().length > 0;
+    return store.list().length > 0;
   }));
   if (results.some((result) => result.status === 'fulfilled' && result.value)) return true;
   // Unknown configuration must not be mistaken for deleting the last channel.

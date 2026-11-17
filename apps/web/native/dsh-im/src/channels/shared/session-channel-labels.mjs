@@ -5,8 +5,6 @@ export const SESSION_CHANNEL_LABELS = Object.freeze(Object.fromEntries(Object.en
   wecom: ['企业微信', 'WeCom'],
   qq: ['QQ', 'QQ'],
   imessage: ['iMessage', 'iMessage'],
-  matrix: ['Matrix', 'Matrix'],
-  office: ['AI Office', 'AI Office'],
 }).map(([channel, labels]) => [channel, Object.freeze(labels)])));
 
 /** Read only the exact, leading title prefix emitted by dsh-im. */

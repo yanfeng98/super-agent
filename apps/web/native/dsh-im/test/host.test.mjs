@@ -9,7 +9,7 @@ import { createImHostPlugin, inject, name } from '../plugin-src/host/index.mjs';
 const NO_CHANNELS = Object.freeze({
   applyFeishu: async () => {}, applyWeixin: async () => {}, applyDingtalk: async () => {},
   applyWecom: async () => {}, applyWecomApp: async () => {}, applyQq: async () => {},
-  applyIMessage: async () => {}, applyOffice: async () => {},
+  applyIMessage: async () => {}, applyEmail: async () => {},
 });
 
 test('Host forwards its management authority to general settings in the native build', async () => {
@@ -54,13 +54,13 @@ test('Host resolves the bot message language before channels start and serves it
     installSidebarSettingsRpc: (_ctx, { config }) => {
       order.push(['sidebar-rpc', config.rpcAuthority, config.language]);
     },
-    applyMatrix: async () => { order.push(['matrix', resolved]); },
+    applyEmail: async () => { order.push(['email', resolved]); },
   });
 
   await plugin.apply({ connection: { fetch: {} } }, {
     language: 'en',
     rpcAuthority: 'trusted-host',
-    matrix: {},
+    email: {},
   });
 
   assert.deepEqual(order[0], ['language', 'en']);
@@ -68,13 +68,13 @@ test('Host resolves the bot message language before channels start and serves it
     ['language-rpc', true, 'trusted-host']);
   assert.deepEqual(order.find(([kind]) => kind === 'sidebar-rpc'),
     ['sidebar-rpc', 'trusted-host', 'en']);
-  assert.deepEqual(order.find(([kind]) => kind === 'matrix'), ['matrix', true]);
+  assert.deepEqual(order.find(([kind]) => kind === 'email'), ['email', true]);
 });
 
 test('Host-provided describeConversation delegates through ctx.provide', async () => {
   let provided;
   const described = {
-    channel: 'matrix',
+    channel: 'feishu',
     conversationKey: 'group:chat-1:thread-2',
     senderId: 'user-1',
   };
@@ -102,7 +102,7 @@ test('Host-provided describeConversation delegates through ctx.provide', async (
   assert.deepEqual(await provided.describeConversation('session-1'), described);
 });
 
-test('Host composes IM channels and the AI Office connector inside one plugin context', async () => {
+test('Host composes the IM channels inside one plugin context', async () => {
   const calls = [];
   const deliveryService = { marker: 'shared-delivery-service' };
   const plugin = createImHostPlugin({
@@ -113,7 +113,6 @@ test('Host composes IM channels and the AI Office connector inside one plugin co
     applyWecom: async (ctx, config) => calls.push(['wecom', ctx, config]),
     applyQq: async (ctx, config) => calls.push(['qq', ctx, config]),
     applyIMessage: async (ctx, config) => calls.push(['imessage', ctx, config]),
-    applyOffice: async (ctx, config) => calls.push(['office', ctx, config]),
   });
   const ctx = { marker: 'shared-context' };
   const config = {
@@ -125,7 +124,6 @@ test('Host composes IM channels and the AI Office connector inside one plugin co
     wecom: { replyTimeoutMs: 60_000 },
     qq: { replyTimeoutMs: 60_000 },
     imessage: { replyTimeoutMs: 60_000 },
-    office: { heartbeatSeconds: 30 },
   };
 
   await plugin.apply(ctx, config);
@@ -143,7 +141,6 @@ test('Host composes IM channels and the AI Office connector inside one plugin co
     ['wecom', ctx, { groupByAgentPreset: true, ...config.wecom, rpcAuthority: 'trusted-host', deliveryService }],
     ['qq', ctx, { groupByAgentPreset: true, ...config.qq, rpcAuthority: 'trusted-host', deliveryService }],
     ['imessage', ctx, { groupByAgentPreset: true, ...config.imessage, rpcAuthority: 'trusted-host', deliveryService }],
-    ['office', ctx, { groupByAgentPreset: true, ...config.office, rpcAuthority: 'trusted-host' }],
   ]);
 });
 
@@ -160,13 +157,13 @@ test('Host provides #65 and installs #84 with the same delivery service', async 
     async historyChecked(...args) { historyReads.push(args); return {events:[],hasMore:false}; },
     async send(...args) { sent.push(args); return { sent: true }; },
     async listTargets(botId) {
-      return { botId, channel: 'matrix', targets: [{ targetId: 'target' }] };
+      return { botId, channel: 'feishu', targets: [{ targetId: 'target' }] };
     },
     async createTarget(...args) {
       created.push(args);
       return { targetId: args[1].targetId };
     },
-    async listBots() { return [{ botId: 'bot_one', channel: 'matrix' }]; },
+    async listBots() { return [{ botId: 'bot_one', channel: 'feishu' }]; },
   };
   const provided = [];
   const rpc = [];
@@ -175,7 +172,7 @@ test('Host provides #65 and installs #84 with the same delivery service', async 
   const internals = Object.fromEntries(CHANNELS.map(([channel, applyName]) => [
     applyName,
     async (_ctx, config) => {
-      if (channel !== 'office') channelServices.push(config.deliveryService);
+      channelServices.push(config.deliveryService);
     },
   ]));
   Object.assign(internals, {
@@ -206,7 +203,7 @@ test('Host provides #65 and installs #84 with the same delivery service', async 
     { targetId: 'new-target' },
   );
   assert.deepEqual(created, [['bot_one', { targetId: 'new-target', kind: 'chat', route: { chatId: '123456789' } }]]);
-  assert.deepEqual(await provided[0][1].listBots(), [{ botId: 'bot_one', channel: 'matrix' }]);
+  assert.deepEqual(await provided[0][1].listBots(), [{ botId: 'bot_one', channel: 'feishu' }]);
   assert.deepEqual(await provided[0][1].send('bot_one', 'target', 'hello'), { sent: true });
   assert.deepEqual(sent, [['bot_one', 'target', 'hello', undefined]]);
   assert.deepEqual(await provided[0][1].historyChecked('bot_one', {messageId:'anchor'}, {scope:'thread',limit:1}, {}), {events:[],hasMore:false});
@@ -374,8 +371,6 @@ const CHANNELS = [
   ['qq', 'applyQq'],
   ['imessage', 'applyIMessage'],
   ['email', 'applyEmail'],
-  ['matrix', 'applyMatrix'],
-  ['office', 'applyOffice'],
 ];
 
 function activationFixture(failedChannels) {

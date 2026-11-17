@@ -203,7 +203,7 @@ test('the shared bridge binds locally with its conversation key and never prompt
   assert.equal(seen.has('message-session-bind'), true);
 });
 
-test('all nine channel bridges advertise /session and pass their current conversation key', async () => {
+test('all channel bridges advertise /session and pass their current conversation key', async () => {
   const bridgeFamilies = [
     ['../src/channels/shared/text-harness-bridge.mjs', 'conversationKey'],
     ['../src/channels/weixin/weixin-bridge.mjs', 'key'],
@@ -228,7 +228,6 @@ test('all nine channel bridges advertise /session and pass their current convers
   }
 
   for (const file of [
-    '../src/channels/matrix/matrix-bridge.mjs',
     '../src/channels/email/email-bridge.mjs',
     '../src/channels/imessage/imessage-bridge.mjs',
   ]) {

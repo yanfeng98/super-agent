@@ -24,7 +24,7 @@ const deferred = () => {
 };
 const sessionId = 'session-11111111-1111-4111-8111-111111111111';
 const channelKey = 'group:room:!example:test.invalid';
-const row = { key: channelKey, sessionId, botId: 'matrix_test' };
+const row = { key: channelKey, sessionId, botId: 'feishu_test' };
 
 function installPage(t, translate = (key) => key) {
   setImTranslator(translate);
@@ -107,7 +107,7 @@ test('both the history list and transcript offer a return to IM bots', async (t)
     renderer = create(h(Page, {
       onBackToIm: () => { returned++; },
       channelListRpcCall: async (method) => method === 'list.channels'
-        ? { ok: true, value: { channels: [{ channel: 'matrix', sessions: [row] }] } }
+        ? { ok: true, value: { channels: [{ channel: 'feishu', sessions: [row] }] } }
         : { ok: true, value: { messages: transcript(1), total: 1, hasMore: false } },
     }));
     await flush();
@@ -130,7 +130,7 @@ test('loading every earlier page keeps each transcript message exactly once', as
   const channelListRpcCall = async (method, payload = {}) => {
     calls.push({ method, payload });
     if (method === 'list.channels') {
-      return { ok: true, value: { channels: [{ channel: 'matrix', sessions: [row] }] } };
+      return { ok: true, value: { channels: [{ channel: 'feishu', sessions: [row] }] } };
     }
     assert.equal(method, 'session.read');
     const limit = payload.limit ?? 100;
@@ -138,7 +138,7 @@ test('loading every earlier page keeps each transcript message exactly once', as
     return {
       ok: true,
       value: {
-        channel: 'matrix', key: channelKey, botId: row.botId, sessionId,
+        channel: 'feishu', key: channelKey, botId: row.botId, sessionId,
         total: messages.length, offset, limit,
         hasMore: offset > 0,
         nextOffset: Math.max(0, offset - limit),
@@ -182,11 +182,11 @@ test('loading every earlier page keeps each transcript message exactly once', as
 test('a stale detail response cannot replace a newer navigation', async (t) => {
   const Page = installPage(t);
   const otherSessionId = 'session-22222222-2222-4222-8222-222222222222';
-  const otherRow = { key: 'group:room:!other:test.invalid', sessionId: otherSessionId, botId: 'matrix_test' };
+  const otherRow = { key: 'group:oc_other', sessionId: otherSessionId, botId: 'feishu_test' };
   const pending = new Map([[sessionId, deferred()], [otherSessionId, deferred()]]);
   const channelListRpcCall = async (method) => {
     if (method === 'list.channels') {
-      return { ok: true, value: { channels: [{ channel: 'matrix', sessions: [row, otherRow] }] } };
+      return { ok: true, value: { channels: [{ channel: 'feishu', sessions: [row, otherRow] }] } };
     }
     throw new Error('session.read is deferred below');
   };
@@ -201,12 +201,12 @@ test('a stale detail response cannot replace a newer navigation', async (t) => {
   t.after(() => renderer.unmount());
   const instance = renderer.root.findByType(ChannelSessionsPanel({}).type).instance;
 
-  act(() => { void instance.openSession({ channel: 'matrix' }, row); });
+  act(() => { void instance.openSession({ channel: 'feishu' }, row); });
   act(() => { instance.backToList(); });
-  act(() => { void instance.openSession({ channel: 'matrix' }, otherRow); });
+  act(() => { void instance.openSession({ channel: 'feishu' }, otherRow); });
   await act(async () => {
     pending.get(otherSessionId).resolve({ ok: true, value: {
-      channel: 'matrix', key: otherRow.key, botId: otherRow.botId, sessionId: otherSessionId,
+      channel: 'feishu', key: otherRow.key, botId: otherRow.botId, sessionId: otherSessionId,
       total: 1, offset: 0, limit: 100, hasMore: false, nextOffset: 0,
       messages: [{ id: 'newer', seq: 1, time: 1, role: 'assistant', text: 'newer response' }],
     } });
@@ -217,7 +217,7 @@ test('a stale detail response cannot replace a newer navigation', async (t) => {
 
   await act(async () => {
     pending.get(sessionId).resolve({ ok: true, value: {
-      channel: 'matrix', key: row.key, botId: row.botId, sessionId,
+      channel: 'feishu', key: row.key, botId: row.botId, sessionId,
       total: 1, offset: 0, limit: 100, hasMore: false, nextOffset: 0,
       messages: [{ id: 'stale', seq: 1, time: 1, role: 'assistant', text: 'stale response' }],
     } });
@@ -233,7 +233,7 @@ test('unmount aborts and ignores a late detail response', async (t) => {
   let detailSignal;
   const channelListRpcCall = async (method, _payload, signal) => {
     if (method === 'list.channels') {
-      return { ok: true, value: { channels: [{ channel: 'matrix', sessions: [row] }] } };
+      return { ok: true, value: { channels: [{ channel: 'feishu', sessions: [row] }] } };
     }
     detailSignal = signal;
     return pending.promise;
@@ -246,7 +246,7 @@ test('unmount aborts and ignores a late detail response', async (t) => {
   let mounted = true;
   t.after(() => { if (mounted) renderer.unmount(); });
   const instance = renderer.root.findByType(ChannelSessionsPanel({}).type).instance;
-  act(() => { void instance.openSession({ channel: 'matrix' }, row); });
+  act(() => { void instance.openSession({ channel: 'feishu' }, row); });
   assert.equal(instance.state.selected.sessionId, sessionId);
   act(() => {
     renderer.unmount();
@@ -256,7 +256,7 @@ test('unmount aborts and ignores a late detail response', async (t) => {
 
   await act(async () => {
     pending.resolve({ ok: true, value: {
-      channel: 'matrix', key: row.key, botId: row.botId, sessionId,
+      channel: 'feishu', key: row.key, botId: row.botId, sessionId,
       total: 1, offset: 0, limit: 100, hasMore: false, nextOffset: 0,
       messages: [{ id: 'late', seq: 1, time: 1, role: 'assistant', text: 'late response' }],
     } });
@@ -270,7 +270,7 @@ test('detail loading and empty states use exact localized dictionary entries', a
   const pending = deferred();
   const channelListRpcCall = async (method) => {
     if (method === 'list.channels') {
-      return { ok: true, value: { channels: [{ channel: 'matrix', sessions: [row] }] } };
+      return { ok: true, value: { channels: [{ channel: 'feishu', sessions: [row] }] } };
     }
     return pending.promise;
   };
@@ -287,7 +287,7 @@ test('detail loading and empty states use exact localized dictionary entries', a
 
   await act(async () => {
     pending.resolve({ ok: true, value: {
-      channel: 'matrix', key: channelKey, botId: row.botId, sessionId,
+      channel: 'feishu', key: channelKey, botId: row.botId, sessionId,
       total: 0, offset: 0, limit: 100, hasMore: false, nextOffset: 0, messages: [],
     } });
     await flush();

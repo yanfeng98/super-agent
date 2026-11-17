@@ -38,7 +38,7 @@ interface DshImClient {
 | `setSettingsVisible(visible)` | 只接受 boolean，重复调用无副作用。false 撤销入口及等待中的注册，true 恢复 | Accepts only booleans; repeated calls are idempotent. False removes both the entry and any pending registration; true restores them |
 | `settingsVisible()` | 返回入口当前是否已注册，不表示设置弹窗是否打开。等待槽位、已隐藏或已卸载时为 false | Reports whether the entry is currently registered, not whether the settings dialog is open. False while waiting, hidden or disposed |
 
-`preferredSectionId` 只决定首次挂载的栏目，支持 `weixin`、`feishu`、`dingtalk`、`wecom`、`wecomApp`、`qq`、`slack`、`telegram`、`discord`、`whatsapp`、`imessage`、`office` 和 `global-settings`。省略或无效值回退到微信。已挂载后改变该值不会覆盖用户选择；需要重新定位时由宿主重新挂载。
+`preferredSectionId` 只决定首次挂载的栏目，支持 `weixin`、`feishu`、`dingtalk`、`wecom`、`wecomApp`、`qq`、`imessage`、`email` 和 `global-settings`。省略或无效值回退到微信。已挂载后改变该值不会覆盖用户选择；需要重新定位时由宿主重新挂载。
 
 `preferredSectionId` selects the initial section using the IDs above. Missing or unknown IDs default to WeChat. Changing the prop after mounting does not override the reader's selection; remount deliberately to reset it.
 

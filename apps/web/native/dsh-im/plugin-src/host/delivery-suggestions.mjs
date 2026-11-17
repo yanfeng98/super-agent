@@ -8,7 +8,6 @@ const CHANNELS = new Set([
   'wecom-app',
   'qq',
   'imessage',
-  'matrix',
 ]);
 
 function isRecord(value) {
@@ -82,15 +81,6 @@ function whatsappSuggestion(key) {
   return group ? { kind: 'group', route: { jid: group[1] } } : null;
 }
 
-function matrixSuggestion(key) {
-  const dm = /^dm:(@[A-Za-z0-9._=\-\/+]+:[A-Za-z0-9.-]+(?::\d{1,5})?)$/.exec(key);
-  if (dm) return { kind: 'dm', route: { userId: dm[1] } };
-  const room = /^room:([!#][^:$\s]+:[A-Za-z0-9.-]+(?::\d{1,5})?)(?:\$(\$[^\s]+))?$/u.exec(key);
-  if (!room) return null;
-  if (room[2] === undefined) return { kind: 'room', route: { roomId: room[1] } };
-  return { kind: 'thread', route: { roomId: room[1], threadId: room[2] } };
-}
-
 /** Convert one persisted conversation key into a stable proactive-delivery route. */
 export function deliverySuggestionFromConversationKey(channel, key) {
   if (!CHANNELS.has(channel) || typeof key !== 'string') return null;
@@ -133,8 +123,6 @@ export function deliverySuggestionFromConversationKey(channel, key) {
         && !/[\u0000-\u001f\u007f]/u.test(chatGuid)
         ? { kind: 'user', route: { chatGuid } } : null;
     }
-    case 'matrix':
-      return matrixSuggestion(key.replace(/^(direct|group):/, ''));
     default:
       return null;
   }
@@ -142,7 +130,6 @@ export function deliverySuggestionFromConversationKey(channel, key) {
 
 /** Convert only a persisted private-chat key into its stable delivery route. */
 export function privateDeliverySuggestionFromConversationKey(channel, key) {
-  if (channel === 'matrix' && typeof key === 'string') key = key.replace(/^direct:dm:/, 'dm:');
   const separator = typeof key === 'string' ? key.indexOf(':') : -1;
   const prefix = separator > 0 ? key.slice(0, separator) : '';
   const privatePrefix = {
@@ -157,7 +144,6 @@ export function privateDeliverySuggestionFromConversationKey(channel, key) {
     discord: 'direct',
     whatsapp: 'direct',
     imessage: 'direct',
-    matrix: 'dm',
   }[channel];
   if (!privatePrefix || prefix !== privatePrefix) return null;
   return deliverySuggestionFromConversationKey(channel, key);

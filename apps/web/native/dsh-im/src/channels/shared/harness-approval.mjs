@@ -12,7 +12,6 @@ const APPROVAL_REPLIES = new Map([
 
 export const COMPETITIVE_APPROVAL_CHANNELS = Object.freeze([
   'feishu', 'weixin', 'dingtalk', 'wecom', 'wecom-app', 'qq',
-  'matrix',
 ]);
 
 const APPROVAL_UNAVAILABLE_TEXT = '机器人端无法处理这次审批，请到 Web 查看。';

@@ -3,7 +3,7 @@
   "version": "5.10.0",
   "private": true,
   "icon": "./assets/logo-plugin-message-link-gradient.webp",
-  "description": "把微信、飞书、企微、钉钉、QQ、企业微信应用、iMessage、Matrix、邮箱接入DSH。 Connect WeChat, Feishu, WeCom, DingTalk, QQ, WeCom app, iMessage, Matrix, and email to DSH.",
+  "description": "把微信、飞书、企微、钉钉、QQ、企业微信应用、iMessage、邮箱接入DSH。 Connect WeChat, Feishu, WeCom, DingTalk, QQ, WeCom app, iMessage, and email to DSH.",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -18,9 +18,7 @@
     "wecom",
     "dingtalk",
     "qq",
-    "imessage",
-    "matrix",
-    "ai-office"
+    "imessage"
   ],
   "author": "xmanrui (https://github.com/xmanrui)",
   "license": "MIT",
@@ -90,7 +88,6 @@
     "dsh": ">=0.2.2-rc.3 <0.3.0"
   },
   "dependencies": {
-    "@matrix-org/olm": "3.2.15",
     "@tencent-connect/qqbot-connector": "1.2.0",
     "@tencent-connect/qqbot-nodejs": "1.0.4",
     "@wecom/aibot-node-sdk": "1.0.7",

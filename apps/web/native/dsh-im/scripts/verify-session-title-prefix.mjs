@@ -38,7 +38,7 @@ for (const [name, value] of Object.entries({
   typertGateway: { stream() {} }, sessionController: {}, workspaceController: {},
 })) ctx.provide(name, value);
 const internals = Object.fromEntries(
-  ['Feishu', 'Weixin', 'Dingtalk', 'Wecom', 'Qq', 'Slack', 'Telegram', 'Discord', 'Whatsapp', 'Office']
+  ['Feishu', 'Weixin', 'Dingtalk', 'Wecom', 'Qq', 'Slack', 'Telegram', 'Discord', 'Whatsapp']
     .map((channel) => [`apply${channel}`, async () => {}]),
 );
 Object.assign(internals, {

@@ -134,9 +134,6 @@ function artifactFailureText(fileName, error, descriptor) {
     case 'artifact-delivery-uncertain':
       return t('结果文件「{name}」的发送结果未能确认，请先检查聊天内是否已收到，不要立即重试。', { name });
     case 'artifact-permission-required':
-      if (descriptor?.key === 'matrix') {
-        return t('结果文件「{name}」已生成，但 Matrix homeserver 拒绝了媒体上传，请检查其媒体大小限制与上传权限。', { name });
-      }
       return t('结果文件「{name}」已生成，但当前机器人没有文件发送权限，请检查渠道权限。', { name });
     case 'artifact-too-large':
       return t('结果文件「{name}」超过当前渠道大小上限，未发送。', { name });
@@ -1375,7 +1372,7 @@ export class TextHarnessBridge {
       // the sender of a group turn without replaying any message text. Channels
       // that own a different state store simply skip it.
       // The sender id and bot flag are always kept. A display name is kept only
-      // when the channel already exposes it (Matrix speakerName) or context
+      // when the channel already exposes it (speakerName) or context
       // enhancement read it above; a disabled enhancement never leaks names.
       try {
         await this.#state.rememberAuthor?.(conversationKey, {

@@ -12,7 +12,7 @@ async function startHost(t, language) {
   t.after(() => rm(dshHome, { recursive: true, force: true }));
   const channels = [
     'Feishu', 'Weixin', 'Dingtalk', 'Wecom', 'WecomApp', 'Qq',
-    'IMessage', 'Email', 'Matrix', 'Office',
+    'IMessage', 'Email',
   ];
   const internals = Object.fromEntries(channels.map((channel) => [
     `apply${channel}`, async () => {},
@@ -25,7 +25,7 @@ async function startHost(t, language) {
   let controller;
   let languageAtChannelStart;
   internals.installHostLanguageRpc = (_ctx, value) => { controller = value; };
-  internals.applyMatrix = async () => { languageAtChannelStart = controller.language(); };
+  internals.applyEmail = async () => { languageAtChannelStart = controller.language(); };
   const errors = [];
   await createImHostPlugin(internals).apply({
     connection: { fetch: { register: () => () => {} } },

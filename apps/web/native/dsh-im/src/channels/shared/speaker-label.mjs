@@ -1,7 +1,7 @@
 /**
  * Speaker labels for room-shared Sessions.
  *
- * A Matrix room routes every addressed message of the room into one shared
+ * A group chat routes every addressed message of the room into one shared
  * conversation (see `conversation/route.mjs`: group keys carry no sender), so
  * when several members question the same bot the persisted turn text alone
  * cannot say whose question each turn carries. The bridge therefore labels the

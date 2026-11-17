@@ -202,7 +202,7 @@ try {
     headers: { cookie: lan.cookie },
   }), 200);
   const channels = ['feishu', 'weixin', 'dingtalk', 'wecom', 'wecom-app', 'qq',
-    'imessage', 'email', 'matrix', 'office'];
+    'imessage', 'email'];
   for (const channel of channels) {
     expectStatus(`LAN default: ${channel}`, await readyStatus(lan, channel), 200, true);
   }

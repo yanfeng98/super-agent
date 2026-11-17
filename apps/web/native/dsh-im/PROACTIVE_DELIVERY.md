@@ -4,7 +4,7 @@
 
 主动投递让应用在没有用户新消息的情况下，通过已经接入 DSH-IM 的机器人发送文字消息。调用方只需保存一组稳定的 `botId + targetId`，不需要保存 Harness `sessionId`、聊天引用、消息 ID 或临时 Webhook。
 
-九个内置渠道支持主动投递：微信、飞书、钉钉、企业微信、企业微信应用、QQ、iMessage、Matrix 和邮箱。
+八个内置渠道支持主动投递：微信、飞书、钉钉、企业微信、企业微信应用、QQ、iMessage 和邮箱。
 
 ## 快速开始
 
@@ -115,7 +115,7 @@
 
 同机设置页通过 `settings.delivery-sync.get` / `settings.delivery-sync.set` 读写这份设置（`set` 只应用传入的字段，四个字段都可选）。消息语言通过 `settings.language.set` 在「跟随 DSH 界面语言」与 `zh`／`en`／`ru` 之间切换：显式选择优先于 DSH 界面语言，插件 `language` 选项仍然优先于两者。
 
-## 九渠道手动填写字段
+## 八渠道手动填写字段
 
 优先从已聊会话中选择。只有目标未出现在候选中时，才需要手动取得以下平台原生 ID。
 
@@ -200,7 +200,6 @@ await ctx.dshIm.send(botId, targetId, '# 每日报告\n\n**检查完成**', {
 | QQ | Markdown 消息；已知格式拒绝时仅当前分段回退文本 |
 | 钉钉 | 主动 Markdown 消息；明确格式拒绝时回退文本 |
 | 企业微信机器人 | 现有 Markdown 消息类型 |
-| Matrix | 清理后的 HTML，并附带文本正文 |
 | 企业微信应用／微信 | 完整文本，保留代码和链接目标 |
 
 长消息按渠道限制分段。飞书主动卡片保留原有不自动分段的行为，平台拒绝或结果未知时不自动改发文本。其他新增回退仅针对本地格式处理错误或明确的格式拒绝，不重发已成功的分段，不因网络结果未知而改格式重试。旧 Host 可能忽略 `format`，需要加载更新后的插件。
@@ -225,7 +224,7 @@ await ctx.dshIm.createTarget(botId, {
 });
 ```
 
-`kind` 和 `route` 必须匹配机器人的渠道，参见[九渠道手动填写字段](#九渠道手动填写字段)。例如飞书群聊使用 `kind: 'group'` 和 `route: { chatId: 'oc_xxx' }`。
+`kind` 和 `route` 必须匹配机器人的渠道，参见[八渠道手动填写字段](#八渠道手动填写字段)。例如飞书群聊使用 `kind: 'group'` 和 `route: { chatId: 'oc_xxx' }`。
 
 `targetId` 已存在时以 `target-conflict` 拒绝；修改或删除已有目标仍走管理 RPC 的 `target.update` / `target.delete`。
 
@@ -393,7 +392,7 @@ Connection RPC 默认只允许当前 Host 的回环调用。若 Web profile 明�
 
 ### 为什么不用 sessionId
 
-`sessionId` 标识 Harness 会话，不是九个平台统一、稳定的消息投递地址。主动投递只使用机器人和已保存目标的稳定组合。
+`sessionId` 标识 Harness 会话，不是八个平台统一、稳定的消息投递地址。主动投递只使用机器人和已保存目标的稳定组合。
 
 ### 测试成功但对方没有看到消息
 

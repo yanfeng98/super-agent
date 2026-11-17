@@ -1,4 +1,4 @@
-> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, Matrix, and email, plus the AI Office connector. Slack, Telegram, Discord, and WhatsApp are not included. Sections below that describe those four channels apply to upstream dsh-im, not to this build.
+> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email. Slack, Telegram, Discord, WhatsApp, Matrix, and the AI Office connector are not included. Sections below that describe those channels apply to upstream dsh-im, not to this build.
 
 <p align="center">
   <img src="assets/logo-dsh-im-connecting-readme-3x2.png" alt="DSH-IM — Connecting DeepSeek Harness" width="420" height="280" align="middle">&nbsp;&nbsp;
@@ -168,10 +168,6 @@ WhatsApp、飞书、Telegram、Discord、Slack、QQ 支持自动保存实际收�
 | Discord | Developer Portal 的 Bot 设置中需启用 **Message Content Intent**；机器人需有 **Send Messages**、**Create Public Threads**、**Send Messages in Threads** 和 **Read Message History** 权限；发送结果文件还需 **Attach Files**。实际附件额度由当前账号与服务器能力决定。 |
 | WhatsApp | 当前绑定会话需支持 Document Message，实际可发送范围以 WhatsApp/Baileys 返回为准。 |
 | Matrix | homeserver 需允许媒体上传，单文件实际上限由其媒体仓库配置决定；被拒绝时插件会明确提示检查媒体大小限制与上传权限。 |
-
-## AI Office Connector
-
-[查看 AI Office Connector 说明](docs/AI-Office-Connector.md)
 
 ## 安装
 

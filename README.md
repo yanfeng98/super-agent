@@ -58,7 +58,7 @@ pnpm dsh web
 
 对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-13 的 `master`（`0.2.2-rc.3` 发布线），对比时间为 2026-11-16。截至 `ant-ling` 移除提交，`main` 相对上游有 43 个提交、362 个文件（+19,979/−895 行）；下表按当前分支统计，不含本次 README 更新。上游继续前进后需要重新比对。逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
 
-2026-11-17 起新增的原生 IM 机器人（含 `/goal`、`/plan`）及 Slack/Telegram/Discord/WhatsApp 四渠道移除未计入上述统计，见 [`logs/00027`](logs/00027-原生集成dsh-im.md) 与 [`logs/00028`](logs/00028-移除四渠道.md)。
+2026-11-17 起新增的原生 IM 机器人（含 `/goal`、`/plan`）及 Slack/Telegram/Discord/WhatsApp 四渠道移除未计入上述统计，见 [`logs/00027`](logs/00027-原生集成dsh-im.md)、[`logs/00028`](logs/00028-移除四渠道.md) 与 [`logs/00033`](logs/00033-移除Matrix与Office.md)。
 
 ### 新增与行为调整
 
@@ -92,10 +92,10 @@ pnpm dsh web
 
 ### 原生 IM 机器人
 
-- 社区插件 `dsh-im` 已以源码形式内置到 `apps/web/native/dsh-im/`（基线 5.10.0），并作为 `dsh-web-app` bundle 的默认依赖挂载；`dsh web` 与 Desktop 首次启动即出现「IM bots」设置页，不需要再安装外部插件。内置渠道为微信、飞书、钉钉、企业微信、企业微信应用、QQ、iMessage、Matrix 和邮箱；Slack、Telegram、Discord、WhatsApp 不包含在这个原生构建中。
+- 社区插件 `dsh-im` 已以源码形式内置到 `apps/web/native/dsh-im/`（基线 5.10.0），并作为 `dsh-web-app` bundle 的默认依赖挂载；`dsh web` 与 Desktop 首次启动即出现「IM bots」设置页，不需要再安装外部插件。内置渠道为微信、飞书、钉钉、企业微信、企业微信应用、QQ、iMessage 和邮箱；Slack、Telegram、Discord、WhatsApp、Matrix 以及 AI Office 连接器不包含在这个原生构建中。
 - 内置副本适配 DSH `0.2.2-rc.3` 的客户端模块名与服务访问方式，修正了 Cordis 4.1 下 `ctx.root` 的无注入访问问题，并关闭了针对上游 npm 包的自更新，避免把内置实现替换成外部版本。
 - `/goal` 与 `/plan` 已提升为所有内置渠道的原生命令：命令直接委派给当前会话绑定的 DSH Host 命令网关，复用 DSH 的持久化目标与自动续跑，不经过模型提示词。
-- 上游同步、构建与本地修改记录见 [`apps/web/native/dsh-im/NATIVE.md`](apps/web/native/dsh-im/NATIVE.md)；变更记录见 [`logs/00027`](logs/00027-原生集成dsh-im.md) 与 [`logs/00028`](logs/00028-移除四渠道.md)。
+- 上游同步、构建与本地修改记录见 [`apps/web/native/dsh-im/NATIVE.md`](apps/web/native/dsh-im/NATIVE.md)；变更记录见 [`logs/00027`](logs/00027-原生集成dsh-im.md)、[`logs/00028`](logs/00028-移除四渠道.md) 与 [`logs/00033`](logs/00033-移除Matrix与Office.md)。
 
 ## 许可证
 

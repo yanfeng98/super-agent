@@ -20,7 +20,6 @@ const CHANNELS = new Set([
   'qq',
   'imessage',
   'email',
-  'matrix',
 ]);
 
 export function supportsDeliveryChannel(channel) {
@@ -140,23 +139,6 @@ function normalizeRoute(channel, kind, route) {
         throw invalidTarget('route.address must be a valid email address');
       }
       return { address: normalized.address.toLowerCase() };
-    }
-    case 'matrix': {
-      oneOf(kind, ['room', 'thread', 'dm']);
-      const normalized = routeWithStrings(
-        route,
-        kind === 'room' ? ['roomId'] : kind === 'thread' ? ['roomId', 'threadId'] : ['userId'],
-      );
-      if (kind === 'dm' && !/^@[^:\s]+:[^\s:]+(?::\d{1,5})?$/u.test(normalized.userId)) {
-        throw invalidTarget('route.userId must be a Matrix user id');
-      }
-      if (kind !== 'dm' && !/^[!][^:$\s]+:[^\s:$]+(?::\d{1,5})?$/.test(normalized.roomId)) {
-        throw invalidTarget('route.roomId must be a Matrix room id');
-      }
-      if (kind === 'thread' && !/^\$[^\s]+/.test(normalized.threadId)) {
-        throw invalidTarget('route.threadId must be a Matrix event id');
-      }
-      return normalized;
     }
     default:
       throw new TypeError(`Unsupported delivery channel: ${channel}`);

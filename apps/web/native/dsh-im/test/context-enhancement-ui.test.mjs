@@ -655,6 +655,4 @@ test('the approved neutral entry and theme-aware modal keep responsive labels an
   assert.match(styles, /\.dim-contextHeader \{[^}]*position: relative;/);
   assert.match(styles, /\.dim-contextLegend \{[^}]*position: relative;[^}]*inline-flex/);
   assert.match(styles, /\.dim-contextHelp:hover \.dim-contextTooltip, \.dim-contextHelp:focus-within \.dim-contextTooltip \{[^}]*opacity: 1;[^}]*visibility: visible;/);
-  const office = await readFile(new URL('../plugin-src/client/channels/office/index.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(office, /ContextEnhancement|context-enhancement/);
 });
