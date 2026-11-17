@@ -207,9 +207,17 @@ function servesChat(provider: Provider): boolean {
  * appear on `openrouter`, so the route adds a routing and billing layer rather
  * than another vendor's models. `cerebras` is a chip vendor's inference cloud
  * carrying two open-weight models that this build already reaches on other
- * routes (`gpt-oss-120b` under an `openai/` prefix on four routes, Qwen3.8 27B
- * on two), so withholding it removes a serving surface rather than model
- * coverage. `opencode` is OpenCode's pay-as-you-go Console gateway: this build
+ * routes (`gpt-oss-120b` under an `openai/` prefix on `openrouter` and
+ * `together`, Qwen3.8 27B on `openrouter`), so withholding it removes a serving
+ * surface rather than model coverage. `groq` is another chip vendor's inference
+ * cloud in the same position: all seven of its open-weight models — the Llama
+ * pair, three GPT OSS entries, and two Qwen entries — also appear on served
+ * routes: on `openrouter`, with two of them on `together` as well, so
+ * withholding it removes a serving surface rather than model coverage. Its
+ * endpoint answers OpenAI-compatible chat completions at
+ * `https://api.groq.com/openai/v1`, so a deployment that needs it can add that
+ * as an `openai-completions` custom model API under a different provider id.
+ * `opencode` is OpenCode's pay-as-you-go Console gateway: this build
  * keeps the same vendor's subscription route `opencode-go`, both resolve the one
  * `OPENCODE_API_KEY` credential, and most of Zen's closed-source models also
  * appear on other routes, so withholding it leaves the vendor served without a
@@ -254,6 +262,14 @@ function servesChat(provider: Provider): boolean {
  * appears on no other served route. An international account keeps working
  * through an `openai-completions` custom model API at
  * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
+ * `fireworks` is a third-party inference cloud behind one endpoint: it resells
+ * other vendors' open-weight models alongside its own Ember family and
+ * `routers/*` aliases, so withholding it removes a serving and billing layer.
+ * It serves chat through Anthropic Messages and also accepts
+ * OpenAI-compatible chat completions, so a deployment that needs it can add
+ * `https://api.fireworks.ai/inference` as an `anthropic-messages` custom model
+ * API, or `https://api.fireworks.ai/inference/v1` as an `openai-completions`
+ * one, under a different provider id.
  * `baseten` is a third-party inference cloud that hosts other vendors'
  * open-weight models behind one OpenAI-compatible endpoint: ten of its
  * twenty-two model ids keep the same id on other built-in routes, ten more
@@ -282,6 +298,8 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'cerebras',
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
+  'fireworks',
+  'groq',
   'huggingface',
   'minimax',
   'moonshotai',
