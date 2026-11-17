@@ -1269,6 +1269,7 @@ describe('configurable-provider directory', () => {
       'cloudflare-ai-gateway',
       'cloudflare-workers-ai',
       'fireworks',
+      'google-vertex',
       'groq',
       'huggingface',
       'minimax',
