@@ -73,7 +73,7 @@ for (const variant of ['canceled', 'replaced', 'gap', 'unrelated', 'completed'])
 
 const clients = [
   ['weixin', 'HarnessClient'], ['qq', 'QqHarnessClient'], ['feishu', 'HarnessClient'],
-  ['dingtalk', 'HarnessClient'], ['wecom', 'WecomHarnessClient'], ['wecom-app', 'WecomAppHarnessClient'],
+  ['dingtalk', 'HarnessClient'], ['wecom', 'WecomHarnessClient'],
   ['imessage', 'IMessageHarnessClient'], ['email', 'EmailHarnessClient'],
 ];
 for (const [channel, exportName] of clients) {

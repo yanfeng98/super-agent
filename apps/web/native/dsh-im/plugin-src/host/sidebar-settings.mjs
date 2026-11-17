@@ -8,7 +8,6 @@ import { PluginConfigStore } from '../../src/channels/feishu/plugin-config-store
 import { WeixinConfigStore } from '../../src/channels/weixin/config-store.mjs';
 import { DingtalkConfigStore } from '../../src/channels/dingtalk/config-store.mjs';
 import { WecomConfigStore } from '../../src/channels/wecom/config-store.mjs';
-import { WecomAppConfigStore } from '../../src/channels/wecom-app/config-store.mjs';
 import { QqConfigStore } from '../../src/channels/qq/config-store.mjs';
 import { IMessageConfigStore } from '../../src/channels/imessage/config-store.mjs';
 import { EmailConfigStore } from '../../src/channels/email/config-store.mjs';
@@ -21,7 +20,7 @@ const MODES = new Set(['auto', 'show', 'hide']);
 const CHANNEL_STORES = [
   ['feishu', PluginConfigStore], ['weixin', WeixinConfigStore],
   ['dingtalk', DingtalkConfigStore], ['wecom', WecomConfigStore],
-  ['wecomApp', WecomAppConfigStore, 'wecom-app'], ['qq', QqConfigStore],
+  ['qq', QqConfigStore],
   ['imessage', IMessageConfigStore], ['email', EmailConfigStore],
 ];
 

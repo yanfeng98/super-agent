@@ -5,7 +5,6 @@ import { apply as applyDingtalk } from './channels/dingtalk/index.mjs';
 import { apply as applyFeishu } from './channels/feishu/index.mjs';
 import { apply as applyQq } from './channels/qq/index.mjs';
 import { apply as applyWecom } from './channels/wecom/index.mjs';
-import { apply as applyWecomApp } from './channels/wecom-app/index.mjs';
 import { apply as applyWeixin } from './channels/weixin/index.mjs';
 import { apply as applyIMessage } from './channels/imessage/index.mjs';
 import { apply as applyEmail } from './channels/email/index.mjs';
@@ -64,7 +63,6 @@ export function createImHostPlugin(internals = {}) {
   const startWeixin = internals.applyWeixin ?? applyWeixin;
   const startDingtalk = internals.applyDingtalk ?? applyDingtalk;
   const startWecom = internals.applyWecom ?? applyWecom;
-  const startWecomApp = internals.applyWecomApp ?? applyWecomApp;
   const startQq = internals.applyQq ?? applyQq;
   const startIMessage = internals.applyIMessage ?? applyIMessage;
   const startEmail = internals.applyEmail ?? applyEmail;
@@ -73,7 +71,6 @@ export function createImHostPlugin(internals = {}) {
     ['weixin', startWeixin],
     ['dingtalk', startDingtalk],
     ['wecom', startWecom],
-    ['wecomApp', startWecomApp],
     ['qq', startQq],
     ['imessage', startIMessage],
     ['email', startEmail],
@@ -86,7 +83,7 @@ export function createImHostPlugin(internals = {}) {
         .map(([channel]) => channel)
         .filter((channel) => config[channel]?.harnessBaseUrl !== undefined);
       const deliveryService = makeDeliveryService({
-        unavailableSessionSyncChannels: unavailableSessionSyncChannels.map((channel) => channel === 'wecomApp' ? 'wecom-app' : channel),
+        unavailableSessionSyncChannels,
         dsBot: createDsBotClient(ctx),
       });
       // The delivery switches are the master for everything that follows a Session

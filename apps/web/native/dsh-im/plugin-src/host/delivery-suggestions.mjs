@@ -5,7 +5,6 @@ const CHANNELS = new Set([
   'feishu',
   'dingtalk',
   'wecom',
-  'wecom-app',
   'qq',
   'imessage',
 ]);
@@ -99,8 +98,6 @@ export function deliverySuggestionFromConversationKey(channel, key) {
         ['direct', 'user', 'chatId'],
         ['group', 'group', 'chatId'],
       ]);
-    case 'wecom-app':
-      return simpleSuggestion(key, [['p2p', 'user', 'chatId']]);
     case 'qq':
       return simpleSuggestion(key, [
         ['c2c', 'user', 'userOpenId'],
@@ -137,7 +134,6 @@ export function privateDeliverySuggestionFromConversationKey(channel, key) {
     feishu: 'p2p',
     dingtalk: 'p2p',
     wecom: 'direct',
-    'wecom-app': 'p2p',
     qq: 'c2c',
     slack: 'direct',
     telegram: 'direct',

@@ -2,7 +2,7 @@ import { t } from '../../../../src/channels/shared/i18n.mjs';
 
 const CHANNEL_NAMES = {
   weixin: '微信', feishu: '飞书', dingtalk: '钉钉', wecom: '企业微信',
-  'wecom-app': '企业微信应用', qq: 'QQ', imessage: 'iMessage',
+  qq: 'QQ', imessage: 'iMessage',
   email: '邮箱',
 };
 const INVALID_CONFIG_MESSAGES = new Set([

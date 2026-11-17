@@ -201,7 +201,7 @@ try {
   expectStatus('LAN authenticated web page', await request(new URL('/', lan.origin), {
     headers: { cookie: lan.cookie },
   }), 200);
-  const channels = ['feishu', 'weixin', 'dingtalk', 'wecom', 'wecom-app', 'qq',
+  const channels = ['feishu', 'weixin', 'dingtalk', 'wecom', 'qq',
     'imessage', 'email'];
   for (const channel of channels) {
     expectStatus(`LAN default: ${channel}`, await readyStatus(lan, channel), 200, true);

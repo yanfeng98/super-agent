@@ -8,7 +8,7 @@ import { runClearCommand } from '../src/channels/shared/clear-command.mjs';
 
 const clients = [
   ['weixin', 'HarnessClient'], ['qq', 'QqHarnessClient'], ['feishu', 'HarnessClient'],
-  ['dingtalk', 'HarnessClient'], ['wecom', 'WecomHarnessClient'], ['wecom-app', 'WecomAppHarnessClient'],
+  ['dingtalk', 'HarnessClient'], ['wecom', 'WecomHarnessClient'],
   ['imessage', 'IMessageHarnessClient'], ['email', 'EmailHarnessClient'],
 ];
 

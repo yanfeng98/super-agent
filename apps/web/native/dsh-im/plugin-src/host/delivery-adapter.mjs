@@ -16,7 +16,6 @@ const CHANNELS = new Set([
   'feishu',
   'dingtalk',
   'wecom',
-  'wecom-app',
   'qq',
   'imessage',
   'email',
@@ -87,9 +86,6 @@ function normalizeRoute(channel, kind, route) {
       return routeWithStrings(route, kind === 'user' ? ['userId'] : ['openConversationId']);
     case 'wecom':
       oneOf(kind, ['user', 'group']);
-      return routeWithStrings(route, ['chatId']);
-    case 'wecom-app':
-      oneOf(kind, ['user']);
       return routeWithStrings(route, ['chatId']);
     case 'qq':
       oneOf(kind, ['user', 'group']);

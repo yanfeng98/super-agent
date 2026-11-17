@@ -31,9 +31,6 @@ test('buildList reads standard bot, Weixin account, and configured Feishu legacy
     sessions: { z_chat: 'session-z', a_chat: 'session-a' },
   });
   await putState(root, 'telegram', 'telegram-empty', { sessions: {} });
-  await putState(root, 'wecom-app', 'wecom-a', {
-    sessions: { 'group:room:42': 'session-wecom' },
-  });
   await putState(root, 'weixin', 'wx-account', {
     sessions: { 'direct:wx-user': 'session-weixin' },
   }, 'accounts');
@@ -63,8 +60,8 @@ test('buildList reads standard bot, Weixin account, and configured Feishu legacy
   }));
 
   const result = await buildList({ dshHome: root });
-  assert.deepEqual(result.channels.map(group => group.channel), ['feishu', 'qq', 'telegram', 'wecom-app', 'weixin']);
-  assert.equal(result.scannedFiles, 7);
+  assert.deepEqual(result.channels.map(group => group.channel), ['feishu', 'qq', 'telegram', 'weixin']);
+  assert.equal(result.scannedFiles, 6);
   assert.equal(result.warnings.length, 1);
   assert.match(result.warnings[0], /dsh-discord\/broken-bot/);
 
@@ -84,11 +81,7 @@ test('buildList reads standard bot, Weixin account, and configured Feishu legacy
   assert.ok(telegram.sessions.every(row => row.botId === 'telegram-a'));
   assert.ok(!telegram.sessions.some(row => row.sessionId === 'must-not-appear'));
 
-  const wecom = result.channels[3];
-  assert.equal(wecom.sessions[0].botId, 'wecom-a');
-  assert.equal(wecom.sessions[0].sessionId, 'session-wecom');
-
-  const weixin = result.channels[4];
+  const weixin = result.channels[3];
   assert.deepEqual(weixin.sessions, [
     { key: 'direct:wx-user', sessionId: 'session-weixin', botId: 'wx-account' },
   ]);

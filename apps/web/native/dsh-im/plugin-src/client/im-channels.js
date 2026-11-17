@@ -9,7 +9,6 @@ export const CHANNEL_SESSIONS_PANEL_ID = 'xmanrui-dsh-im-channels';
 
 const CHANNEL_LABELS = Object.freeze({
   wecom: '微信客服',
-  'wecom-app': '企业微信',
   feishu: '飞书',
   dingtalk: '钉钉',
   line: 'LINE',

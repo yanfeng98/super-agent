@@ -14,12 +14,12 @@ import { getImHostLanguage, setImHostLanguage } from '../../../src/channels/shar
 const channels = await Promise.all([
   ['feishu', 'PluginConfigStore', 'plugin-config-store'],
   ['weixin', 'WeixinConfigStore'], ['dingtalk', 'DingtalkConfigStore'],
-  ['wecom', 'WecomConfigStore'], ['wecom-app', 'WecomAppConfigStore'],
+  ['wecom', 'WecomConfigStore'],
   ['qq', 'QqConfigStore'],
   ['email', 'EmailConfigStore'],
 ].map(async ([id, storeName, storeFile = 'config-store']) => ({
   id,
-  key: id === 'wecom-app' ? 'wecomApp' : id,
+  key: id,
   apply: (await import(`../../../plugin-src/host/channels/${id}/index.mjs`)).apply,
   Store: (await import(`../../../src/channels/${id}/${storeFile}.mjs`))[storeName],
   api: await import(`../../../plugin-src/client/channels/${id}/api.js`),

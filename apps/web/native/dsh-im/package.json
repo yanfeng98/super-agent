@@ -3,7 +3,7 @@
   "version": "5.10.0",
   "private": true,
   "icon": "./assets/logo-plugin-message-link-gradient.webp",
-  "description": "把微信、飞书、企微、钉钉、QQ、企业微信应用、iMessage、邮箱接入DSH。 Connect WeChat, Feishu, WeCom, DingTalk, QQ, WeCom app, iMessage, and email to DSH.",
+  "description": "把微信、飞书、企微、钉钉、QQ、iMessage、邮箱接入DSH。 Connect WeChat, Feishu, WeCom, DingTalk, QQ, iMessage, and email to DSH.",
   "keywords": [
     "deepseek-harness",
     "dsh",
