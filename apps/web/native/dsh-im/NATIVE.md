@@ -2,9 +2,9 @@
 
 This directory is the source-vendored copy of [`xmanrui/dsh-im`](https://github.com/xmanrui/dsh-im) that ships with this Super Agent checkout as a built-in capability. It is not installed from npm and it is not a third-party profile plugin.
 
-This native build excludes Slack, Telegram, Discord, and WhatsApp entirely: their Host/Client directories, command wiring, settings tabs, dependencies, and tests were removed. The remaining channels are WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, Matrix, email, and the AI Office connector.
+This native build excludes Slack, Telegram, Discord, and WhatsApp entirely: their Host/Client directories, command wiring, settings tabs, dependencies, and tests were removed. The remaining channels are WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email. Matrix and the AI Office connector were removed in a later change; their Host/Client directories, settings tabs, shared codecs, dependencies, and tests are gone too.
 
-Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (integration) and [`logs/00028`](../../../../logs/00028-移除四渠道.md) (the four-channel removal and audit fixes).
+Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (integration), [`logs/00028`](../../../../logs/00028-移除四渠道.md) (the four-channel removal and audit fixes), and [`logs/00033`](../../../../logs/00033-移除Matrix与Office.md) (Matrix and AI Office removal).
 
 ## Baseline
 
@@ -27,6 +27,7 @@ Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (in
 4. `/goal` and `/plan`: delegated from the shared `TextHarnessBridge` and from the Feishu, DingTalk, WeCom, WeCom app, and QQ bridges to the bound Session's Host command gateway. Help text, command catalogs, and the Feishu slash-command manifest include both commands. Upstream already supported them in Weixin only.
 5. Removed the standalone installer `bin/`, the Cloudflare badge `worker/`, `poll*.mjs`, `wrangler.jsonc`, and their tests. Tests for the disabled npm updater were removed; behavior tests were extended for the native build and the two new commands.
 6. Removed Slack, Telegram, Discord, and WhatsApp end to end (source, Host/Client wiring, command catalogs, delivery/access definitions, i18n dictionaries, Baileys, scripts, and channel-specific tests). The remaining test suite has 3,680 passing cases; helper scripts that referenced the deleted channels were removed or updated.
+7. Removed Matrix and the AI Office connector end to end (channel sources, Host/Client entries, settings tabs and RPC, shared conversation codecs, delivery/access/diagnostic definitions, `@matrix-org/olm`, helper scripts, and channel-specific tests). The remaining test suite has 3,548 passing cases.
 
 ## Syncing upstream
 
@@ -38,4 +39,4 @@ Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (in
 ## Boundaries
 
 - The panel follows the DSH interface language and keeps credentials Host-side; the browser receives only status, QR/manifest data, and masked identifiers.
-- Channel connections, permissions, and platform ToS still belong to the upstream implementation. The unofficial WeChat, Matrix, and iMessage paths keep their upstream caveats.
+- Channel connections, permissions, and platform ToS still belong to the upstream implementation. The unofficial WeChat and iMessage paths keep their upstream caveats.

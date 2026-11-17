@@ -20,7 +20,7 @@ async function until(predicate, message) {
 const titles = [
   '整理今天的项目进度', '分析本周的客户反馈', '跟进产品发布清单', '汇总团队讨论结果',
   '检查订单处理状态', 'Review the launch checklist', 'Plan the next release',
-  'Summarize community feedback', '确认下周会议安排', '测试 iMessage 渠道', '测试 Matrix 渠道', '处理跨团队协作任务',
+  'Summarize community feedback', '确认下周会议安排', '测试 iMessage 渠道', '测试邮箱渠道', '处理跨团队协作任务',
 ];
 const initial = Object.entries(SESSION_CHANNEL_LABELS).map(([channel, labels], index) => ({
   id: channel, title: `${labels[0]} · ${titles[index]}`, channel,

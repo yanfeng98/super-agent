@@ -1166,9 +1166,6 @@ importers:
 
   apps/web/native/dsh-im:
     dependencies:
-      '@matrix-org/olm':
-        specifier: 3.2.15
-        version: 3.2.15
       '@tencent-connect/qqbot-connector':
         specifier: 1.2.0
         version: 1.2.0
@@ -22235,9 +22232,6 @@ packages:
     resolution: {integrity: sha512-9QOtNffcOF/c1seMCDnjckb3R9WHcG34tky+FHpNKKCW0wc/scYLwMtO+ptyGUfMW0/b/n4qRiALlaFHc9Oj7Q==}
     engines: {node: '>= 10.0.0'}
 
-  '@matrix-org/olm@3.2.15':
-    resolution: {integrity: sha512-S7lOrndAK9/8qOtaTq/WhttJC/o4GAzdfK0MUPpo8ApzsJEC0QjtwrkC3KBXdFP1cD1MXi/mlKR7aaoVMKgs6Q==}
-
   '@mermaid-js/mermaid-mindmap@9.3.0':
     resolution: {integrity: sha512-IhtYSVBBRYviH1Ehu8gk69pMDF8DSRqXBRDMWrEfHoaMruHeaP2DXA3PBnuwsMaCdPQhlUUcy/7DBLAEIXvCAw==}
 
@@ -30366,8 +30360,6 @@ snapshots:
       tmp-promise: 3.0.3
     transitivePeerDependencies:
       - supports-color
-
-  '@matrix-org/olm@3.2.15': {}
 
   '@mermaid-js/mermaid-mindmap@9.3.0':
     dependencies:

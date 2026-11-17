@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "IM bots (dsh-im)",
-    "description": "Connect Telegram, WhatsApp, Slack, Discord, Matrix, WeChat, Feishu, WeCom, DingTalk, and QQ to DSH."
+    "description": "Connect WeChat, Feishu, WeCom, DingTalk, QQ, WeCom app, iMessage, and email to DSH."
   }
 }

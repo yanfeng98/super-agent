@@ -486,13 +486,13 @@ test('/tail file export fences arbitrary Markdown bodies byte-for-byte', async (
 test('capability matrix: the native channels advertise no buttons or documents', () => {
   assert.deepEqual(channelCapabilities('feishu'), { buttons: false, fileSend: false });
   assert.deepEqual(channelCapabilities('dingtalk'), { buttons: false, fileSend: false });
-  assert.deepEqual(channelCapabilities('matrix'), { buttons: false, fileSend: false });
+  assert.deepEqual(channelCapabilities('email'), { buttons: false, fileSend: false });
   assert.deepEqual(channelCapabilities('unknown'), { buttons: false, fileSend: false });
 });
 
 test('capability matrix: unsupported channels never send buttons or files', () => {
-  assert.equal(documentSendSupported('matrix', { sendFile() {} }), false);
-  assert.equal(buttonPreviewSupported('matrix', { sendInteractionCard() {} }), false);
+  assert.equal(documentSendSupported('email', { sendFile() {} }), false);
+  assert.equal(buttonPreviewSupported('email', { sendInteractionCard() {} }), false);
 });
 
 test('runSessionNavTextCommand returns text and degrades a file export honestly', async () => {

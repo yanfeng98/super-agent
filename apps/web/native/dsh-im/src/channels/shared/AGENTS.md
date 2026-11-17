@@ -13,7 +13,7 @@ carries the very same string.
 - Placeholders stay byte-identical in the translation. Never rename, translate
   or drop one.
 - Product and channel names (DSH, Cordis, Feishu, Telegram, Slack, Discord,
-  WeCom, QQ, Weixin, WhatsApp, Matrix, DingTalk, email) are never translated.
+  WeCom, QQ, Weixin, DingTalk, email) are never translated.
 - `test/channels/shared/i18n-coverage.test.mjs` enforces this rule: a literal
   with no entry in a dictionary fails the build and names the file that added
   it. A prose rule alone would not.

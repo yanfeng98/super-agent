@@ -9,7 +9,6 @@
  * yields `null` and the caller treats the conversation as unidentified.
  *
  * Known shapes:
- *   direct:dm:<userId>              Matrix direct chat (user ids contain `:`)
  *   direct:<id>                     generic direct chat; whether <id> names
  *                                   the peer user or the DM channel depends
  *                                   on the channel (see SENDER_DIRECT_CHANNELS)
@@ -17,8 +16,7 @@
  *   c2c:<openid>                    QQ private chat
  *   group:<chatId>                  group without a thread
  *   group:<chatId>:thread:<threadId> Feishu thread (older shape)
- *   group:<chatId>:<threadId>       Telegram forum topic, Slack thread
- *   group:room:<roomId>[$<root>]    Matrix room, `$` separates a thread root
+ *   group:<chatId>:<threadId>       Platform thread / topic
  */
 
 /**
@@ -54,12 +52,6 @@ function dm(chatId, senderId) {
 }
 
 function parseDirect(rest, channel) {
-  // `direct:dm:<id>` — Matrix keeps an explicit `dm` marker; the user id
-  // itself (`@alice:example.org`) contains the separator, so take it whole.
-  if (rest.startsWith('dm' + SEP)) {
-    const id = rest.slice(3);
-    return id ? dm(null, id) : null;
-  }
   return dm(rest, SENDER_DIRECT_CHANNELS.has(channel) ? rest : null);
 }
 
@@ -68,22 +60,8 @@ function parsePeer(rest) {
   return dm(null, rest);
 }
 
-function parseMatrixRoom(rest) {
-  const body = rest.slice('room:'.length);
-  const mark = body.indexOf('$');
-  if (mark === -1) {
-    return body ? { chatType: 'group', chatId: body, threadId: null, senderId: null } : null;
-  }
-  const chatId = body.slice(0, mark);
-  const threadId = body.slice(mark + 1);
-  if (!chatId || !threadId) return null;
-  return { chatType: 'thread', chatId, threadId, senderId: null };
-}
-
 function parseGroup(rest) {
-  // Matrix rooms keep their own prefix; everything else is `<chatId>[:<thread>]`
-  // or the explicit `<chatId>:thread:<threadId>` form.
-  if (rest.startsWith('room:')) return parseMatrixRoom(rest);
+  // Everything is `<chatId>[:<thread>]` or the explicit `<chatId>:thread:<threadId>` form.
   const parts = rest.split(SEP);
   const chatId = parts[0];
   if (!chatId) return null;

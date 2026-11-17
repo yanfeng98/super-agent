@@ -8,7 +8,6 @@ export const CHANNEL_LIST_RPC_CHANNEL = '/dsh-im-channels';
 export const CHANNEL_SESSIONS_PANEL_ID = 'xmanrui-dsh-im-channels';
 
 const CHANNEL_LABELS = Object.freeze({
-  matrix: 'Matrix',
   wecom: '微信客服',
   'wecom-app': '企业微信',
   feishu: '飞书',

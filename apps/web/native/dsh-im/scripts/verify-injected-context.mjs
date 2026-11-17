@@ -69,7 +69,7 @@ try {
   // Keep the real bundled context hook; unrelated channel connections stay idle.
   const internals = Object.fromEntries([
     'Feishu', 'Weixin', 'Dingtalk', 'Wecom', 'WecomApp', 'Qq', 'Slack',
-    'Telegram', 'Discord', 'Whatsapp', 'IMessage', 'Email', 'Matrix', 'Office',
+    'Telegram', 'Discord', 'Whatsapp', 'IMessage', 'Email',
   ].map(name => [`apply${name}`, async () => {}]));
   const host = ctx.plugin(createImHostPlugin({
     ...internals,

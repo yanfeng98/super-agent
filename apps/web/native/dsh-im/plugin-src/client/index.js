@@ -5,13 +5,11 @@ import manifest from '../../package.json' with { type: 'json' };
 import {
   DingtalkLogoGlyph,
   FeishuLogoGlyph,
-  OfficeLogoGlyph,
   QqLogoGlyph,
   WecomLogoGlyph,
   WeixinLogoGlyph,
   IMessageLogoGlyph,
   EmailLogoGlyph,
-  MatrixLogoGlyph,
 } from './channel-logos.js';
 import { DINGTALK_RPC_CHANNEL } from './channels/dingtalk/api.js';
 import { DingtalkSettingsTab } from './channels/dingtalk/index.js';
@@ -21,9 +19,6 @@ import { installFeishuStyles } from './channels/feishu/styles.js';
 import { QQ_RPC_CHANNEL } from './channels/qq/api.js';
 import { QqSettingsTab } from './channels/qq/index.js';
 import { installQqStyles } from './channels/qq/styles.js';
-import { OFFICE_RPC_CHANNEL } from './channels/office/api.js';
-import { OfficeSettingsTab } from './channels/office/index.js';
-import { installOfficeStyles } from './channels/office/styles.js';
 import { WECOM_RPC_CHANNEL } from './channels/wecom/api.js';
 import { WecomSettingsTab } from './channels/wecom/index.js';
 import { installWecomStyles } from './channels/wecom/styles.js';
@@ -39,9 +34,6 @@ import { IMessageSettingsTab } from './channels/imessage/index.js';
 import { EmailSettingsTab, useEmailChannelEnabled } from './channels/email/index.js';
 import { installIMessageStyles } from './channels/imessage/styles.js';
 import { installEmailStyles } from './channels/email/styles.js';
-import { MATRIX_RPC_CHANNEL } from './channels/matrix/api.js';
-import { MatrixSettingsTab } from './channels/matrix/index.js';
-import { installMatrixStyles } from './channels/matrix/styles.js';
 import { en, h, IM_LOCALE_NAMESPACE, installImRussianLocale, setImTranslator, zh } from './i18n.js';
 import {
   HOST_LANGUAGE_RPC_CHANNEL,
@@ -99,8 +91,6 @@ const CHANNELS = Object.freeze([
   { id: 'wecomApp', label: '企业微信应用', note: '（实验功能）' },
   { id: 'imessage', label: 'iMessage', note: '（实验功能）' },
   { id: 'email', label: '邮箱', note: '（实验功能）' },
-  { id: 'matrix', label: 'Matrix', note: '（实验功能）' },
-  { id: 'office', label: 'AI Office', note: '（实验功能）' },
 ]);
 
 function WeixinLogo() {
@@ -140,16 +130,6 @@ function EmailLogo() {
     h(EmailLogoGlyph));
 }
 
-function MatrixLogo() {
-  return h('span', { className: 'dim-logo dim-logoMatrix', 'aria-hidden': 'true' },
-    h(MatrixLogoGlyph));
-}
-
-function OfficeLogo() {
-  return h('span', { className: 'dim-logo dim-logoOffice', 'aria-hidden': 'true' },
-    h(OfficeLogoGlyph));
-}
-
 function ChannelLogo({ channel }) {
   if (channel === 'weixin') return h(WeixinLogo);
   if (channel === 'feishu') return h(FeishuLogo);
@@ -159,8 +139,7 @@ function ChannelLogo({ channel }) {
   if (channel === 'qq') return h(QqLogo);
   if (channel === 'imessage') return h(IMessageLogo);
   if (channel === 'email') return h(EmailLogo);
-  if (channel === 'matrix') return h(MatrixLogo);
-  return h(OfficeLogo);
+  return null;
 }
 
 export function LoopbackRecoveryNotice({ recovery, onNavigate = replacePageLocation }) {
@@ -184,12 +163,10 @@ export function IMSettingsTab({
   feishuRpcCall,
   imessageRpcCall,
   emailRpcCall,
-  matrixRpcCall,
   qqRpcCall,
   wecomRpcCall,
   wecomAppRpcCall,
   weixinRpcCall,
-  officeRpcCall,
   updateRpcCall,
   deliveryRpcCall,
   globalSettingsRpcCall,
@@ -241,7 +218,6 @@ export function IMSettingsTab({
         wecomRpcCall,
     wecomAppRpcCall,
     weixinRpcCall,
-      officeRpcCall,
     updateRpcCall,
     deliveryRpcCall,
     globalSettingsRpcCall,
@@ -249,7 +225,6 @@ export function IMSettingsTab({
     languageRpcCall,
     imessageRpcCall,
     emailRpcCall,
-    matrixRpcCall,
   }, {
     location: browserLocation,
     onRecovery: reportLoopbackRecovery,
@@ -262,8 +237,6 @@ export function IMSettingsTab({
     deliverySyncRpcCall,
     imessageRpcCall,
     emailRpcCall,
-    matrixRpcCall,
-    officeRpcCall,
     qqRpcCall,
     reportLoopbackRecovery,
         updateRpcCall,
@@ -415,9 +388,7 @@ export function IMSettingsTab({
                             ? h(IMessageSettingsTab, { rpcCall: rpcCalls.imessageRpcCall })
                           : active.id === 'email'
                             ? h(EmailSettingsTab, { rpcCall: rpcCalls.emailRpcCall })
-                          : active.id === 'matrix'
-                            ? h(MatrixSettingsTab, { rpcCall: rpcCalls.matrixRpcCall })
-                          : h(OfficeSettingsTab, { rpcCall: rpcCalls.officeRpcCall }))),
+                          : null)),
     ),
   ));
 }
@@ -467,8 +438,6 @@ export function apply(ctx) {
       installQqStyles(),
       installIMessageStyles(),
       installEmailStyles(),
-      installMatrixStyles(),
-      installOfficeStyles(),
       installImStyles(),
     ];
     return () => {
@@ -503,10 +472,6 @@ export function apply(ctx) {
     managementRpc(ctx.connection, IMESSAGE_RPC_CHANNEL, endpoint, payload, signal);
   const emailRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, EMAIL_RPC_CHANNEL, endpoint, payload, signal);
-  const matrixRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, MATRIX_RPC_CHANNEL, endpoint, payload, signal);
-  const officeRpcCall = (endpoint, payload, signal) =>
-    managementRpc(ctx.connection, OFFICE_RPC_CHANNEL, endpoint, payload, signal);
   const updateRpcCall = (endpoint, payload, signal) =>
     managementRpc(ctx.connection, UPDATE_RPC_CHANNEL, endpoint, payload, signal);
   const deliveryRpcCall = (endpoint, payload, signal) =>
@@ -534,9 +499,7 @@ export function apply(ctx) {
     wecomAppRpcCall,
     weixinRpcCall,
       imessageRpcCall,
-    officeRpcCall,
     emailRpcCall,
-    matrixRpcCall,
     updateRpcCall,
     deliveryRpcCall,
     globalSettingsRpcCall,

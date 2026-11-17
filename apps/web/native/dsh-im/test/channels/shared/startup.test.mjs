@@ -16,8 +16,7 @@ const channels = await Promise.all([
   ['weixin', 'WeixinConfigStore'], ['dingtalk', 'DingtalkConfigStore'],
   ['wecom', 'WecomConfigStore'], ['wecom-app', 'WecomAppConfigStore'],
   ['qq', 'QqConfigStore'],
-  ['matrix', 'MatrixConfigStore', 'matrix-config-store'],
-  ['email', 'EmailConfigStore'], ['office', 'OfficeConfigStore'],
+  ['email', 'EmailConfigStore'],
 ].map(async ([id, storeName, storeFile = 'config-store']) => ({
   id,
   key: id === 'wecom-app' ? 'wecomApp' : id,
@@ -117,7 +116,7 @@ for (const { id, apply, Store, api } of channels) {
   for (const [label, filename, contents] of [
     ['malformed JSON', 'configPath', '{private-secret-value'],
     ['invalid configuration data', 'configPath', '{"invalid":"private-secret-value"}'],
-    ...(id === 'office' ? [] : [['invalid workspace data', 'workspacesPath', '{"version":999,"private":"private-secret-value"}']]),
+    ['invalid workspace data', 'workspacesPath', '{"version":999,"private":"private-secret-value"}'],
   ]) {
     test(`${id} preserves ${label} and exposes safe guidance in its settings client`, async t => {
       const f = await fixture(t);
@@ -141,13 +140,12 @@ for (const { id, apply, Store, api } of channels) {
       } else { assert.equal(result.error.details.stage, 'startup.load'); assert.match(result.error.details.referenceId, /^IM-CONN-[A-F0-9]{8}$/); assert.equal(result.error.details.operation, 'startup'); }
       assert.doesNotMatch(JSON.stringify(result), /private-secret-value/);
       assert.equal(await readFile(config[filename], 'utf8'), contents);
-      assert.throws(() => (api.unwrapRpcResult ?? api.unwrapOfficeRpc)(result), error => {
+      assert.throws(() => api.unwrapRpcResult(result), error => {
         assert.equal(error.code, result.error.code);
         const message = api.presentError ? api.presentError(error).message : error.message;
         assert.match(message, id === 'weixin' && filename === 'workspacesPath' ? /workspaces\.json/ : /config\.json/);
         assert.match(message, /重启 DSH/);
         if (id === 'weixin') assert.ok(message.includes(result.error.details.file));
-        else if (id === 'office') assert.doesNotMatch(message, /workspaces\.json/);
         else assert.match(message, /workspaces\.json/);
         return true;
       });
@@ -220,10 +218,10 @@ test('the composed host serves other real channels while Feishu is loading and a
     assert.equal((await f.call('feishu')).error.code, 'feishu-initializing');
     // Let the other channels finish their local workspace reconciliation.
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      if ((await f.call('matrix')).ok) break;
+      if ((await f.call('wecom')).ok) break;
       await new Promise(resolve => setTimeout(resolve, 5));
     }
-    assert.equal((await f.call('matrix')).ok, true);
+    assert.equal((await f.call('wecom')).ok, true);
     gate.resolve();
     await fiber.await();
     assert.equal((await f.call('feishu')).error.code, 'feishu-startup-config-invalid');
@@ -326,14 +324,14 @@ test('a channel without a platform-side command menu ignores language changes', 
   setImHostLanguage('zh');
   const f = await fixture(t);
   const fiber = f.start((ctx, config) => installProductionChannel(ctx, config, {
-    channel: 'office', rpcChannel: '/office',
+    channel: 'email', rpcChannel: '/email',
     createProduction: async () => ({ controller: {}, async close() {} }),
     createHandler: () => async () => ({ ok: true, value: {} }),
   }), {});
   await fiber.await();
   setImHostLanguage('en');
   await new Promise(setImmediate);
-  assert.equal((await f.call('office')).ok, true);
+  assert.equal((await f.call('email')).ok, true);
   await fiber.dispose();
 });
 

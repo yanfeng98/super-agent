@@ -24,8 +24,8 @@ async function putState(root, channel, botId, value, container = 'bots') {
 
 test('buildList reads standard bot, Weixin account, and configured Feishu legacy state', async t => {
   const root = await temporaryHome(t);
-  await putState(root, 'matrix', 'matrix-bot', {
-    sessions: { 'group:room:!room:example.org': 'session-matrix' },
+  await putState(root, 'qq', 'qq-bot', {
+    sessions: { 'group:group_openid': 'session-qq' },
   });
   await putState(root, 'telegram', 'telegram-a', {
     sessions: { z_chat: 'session-z', a_chat: 'session-a' },
@@ -63,7 +63,7 @@ test('buildList reads standard bot, Weixin account, and configured Feishu legacy
   }));
 
   const result = await buildList({ dshHome: root });
-  assert.deepEqual(result.channels.map(group => group.channel), ['feishu', 'matrix', 'telegram', 'wecom-app', 'weixin']);
+  assert.deepEqual(result.channels.map(group => group.channel), ['feishu', 'qq', 'telegram', 'wecom-app', 'weixin']);
   assert.equal(result.scannedFiles, 7);
   assert.equal(result.warnings.length, 1);
   assert.match(result.warnings[0], /dsh-discord\/broken-bot/);
@@ -74,9 +74,9 @@ test('buildList reads standard bot, Weixin account, and configured Feishu legacy
     { key: 'group:modern', sessionId: 'session-feishu-modern', botId: 'feishu-modern' },
   ]);
 
-  const matrix = result.channels[1];
-  assert.deepEqual(matrix.sessions, [{
-    key: 'group:room:!room:example.org', sessionId: 'session-matrix', botId: 'matrix-bot',
+  const qq = result.channels[1];
+  assert.deepEqual(qq.sessions, [{
+    key: 'group:group_openid', sessionId: 'session-qq', botId: 'qq-bot',
   }]);
 
   const telegram = result.channels[2];
@@ -187,7 +187,7 @@ test('buildList ignores Feishu root state without a legacy bot config', async t 
 
 test('list.channels returns its payload in the connection RPC value field', async t => {
   const root = await temporaryHome(t);
-  await putState(root, 'matrix', 'matrix-bot', { sessions: { room: 'session-matrix' } });
+  await putState(root, 'qq', 'qq-bot', { sessions: { room: 'session-qq' } });
   let fetch;
   const ctx = { connection: { fetch: { register(definition) {
     fetch = definition.fetch;
@@ -209,14 +209,14 @@ test('list.channels returns its payload in the connection RPC value field', asyn
   assert.equal(envelope.result.ok, true);
   // dsh-client-connection discards every success field except `value`.
   assert.equal(Object.hasOwn(envelope.result, 'data'), false);
-  assert.equal(envelope.result.value.channels[0].channel, 'matrix');
-  assert.equal(envelope.result.value.channels[0].sessions[0].sessionId, 'session-matrix');
+  assert.equal(envelope.result.value.channels[0].channel, 'qq');
+  assert.equal(envelope.result.value.channels[0].sessions[0].sessionId, 'session-qq');
 });
 
 test('session.read returns only the bound session append-origin human transcript', async t => {
   const root = await temporaryHome(t);
-  await putState(root, 'matrix', 'matrix-bot', { sessions: { room: 'session-matrix' } });
-  await putState(root, 'matrix', 'matrix-other', { sessions: { room: 'session-other' } });
+  await putState(root, 'qq', 'qq-bot', { sessions: { room: 'session-qq' } });
+  await putState(root, 'qq', 'qq-other', { sessions: { room: 'session-other' } });
   await putState(root, 'weixin', 'wx-account', {
     sessions: { 'direct:wx-user': 'session-weixin' },
   }, 'accounts');
@@ -277,7 +277,7 @@ test('session.read returns only the bound session append-origin human transcript
   }
 
   const latest = await call({
-    channel: 'matrix', key: 'room', botId: 'matrix-bot', sessionId: 'session-matrix', limit: 2,
+    channel: 'qq', key: 'room', botId: 'qq-bot', sessionId: 'session-qq', limit: 2,
   });
   assert.equal(latest.ok, true);
   assert.equal(latest.value.total, 3);
@@ -285,10 +285,10 @@ test('session.read returns only the bound session append-origin human transcript
   assert.equal(latest.value.nextOffset, 0);
   assert.deepEqual(latest.value.messages.map(message => message.text), ['第一条助手回复', '第二条用户消息']);
   assert.ok(latest.value.messages.every(message => !message.text.includes('不得')));
-  assert.deepEqual(reads, ['session-matrix']);
+  assert.deepEqual(reads, ['session-qq']);
 
   const earlier = await call({
-    channel: 'matrix', key: 'room', botId: 'matrix-bot', sessionId: 'session-matrix',
+    channel: 'qq', key: 'room', botId: 'qq-bot', sessionId: 'session-qq',
     limit: 2, offset: latest.value.nextOffset,
   });
   assert.equal(earlier.ok, true);
@@ -305,15 +305,15 @@ test('session.read returns only the bound session append-origin human transcript
   ]);
 
   for (const payload of [
-    { channel: 'matrix', key: 'room', botId: 'matrix-other', sessionId: 'session-matrix' },
-    { channel: 'matrix', key: 'room', sessionId: 'session-matrix' },
-    { channel: 'matrix', key: 'room', botId: 'matrix-bot', sessionId: 'session-unbound' },
+    { channel: 'qq', key: 'room', botId: 'qq-other', sessionId: 'session-qq' },
+    { channel: 'qq', key: 'room', sessionId: 'session-qq' },
+    { channel: 'qq', key: 'room', botId: 'qq-bot', sessionId: 'session-unbound' },
   ]) {
     const denied = await call(payload);
     assert.equal(denied.ok, false);
     assert.equal(denied.error.code, 'channel-session/not-bound');
   }
-  assert.deepEqual(reads, ['session-matrix', 'session-matrix', 'session-weixin']);
+  assert.deepEqual(reads, ['session-qq', 'session-qq', 'session-weixin']);
 });
 
 test('installer disposes both the RPC route and the Cordis query injection', () => {

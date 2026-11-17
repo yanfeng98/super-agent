@@ -4,7 +4,7 @@
 
 Proactive delivery lets an application send a text message through a bot connected to DSH-IM without waiting for a new user message. The caller stores only a stable `botId + targetId` pair—never a Harness `sessionId`, chat reference, message ID, or temporary webhook.
 
-All nine built-in channels support proactive delivery: WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, Matrix, and email.
+All eight built-in channels support proactive delivery: WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email.
 
 ## Quick start
 
@@ -115,7 +115,7 @@ The **Two-way Session sync** switch on a delivery target now only affects the ca
 
 The settings page reads and writes this document through `settings.delivery-sync.get` / `settings.delivery-sync.set` (`set` applies only the fields it carries, and all four are optional). `settings.language.set` switches the message language between "same as the DSH interface" and `zh`/`en`/`ru`: the explicit choice outranks the DSH interface language, and the plugin `language` option still outranks both.
 
-## Native fields for all nine channels
+## Native fields for all eight channels
 
 Choose a known conversation whenever possible. Obtain and enter a platform-native ID manually only when the target is missing from the suggestions.
 
@@ -200,7 +200,6 @@ await ctx.dshIm.send(botId, targetId, '# Daily report\n\n**Checks complete**', {
 | QQ | Markdown message; known format rejection falls back for the current chunk |
 | DingTalk | Proactive Markdown message; definite format rejection falls back to text |
 | WeCom bot | Existing Markdown message type |
-| Matrix | Sanitized HTML with a text body |
 | WeCom app / Weixin | Full text, including code and link destinations |
 
 Channels apply their own message limits and splitting. Feishu proactive cards retain their existing unsplit behavior and do not automatically resend as text after rejection or an uncertain result. Other newly added fallback paths only handle local formatting errors or definite format rejection; they do not resend accepted chunks or retry ambiguous network outcomes. Older Hosts may ignore `format`; load the updated plugin on the Host.
@@ -225,7 +224,7 @@ await ctx.dshIm.createTarget(botId, {
 });
 ```
 
-Both `kind` and `route` must match the bot's channel; see [Native fields for all nine channels](#native-fields-for-all-nine-channels). For example, a Feishu group uses `kind: 'group'` with `route: { chatId: 'oc_xxx' }`.
+Both `kind` and `route` must match the bot's channel; see [Native fields for all eight channels](#native-fields-for-all-eight-channels). For example, a Feishu group uses `kind: 'group'` with `route: { chatId: 'oc_xxx' }`.
 
 An existing `targetId` is rejected with `target-conflict`; updating or deleting a saved target still goes through the management RPC's `target.update` / `target.delete`.
 
@@ -393,7 +392,7 @@ No. You can edit its name, type, and native route without changing call paramete
 
 ### Why not use sessionId?
 
-A `sessionId` identifies a Harness Session. It is not a uniform, stable message address across the nine platforms. Proactive delivery uses the stable bot and saved-target pair instead.
+A `sessionId` identifies a Harness Session. It is not a uniform, stable message address across the eight platforms. Proactive delivery uses the stable bot and saved-target pair instead.
 
 ### The test succeeded, but the recipient cannot see the message
 

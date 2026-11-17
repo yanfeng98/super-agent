@@ -1,6 +1,6 @@
 /**
- * One-consumption registry for conversation roots (Feishu topic roots, Matrix
- * thread roots): the first message of a thread is context for that thread's AI
+ * One-consumption registry for conversation roots (Feishu topic roots): the
+ * first message of a thread is context for that thread's AI
  * conversation, but it must not be re-fed on every turn.
  *
  * The contract mirrors the behavior shipped for Feishu topics in CHANGELOG

@@ -9,7 +9,7 @@ import { SET_MESSAGE_MODE_ENDPOINT } from '../src/channels/shared/message-mode.m
 const CHANNELS = [
   ['wecom', 'Wecom'], ['weixin', 'Weixin'], ['feishu', 'Feishu'], ['dingtalk', 'Dingtalk'],
   ['qq', 'Qq'], ['wecom-app', 'WecomApp'], ['imessage', 'IMessage'],
-  ['email', 'Email'], ['matrix', 'Matrix'],
+  ['email', 'Email'],
 ];
 
 async function fixture(t) {

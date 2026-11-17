@@ -1,3 +1,5 @@
+> **This copy is the native Super Agent build.** It includes WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ, iMessage, and email. Slack, Telegram, Discord, WhatsApp, Matrix, and the AI Office connector are not included. Sections below that describe those channels apply to upstream dsh-im, not to this build.
+
 <p align="center">
   <img src="assets/logo-dsh-im-connecting-readme-3x2.png" alt="DSH-IM — Connecting DeepSeek Harness" width="420" height="280" align="middle">&nbsp;&nbsp;
   <img src="assets/logo-plugin-phone.png" alt="DSH-IM phone logo" width="280" height="280" align="middle">
@@ -163,10 +165,6 @@ After the model calls the file-return tool, the plugin hands the specified file 
 | Discord | Enable **Message Content Intent** in the Developer Portal. The bot needs **Send Messages**, **Create Public Threads**, **Send Messages in Threads**, and **Read Message History**; result-file delivery also requires **Attach Files**. The current account and server capability determine the actual attachment allowance. |
 | WhatsApp | The linked session must support Document Messages; the WhatsApp/Baileys response determines the actual range. |
 | Matrix | The homeserver must allow media uploads; its media repository configuration decides the real per-file limit. When an upload is rejected, the plugin asks you to check the media size limit and upload permissions. |
-
-## AI Office Connector
-
-[Read the AI Office Connector guide](docs/AI-Office-Connector.en.md)
 
 ## Installation
 

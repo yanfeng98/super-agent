@@ -64,8 +64,8 @@
         maxNoteBytes: 8192
 
     # Native IM bot surface: one Settings → IM bots page that manages the
-    # built-in channels (WeChat, Feishu, DingTalk, WeCom, QQ, Slack, Telegram,
-    # Discord, WhatsApp, iMessage, Matrix, email) and the AI Office connector.
+    # built-in channels (WeChat, Feishu, DingTalk, WeCom, WeCom app, QQ,
+    # iMessage, email).
     # The package carries both faces, so its `dsh.client` declaration joins the
     # browser roster in the same row.
     - id: dsh-im

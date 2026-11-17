@@ -1,8 +1,7 @@
 import { parseSessionChannelTitle } from '../../src/channels/shared/session-channel-labels.mjs';
 import {
   WeixinLogoGlyph, FeishuLogoGlyph, DingtalkLogoGlyph, WecomLogoGlyph, QqLogoGlyph,
-  OfficeLogoGlyph,
-  IMessageLogoGlyph, MatrixLogoGlyph,
+  IMessageLogoGlyph,
 } from './channel-logos.js';
 
 const GLYPHS = Object.freeze({
@@ -12,8 +11,6 @@ const GLYPHS = Object.freeze({
   wecom: [WecomLogoGlyph, '#3370ff'],
   qq: [QqLogoGlyph, '#12b7f5'],
   imessage: [IMessageLogoGlyph, '#3478f6'],
-  matrix: [MatrixLogoGlyph, '#1a8f6f'],
-  office: [OfficeLogoGlyph, '#f97316'],
 });
 const CHANNEL_ATTR = 'data-dsh-im-session-channel';
 const TITLE_ATTR = 'data-dsh-im-session-text';
