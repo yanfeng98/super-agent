@@ -132,7 +132,6 @@ export function ProviderSignIn({ open, displayName, flow, signIn, onClose, t, cl
           {attempt.phase === 'failed'
             ? <Button onClick={() => { signIn.begin(flow.key, flow.methods[0]?.id) }}>{t('signInRetry')}</Button>
             : null}
-          {attempt.phase === 'authorized' ? <Button onClick={onClose}>{t('close')}</Button> : null}
         </>
       )}
     >
@@ -167,14 +166,14 @@ export function ProviderSignIn({ open, displayName, flow, signIn, onClose, t, cl
             </div>
           )}
         {attempt.phase === 'authorized' ? <p className={css['done']} role="status">{t('signInDone')}</p> : null}
-        {attempt.failure === null
+        {attempt.phase !== 'failed'
           ? null
           : (
             <div className={css['error']} role="alert">
               <p className={css['errorText']}>{t('signInFailed')}</p>
-              {/* The host's own words: a refused attempt explains itself better
-                  than any copy this page could invent for it. */}
-              <p className={css['errorDetail']}>{attempt.failure}</p>
+              {/* The Host's own words when it refused the attempt; the page's own
+                  note when the attempt vanished before it finished. */}
+              <p className={css['errorDetail']}>{attempt.ended ? t('signInEnded') : attempt.failure}</p>
             </div>
           )}
       </div>

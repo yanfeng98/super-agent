@@ -33,7 +33,7 @@ DeepSeek Account appears first and DeepSeek second in the provider list; third-p
 
 Open the Models page from the Settings navigation to see every configured provider as a row. A whole-section provider whose key is not configured anywhere renders as its open setup card instead, but only in the first-run posture and only until the user closes that card. Each card kind owns its own open state, so closing one never discards a draft in another.
 
-A route with no API key to store shows the Host sign-in flow's button instead of the key field, and the dialog it opens shows the flow's notices (a page to open, a code to type) and asks whatever question the flow needs answered. One attempt runs at a time for the page; closing the dialog withdraws it, and the page rejoins a still-running attempt after a reload.
+A route with no API key to store shows the Host sign-in flow's button instead of the key field, and the dialog it opens shows the flow's notices (a page to open, a code to type) and asks whatever question the flow needs answered. One attempt runs per credential key at a time; closing the dialog withdraws it, and the page rejoins a still-running attempt after a reload while an attempt the Host no longer holds is reported as ended instead of waited on.
 
 A provider with a stored catalog error remains visible with its diagnostic and edit/delete actions. Add actions are offered only for registered settings namespaces, so an unavailable namespace cannot leave a button that opens no editor. A rejected save leaves the editor open and displays the Host diagnostic.
 

@@ -148,6 +148,76 @@ describe('the Models page sign-in store', () => {
     signIn.dispose()
   })
 
+  it('withdraws an attempt the dialog stopped watching while its start was in flight', async () => {
+    let releaseStart: () => void = () => {}
+    const startGate = new Promise<void>((resolve) => { releaseStart = resolve })
+    const { ctx, calls } = harness({
+      state: () => Promise.resolve(ok(null)),
+      begin: async () => {
+        await startGate
+        return ok(attempt())
+      },
+    })
+    const signIn = createProviderSignIn(ctx)
+    const starting = signIn.begin(KEY, 'oauth')
+    // The human closes the dialog before the Host has answered the start.
+    await signIn.cancel()
+    releaseStart()
+    await starting
+
+    // Whatever the start created still has no watcher, so it is withdrawn.
+    expect(calls.cancel).toContain(KEY)
+    signIn.dispose()
+  })
+
+  it('reports a vanished attempt instead of polling forever behind it', async () => {
+    vi.useFakeTimers()
+    try {
+      let reads = 0
+      const { ctx } = harness({
+        state: () => {
+          reads += 1
+          // The Host kept it on the first read, then lost it (a restart).
+          return Promise.resolve(ok(reads === 1 ? attempt() : null))
+        },
+      })
+      const signIn = createProviderSignIn(ctx)
+      await signIn.begin(KEY, undefined)
+      expect(signIn.store.getSnapshot().phase).toBe('running')
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(900) })
+      expect(signIn.store.getSnapshot()).toMatchObject({ phase: 'failed', ended: true, failure: null })
+
+      const settledReads = reads
+      await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
+      expect(reads).toBe(settledReads)
+      signIn.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('treats a refused answer as stale when the attempt itself is still running', async () => {
+    const { ctx } = harness({
+      state: () => Promise.resolve(ok(attempt({
+        prompt: { promptId: 3, kind: 'text', message: 'Paste the code' },
+      }))),
+      answer: () => Promise.resolve(fail('attempt for this key is not waiting on that question')),
+    })
+    const signIn = createProviderSignIn(ctx)
+    await signIn.begin(KEY, 'oauth')
+    await signIn.answer(2, 'THE-CODE')
+
+    // The double submit is refused; the attempt keeps running with its real question.
+    expect(signIn.store.getSnapshot()).toMatchObject({
+      phase: 'running',
+      failure: null,
+      ended: false,
+      prompt: { promptId: 3 },
+    })
+    signIn.dispose()
+  })
+
   it('keeps polling a running attempt until it settles', async () => {
     vi.useFakeTimers()
     try {
@@ -176,7 +246,9 @@ describe('the Models page sign-in store', () => {
 })
 
 describe('the sign-in dialog', () => {
-  const idle: ProviderSignInState = { key: null, phase: 'idle', notices: [], prompt: null, failure: null }
+  const idle: ProviderSignInState = {
+    key: null, phase: 'idle', notices: [], prompt: null, failure: null, ended: false,
+  }
 
   function view(attemptState: ProviderSignInState) {
     return { attempt: attemptState, begin: vi.fn(), answer: vi.fn(), cancel: vi.fn(), reset: vi.fn() }
@@ -243,6 +315,17 @@ describe('the sign-in dialog', () => {
     expect(screen.getByRole('alert').textContent).toContain('the provider refused the grant')
     fireEvent.click(screen.getByRole('button', { name: en.signInRetry }))
     expect(signIn.begin).toHaveBeenCalledWith(KEY, 'oauth')
+  })
+
+  it('reports a vanished attempt with the page’s own copy', () => {
+    renderDialog({ ...idle, key: KEY, phase: 'failed', ended: true })
+    expect(screen.getByRole('alert').textContent).toContain(en.signInEnded)
+  })
+
+  it('confirms the sign-in and offers no retry for it', () => {
+    renderDialog({ ...idle, key: KEY, phase: 'authorized' })
+    expect(screen.getByText(en.signInDone)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: en.signInRetry })).toBeNull()
   })
 
   it('cancels a running attempt when the dialog is closed', () => {

@@ -179,7 +179,9 @@ function remoteFail(message: string, code: RefusalCode = 'credential/rejected') 
 }
 
 /** The attempt state the page renders when no sign-in has been started. */
-const IDLE_ATTEMPT: ProviderSignInState = { key: null, phase: 'idle', notices: [], prompt: null, failure: null }
+const IDLE_ATTEMPT: ProviderSignInState = {
+  key: null, phase: 'idle', notices: [], prompt: null, failure: null, ended: false,
+}
 
 /** Bind an attempt to the selector a store hook would receive. */
 const useIdleAttempt = <T,>(selector: (state: ProviderSignInState) => T): T => selector(IDLE_ATTEMPT)
