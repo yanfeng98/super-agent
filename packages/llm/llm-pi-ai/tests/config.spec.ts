@@ -98,6 +98,7 @@ describe('withheld catalog providers', () => {
     'groq',
     'huggingface',
     'minimax',
+    'mistral',
     'moonshotai',
     'moonshotai-cn',
     'nvidia',

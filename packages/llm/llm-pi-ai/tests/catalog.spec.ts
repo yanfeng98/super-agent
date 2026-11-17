@@ -1272,6 +1272,7 @@ describe('configurable-provider directory', () => {
       'groq',
       'huggingface',
       'minimax',
+      'mistral',
       'moonshotai',
       'moonshotai-cn',
       'nvidia',
