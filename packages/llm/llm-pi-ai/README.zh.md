@@ -287,7 +287,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 
 本开发备注是不具权威性的工作上下文：尚未决定的探索方向与维护者备注。已交付的行为与既定理由以上文、包代码和相关 Agent Note 为准。
 
-- 提供的协议集合刻意比 pi-ai 的完整 API 集合更窄：Vertex 与 Codex 需要密钥、端点与标头之外的东西——应用默认凭据还要项目与位置，Codex 则要 OAuth grant，因此自定义路由不能选择它们的协议。Codex 可经授权流程的 OAuth grant 登录，Vertex 的模型则仍由 `google` 提供。Bedrock、Azure、两条 Cloudflare 路由与 Vertex 完全不予提供。
+- 提供的协议集合刻意比 pi-ai 的完整 API 集合更窄：Vertex 与 Codex 需要密钥、端点与标头之外的东西——应用默认凭据还要项目与位置，Codex 则要 OAuth grant，因此自定义路由不能选择它们的协议。Codex 可经授权流程的 OAuth grant 登录——模型设置页会为没有密钥可填的路由渲染这条登录——Vertex 的模型则仍由 `google` 提供。Bedrock、Azure、两条 Cloudflare 路由与 Vertex 完全不予提供。
 - `compat` 开关集合由漂移门禁钉在 pi-ai 的 compat 类型上；上游升级若新增字段、为更多协议赋予 compat 类型或扩大值联合，会在有人分类前让构建失败。
 
 </details>

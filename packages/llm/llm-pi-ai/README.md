@@ -287,7 +287,7 @@ These limits define where the adapter stops and future work begins. They are cur
 
 This Dev Note is non-authoritative working context: undecided directions and notes for maintainers. Shipped behavior and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
-- The offered protocol set is deliberately narrower than pi-ai's full API set: Vertex and Codex need more than a key, an endpoint, and headers — a project and location beside application-default credentials, or an OAuth grant — so no custom route may select their protocols. Codex stays sign-in-able through the authorization flow's OAuth grant, and Vertex's models stay served by `google`. Bedrock, Azure, both Cloudflare routes, and Vertex are withheld from the catalog entirely.
+- The offered protocol set is deliberately narrower than pi-ai's full API set: Vertex and Codex need more than a key, an endpoint, and headers — a project and location beside application-default credentials, or an OAuth grant — so no custom route may select their protocols. Codex stays sign-in-able through the authorization flow's OAuth grant, which the Models page renders for a route with no key to store, and Vertex's models stay served by `google`. Bedrock, Azure, both Cloudflare routes, and Vertex are withheld from the catalog entirely.
 - The `compat` switch set is pinned to pi-ai's compat types by drift gates; an upstream upgrade that adds a field, gives a further protocol a compat type, or widens a value union fails the build until someone classifies it.
 
 </details>
