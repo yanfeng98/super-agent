@@ -34,6 +34,8 @@ import type { ModelsSettingsStore, ProviderRow } from './store.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
+import type { ProviderSignInView } from './ProviderSignIn.tsx'
+import type { ProviderSignIn } from './sign-in.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -44,11 +46,15 @@ export interface ModelsSectionInjected {
   hooks: {
     /** Page snapshot bound by the UI renderer as useSnapshot. */
     snapshot: ModelsSettingsStore['store']
+    /** The sign-in attempt the page is driving, bound as useAttempt. */
+    attempt: ProviderSignIn['store']
   }
   /** The Host operations the section and its cards invoke. */
   operations: ModelsOperations
   /** Settings schema and immutable path callbacks. */
   schema: SettingsSchemaOperations
+  /** Sign-in actions shared by every provider card; the attempt itself rides {@link hooks}. */
+  signIn: Pick<ProviderSignInView, 'begin' | 'answer' | 'cancel' | 'reset'>
   /** Section copy. */
   t: (key: keyof typeof en) => string
 }
@@ -115,7 +121,7 @@ interface CatalogDraft {
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
-  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose'
+  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose' | 'signIn'
 > {
   target: EditorTarget
   row: ProviderRow
@@ -132,6 +138,7 @@ function renderProviderEditor({ target, row, ...props }: ProviderEditorRenderPro
       {...target.defaultBaseURL === undefined ? {} : { defaultBaseURL: target.defaultBaseURL }}
       {...target.baseURLEnv === undefined ? {} : { baseURLEnv: target.baseURLEnv }}
       {...target.nativeAuth === undefined ? {} : { nativeAuth: target.nativeAuth }}
+      {...row.flow === undefined ? {} : { flow: row.flow }}
       {...row.credential === undefined ? {} : { credential: row.credential }}
       {...row.credentialChecks === undefined ? {} : { credentialChecks: row.credentialChecks }}
       {...props}
@@ -236,17 +243,24 @@ export function providerCopy(template: string, target: ProviderIdentity): string
  * @returns the section, or null while the shell has not injected yet.
  */
 export function ModelsSection(props: ModelsSectionProps): ReactNode {
-  const { controller, useSnapshot, operations, schema, t, renderSlot } = props
+  const { controller, useSnapshot, useAttempt, operations, schema, signIn, t, renderSlot } = props
   if (
-    controller === undefined || useSnapshot === undefined || operations === undefined
-    || schema === undefined || t === undefined
+    controller === undefined || useSnapshot === undefined || useAttempt === undefined
+    || operations === undefined || schema === undefined || signIn === undefined || t === undefined
   ) return null
-  return <Loaded injected={{ controller, useSnapshot, operations, schema, t }} renderSlot={renderSlot} />
+  return (
+    <Loaded
+      injected={{ controller, useSnapshot, useAttempt, operations, schema, signIn, t }}
+      renderSlot={renderSlot}
+    />
+  )
 }
 
 function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderSlot: ModelsRenderSlot }): ReactNode {
   const { controller, operations, schema, t } = injected
   const snapshot = injected.useSnapshot(value => value)
+  const attempt = injected.useAttempt(value => value)
+  const signIn: ProviderSignInView = { attempt, ...injected.signIn }
   const state = { ...snapshot, rows: snapshot.rows.map(row => row.entry.provider === 'deepseek-account'
     ? { ...row, entry: { ...row.entry, displayName: t('deepSeekAccount') } } : row) }
   /** A new or failed surface waits for a current snapshot; background refreshes preserve its drafts. */
@@ -444,6 +458,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   schema,
                   operations,
                   t,
+                  signIn,
                   readOnly: !state.writable,
                   onClose: (changed) => { closeSetup(changed, target) },
                 })}
@@ -557,6 +572,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   schema,
                   operations,
                   t,
+                  signIn,
                   readOnly: !state.writable,
                   onClose: (changed) => { closeEditor(changed, target) },
                 })
@@ -647,6 +663,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       {...draft.target.defaultBaseURL === undefined ? {} : { defaultBaseURL: draft.target.defaultBaseURL }}
                       {...draft.target.baseURLEnv === undefined ? {} : { baseURLEnv: draft.target.baseURLEnv }}
                       {...draft.target.nativeAuth === undefined ? {} : { nativeAuth: draft.target.nativeAuth }}
+                      {...addRow?.flow === undefined ? {} : { flow: addRow.flow }}
+                      signIn={signIn}
                       {...addRow?.credentialChecks === undefined ? {} : { credentialChecks: addRow.credentialChecks }}
                       t={t}
                       readOnly={!state.writable}

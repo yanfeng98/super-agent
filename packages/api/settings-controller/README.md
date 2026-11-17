@@ -1,5 +1,5 @@
 ---
-description: "Host Remote owner for settings and credential configuration surfaces, including redacted reads, writes, credential references, and native document opening."
+description: "Host Remote owner for settings, credential, and sign-in configuration surfaces, including redacted reads, writes, credential references, authorization flows, and native document opening."
 kind: "package-reference"
 ---
 # Settings Controller
@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-api-settings-controller` exposes generated `ctx.remote.settings` and `ctx.remote.credentials` namespaces for browser configuration surfaces. It returns redacted settings and credential metadata, supports settings and credential writes without returning secret values, and opens provider-owned settings or Agent preset locations on the Host desktop. When a provider is absent, the namespace remains registered and returns an actionable configuration error.
+`@deepseek-ai/dsh-api-settings-controller` exposes generated `ctx.remote.settings`, `ctx.remote.credentials`, and `ctx.remote.authorization` namespaces for browser configuration surfaces. It returns redacted settings and credential metadata, supports settings and credential writes without returning secret values, drives a credential-obtaining sign-in the human completes, and opens provider-owned settings or Agent preset locations on the Host desktop. When a provider is absent, the namespace remains registered and returns an actionable configuration error.
 
 ## Table of Contents
 
@@ -23,9 +23,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package as a Loader entry in a profile that serves browser configuration. The entry registers both namespaces independently of their providers so a missing provider produces a named configuration error at invocation. Its generated descriptors enter the strict Typert registry, while the settings and credential Definitions remain plain Cordis Services with no wire obligations of their own.
+Mount this package as a Loader entry in a profile that serves browser configuration. The entry registers its namespaces independently of their providers so a missing provider produces a named configuration error at invocation. Its generated descriptors enter the strict Typert registry, while the settings and credential Definitions remain plain Cordis Services with no wire obligations of their own.
 
 `describe(refs)` answers one map keyed by the requested names, so a settings page describing every reference its rows carry settles those rows together. It accepts at most 64 names per call, reports an invalid name or empty write value as `bad-request`, and copies each answer field by field — a provider returning more than `CredentialInfo` declares cannot widen what crosses. The view may include a provider-generated `masked` preview, never the full stored value. Valid `set(ref, value)` and `unset(ref)` calls report a provider refusal as `credential-rejected`, carrying the provider's message with only the reference in its details. Full secret values cross in this direction only: no method here returns one.
+
+`authorization.list()` answers every registered sign-in flow with the credential key it writes, its methods, and whether an attempt is running. `authorization.begin(key, method)` starts one and returns the state it has already reached; `authorization.state(key)` re-reads that state, which is how a reloaded page rejoins the attempt it left behind, since one attempt per key is the authorization seam's own rule. `authorization.answer(key, promptId, value)` answers the question the attempt waits on, and `authorization.cancel(key)` withdraws it. A prompt id that is no longer pending is refused rather than answered late.
 
 `settings.describe()` returns deployment facts and every namespace under `redactSecrets: true`. `settings.update`, `settings.replace`, and `settings.mutate` expose the settings service's three write operations and return the namespace's new redacted view; stale writes use `settings-conflict` and other provider refusals use `settings-rejected`.
 
@@ -57,6 +59,8 @@ No direct effect; reading or writing these configuration values does not alter m
 <a id="known-limitations-and-deferred-work"></a>
 
 - The batch bound is fixed at 64 references and is not a deployment-configurable field.
+- One sign-in attempt runs per credential key at a time, and an unanswered attempt expires after fifteen minutes; the page has no way to extend either bound.
+- Notices are retained per attempt up to 64 entries, oldest dropped first, so a page that stops reading loses earlier progress lines rather than the newest instruction.
 
 <a id="dev-note"></a>
 ### Dev Note

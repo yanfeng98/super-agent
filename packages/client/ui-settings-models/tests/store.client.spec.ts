@@ -1,6 +1,6 @@
 /** Page-store join: directory × namespaces × credentials, with last-good rows on failure. */
 import { describe, expect, it } from 'vitest'
-import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
+import type { AuthorizationFlowView, RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { settingsSchema } from './settings-schema.client.ts'
@@ -108,6 +108,8 @@ function api(overrides: {
   providers?: () => Promise<RpcResponse<{ providers: typeof DIRECTORY }>>
   describeSettings?: () => Promise<RemoteAnswer<{ writable: boolean; hasDocument: boolean; namespaces: typeof NAMESPACES }>>
   describeCredentials?: (refs: readonly string[]) => Promise<RemoteAnswer<Record<string, unknown>>>
+  /** Flows the page lists for its cards; absent means the composition offers none. */
+  flows?: readonly AuthorizationFlowView[]
 } = {}) {
   const seenRefs: string[][] = []
   const providers = overrides.providers ?? (() => Promise.resolve(ok({ providers: DIRECTORY })))
@@ -140,6 +142,9 @@ function api(overrides: {
         .map(({ active: _active, ...row }) => row)),
       discoverModels: () => Promise.resolve(remoteOk([])),
     },
+    authorization: {
+      list: () => Promise.resolve(remoteOk(overrides.flows ?? [])),
+    },
     settings: {
       describe: overrides.describeSettings
         ?? (() => Promise.resolve(remoteOk({ writable: true, hasDocument: false, namespaces: NAMESPACES }))),
@@ -162,6 +167,29 @@ function api(overrides: {
 }
 
 describe('ModelsSettingsStore', () => {
+  it('joins the host sign-in flow onto the route it authorizes, and nowhere else', async () => {
+    const flow: AuthorizationFlowView = {
+      key: 'llm-pi-ai/openai-codex',
+      scope: 'llm-pi-ai',
+      id: 'openai-codex',
+      label: 'OpenAI Codex',
+      methods: [{ id: 'oauth', label: 'Sign in with ChatGPT' }],
+      inFlight: false,
+    }
+    const { ctx, mirror } = api({
+      providers: () => Promise.resolve(ok({ providers: [
+        ...DIRECTORY,
+        { provider: 'openai-codex', displayName: 'Codex', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai-codex'], active: false },
+      ] })),
+      flows: [flow],
+    })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    await store.load()
+    const rows = store.store.getSnapshot().rows
+    expect(rows.find(row => row.entry.provider === 'openai-codex')?.flow).toEqual(flow)
+    expect(rows.find(row => row.entry.provider === 'openai')?.flow).toBeUndefined()
+  })
+
   it('describes native variables without exposing secret values and respects the 64-reference limit', async () => {
     const providers = Array.from({ length: 65 }, (_, index) => ({
       provider: `fixture-${index}`, displayName: 'fixture', settingsNs: 'llm-pi-ai', settingsPath: ['providers', `fixture-${index}`], active: false,

@@ -9,7 +9,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {
-  CredentialInfo, LlmConfigurableProvider, LlmNativeAuth, LlmProviderInfo, SettingsNamespaceView,
+  AuthorizationFlowView, CredentialInfo, LlmConfigurableProvider, LlmNativeAuth, LlmProviderInfo, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -98,6 +98,13 @@ export interface ProviderRow {
   derivedCredential?: CredentialInfo
   /** Redacted checks for named or native references; absent when their read failed. */
   credentialChecks?: Readonly<Record<string, CredentialInfo>>
+  /**
+   * The host sign-in flow that writes this route's credential, when the
+   * composition offers one. A keyless provider — one whose route has no API key
+   * to type — is reachable only by signing in, so the card renders this flow's
+   * button instead of a credential field.
+   */
+  flow?: AuthorizationFlowView
 }
 
 /** Page snapshot. */
@@ -229,10 +236,11 @@ export class ModelsSettingsStore {
   /** Publish one joined answer; stale answers leave the current refresh in charge. */
   private async read(generation: number): Promise<void> {
     this.store.update((s) => { s.status = 'loading'; s.error = null })
-    const [registered, declared] = await Promise.all([
+    const [registered, declared, , flows] = await Promise.all([
       this.ctx.remote.llm.listProviders(),
       this.ctx.remote.llm.listConfigurableProviders(),
       this.describeFace.ensure(),
+      this.ctx.remote.authorization.list(),
     ])
     if (generation !== this.generation) return
     if (!registered.ok) { this.failLoad(registered.error.message); return }
@@ -248,6 +256,9 @@ export class ModelsSettingsStore {
     const writable = mirrored.view.writable
     const views: readonly SettingsNamespaceView[] = mirrored.view.namespaces
     const namespaces = new Map(views.map(view => [view.ns, view]))
+    // Sign-in is an enrichment: a composition mounting no authorization seam
+    // still lists every provider, and its cards simply offer no sign-in.
+    const signInFlows: readonly AuthorizationFlowView[] = flows.ok ? flows.value : []
     const rows: ProviderRow[] = providers.map((entry) => {
       const namespace = namespaces.get(entry.settingsNs)
       const configured = namespace !== undefined
@@ -294,8 +305,11 @@ export class ModelsSettingsStore {
         if (row.entry.provider === 'deepseek-account') return row
         const named = row.apiKeyEnv === undefined ? undefined : credentials[row.apiKeyEnv]
         const derived = row.apiKeyEnv !== undefined ? undefined : credentials[deriveKeyRef(row.entry.provider)]
+        const flow = signInFlows.find(candidate =>
+          candidate.id === row.entry.provider && candidate.scope === row.entry.settingsNs)
         return {
           ...row,
+          ...flow === undefined ? {} : { flow },
           ...named === undefined ? {} : { credential: named },
           ...derived === undefined ? {} : { derivedCredential: derived },
           ...credentialError === null ? { credentialChecks: Object.fromEntries(

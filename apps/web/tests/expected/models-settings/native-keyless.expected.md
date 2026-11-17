@@ -31,6 +31,9 @@
       - option "xai"
       - option "xiaomi-token-plan-cn"
       - option "zai-coding-cn"
+    - text: 登录
+    - button "OpenAI (ChatGPT Plus/Pro)"
+    - text: 该提供商通过自己的页面登录；提供商确认后，凭据会保存在本地。
     - group: 自定义设置
     - button "取消"
     - button "保存"

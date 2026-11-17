@@ -271,6 +271,13 @@
   gap: 6px;
 }
 
+/* A keyless provider's sign-in actions: one button per method the host flow offers. */
+.signInActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .fieldLabel {
   display: inline-flex;
   align-items: center;

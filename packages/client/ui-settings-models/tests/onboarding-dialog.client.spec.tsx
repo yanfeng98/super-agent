@@ -121,6 +121,7 @@ function harness(options: {
       })),
       mutate,
     },
+    authorization: { list: () => Promise.resolve(remoteOk([])) },
     credentials: {
       describe: () => options.describeFailure === undefined
         ? Promise.resolve(remoteOk({

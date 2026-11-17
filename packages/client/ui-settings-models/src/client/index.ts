@@ -24,6 +24,7 @@ import { WelcomeNotice } from './WelcomeNotice.tsx'
 import type { WelcomeNoticeInjected } from './WelcomeNotice.tsx'
 import { WelcomeNoticeStore } from './welcome-store.ts'
 import { ModelsSettingsStore } from './store.ts'
+import { createProviderSignIn } from './sign-in.ts'
 import { createModelsOperations } from './operations.ts'
 import { createSettingsSchemaOperations } from './schema-operations.ts'
 import { en, ja, es, fr, de, ru, pt, zh, type ModelsKey } from './locales.ts'
@@ -65,8 +66,8 @@ export function refreshIfLoaded(controller: ModelsSettingsStore): void {
  * constrained; registration depends on each slot through `slots.inject()`.
  */
 export const inject = [
-  'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session',
-  'configForms', 'settingsSchema',
+  'slots', 'locale', 'remote', 'remote.authorization', 'remote.credentials', 'remote.llm', 'remote.settings',
+  'remote.session', 'configForms', 'settingsSchema',
 ]
 
 /**
@@ -87,14 +88,25 @@ export function apply(ctx: ClientContext): void {
   // own `inject`; the cards receive callbacks and never a context.
   const operations = createModelsOperations(ctx)
   const controller = new ModelsSettingsStore(ctx, schema, ctx.configForms.describe())
+  // One sign-in attempt at a time for the whole page: two cards sharing the
+  // store cannot hold two flows open, and a card that closes mid-sign-in leaves
+  // the attempt to the cancel the dialog sends.
+  const signIn = createProviderSignIn(ctx)
+  ctx.effect(() => () => { signIn.dispose() }, 'ui-settings-models: sign-in lifetime')
   // Registration-time text (the nav label thunk) and the inject faces share
   // one bound translate; copy freshness rides the locale revision.
   const t = ctx.locale.bind(NS) as ModelsSectionInjected['t']
   const injected = (): ModelsSectionInjected => ({
     controller,
-    hooks: { snapshot: controller.store },
+    hooks: { snapshot: controller.store, attempt: signIn.store },
     operations,
     schema,
+    signIn: {
+      begin: (key, method) => { void signIn.begin(key, method) },
+      answer: (promptId, value) => { void signIn.answer(promptId, value) },
+      cancel: () => { void signIn.cancel() },
+      reset: () => { signIn.reset() },
+    },
     t,
   })
   const deepSeekOnboardingInjected = (): DeepSeekOnboardingInjected => ({

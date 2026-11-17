@@ -137,6 +137,7 @@ function scriptedFace(options: {
       describe: vi.fn(() => Promise.resolve(remoteOk({ writable: true, namespaces: [namespace] }))),
       mutate,
     },
+    authorization: { list: vi.fn(() => Promise.resolve(remoteOk([]))) },
     credentials: {
       describe: vi.fn((refs: string[]) => Promise.resolve(remoteOk(
         Object.fromEntries(refs.map(ref => [ref, { configured: false, writable: true }])),
@@ -214,6 +215,8 @@ async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
   const injected: ModelsSectionProps = {
     controller,
     useSnapshot: bindSnapshotSelector(controller.store),
+    useAttempt: selector => selector({ key: null, phase: 'idle', notices: [], prompt: null, failure: null }),
+    signIn: { begin: vi.fn(), answer: vi.fn(), cancel: vi.fn(), reset: vi.fn() },
     operations: operationsWith(scripted.face),
     schema: settingsSchema,
     t,
