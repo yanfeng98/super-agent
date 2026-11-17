@@ -56,6 +56,9 @@ export interface InventoryGate<T extends InventoryFinding> {
 export function isInventorySource(file: string): boolean {
   return SOURCE_EXTENSIONS.test(file)
     && !file.startsWith('vendor/')
+    // Vendored native plugins keep upstream source close for syncs; dsh-im ships JavaScript, and the
+    // TypeScript ones are not first-party source.
+    && !file.startsWith('apps/web/native/')
     && !file.startsWith('.agents/notes/archived/')
 }
 
