@@ -25,7 +25,6 @@
       - option "kimi-coding"
       - option "meta"
       - option "minimax-cn" [selected]
-      - option "mistral"
       - option "openai"
       - option "openai-codex"
       - option "opencode-go"

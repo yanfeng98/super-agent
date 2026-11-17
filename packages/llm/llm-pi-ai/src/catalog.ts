@@ -262,6 +262,17 @@ function servesChat(provider: Provider): boolean {
  * appears on no other served route. An international account keeps working
  * through an `openai-completions` custom model API at
  * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
+ * `mistral` is Mistral AI's own platform endpoint rather than a reseller, so
+ * withholding it removes model coverage as well as a serving surface: 29 of its
+ * 40 entries map to the same model on a served route — the `mistralai/*`
+ * entries on `openrouter`, with the Z.AI GLM pair it now hosts as well on
+ * `together` and `opencode-go` — while eleven map to no other route. Those are
+ * the Pixtral pair, Magistral Medium, Leanstral 1.5, Devstral Medium, its three
+ * Devstral Small entries, Mistral Large 2.1, Mistral 7B, and Mixtral 8x7B. The
+ * endpoint also answers OpenAI-compatible chat completions at
+ * `https://api.mistral.ai/v1`, so a deployment that needs those models can add
+ * that as an `openai-completions` custom model API under a different provider
+ * id.
  * `fireworks` is a third-party inference cloud behind one endpoint: it resells
  * other vendors' open-weight models alongside its own Ember family and
  * `routers/*` aliases, so withholding it removes a serving and billing layer.
@@ -282,9 +293,10 @@ function servesChat(provider: Provider): boolean {
  * model API under a different provider id; the `chat_template_args` thinking
  * format it uses stays nameable for such a route.
  * The Baseten, Cerebras, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA, Z.AI, and
- * Ant Ling routes speak OpenAI-compatible chat completions, and the Vercel AI Gateway
- * and MiniMax endpoints speak Anthropic Messages, so a deployment that needs
- * one can add it as a custom model API.
+ * Ant Ling routes speak OpenAI-compatible chat completions, the Mistral
+ * endpoint answers those requests beside its own protocol, and the Vercel AI
+ * Gateway and MiniMax endpoints speak Anthropic Messages, so a deployment that
+ * needs one can add it as a custom model API.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -302,6 +314,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'groq',
   'huggingface',
   'minimax',
+  'mistral',
   'moonshotai',
   'moonshotai-cn',
   'nvidia',

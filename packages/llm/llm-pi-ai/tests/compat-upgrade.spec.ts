@@ -58,11 +58,12 @@ describe('pi-ai gateway compatibility declarations', () => {
       .toThrow(/which is not configurable here/)
   })
 
-  it('withholds Mistral conversation capabilities', () => {
-    expect(() => resolveProfiles({
-      mistral: { compat: { supportsMidConvoSystemMessages: true } as never },
-    }))
-      .toThrow(/which is not configurable here/)
+  it('refuses a declared route on the withheld Mistral protocol', () => {
+    // `mistral` is withheld and `mistral-conversations` is not one of the four
+    // protocols a hand-declared route may name, so the compat fields its gate
+    // withholds have no route left to configure.
+    expect(() => configured({ supportsMidConvoSystemMessages: true }, 'mistral-conversations'))
+      .toThrow(/mistral-conversations/)
   })
 
   it('keeps generic additions absent unless configured', () => {
