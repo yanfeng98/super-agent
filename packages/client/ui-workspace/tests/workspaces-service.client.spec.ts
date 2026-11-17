@@ -1575,6 +1575,40 @@ describe('UiWorkspaceService', () => {
     expect(b.selectPanel).not.toHaveBeenCalled()
   })
 
+  it('releases its own view and retries once when the Host reports the conversation as in use', async () => {
+    const b = bench()
+    b.uiWorkspace.openSession(sid('current'))
+    b.selectPanel.mockClear()
+    const inUse = Object.assign(new Error('session "current" is still attached to the Host'), {
+      name: 'SessionDeleteError',
+      rpcError: { code: 'session/in-use', message: 'still attached', details: {} },
+    })
+    b.sessions.delete.mockRejectedValueOnce(inUse)
+
+    await b.uiWorkspace.deleteSession(sid('current'))
+
+    expect(b.sessions.delete).toHaveBeenCalledTimes(2)
+    expect(b.sessions.delete).toHaveBeenLastCalledWith(sid('current'))
+    expect(b.sessions.retained[0]!.release).toHaveBeenCalledOnce()
+    expect(b.selectPanel).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps the selection when a retried deletion fails again', async () => {
+    const b = bench()
+    b.uiWorkspace.openSession(sid('current'))
+    b.selectPanel.mockClear()
+    const inUse = Object.assign(new Error('session "current" is still attached to the Host'), {
+      name: 'SessionDeleteError',
+      rpcError: { code: 'session/in-use', message: 'still attached', details: {} },
+    })
+    b.sessions.delete.mockRejectedValueOnce(inUse).mockRejectedValueOnce(new Error('still refused'))
+
+    await expect(b.uiWorkspace.deleteSession(sid('current'))).rejects.toThrow('still refused')
+    expect(b.sessions.delete).toHaveBeenCalledTimes(2)
+    expect(b.sessions.retained[0]!.release).toHaveBeenCalledOnce()
+    expect(b.selectPanel).toHaveBeenCalledWith(null)
+  })
+
   it('forwards archive commands and preserves failures', async () => {
     const idle = sid('idle')
     const b = bench()

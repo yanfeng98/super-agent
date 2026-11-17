@@ -506,6 +506,19 @@ describe('candidates', () => {
       expect(await source.matchEnter!(proj('s1'), '/压缩', new AbortController().signal, { attachments: 0 })).toBe('handled')
       await vi.waitFor(() => { expect(executeCalls).toEqual([{ sessionId: sid('s1'), line: '/compact', images: [] }]) })
     })
+
+    it('a command name typed against non-Latin text claims that command with the text as its argument', async () => {
+      const { source, mint, warm, executeCalls } = await bench({ commands: () => Promise.resolve({ commands: SHIPPED }) })
+      mint('s1')
+      await warm(proj('s1'))
+      const enter = await source.matchEnter!(proj('s1'), '/goal完成目标', new AbortController().signal, { attachments: 0 })
+      if (enter === undefined || enter === 'handled' || !('claim' in enter)) throw new Error('expected the goal claim')
+      expect(enter.claim.token).toBe('/goal ')
+      await enter.claim.submit('完成目标', new Context(), [])
+      expect(executeCalls).toEqual([{ sessionId: sid('s1'), line: '/goal 完成目标', images: [] }])
+      // An unregistered name keeps the line as ordinary text.
+      expect(await source.matchEnter!(proj('s1'), '/tmp文件', new AbortController().signal, { attachments: 0 })).toBeUndefined()
+    })
   })
 })
 

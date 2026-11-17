@@ -324,8 +324,18 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     signal: AbortSignal,
     envelope: SubmitEnvelope,
   ): Promise<PickOutcome> {
-    const trimmed = line.trim()
+    let trimmed = line.trim()
     if (!trimmed.startsWith('/')) return undefined
+    // Chinese and other non-Latin text is routinely typed against the name
+    // (`/goal完成目标`). The shared command grammar keeps requiring a
+    // separator, so the composer inserts the omitted one here, before the
+    // line would otherwise be sent as an ordinary prompt.
+    const spaced = /^\/([a-z][a-z0-9_-]*)([^\x00-\x7F].*)$/u.exec(trimmed)
+    if (spaced !== null) {
+      await this.directory.ensureReady(session.sessionId, signal)
+      const spacedDescriptor = this.directory.resolve(session.sessionId, spaced[1] ?? '')
+      if (spacedDescriptor !== undefined) trimmed = `/${spacedDescriptor.name} ${spaced[2] ?? ''}`
+    }
     const ws = trimmed.search(/\s/)
     const token = ws === -1 ? trimmed : trimmed.slice(0, ws)
     const bare = ws === -1

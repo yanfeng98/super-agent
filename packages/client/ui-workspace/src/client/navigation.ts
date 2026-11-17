@@ -392,8 +392,21 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   async deleteSession(sessionId: SessionId): Promise<void> {
-    await this.sessions.delete(sessionId)
-    if (this.mainReference?.sessionId === sessionId) this.clearMain()
+    const wasMain = this.mainReference?.sessionId === sessionId
+    try {
+      await this.sessions.delete(sessionId)
+    } catch (error: unknown) {
+      // `session/in-use` outlives the request that produced it: the Host is
+      // still releasing a view. This window can itself be that holder, so
+      // release its own conversation, give the Host the release, then retry
+      // once. A conversation another window still holds keeps failing below.
+      if (!inUseRefusal(error)) throw error
+      if (wasMain) this.clearMain()
+      await new Promise<void>((resolve) => { setTimeout(resolve, SESSION_VIEW_RELEASE_MS) })
+      await this.sessions.delete(sessionId)
+      return
+    }
+    if (wasMain) this.clearMain()
   }
 
   async unarchiveSession(sessionId: SessionId): Promise<void> {
@@ -579,6 +592,20 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     if (panel === 'reveal') this.ctx.layout.selectPanel(null)
   }
 
+}
+
+/** Time the Host gets to drop a released conversation view before the retry. */
+const SESSION_VIEW_RELEASE_MS = 400
+
+/**
+ * Whether `error` is the Session Controller's `session/in-use` deletion
+ * refusal. Client plugin bundles do not share error-class identity, so the
+ * name and the Host code decide.
+ */
+function inUseRefusal(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name !== 'SessionDeleteError') return false
+  const failure = error as Error & { readonly rpcError?: { readonly code?: unknown } }
+  return failure.rpcError?.code === 'session/in-use'
 }
 
 /**
