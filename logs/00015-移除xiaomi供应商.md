@@ -4,6 +4,8 @@
 - **背景**：用户要求移除 `xiaomi`（小米 MiMo 的按量计费开放平台接入），且不能破坏项目现有功能。同厂商的中国区 token 套餐 `xiaomi-token-plan-cn` 保留。`xiaomi` 提供 6 个模型，其中 4 个（MiMo-V2.5、V2.5-Pro、V2.6-Flash、V2.6-Pro）与 `xiaomi-token-plan-cn` 逐字段相同，另有两个 UltraSpeed 变体（`mimo-v2.5-pro-ultraspeed`、`mimo-v2.6-pro-ultraspeed`）只在该路由下以裸模型 id 出现（`openrouter` 与 `vercel-ai-gateway` 各有一条 `xiaomi/mimo-v2.6-pro-ultraspeed`）。本机 Web profile 只配置了 `opencode-go`，未点名该路由。
 - **范围**：`packages/llm/llm-pi-ai` 的目录、测试与双语 README；Web 设置页与 onboarding golden；`docs/user/guide/providers.md` 与 `.zh.md`；既有升级指南；`logs/`。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；`mimo-v2.5-pro-ultraspeed` 与 `mimo-v2.6-pro-ultraspeed` 现均无其他内置路由（本记录中后者「另见 `openrouter`、`vercel-ai-gateway`」的说法失效）；其余四个与 `xiaomi-token-plan-cn` 相同的模型不受影响。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 文件 | 变更 |

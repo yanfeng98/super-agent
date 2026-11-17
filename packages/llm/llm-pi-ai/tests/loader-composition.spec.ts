@@ -122,9 +122,10 @@ describe('llm-pi-ai real dormant composition', () => {
       defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta',
     })
     // The directory carries the catalog's offered routes only, and this build
-    // withholds the Vertex route that shares those models.
+    // withholds both the Vertex route that shares those models and the
+    // OpenRouter aggregator.
     expect(directory.map(entry => entry.provider)).not.toContain('google-vertex')
-    expect(directory.find(entry => entry.provider === 'openrouter')?.defaultBaseURL).toBe('https://openrouter.ai/api/v1')
+    expect(directory.map(entry => entry.provider)).not.toContain('openrouter')
     expect(directory.find(entry => entry.provider === 'opencode-go')?.defaultBaseURL).toBeUndefined()
 
     // Exactly what the web Models page leaves on disk.

@@ -4,6 +4,8 @@
 - **背景**：MiniMax 在 pi-ai 目录里占两条路由：`minimax` 是国际站开放平台（`https://api.minimax.io/anthropic`，密钥 `MINIMAX_API_KEY`），`minimax-cn` 是中文站开放平台（`https://api.minimaxi.com/anthropic`，密钥 `MINIMAX_CN_API_KEY`）。两者提供完全相同的三个模型且能力、价格逐字段一致，属于同一家厂商的两套账号与结算体系。本仓库按「同一厂商只保留一条可售路由」的既有做法（00013 Moonshot、00014 Qwen、00020 OpenCode）移除国际站 `minimax`，保留中文站 `minimax-cn`。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点、测试）、`docs/user/guide/providers.md`、`packages/llm/llm-pi-ai/README.md`、升级指南、Web golden 与 `logs/`。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；三个模型仍全部由 `minimax-cn` 承接（3/3），表中「另见 `openrouter`、`together`」的承接说明失效。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 位置 | 变更 |

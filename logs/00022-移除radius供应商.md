@@ -6,6 +6,8 @@
 
 - **后续变更**：`baseten` 已于 [00026](00026-移除baseten供应商.md) 移除，`fireworks` 与 `together` 也分别于 [00029](00029-移除fireworks供应商.md)、[00032](00032-移除together供应商.md) 移除，本记录中作为承接路由出现的 `baseten`、`fireworks`、`nvidia`、`together` 均不再可用；`kimi-k3` 现由 `github-copilot`、`opencode-go`、`openrouter` 提供，`deepseek-v4.1-flash` 现由 `opencode-go`、`openrouter` 提供，现行覆盖见该文件第 3 节。
 
+- **后续变更（00036）**：`openrouter` 已于 [00036](00036-移除openrouter供应商.md) 移除，本记录中以 `openrouter` 作为承接路由的说明随之失效；`radius` 覆盖不变（29 个 id 中 26 个仍在内置路由上）；`loader-composition.spec.ts` 中借 `openrouter` 校验 `defaultBaseURL` 的断言已随本轮改为断言两条被移除路由缺席。现行覆盖见 00036 第 2 节与 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00036）」。
+
 ## 1. 变更
 
 | 位置 | 变更 |

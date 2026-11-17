@@ -22,7 +22,7 @@ describe('reasoning schema boundary', () => {
   it('accepts an empty provider section and propagates unexpected catalog failures', () => {
     expect(() => { assertServiceable({}) }).not.toThrow()
     const failure = new TypeError('model metadata lookup failed')
-    expect(() => resolveProfiles({ openrouter: { models: [{
+    expect(() => resolveProfiles({ anthropic: { models: [{
       id: '111',
       get name(): string { throw failure },
     }], api: 'openai-completions' } }, 'deferred')).toThrow(failure)
@@ -104,6 +104,7 @@ describe('withheld catalog providers', () => {
     'moonshotai-cn',
     'nvidia',
     'opencode',
+    'openrouter',
     'qwen-token-plan',
     'qwen-token-plan-cn',
     'qwen-token-plan-individual',

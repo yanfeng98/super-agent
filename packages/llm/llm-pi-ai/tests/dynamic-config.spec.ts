@@ -82,44 +82,44 @@ describe('request-level dynamic profiles', () => {
     vi.stubEnv('PI_DYNAMIC_KEY', '')
     const dir = await home()
     const server = await mockServer([{ events: textEvents }, { events: textEvents }])
-    const known = getBuiltinModels('openrouter').find(model => model.api === 'openai-completions')!
-    const stored = { providers: { openrouter: {
+    const known = getBuiltinModels('github-copilot').find(model => model.api === 'openai-completions')!
+    const stored = { providers: { 'github-copilot': {
       apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url,
       models: [{ id: known.id }, { id: '111' }],
     } } }
     await writeFile(join(dir, '.credentials.yaml'), 'version: 1\nrefs:\n  PI_DYNAMIC_KEY: fake-key\n', { mode: 0o600 })
     const ctx = await boot(dir, stored)
-    const failure = 'llm-pi-ai: provider "openrouter" model "111" needs an api; '
+    const failure = 'llm-pi-ai: provider "github-copilot" model "111" needs an api; '
       + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
 
-    expect(ctx.llm.listProviders()).toEqual([{ id: 'openrouter', name: 'openrouter' }])
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'github-copilot', name: 'github-copilot' }])
     expect(ctx.llm.listConfigurableProviders()).toContainEqual({
-      provider: 'openrouter', displayName: 'openrouter', settingsNs: 'llm-pi-ai',
-      settingsPath: ['providers', 'openrouter'], declared: false,
-      defaultBaseURL: 'https://openrouter.ai/api/v1', nativeAuth: { env: ['OPENROUTER_API_KEY'], oauth: true },
+      provider: 'github-copilot', displayName: 'github-copilot', settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'github-copilot'], declared: false,
+      defaultBaseURL: 'https://api.individual.githubcopilot.com', nativeAuth: { env: ['COPILOT_GITHUB_TOKEN'], oauth: true },
       error: failure,
     })
-    expect((await ctx.llm.listModels('openrouter')).map(model => model.id)).toEqual([known.id])
-    const bad = await assemble(ctx, { provider: 'openrouter', model: '111', messages: [] })
+    expect((await ctx.llm.listModels('github-copilot')).map(model => model.id)).toEqual([known.id])
+    const bad = await assemble(ctx, { provider: 'github-copilot', model: '111', messages: [] })
     expect(bad.finish).toMatchObject({ kind: 'error', failure: { code: 'INVALID_CONFIG', message: failure } })
     expect(server.requests).toHaveLength(0)
-    const good = await assemble(ctx, { provider: 'openrouter', model: known.id, messages: [] })
+    const good = await assemble(ctx, { provider: 'github-copilot', model: known.id, messages: [] })
     expect(good.message.content).toEqual([{ type: 'text', text: 'hello' }])
 
     await configurations.get(ctx)!.update({ providers: { deepseek: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url } } })
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openrouter', 'deepseek'])
+    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['github-copilot', 'deepseek'])
     const beforeRejected: unknown = configurations.get(ctx)!.entry.options.config
-    await expect(configurations.get(ctx)!.update({ providers: { openrouter: { displayName: 'Edited' } } })).rejects.toThrow(failure)
+    await expect(configurations.get(ctx)!.update({ providers: { 'github-copilot': { displayName: 'Edited' } } })).rejects.toThrow(failure)
     expect(configurations.get(ctx)!.entry.options.config).toEqual(beforeRejected)
 
     const diagnostics: Array<string | undefined> = []
     ctx.on('llm/adapters-updated', () => {
-      diagnostics.push(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'openrouter')?.error)
+      diagnostics.push(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'github-copilot')?.error)
     })
-    await configurations.get(ctx)!.update({ providers: { openrouter: { api: 'openai-completions' } } })
+    await configurations.get(ctx)!.update({ providers: { 'github-copilot': { api: 'openai-completions' } } })
     expect(diagnostics).toEqual([undefined])
-    expect(ctx.llm.listProviders()[0]).toEqual({ id: 'openrouter', name: 'openrouter' })
-    const repaired = await assemble(ctx, { provider: 'openrouter', model: '111', messages: [] })
+    expect(ctx.llm.listProviders()[0]).toEqual({ id: 'github-copilot', name: 'github-copilot' })
+    const repaired = await assemble(ctx, { provider: 'github-copilot', model: '111', messages: [] })
     expect(repaired.message.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(server.requests).toHaveLength(2)
   })
