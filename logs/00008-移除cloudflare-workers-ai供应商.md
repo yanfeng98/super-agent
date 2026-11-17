@@ -66,3 +66,7 @@
 - 当前 `127.0.0.1:3080` 的进程仍显示旧列表，重启后生效。
 - WebKit 浏览器未安装，两个键盘可访问性 e2e 未在 WebKit 下验证；Chromium 已覆盖 golden。
 - 若将来恢复该路由，需要删除集合项、更新 withheld 测试参数、恢复 3 个 Web golden 与双语 README，并重新记录 i18n 哈希。
+
+## 7. 后续变更
+
+- 本节「变更」表里「目录元数据断言从被移除的路由切换到仍提供的 `google-vertex`」与「行为」表里「`google-vertex`（仍提供）… 14 个模型保持可用」记录的是当时状态。`google-vertex` 已在 [00033](00034-移除google-vertex供应商.md) 中移除：`loader-composition.spec.ts` 的目录元数据断言改借 `google`（`nativeAuth` 与 `defaultBaseURL`），并新增一条断言确认 `google-vertex` 不在目录中。

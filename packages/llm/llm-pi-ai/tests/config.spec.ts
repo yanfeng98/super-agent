@@ -95,6 +95,7 @@ describe('withheld catalog providers', () => {
     'cloudflare-ai-gateway',
     'cloudflare-workers-ai',
     'fireworks',
+    'google-vertex',
     'groq',
     'huggingface',
     'minimax',

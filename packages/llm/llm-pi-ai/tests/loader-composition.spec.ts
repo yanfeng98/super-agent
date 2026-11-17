@@ -117,16 +117,13 @@ describe('llm-pi-ai real dormant composition', () => {
     // The shipped posture: the adapter exists, no route does.
     expect(ctx.llm.listProviders()).toEqual([])
     const directory = ctx.llm.listConfigurableProviders()
-    expect(directory.find(entry => entry.provider === 'google-vertex')).toMatchObject({
-      nativeAuth: {
-        env: [
-          'GOOGLE_CLOUD_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT',
-          'GCLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION',
-        ],
-        oauth: false,
-      },
-      baseURLEnv: ['GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION'],
+    expect(directory.find(entry => entry.provider === 'google')).toMatchObject({
+      nativeAuth: { env: ['GEMINI_API_KEY'], oauth: false },
+      defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta',
     })
+    // The directory carries the catalog's offered routes only, and this build
+    // withholds the Vertex route that shares those models.
+    expect(directory.map(entry => entry.provider)).not.toContain('google-vertex')
     expect(directory.find(entry => entry.provider === 'openrouter')?.defaultBaseURL).toBe('https://openrouter.ai/api/v1')
     expect(directory.find(entry => entry.provider === 'opencode-go')?.defaultBaseURL).toBeUndefined()
 

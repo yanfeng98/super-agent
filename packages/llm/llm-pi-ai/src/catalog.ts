@@ -301,11 +301,21 @@ function servesChat(provider: Provider): boolean {
  * can add `https://inference.baseten.co/v1` as an `openai-completions` custom
  * model API under a different provider id; the `chat_template_args` thinking
  * format it uses stays nameable for such a route.
+ * `google-vertex` is Google Cloud's Vertex AI endpoint rather than the Gemini
+ * API endpoint `google` serves, and it reaches the same models through its own
+ * `google-vertex` protocol, whose application-default-credentials path also
+ * needs a project and a location. All fourteen of its catalog entries appear on
+ * `google` with the same ids, context windows, and input modalities, so
+ * withholding it removes a serving surface rather than model coverage; the two
+ * catalogs still differ in one output cap, one cache price, and the tiered
+ * input pricing `google` records for three entries.
  * The Baseten, Cerebras, Together, Moonshot, Xiaomi, Qwen, Hugging Face, NVIDIA,
  * Z.AI, and Ant Ling routes speak OpenAI-compatible chat completions, the Mistral
  * endpoint answers those requests beside its own protocol, and the Vercel AI
  * Gateway and MiniMax endpoints speak Anthropic Messages, so a deployment that
- * needs one can add it as a custom model API.
+ * needs one can add it as a custom model API. The Vertex route speaks
+ * `google-vertex`, which no custom route can select, so the served `google`
+ * route is how those models stay reachable.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -320,6 +330,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'cloudflare-ai-gateway',
   'cloudflare-workers-ai',
   'fireworks',
+  'google-vertex',
   'groq',
   'huggingface',
   'minimax',

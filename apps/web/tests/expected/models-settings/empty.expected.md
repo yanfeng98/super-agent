@@ -21,7 +21,6 @@
       - option "deepseek"
       - option "github-copilot"
       - option "google"
-      - option "google-vertex"
       - option "kimi-coding"
       - option "meta"
       - option "minimax-cn" [selected]
