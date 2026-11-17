@@ -83,3 +83,10 @@
 3. **登录面计数错误**：目录中声明 OAuth 的已提供路由由 8 条（含 `openrouter`）变为 7 条（含被本构建关闭登录的 `openai`），设置页实际出现按钮的是 6 条；原日志写成「由 7 条变为 6 条」。已改正。
 
 复核同时用脚本重跑全部覆盖数字（95 / 2 / 299、260 个厂商条目、77 个 `:batch`、36 个厂商前缀、各路由覆盖数与 `baseten` 7/22、`fireworks` 6/22、`cloudflare-workers-ai` 5/18、`amazon-bedrock` 26/193 等）与 28 条 id 清单，均与文档一致；`gpt-5.1-codex`、`gpt-5.2-codex` 确认不在 `openai` 路由上，`opencode` 的 26 个未覆盖条目表述仍成立。
+
+## 7. 文档与日志刷新（用户要求）
+
+- 7 份承载被移除路由清单的文档（用户指南、包 README、升级指南各一对与根 README）已在本轮改动中同步：清单、覆盖数字、端点与协议说明一致，28 条 id 无缺失。
+- 维护性文档扫描又修正 1 处：`packages/client/ui-settings-models/README.md` / `.zh.md` 说明「留空密钥保留提供商原生认证」时，举例用的是 `amazon-bedrock` 凭据链与 Vertex ADC——两条路由都已被移除；改为「订阅路由的 OAuth 授权」与「提供商自己的环境变量」两个在当前目录中仍然成立的例子。
+- 其余维护性文档（`docs/subsystems/`、`docs/architecture.md`、`docs/user/` 其他页面、`website/src`、`packages/llm/README.md`）不含可售路由清单或供应商计数，无需改动；`docs/upgrade-guide/v0.2.1-rc.2/pi-ai-model-catalog/` 是 v0.2.1-rc.2 的历史记录，保持原样。
+- `logs/00009` 刷新为 13 条路由 / 185 个模型 / 28 条被移除 id，并加入本轮的覆盖重算表；15 份受影响的旧日志各补「后续变更（00036）」一句。
