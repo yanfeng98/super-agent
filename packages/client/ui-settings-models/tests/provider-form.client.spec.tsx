@@ -215,7 +215,9 @@ async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
   const injected: ModelsSectionProps = {
     controller,
     useSnapshot: bindSnapshotSelector(controller.store),
-    useAttempt: selector => selector({ key: null, phase: 'idle', notices: [], prompt: null, failure: null }),
+    useAttempt: selector => selector({
+      key: null, phase: 'idle', notices: [], prompt: null, failure: null, ended: false,
+    }),
     signIn: { begin: vi.fn(), answer: vi.fn(), cancel: vi.fn(), reset: vi.fn() },
     operations: operationsWith(scripted.face),
     schema: settingsSchema,

@@ -36,8 +36,10 @@ export interface ProviderSignInState {
   notices: readonly AuthorizationNoticeView[]
   /** The question the attempt is waiting on, or null when it waits on nothing. */
   prompt: AuthorizationPromptView | null
-  /** Copy for a refused or failed attempt. */
+  /** The Host's own refusal, shown verbatim under the failure line. */
   failure: string | null
+  /** The attempt disappeared before it finished, so the page reports the loss itself. */
+  ended: boolean
 }
 
 /** The sign-in state and the actions a provider card invokes. */
@@ -73,6 +75,7 @@ function adopt(view: AuthorizationAttemptView): ProviderSignInState {
     notices: [...view.notices],
     prompt: view.prompt,
     failure: view.error ?? null,
+    ended: false,
   }
 }
 
@@ -83,7 +86,7 @@ function adopt(view: AuthorizationAttemptView): ProviderSignInState {
  */
 export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
   const store = createSnapshotStore<ProviderSignInState>({
-    key: null, phase: 'idle', notices: [], prompt: null, failure: null,
+    key: null, phase: 'idle', notices: [], prompt: null, failure: null, ended: false,
   })
   /** Latest attempt's owner; a response for an older one is dropped instead of published. */
   let generation = 0
@@ -104,14 +107,15 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
     const result = await ctx.remote.authorization.state(key)
     if (owner !== generation) return
     if (!result.ok) {
-      store.update((state) => {
-        state.phase = 'failed'
-        state.failure = result.error.message
-      })
-      stopPolling()
+      fail(result.error.message)
       return
     }
-    if (result.value === null) return
+    // No attempt under that key: the Host was restarted, or another surface
+    // withdrew it. Waiting would poll forever behind a question nobody holds.
+    if (result.value === null) {
+      failEnded()
+      return
+    }
     publish(result.value)
   }
 
@@ -124,6 +128,17 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
     store.update((state) => {
       state.phase = 'failed'
       state.failure = message
+      state.ended = false
+    })
+    stopPolling()
+  }
+
+  /** The attempt is gone: no Host copy explains it, so the page says it ended. */
+  const failEnded = (): void => {
+    store.update((state) => {
+      state.phase = 'failed'
+      state.failure = null
+      state.ended = true
     })
     stopPolling()
   }
@@ -136,20 +151,29 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
       stopPolling()
       store.update((state) => {
         Object.assign(state, {
-          key, phase: 'starting', notices: [], prompt: null, failure: null,
+          key, phase: 'starting', notices: [], prompt: null, failure: null, ended: false,
         } satisfies ProviderSignInState)
       })
       // An attempt another page started belongs to this one too: adopting it
       // is what keeps a reload from being a second sign-in to the provider.
       const current = await ctx.remote.authorization.state(key)
-      if (owner !== generation) return
+      // The dialog closed while the read was in flight. Whatever this page
+      // started (or adopted) would have no watcher and would hold the key until
+      // its lifetime ran out, so withdraw it on the way out.
+      if (owner !== generation) {
+        void ctx.remote.authorization.cancel(key)
+        return
+      }
       if (current.ok && current.value !== null && current.value.phase === 'running') {
         publish(current.value)
         poll(key, owner)
         return
       }
       const started = await ctx.remote.authorization.begin(key, method)
-      if (owner !== generation) return
+      if (owner !== generation) {
+        void ctx.remote.authorization.cancel(key)
+        return
+      }
       if (!started.ok) {
         fail(started.error.message)
         return
@@ -165,7 +189,16 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
       const answered = await ctx.remote.authorization.answer(key, promptId, value)
       if (owner !== generation) return
       if (!answered.ok) {
-        fail(answered.error.message)
+        // A second submit, or an answer that arrived after the question was
+        // replaced, is refused while the attempt itself is fine: publish what
+        // the Host now holds instead of turning a stale click into a failure.
+        const latest = await ctx.remote.authorization.state(key)
+        if (owner !== generation) return
+        if (latest.ok && latest.value !== null) {
+          publish(latest.value)
+          if (latest.value.phase === 'running' && timer === undefined) poll(key, owner)
+        } else if (latest.ok) failEnded()
+        else fail(answered.error.message)
         return
       }
       publish(answered.value)
@@ -174,12 +207,21 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
 
     async cancel() {
       const { key } = store.getSnapshot()
+      // Bumping the generation is what tells a start still in flight that the
+      // attempt it is about to create has no watcher left; that continuation
+      // withdraws it once the Host answers.
+      const owner = ++generation
       stopPolling()
       if (key === null) return
       await ctx.remote.authorization.cancel(key)
-      const owner = generation
-      await refresh(key, owner)
-      store.update((state) => { state.phase = 'cancelled' })
+      if (owner !== generation) return
+      const latest = await ctx.remote.authorization.state(key)
+      if (owner !== generation) return
+      if (latest.ok && latest.value !== null) publish(latest.value)
+      store.update((state) => {
+        state.phase = 'cancelled'
+        state.ended = false
+      })
     },
 
     reset() {
@@ -187,7 +229,7 @@ export function createProviderSignIn(ctx: ClientContext): ProviderSignIn {
       stopPolling()
       store.update((state) => {
         Object.assign(state, {
-          key: null, phase: 'idle', notices: [], prompt: null, failure: null,
+          key: null, phase: 'idle', notices: [], prompt: null, failure: null, ended: false,
         } satisfies ProviderSignInState)
       })
     },
