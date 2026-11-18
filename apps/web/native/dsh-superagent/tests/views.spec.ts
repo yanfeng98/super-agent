@@ -10,7 +10,7 @@ import { localKind } from '../src/sources/local.ts'
 import { githubKind } from '../src/sources/github.ts'
 import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail } from '../src/app/views/tickets.ts'
-import { threadDetail } from '../src/app/views/threads.ts'
+import { search, threadDetail } from '../src/app/views/threads.ts'
 import { droppedReplies, sourcesStatus } from '../src/app/views/sources.ts'
 import { overview } from '../src/app/views/overview.ts'
 import { markdown, plain } from '../src/app/views/text.ts'
@@ -328,4 +328,26 @@ it('reads each ticket a page\'s follow-ups reached once, and nothing for a messa
   const records = { tickets: { get: vi.fn() }, threads: { get: vi.fn() }, triggers: store.triggers }
   expect(followupOwners(store.triggers.get('f3')!, records)).toEqual([])
   expect([records.tickets.get, records.threads.get].map(read => read.mock.calls.length)).toEqual([0, 0])
+})
+
+it('numbers tickets in creation order and keeps the number across edits', () => {
+  const host = views()
+  live('t1'); live('t2')
+  expect(ticketDetail(host, 't1')!.number).toBe(1)
+  expect(ticketDetail(host, 't2')!.number).toBe(2)
+  store.tickets.save({ ...store.tickets.get('t1')!, title: '改名之后' })
+  expect(ticketDetail(host, 't1')!.number).toBe(1)
+})
+
+it('finds a ticket by a reply in its archive as well as by its title', () => {
+  const host = views()
+  host.sources.register(localKind)
+  live('t1')
+  const ticket = store.tickets.get('t1')!
+  store.tickets.save({ ...ticket, title: '文案修复' })
+  store.receipts.add({ id: 'r1', channel: { source: 'local', thread: 'local:r', address: { request: 'r' } }, kind: 'reply',
+    ticketId: 't1', text: '把按钮文案改成保存' })
+  expect(search(host, '按钮文案', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
+  expect(search(host, '文案修复', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
+  expect(search(host, '没有这个词', new Map()).tickets).toEqual([])
 })

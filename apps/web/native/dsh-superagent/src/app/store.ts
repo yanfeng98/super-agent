@@ -239,6 +239,16 @@ export class Store implements Repositories {
     open: (): Ticket[] => this.values('SELECT value FROM ticket WHERE open = 1 ORDER BY rowid DESC'),
     /** Newest first. */
     active: (): Ticket[] => this.values('SELECT value FROM ticket WHERE active = 1 ORDER BY rowid DESC'),
+    /** Display number of a ticket: its 1-based position in creation order, which never changes because tickets are not deleted. */
+    number: (id: string): number | undefined => {
+      const row = this.db.prepare('SELECT rowid AS seq FROM ticket WHERE id = ?').get(id) as { seq?: number } | undefined
+      if (row?.seq === undefined) return undefined
+      const counted = this.db.prepare('SELECT COUNT(*) AS count FROM ticket WHERE rowid <= ?').get(row.seq) as { count?: number } | undefined
+      return counted?.count === undefined ? undefined : Number(counted.count)
+    },
+    /** Every ticket's display number, in one read, for a list that numbers each row. */
+    numbering: (): Map<string, number> => new Map(this.db.prepare('SELECT id FROM ticket ORDER BY rowid').all()
+      .map((row, index) => [String(row.id), index + 1])),
   }
   readonly decisions = {
     get: (id: string): Decision | undefined => { const row = this.db.prepare('SELECT value FROM decision WHERE id=?').get(id); return row ? JSON.parse(String(row.value)) as Decision : undefined },
@@ -257,6 +267,15 @@ export class Store implements Repositories {
     waiting: (): Receipt[] => this.values("SELECT value FROM outbox WHERE value ->> '$.status' = 'pending' ORDER BY rowid"),
     /** Receipts for one ticket, oldest first, as the ticket page lists them. */
     ofTicket: (ticketId: string): Receipt[] => this.values("SELECT value FROM outbox WHERE value ->> '$.ticketId' = ? ORDER BY rowid", ticketId),
+    /**
+     * Tickets with a reply whose text contains `text`, case-insensitively, so search reaches what an agent wrote without
+     * reading every receipt: the archived Markdown holds the same text.
+     * @param text - Literal text; `%`, `_`, and `\` are matched literally.
+     * @param limit - Maximum number of distinct tickets returned.
+     */
+    ticketsMatching: (text: string, limit = 50): string[] => this.db.prepare(`SELECT DISTINCT value ->> '$.ticketId' AS ticket
+      FROM outbox WHERE value ->> '$.text' LIKE ? ESCAPE '\\' AND value ->> '$.ticketId' IS NOT NULL LIMIT ?`)
+      .all(`%${text.replace(/[\\%_]/g, match => `\\${match}`)}%`, limit).map(row => String(row.ticket)),
     /** True if an earlier message for the same ticket and conversation is still pending with fewer than `failures` consecutive failed `reply` effect attempts. */
     behind: (id: string, failures: number): boolean => !!this.db.prepare(`SELECT 1 FROM outbox earlier
       JOIN outbox message ON message.id = ? LEFT JOIN effect ON effect.kind = 'reply' AND effect.key = earlier.id

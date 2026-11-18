@@ -162,6 +162,26 @@ export class Tickets extends EnginePart {
     return this.require(ticketId)
   }
   /**
+   * Reopens an ended ticket under its unchanged Mandate with a fresh Assignment and a note telling its worker why.
+   * @throws UserError when the ticket is unknown, still open, or the current Policy no longer holds its Mandate.
+   */
+  reopen(ticketId: string): Ticket {
+    const ticket = this.require(ticketId)
+    if (liveTicket(ticket)) throw new UserError('ticketOpen')
+    if (!this.policy().revalidate(ticket.mandate)) throw new UserError('mandateRevoked')
+    const at = this.now()
+    delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review
+    const assignment = this.newAssignment(ticket)
+    const note: TicketInput = { id: key('input', ticket.id, 'reopened', at), kind: 'text', at,
+      text: 'The operator reopened this ended ticket under its original mandate. Continue the assignment from the current '
+        + 'worktree and git history; report ready when it is done.' }
+    ticket.inputs.push(note); ticket.undelivered.push(note.id); ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    this.emit('ticket.reopened', { ticketId: ticket.id })
+    this.options.executor.start(ticket, assignment)
+    return this.require(ticketId)
+  }
+  /**
    * Ends the stalled assignment of a retryable open ticket (`failed`, `blocked`, or failed input delivery) and starts a new one.
    * @throws UserError when the ticket is unknown or not retryable.
    */

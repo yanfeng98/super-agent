@@ -28,6 +28,10 @@ Executor Sessions run commands without approval as the operator's OS user. Their
 
 The main Session uses `dsh-superagent-router`, with the same 5-second shell and job-wait limits and a smaller tool set for routing. Sessions retain the preset selected at creation. Worker subagents use DeepSeek Harness's `standard` preset.
 
+### Workspace review
+
+When a Ticket first launches, the Executor records the workspace's current commit as its base. When the Ticket ends, it collects the workspace's branch, head, the commits added since that base, the files they changed, and any work left uncommitted, and stores them on the Ticket. The panel shows them under **Changes**, with **View diff** reading the committed diff on demand, and a local Ticket's archive receives the same facts with its ending. A workspace that is not a git repository records the reason instead, so a Ticket without version control still ends normally. Reopening a Ticket clears the review and captures it again at the next end.
+
 ### Background work and worker slots
 
 When a turn ends with shell jobs or subagents still running, the Ticket keeps its worker slot and stays working. It is not reported as waiting, and the main Session receives no waiting report. A completed job or subagent wakes the Executor with its result in the same slot. Once a turn ends with no background work, the Executor reports waiting normally.

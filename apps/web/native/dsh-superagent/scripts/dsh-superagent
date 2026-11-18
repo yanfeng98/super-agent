@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import sqlite3
 import shutil
 import signal
 import subprocess
@@ -20,6 +21,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = ROOT / '.artifacts'
@@ -206,9 +208,83 @@ def start(args):
     raise RuntimeError('Startup health check timed out; inspect the log. Any running process was left intact.')
 
 
+def state_directory(value):
+    """Return the state directory a command should use, from its option or the DSH home."""
+    return Path(value).expanduser() if value else (Path(os.environ.get('DSH_HOME') or Path.home() / '.dsh')
+                                                   / 'state' / 'superagent')
+
+
+def archive_directory(connection):
+    """Read the local Source's configured archive directory from settings, or None when it is the default."""
+    try:
+        revision = int(json.loads(connection.execute("SELECT value FROM kv WHERE key = 'settings-revision'").fetchone()[0]))
+        saved = json.loads(connection.execute("SELECT value FROM kv WHERE key = ?",
+                                              (f'settings-version:{revision}',)).fetchone()[0])
+        configured = saved['settings']['sources']['local']['config']['archive']
+        return Path(configured) if configured else None
+    except (TypeError, KeyError, ValueError, sqlite3.Error):
+        return None
+
+
+def backup(args):
+    """Copy the state database and ticket archives into a timestamped backup directory."""
+    state = state_directory(args.state_dir)
+    database = state / 'orchestrator.sqlite'
+    if not database.exists():
+        raise SystemExit(f'no database at {database}')
+    target = state / 'backups' / time.strftime('%Y%m%d-%H%M%S')
+    target.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # SQLite's online backup API is safe while the service runs, including with a write-ahead log.
+    source = sqlite3.connect(f'file:{database}?mode=ro', uri=True)
+    try:
+        archive = archive_directory(source)
+        destination = sqlite3.connect(target / 'orchestrator.sqlite')
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+    for name, source_dir in (('tickets', state / 'tickets'), ('archive', archive)):
+        if source_dir and source_dir.is_dir():
+            shutil.copytree(source_dir, target / name, dirs_exist_ok=True)
+    print(target)
+    return 0
+
+
+def ticket(args):
+    """Write a ticket request into a state directory's inbox for the running service to ingest."""
+    if not args.title:
+        raise SystemExit('ticket needs --title')
+    if args.text_file:
+        text = sys.stdin.read() if args.text_file == '-' else Path(args.text_file).read_text(encoding='utf-8')
+    else:
+        text = args.text or ''
+    if not text.strip():
+        raise SystemExit('ticket needs --text or --text-file')
+    inbox = state_directory(args.state_dir) / 'inbox'
+    (inbox / 'done').mkdir(parents=True, exist_ok=True, mode=0o700)
+    name = f"cli-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}.json"
+    request = {'title': args.title, 'text': text, 'key': name[:-5]}
+    temporary = inbox / f'.{name}.tmp'
+    temporary.write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+    os.replace(temporary, inbox / name)
+    print(f"queued {inbox / name}")
+    if args.wait > 0:
+        deadline = time.time() + args.wait
+        while time.time() < deadline:
+            done = inbox / 'done' / name
+            if done.exists():
+                print(done.read_text(encoding='utf-8'))
+                return 0
+            time.sleep(0.5)
+        print('the service did not pick it up before the wait ended; it stays queued')
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['start', 'stop', 'restart', 'status'])
+    parser.add_argument('action', choices=['start', 'stop', 'restart', 'status', 'ticket', 'backup'])
     parser.add_argument('--profile', default=os.environ.get('DSH_SUPERAGENT_PROFILE') or 'superagent',
                         help='DSH profile that loads dsh-superagent; its tmux session is dsh-<profile>.')
     parser.add_argument('--url', default=os.environ.get('DSH_SUPERAGENT_URL') or 'http://127.0.0.1:3082',
@@ -218,7 +294,16 @@ def main():
                         help='Graceful shutdown timeout in seconds; running Executor Sessions finish their step first.')
     parser.add_argument('--respect-stop', action='store_true',
                         help='For monitoring: never start/restart after an intentional stop.')
+    parser.add_argument('--title', help='ticket: one-line title.')
+    parser.add_argument('--text', help='ticket: request text.')
+    parser.add_argument('--text-file', help='ticket: read the request from a file, or - for standard input.')
+    parser.add_argument('--state-dir', help='ticket: dsh-superagent state directory; defaults to <DSH_HOME>/state/superagent.')
+    parser.add_argument('--wait', type=float, default=0, help='ticket: seconds to wait for the service to accept it.')
     args = parser.parse_args()
+    if args.action == 'ticket':
+        return ticket(args)
+    if args.action == 'backup':
+        return backup(args)
     if args.timeout <= 0 or args.stop_timeout <= 0:
         parser.error('--timeout and --stop-timeout must be positive')
     if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]*', args.profile):

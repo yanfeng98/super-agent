@@ -6,23 +6,28 @@ import { usePoll, type SettingsView, type SourceView, type StateView } from './a
 import { Button, DisclosureRow, Icon, InfoTip, Input, Modal, Pill } from './controls.tsx'
 import { SaveBar } from './draft.tsx'
 import { usePanel } from './provider.tsx'
+import { enableNotifications, notificationsEnabled, notificationsSupported } from './notify.ts'
 import { TicketLine } from './rows.tsx'
 import { ConfigHistory, Field, Fields, ModelField, numberOf, useBlockDraft, useSettings } from './settings-kit.tsx'
 import { localized } from './text.ts'
 import { ConfirmButton, Hint, LabelValue, LoadMore, LoadState, Section, StatusHead } from './widgets.tsx'
 
+const requestKey = (): string => globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.random().toString(16).slice(2)}`
 /** Creates a local ticket: the request is archived as Markdown and its Trigger starts a Ticket. */
 function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, call, navigate, notify } = usePanel()
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  // One key per unchanged draft, so a retry after a lost response returns the ticket the first attempt made.
+  const idempotency = useRef<string | undefined>(undefined)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setBusy(true)
+    idempotency.current ??= requestKey()
     try {
-      const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim() } })
-      setTitle(''); setText(''); setBusy(false); onClose()
+      const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim(), key: idempotency.current } })
+      setTitle(''); setText(''); idempotency.current = undefined; setBusy(false); onClose()
       navigate({ page: 'trigger', id: created.thread, query: { trigger: created.trigger } })
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error))
@@ -36,19 +41,24 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
     <form id="dt-new-ticket" className="dt-form" onSubmit={submit}>
       <label className="dt-field"><span className="dt-field-head">{t('newTicketTitle')}</span>
         <Input value={title} maxLength={120} required aria-label={t('newTicketTitle')} placeholder={t('newTicketTitlePlaceholder')}
-          onChange={event => setTitle(event.target.value)} /></label>
+          onChange={event => { idempotency.current = undefined; setTitle(event.target.value) }} /></label>
       <label className="dt-field"><span className="dt-field-head">{t('newTicketText')}</span>
         <textarea className="dt-textarea" rows={6} maxLength={20000} required aria-label={t('newTicketText')}
-          placeholder={t('newTicketTextPlaceholder')} value={text} onChange={event => setText(event.target.value)} /></label>
+          placeholder={t('newTicketTextPlaceholder')} value={text} onChange={event => { idempotency.current = undefined; setText(event.target.value) }} /></label>
     </form>
   </Modal>
 }
 export function ExecutionStatus({ filter: current, state, reload }: {
   filter: TicketFilter; state: StateView; reload: () => Promise<void>
 }) {
-  const { t, call, navigate } = usePanel()
+  const { t, call, navigate, notify } = usePanel()
   const [limit, setLimit] = useState(20)
   const [creating, setCreating] = useState(false)
+  const [notifying, setNotifying] = useState(notificationsEnabled)
+  const enableNotify = async () => {
+    if (await enableNotifications()) setNotifying(true)
+    else notify(t('notificationsDenied'))
+  }
   const { data, error, reload: reloadTickets } = usePoll(() => call('GET tickets', { query: { state: current, limit } }), [current, limit])
   const { paused, load: { maxWorkers } } = state
   // Pausing uses its own block revision so toggling pause does not invalidate an open Execution settings draft.
@@ -66,6 +76,9 @@ export function ExecutionStatus({ filter: current, state, reload }: {
           value={`${state.load.running} / ${maxWorkers}`} /><LabelValue label={t('queuedLabel')} value={state.load.queued} />
       </>}
       <Button variant="outline" icon={<Icon name="plus" />} onClick={() => setCreating(true)}>{t('newTicket')}</Button>
+      {notificationsSupported() && !notifying && <Button variant="outline" icon={<Icon name="message" />}
+        onClick={enableNotify}>{t('notificationsEnable')}</Button>}
+      {notifying && <span className="dt-hint">{t('notificationsOn')}</span>}
       <ConfirmButton variant="outline" icon={paused ? 'play' : 'pause'} label={t(action)} title={t(action)} message={t(paused
         ? 'resumeProcessingConfirm' : 'pauseProcessingConfirm')}
         onConfirm={pause} />

@@ -54,6 +54,8 @@ export interface HttpHost {
   readonly setupProblem?: SetupProblem | undefined
   readonly feishuProblem?: SetupProblem | undefined
   configured(): boolean
+  /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
+  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }>
   links(): LinkTarget
   ticketEnvironment(ticket: Ticket): Variable[]
   checkSetup(): void
@@ -147,7 +149,8 @@ type Routes = { [K in keyof Api]: (input: Input<K>) => ApiResponse<K> | Promise<
 const offset = z.coerce.number().int().nonnegative().catch(0)
 const limit = (fallback: number, max: number) => z.coerce.number().int().positive().catch(fallback).transform(value => Math.min(max, value))
 const LOCAL_BODY_BYTES = 256 * 1024
-const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000) }).strict()
+const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),
+  key: z.string().trim().min(8).max(200).optional() }).strict()
 const LocalFollowupSchema = z.object({ thread: z.string().min(1), text: z.string().trim().min(1).max(20_000) }).strict()
 const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000) })
 const ThreadsQuery = z.object({ filter: z.enum(THREAD_FILTERS).catch('subscribed'), offset, limit: limit(20, 1000) })
@@ -216,6 +219,8 @@ function routes(runtime: HttpHost): Routes {
     'GET tickets/:id': ({ params }) => ticketPage(runtime, params.id),
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
+    'POST tickets/:id/reopen': ({ params }) => { const id = ticket(params.id); runtime.engine.reopenTicket(id); return { reopened: true } },
+    'GET tickets/:id/diff': async ({ params }) => { const id = ticket(params.id); return runtime.ticketDiff(id) },
     'POST local/requests': async input => {
       const request = LocalRequestSchema.parse(await input.body(LOCAL_BODY_BYTES))
       await checkLocalSource(runtime)

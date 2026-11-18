@@ -6,7 +6,7 @@ import { decisionMark, reportDot, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
 import { Earlier, ThreadLine, automatedRuns } from './rows.tsx'
-import { actorName, localized, readableMarkers, reasonLabel, valueLabel, when } from './text.ts'
+import { actorName, errorText, localized, readableMarkers, reasonLabel, ticketNumber as ticketRef, valueLabel, when } from './text.ts'
 import { ActionLink, ConfirmButton, ExternalLink, Hint, KeyValues, LabelValue, LoadState, MarkdownLite, PageHead, Section, SessionButton,
   StageMark, When } from './widgets.tsx'
 
@@ -129,9 +129,17 @@ function MandateDetails({ ticket, actor }: { ticket: TicketPageView; actor: stri
 }
 
 export function TicketPage({ id }: { id: string }) {
-  const { t, call } = usePanel()
+  const { t, call, notify } = usePanel()
   const { data, error, reload } = usePoll(() => call('GET tickets/:id', { id }), [id])
+  const [diff, setDiff] = useState<{ diff: string; truncated: boolean; error?: string }>()
+  const [diffBusy, setDiffBusy] = useState(false)
   const after = async (request: Promise<unknown>) => { await request; await reload() }
+  const loadDiff = async () => {
+    setDiffBusy(true)
+    try { setDiff(await call('GET tickets/:id/diff', { id })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setDiffBusy(false) }
+  }
   if (!data) return <><PageHead
     title={t('term.ticket')} />{error instanceof ApiError && error.missing ? <Hint>{t('ticketNotFound')}</Hint> : <LoadState
       error={error} loading />}</>
@@ -148,6 +156,7 @@ export function TicketPage({ id }: { id: string }) {
     return reason ? t('endedAt', { time, outcome, reason }) : t('endedAtShort', { time, outcome })
   })()
   const channel = data.channels[0]
+  const review = data.review
   // Only the Ticket's own local Thread takes a reply; a context-only Thread belongs to another Ticket.
   const localThread = data.threads.find(thread => thread.source === 'local' && !thread.context)
   return <>
@@ -156,11 +165,15 @@ export function TicketPage({ id }: { id: string }) {
       {data.actions.retry && <ConfirmButton variant="outline" icon="refresh" label={t('retry')} title={t('retryTitle')}
         message={t('retryConfirm', { title: data.title })}
         onConfirm={() => after(call('POST tickets/:id/retry', { id }))} />}
+      {data.actions.reopen && <ConfirmButton variant="outline" icon="refresh" label={t('reopen')} title={t('reopenTitle')}
+        message={t('reopenConfirm', { title: data.title })}
+        onConfirm={() => after(call('POST tickets/:id/reopen', { id }))} />}
       {data.sessionId && <SessionButton variant="outline" sessionId={data.sessionId} />}
     </PageHead>
     {error && <LoadState error={error} loading={false} />}
     <div className="dt-row-meta dt-status-line">
       <StageMark state={status.dot} icon={status.icon} label={status.label} />
+      {data.number ? <LabelValue label={t('ticketNumberLabel')} value={ticketRef(data.number)} /> : null}
       <LabelValue label={t('ticketMandateLabel')} value={valueLabel(t, 'strength', data.mandate.strength)} />
       <LabelValue label={t('ticketActorLabel')} value={`${valueLabel(t, 'source', data.mandate.actor.source)} · ${actor}`} />
       <LabelValue label={t('ticketUpdatedLabel')} value={when(data.updatedAt, t('lang'))} />
@@ -195,6 +208,31 @@ export function TicketPage({ id }: { id: string }) {
     </Section>}
     {localThread && <Section title={t('localReplyTitle')} hint={t('localReplyHint')}>
       <LocalReply thread={localThread.key} onDone={reload} />
+    </Section>}
+    {review && <Section title={t('reviewTitle')} hint={t('reviewHint')}>
+      {review.error && <Hint>{review.error}</Hint>}
+      <KeyValues rows={[[t('reviewBranch'), <span className="dt-mono">{review.branch ?? t('empty')}</span>],
+        [t('reviewBase'), <span className="dt-mono">{review.base?.slice(0, 12) ?? t('empty')}</span>],
+        [t('reviewHead'), <span className="dt-mono">{review.head?.slice(0, 12) ?? t('empty')}</span>],
+        ...review.stat ? [[t('reviewDiffstat'), <span className="dt-mono">{review.stat}</span>] as [string, ReactNode]] : []]} />
+      {review.commits.length > 0 && <>
+        <p className="dt-hint">{t('reviewCommits', { count: review.commits.length })}</p>
+        <ul className="dt-plain-list dt-mono">{review.commits.map((commit, index) => <li key={`${commit.sha}:${index}`}>{commit.sha} {commit.subject}</li>)}</ul>
+      </>}
+      {review.files.length > 0 && <>
+        <p className="dt-hint">{t('reviewFiles', { count: review.files.length })}</p>
+        <ul className="dt-plain-list dt-mono">{review.files.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
+      </>}
+      {review.dirty.length > 0 && <>
+        <p className="dt-hint">{t('reviewDirty', { count: review.dirty.length })}</p>
+        <ul className="dt-plain-list dt-mono">{review.dirty.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
+      </>}
+      <div className="dt-row-actions">
+        <Button variant="outline" size="sm" onClick={loadDiff} disabled={diffBusy}>{t('reviewViewDiff')}</Button>
+      </div>
+      {diff?.error && <Hint>{diff.error}</Hint>}
+      {diff && !diff.error && (diff.diff ? <pre className="dt-workspace-diff">{diff.diff}</pre> : <Hint>{t('reviewDiffEmpty')}</Hint>)}
+      {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
     </Section>}
     <MandateDetails ticket={data} actor={actor} />
     {undelivered.length > 0 && <Section title={t('undeliveredInputs')} count={undelivered.length}>

@@ -205,7 +205,8 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
   reason: [{ code: 'explicitRouted' }], at: '2026-09-22T00:00:00Z', strength: 'explicit', ticketId: undefined,
   triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ticketTitle: undefined })
 const ticketDetail = (): TicketPageView => ({
-  ...ticketSummary(), paused: false, decision: acceptDecision(), threads: [threadSummary()],
+  ...ticketSummary(), actions: { ...TICKET.actions, reopen: false }, review: undefined, paused: false, decision: acceptDecision(),
+  threads: [threadSummary()],
   mandate: { strength: 'explicit', policyVersion: 'abcdef1234567890', basis: { via: 'addressed', sender: 'Alice', addressed: 'mention' },
     actor: actor('feishu', MEMBER), scope: '修复登录页回归' },
   basis: { facts: [{ name: 'sender', value: 'Alice' }, { name: 'addressed', value: 'mention' }], legacy: false },
@@ -338,6 +339,14 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     server.tickets.open = []; server.person = server.person.filter(ticket => ticket.id !== params.id)
     return { stopped: true }
+  } },
+  'POST tickets/:id/reopen': { answer: ({ params }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { reopened: true }
+  } },
+  'GET tickets/:id/diff': { answer: ({ params }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { diff: 'diff --git a/src/a.ts b/src/a.ts\n-旧文案\n+新文案', truncated: false }
   } },
   'POST local/requests': { body: true, answer: ({ body }) => ({ request: 'local-1', thread: 'local:local-1', trigger: 'local:local-1',
     file: `/tmp/${String((body as { title?: string }).title ?? 'new')}.md` }) },

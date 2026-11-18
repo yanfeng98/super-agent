@@ -61,3 +61,6 @@ export function fullTime(value: string | undefined, lang: string): string {
   const date = new Date(value ?? '')
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(timeLocale(lang))
 }
+
+/** A ticket's stable display number, such as `T-0001`; empty when it has none. */
+export const ticketNumber = (number: number | undefined): string => number ? `T-${String(number).padStart(4, '0')}` : ''

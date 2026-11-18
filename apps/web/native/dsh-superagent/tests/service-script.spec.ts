@@ -232,3 +232,25 @@ it('does not signal a process that took the recorded service PID, and keeps a st
   expect(await run('stop', '--stop-timeout', '1')).toMatchObject({ code: 1, stderr: expect.stringContaining('Graceful stop timed out') })
   expect(existsSync(join(control('superagent'), 'manually-stopped'))).toBe(true)
 }, 20_000)
+
+it('queues a ticket from the command line into the state directory inbox', async () => {
+  const state = join(root, 'state')
+  expect(await run('ticket', '--title', '来自脚本', '--text', '跑一下回归。', '--state-dir', state))
+    .toMatchObject({ code: 0, stdout: expect.stringContaining('queued') })
+  const files = readdirSync(join(state, 'inbox')).filter(name => name.endsWith('.json'))
+  expect(files).toHaveLength(1)
+  expect(JSON.parse(readFileSync(join(state, 'inbox', files[0]!), 'utf8'))).toMatchObject({ title: '来自脚本',
+    text: '跑一下回归。', key: expect.stringMatching(/^cli-/) })
+})
+
+it('backs up the state database and the ticket archive directory', async () => {
+  const state = join(root, 'state')
+  mkdirSync(join(state, 'tickets'), { recursive: true })
+  writeFileSync(join(state, 'orchestrator.sqlite'), '')
+  writeFileSync(join(state, 'tickets', 'local-1.md'), 'request')
+  expect(await run('backup', '--state-dir', state)).toMatchObject({ code: 0 })
+  const backups = readdirSync(join(state, 'backups'))
+  expect(backups).toHaveLength(1)
+  expect(existsSync(join(state, 'backups', backups[0]!, 'orchestrator.sqlite'))).toBe(true)
+  expect(readFileSync(join(state, 'backups', backups[0]!, 'tickets', 'local-1.md'), 'utf8')).toBe('request')
+})

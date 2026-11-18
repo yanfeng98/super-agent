@@ -78,7 +78,23 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    Policy part (`src/app/views/overview.ts`) so a fresh install is not told that nobody may ask. `local.spec.ts`,
    `deployment.spec.ts`, `environment.spec.ts`, `http.spec.ts`, `views.spec.ts` and `panel-execution.spec.tsx` cover it.
 7. **No-GitHub worker prompt.** `prompts/work.md` tells a worker that an empty `$DSH_SUPERAGENT_GITHUB_ACCOUNT` means there is no GitHub account, so it commits locally (setting `user.name` and `user.email` itself when git has none) and does not push, open a pull request or call `gh`; without this, a local ticket's worker would follow the upstream push/PR instructions and fail.
-8. **Built-in documentation.** `docs/006-deployment.md` opens with a **Built-in copy** section (no profile, default state
+9. **Ticket review, reopening and searchable results.** The Executor records a Ticket workspace's base commit at its first
+   launch (`src/executor/dsh.ts`); when the Ticket ends, Runtime captures the branch, the commits since that base, the changed
+   files and any uncommitted work (`src/app/review.ts`) onto `ticket.review`, and the local archive appends a **Closed**
+   section with the outcome, summary and those facts (`src/sources/local.ts`). `POST tickets/:id/reopen` and the panel's
+   **Reopen** action restore an ended Ticket under its still-valid Mandate (`src/core/tickets.ts`, `src/core/engine.ts`,
+   `src/app/http.ts`, `src/client/ticket.tsx`), and the archive records the reopening; the Changes section reads the committed diff through `GET tickets/:id/diff` (`src/app/review.ts`, `src/client/ticket.tsx`). The new-ticket form sends an
+   idempotency key, so a retry after a lost response returns the same Ticket; panel search matches a Ticket's latest result
+   and the text of its replies (`src/app/views/threads.ts`, `src/app/store.ts`). `review.spec.ts`, `local.spec.ts`,
+   `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
+10. **Ticket numbers and command-line intake.** Every Ticket gets a stable `T-000N` number from its creation order
+   (`src/app/store.ts`, shown by `src/app/views/records.ts`, `src/client/rows.tsx` and `src/client/ticket.tsx`, and written
+   into the archive's close by `src/sources/local.ts`). `scripts/dsh-superagent ticket --title … --text …` drops a JSON
+   request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket
+   within two seconds, writes `inbox/done/<file>` and moves bad input to `inbox/rejected/`, with the file name as the
+   idempotency key. `scripts/dsh-superagent backup` copies the database online and the ticket archives into `backups/<timestamp>/`.
+   `local.spec.ts` and `service-script.spec.ts` cover it.
+11. **Built-in documentation.** `docs/006-deployment.md` opens with a **Built-in copy** section (no profile, default state
    directory, API follows the bind), and `README.md` and `SETUP.md` point at the built-in path instead of the standalone
    install. The rest of the upstream documents describe the standalone deployment and still apply.
 

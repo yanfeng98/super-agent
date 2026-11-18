@@ -303,8 +303,29 @@ export interface Ticket {
   origin: { triggerId: string; triggerIds: string[] }
   /** What its Executor chose: its short name, directory and assignment text. */
   execution?: Execution
+  /** Git facts captured when the ticket ended, so its page shows what changed without opening the worktree. */
+  review?: TicketReview
   /** The latest failed delivery of an Input to its worker, until a delivery succeeds. */
   delivery?: { error: string; at: string }
+}
+/** One file git reports as changed or uncommitted, with its short status (`M`, `A`, `D`, `??`). */
+export interface ReviewFile { status: string; path: string }
+/**
+ * What a ticket's workspace contained when the ticket ended: its branch and head, the commits added since the workspace
+ * started, the files those commits changed, and work left uncommitted. `error` says why git could not describe it.
+ */
+export interface TicketReview {
+  capturedAt: string
+  branch?: string
+  /** The commit the workspace started from, recorded when the first Assignment launched. */
+  base?: string
+  head?: string
+  commits: { sha: string; subject: string }[]
+  files: ReviewFile[]
+  dirty: ReviewFile[]
+  /** `git diff --shortstat` of the commits since `base`. */
+  stat?: string
+  error?: string
 }
 /**
  * A Thread a ticket follows, by its key: `own` when the ticket opened it, such as its own pull request, and when and how it
@@ -312,7 +333,13 @@ export interface Ticket {
  * Thread closed; the ticket then ends unless its work has not finished (see `Tickets.unfinished`).
  */
 export interface Follow { thread: string; own: boolean; closed?: { at: string; outcome: 'merged' | 'closed' } }
-export interface Execution { name: string; directory: string; assignment: string }
+export interface Execution {
+  name: string
+  directory: string
+  assignment: string
+  /** Commit the workspace started from, captured at the first launch so a review lists the commits the ticket added. */
+  base?: string
+}
 
 /** Whether a ticket is open: it has not ended. */
 export const liveTicket = (ticket: Pick<Ticket, 'ended'>): boolean => !ticket.ended
