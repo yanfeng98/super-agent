@@ -52,20 +52,44 @@ export function threadDetail(host: ViewHost, key: string, before: string | undef
     timeline: shown.map(trigger => triggerView(view, trigger, decisions)), earlier: more ? `${shown[0]!.at}|${shown[0]!.id}` : null }
 }
 export type ThreadDetailView = NonNullable<ReturnType<typeof threadDetail>>
+/** Search qualifiers parsed from a query: `is:open`, `tag:p1`, `author:alice`; anything else stays free text. */
+export interface SearchQuery { text: string; is?: 'open' | 'ended'; tag?: string; author?: string }
+/**
+ * Splits a search query into the free text and GitHub-like qualifiers.
+ * @param query - The text a person typed.
+ * @returns The remaining words and the qualifiers they narrowed; an unknown `is:` value stays as text.
+ */
+export function parseSearchQuery(query: string): SearchQuery {
+  const values: Partial<SearchQuery> = {}
+  const text = query.replace(/(?:^|\s)(is|tag|author):("[^"]*"|\S+)/gi, (_match, name: string, raw: string) => {
+    const value = raw.replace(/^"|"$/g, '')
+    if (name.toLowerCase() === 'is') {
+      const state = value.toLowerCase()
+      if (state === 'open' || state === 'ended') values.is = state
+      else return ` ${value}`
+    } else if (name.toLowerCase() === 'tag') values.tag = value
+    else values.author = value
+    return ''
+  }).trim()
+  return { text, ...values }
+}
 /**
  * Searches triggers, threads, and tickets by text, ID, source-extracted references (e.g., `#N`, URLs), or cached Feishu AppLinks.
+ * Qualifiers narrow Tickets only: `is:open` or `is:ended`, `tag:<name>`, and `author:<id or name>`.
  * @param links - Feishu message AppLinks cached since startup, keyed by chat and message ID.
  */
 export function search(host: ViewHost, query: string, links: Pick<TextCache, 'entries'>) {
   const { store, sources } = host
-  const value = query.trim()
-  if (!value) return { tickets: [], items: [], threads: [] }
+  const parts = parseSearchQuery(query)
+  const value = parts.text
+  const narrowed = !!(parts.is || parts.tag || parts.author)
+  if (!value && !narrowed) return { tickets: [], items: [], threads: [], more: false }
   const view = snapshot(host)
-  const named = sources.find(value)
+  const named = value ? sources.find(value) : { terms: [], threads: [] }
   const terms = new Set([value, ...named.terms])
-  for (const [name, url] of links.entries()) if (url === value) terms.add(name.split(':').at(-1)!)
+  if (value) for (const [name, url] of links.entries()) if (url === value) terms.add(name.split(':').at(-1)!)
   const found = new Map<string, Trigger>()
-  for (const term of terms) for (const trigger of store.read.search(term)) found.set(trigger.id, trigger)
+  if (value) for (const term of terms) for (const trigger of store.read.search(term)) found.set(trigger.id, trigger)
   const threads = named.threads.flatMap(key => { const thread = store.threads.get(key); return thread ? [threadSummary(view, thread)]
     : [] })
   const lower = value.toLowerCase()
@@ -73,16 +97,27 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   // whose text the archive also holds, so searching a phrase an agent wrote finds the ticket.
   const reaches = (ticket: Ticket) => [...(ticket.follows ?? []).map(follow => follow.thread),
     ...view.threadsOf(ticket.id).map(thread => thread.key)]
-  const replied = new Set(store.receipts.ticketsMatching(value))
+  const replied = new Set(value ? store.receipts.ticketsMatching(value) : [])
   const tags = (ticket: Ticket): string[] => {
     const value = store.triggers.get(ticket.origin.triggerId)?.meta.tags
     return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
   }
-  const matches = (ticket: Ticket) => reaches(ticket).some(key => named.threads.includes(key)) || ticket.title.toLowerCase().includes(lower)
-    || (latestReport(ticket)?.summary ?? '').toLowerCase().includes(lower) || replied.has(ticket.id)
-    || tags(ticket).some(tag => tag.toLowerCase().includes(lower))
-  const tickets = store.tickets.list().filter(matches).sort(newestFirst).slice(0, 10)
-    .map(ticket => ticketSummary(ticket, view.number(ticket.id)))
+  const actor = (ticket: Ticket) => {
+    const person = view.actor(ticket.mandate.actor, ticket.mandate.basis.via !== 'bot')
+    return [ticket.mandate.actor.id, ...person.name ? [person.name.zh, person.name.en] : []].map(name => name.toLowerCase())
+  }
+  const state = (ticket: Ticket) => !parts.is || (parts.is === 'open' ? !ticket.ended : !!ticket.ended)
+  const tagged = (ticket: Ticket) => !parts.tag || tags(ticket).some(tag => tag.toLowerCase() === parts.tag!.toLowerCase())
+  const authored = (ticket: Ticket) => !parts.author || actor(ticket).includes(parts.author.toLowerCase())
+  // The request text is what a person wrote, so a phrase in it finds the Ticket even when its title differs.
+  const request = (ticket: Ticket) => ticket.origin.triggerIds.map(id => store.triggers.get(id)?.text ?? '').join('\n').toLowerCase()
+  const text = (ticket: Ticket) => !value || reaches(ticket).some(key => named.threads.includes(key))
+    || ticket.title.toLowerCase().includes(lower) || request(ticket).includes(lower)
+    || (latestReport(ticket)?.summary ?? '').toLowerCase().includes(lower)
+    || replied.has(ticket.id) || tags(ticket).some(tag => tag.toLowerCase().includes(lower))
+  const matched = store.tickets.list().filter(ticket => state(ticket) && tagged(ticket) && authored(ticket) && text(ticket))
+    .sort(newestFirst)
+  const tickets = matched.slice(0, 50).map(ticket => ticketSummary(ticket, view.number(ticket.id)))
   // Omit automated triggers from threads already included in `threads`.
   const shownThreads = new Set(threads.map(thread => thread.key))
   const item = (trigger: Trigger) => {
@@ -93,7 +128,8 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
     return { ...row, threadTitle: home ? threadTitle(store, home) : undefined, ...filtered }
   }
   const items = [...found.values()].filter(trigger => trigger.human || !shownThreads.has(threadKey(trigger.threads[0]!)))
-  return { tickets, items: items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20).map(item), threads }
+  const shown = items.sort((a, b) => b.at.localeCompare(a.at))
+  return { tickets, items: shown.slice(0, 30).map(item), threads, more: matched.length > 50 || shown.length > 30 }
 }
 export type SearchView = ReturnType<typeof search>
 export function decisionList(host: ViewHost, kinds: string[], offset: number, limit: number, since = '') {

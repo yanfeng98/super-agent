@@ -7,8 +7,9 @@ import { usePanel } from './provider.tsx'
 import { actorName, localized, readableMarkers, reasonLabel, ticketNumber, valueLabel } from './text.ts'
 import { ActionLink, ConfirmButton, LabelValue, SessionButton, StageMark, When } from './widgets.tsx'
 
-export function TicketLine({ ticket, question, onChanged, context }: {
+export function TicketLine({ ticket, question, onChanged, context, select }: {
   ticket: TicketRow; question?: boolean; onChanged?: () => Promise<void>; context?: boolean
+  select?: { checked: boolean; onToggle: () => void }
 }) {
   const { t, call, navigate } = usePanel()
   const status = ticketMark(t, ticket)
@@ -16,6 +17,8 @@ export function TicketLine({ ticket, question, onChanged, context }: {
   const note = question && ticket.note && { ...ticket.note, text: readableMarkers(t, ticket.note.text) }
   const answer = ticket.reply && ticket.stage === 'person' && ticket.action === 'answer' ? ticket.reply : undefined
   return <li className="dt-row dt-link dt-ticket" data-state={question ? status.dot : undefined}>
+    {select && <label className="dt-check"><input type="checkbox" checked={select.checked} onChange={select.onToggle}
+      aria-label={t('selectTicket', { title: ticket.title })} /></label>}
     <div className="dt-ticket-stage"><StageMark state={status.dot} icon={status.icon} label={status.label} /></div>
     <div className="dt-ticket-body">
       <div className="dt-row-title">{ticket.number ? <span className="dt-ticket-number">{ticketNumber(ticket.number)}</span> : null}

@@ -207,7 +207,7 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
 const ticketDetail = (): TicketPageView => ({
   ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
     cleanup: false, check: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
-  decision: acceptDecision(),
+  history: [], related: [], decision: acceptDecision(),
   threads: [threadSummary()],
   mandate: { strength: 'explicit', policyVersion: 'abcdef1234567890', basis: { via: 'addressed', sender: 'Alice', addressed: 'mention' },
     actor: actor('feishu', MEMBER), scope: '修复登录页回归' },
@@ -301,7 +301,8 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET search': { query: ['q'], answer: async ({ query }) => {
     const q = query.q ?? ''
     await server.searching?.(q)
-    return { tickets: [], threads: server.search.threads, items: server.search.items.filter(item => item.preview.includes(q)) }
+    return { tickets: [], threads: server.search.threads, items: server.search.items.filter(item => item.preview.includes(q)),
+      more: false }
   } },
   'GET sources': { answer: sourceStatuses },
   'GET settings': { answer: settingsView },
@@ -368,6 +369,11 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/cleanup': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { cleaned: true }
+  } },
+  'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    const input = body as { ticket?: unknown; linked?: unknown }
+    return { related: input.linked ? [{ id: 't2', number: 2, title: '相关工单' }] : [] }
   } },
   'POST tickets/:id/check': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')

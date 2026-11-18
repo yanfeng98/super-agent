@@ -180,6 +180,13 @@ export class Engine {
    * @throws UserError when the ticket is unknown, ended, not held, or has no pending Assignment.
    */
   approveTicket(ticketId: string): Ticket { return this.repo.atomic(() => this.tickets.approve(ticketId)) }
+  /**
+   * Links or unlinks two tickets on each other's page.
+   * @returns The ticket that was linked or unlinked.
+   */
+  linkTicket(ticketId: string, otherId: string, linked: boolean): Ticket {
+    return this.repo.atomic(() => this.tickets.link(ticketId, otherId, linked))
+  }
 
   // The Executor
 
@@ -279,7 +286,7 @@ export type EngineForSources = Pick<Engine, 'receive' | 'bindThread' | 'threadCl
 export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivered' | 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'>
 /** What people ask of the Engine, through the panel or the main Session. */
 export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'approveTicket'
-  | 'reevaluate' | 'unsubscribe' | 'dismiss'>
+  | 'linkTicket' | 'reevaluate' | 'unsubscribe' | 'dismiss'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>
 /** What the Executor tells the Engine, and what its workers ask of it. */

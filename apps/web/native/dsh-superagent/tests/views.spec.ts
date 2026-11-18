@@ -372,6 +372,14 @@ it('offers a check run on an ended ticket with a workspace when a check command 
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ check: false })
 })
 
+it('lists related tickets with their number and title', () => {
+  const host = views()
+  live('t1'); live('t2')
+  store.tickets.save({ ...store.tickets.get('t1')!, related: ['t2', 'gone'] })
+  expect(ticketDetail(host, 't1')!.related).toEqual([{ id: 't2', number: 2, title: 't2' }])
+  expect(ticketDetail(host, 't2')!.related).toEqual([])
+})
+
 it('shows the full request text and the archive file on a local ticket\'s page', () => {
   const host = views()
   live('t1')
@@ -403,6 +411,31 @@ it('lists the tags on requests and filters Tickets by one', () => {
   expect(ticketTags(store)).toEqual(['p1', '前端'])
   expect(ticketList(host, 'open', 0, 20, '前端').items.map(item => item.id)).toEqual(['t1'])
   expect(ticketList(host, 'open', 0, 20).items.map(item => item.id).sort()).toEqual(['t1', 't2'])
+})
+
+it('narrows Ticket search with is, tag and author qualifiers', () => {
+  const host = views()
+  host.sources.register(localKind)
+  live('t1'); live('t2')
+  const ended = { at, by: 'human' as const, outcome: 'stopped' as const }
+  store.tickets.save({ ...store.tickets.get('t2')!, ended,
+    mandate: { ...store.tickets.get('t2')!.mandate, actor: { source: 'feishu', id: 'ou_bob' } },
+    origin: { triggerId: 'e1', triggerIds: ['e1'] } })
+  store.triggers.save({ id: 'e0', source: 'local', threads: [{ source: 'local', id: 'r1' }], actor: { source: 'local', id: 'operator' },
+    human: true, at, text: '首页按钮', meta: { tags: ['p1'] } })
+  store.triggers.save({ id: 'e1', source: 'local', threads: [{ source: 'local', id: 'r2' }], actor: { source: 'local', id: 'operator' },
+    human: true, at, text: '设置页面', meta: {} })
+  const ids = (query: string) => search(host, query, new Map()).tickets.map(item => item.id).sort()
+  expect(ids('is:open')).toEqual(['t1'])
+  expect(ids('is:ended')).toEqual(['t2'])
+  expect(ids('tag:p1')).toEqual(['t1'])
+  expect(ids('author:Alice')).toEqual(['t1'])
+  expect(ids('author:ou_bob')).toEqual(['t2'])
+  expect(ids('is:open 首页')).toEqual(['t1'])
+  expect(ids('is:ended 首页')).toEqual([])
+  expect(ids('tag:p1 首页')).toEqual(['t1'])
+  // An unknown `is:` value stays free text rather than silently matching everything.
+  expect(ids('is:merged')).toEqual([])
 })
 
 it('finds a ticket by a reply in its archive as well as by its title', () => {

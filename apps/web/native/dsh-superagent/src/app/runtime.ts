@@ -336,6 +336,31 @@ export class Runtime extends Service implements SourceHost {
    * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
    */
   /**
+   * Links or unlinks another ticket, named by its id or `T-000N`, on both tickets' pages.
+   * @returns The changed ticket's related tickets with their numbers and titles.
+   * @throws when the reference names no ticket, or either ticket link operation is refused.
+   */
+  linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] } {
+    const target = this.ticketReference(reference)
+    if (!target) throw new Error('Unknown ticket')
+    const ticket = this.engine.linkTicket(id, target, linked)
+    return { related: (ticket.related ?? []).flatMap(value => {
+      const other = this.store.tickets.get(value)
+      const number = this.store.tickets.number(value)
+      return other ? [{ id: value, title: other.title, ...number ? { number } : {} }] : []
+    }) }
+  }
+  /** Resolves a ticket id or display number (`T-0001`) to its id. */
+  private ticketReference(reference: string): string | undefined {
+    const value = reference.trim()
+    if (this.store.tickets.get(value)) return value
+    const match = /^T-?(\d+)$/i.exec(value)
+    if (!match) return undefined
+    const number = Number(match[1])
+    for (const [id, seq] of this.store.tickets.numbering()) if (seq === number) return id
+    return undefined
+  }
+  /**
    * Runs the executor's check command in an ended ticket's worktree and records its outcome on the ticket.
    * @throws when the ticket is unknown, still open, has no workspace, or no check command is configured.
    */
@@ -502,6 +527,7 @@ export class Runtime extends Service implements SourceHost {
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
+      linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),
       cleanupTicket: id => runtime.cleanupTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
       approveTicket: id => runtime.approveTicket(id) }
   }
