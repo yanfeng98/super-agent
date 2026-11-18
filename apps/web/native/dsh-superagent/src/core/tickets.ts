@@ -197,6 +197,21 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
+   * Replaces the request text the ticket shows, leaving the originating Trigger as the Source delivered it.
+   * @returns The ticket with the replacement.
+   * @throws UserError when the ticket is unknown or the text is blank.
+   */
+  editRequest(ticketId: string, text: string): Ticket {
+    const ticket = this.require(ticketId)
+    const next = text.trim()
+    if (!next) throw new UserError('emptyRequest')
+    const at = this.now()
+    ticket.request = { text: next, at }
+    ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
    * Replaces a ticket's labels, which only describe it to people.
    * @returns The ticket with its labels.
    * @throws UserError when the ticket is unknown, or more than 8 labels remain or one is over 24 characters.
@@ -262,6 +277,24 @@ export class Tickets extends EnginePart {
     if (!ticket.notes?.some(note => note.id === noteId)) throw new UserError('unknownNote')
     ticket.notes = ticket.notes.filter(note => note.id !== noteId)
     if (!ticket.notes.length) delete ticket.notes
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
+   * Adds a reply to a review note's discussion.
+   * @returns The ticket with the reply.
+   * @throws UserError when the ticket or note is unknown, or the reply is blank.
+   */
+  replyToNote(ticketId: string, noteId: string, text: string): Ticket {
+    const ticket = this.require(ticketId)
+    const note = ticket.notes?.find(item => item.id === noteId)
+    if (!note) throw new UserError('unknownNote')
+    const next = text.trim()
+    if (!next) throw new UserError('emptyNoteReply')
+    const at = this.now()
+    note.replies = [...(note.replies ?? []), { id: key('note-reply', ticketId, noteId, at, String(note.replies?.length ?? 0)),
+      text: next, at }]
+    ticket.updatedAt = at
     this.repo.tickets.save(ticket)
     return ticket
   }

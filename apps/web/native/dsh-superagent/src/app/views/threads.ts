@@ -145,7 +145,8 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   const authored = (ticket: Ticket) => !parts.author || actor(ticket).includes(parts.author.toLowerCase())
   const dated = (ticket: Ticket) => within(ticket.createdAt, parts.created) && within(ticket.updatedAt, parts.updated)
   // The request text is what a person wrote, so a phrase in it finds the Ticket even when its title differs.
-  const request = (ticket: Ticket) => ticket.origin.triggerIds.map(id => store.triggers.get(id)?.text ?? '').join('\n').toLowerCase()
+  const request = (ticket: Ticket) => (ticket.request?.text
+    ?? ticket.origin.triggerIds.map(id => store.triggers.get(id)?.text ?? '').join('\n')).toLowerCase()
   const text = (ticket: Ticket) => !value || reaches(ticket).some(key => named.threads.includes(key))
     || ticket.title.toLowerCase().includes(lower) || request(ticket).includes(lower)
     || (latestReport(ticket)?.summary ?? '').toLowerCase().includes(lower)

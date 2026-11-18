@@ -12,7 +12,7 @@ import { ticketExecution } from '../src/executor/dsh.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { appendFollowup, appendReply, archiveDir, archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, drainInbox,
-  localKind, OPERATOR, recordCleanup, recordRebase, recordRename, recordTags, reopenArchive, seedPolicy, webhookFor }
+  localKind, OPERATOR, recordCleanup, recordRebase, recordRename, recordRequestEdit, recordTags, reopenArchive, seedPolicy, webhookFor }
   from '../src/sources/local.ts'
 import { testDeployment } from './fixtures/deployment.ts'
 
@@ -389,6 +389,11 @@ describe('local tickets', () => {
     const tagged = readFileSync(created.file, 'utf8')
     expect(tagged.match(/标签 \/ Tags/g)).toHaveLength(1)
     expect(tagged).toContain('- tag: "前端"')
+    await recordRequestEdit(ended, { at: '2026-11-18T05:45:00.000Z', text: '新的请求正文' })
+    await recordRequestEdit(ended, { at: '2026-11-18T05:45:00.000Z', text: '新的请求正文' })
+    const edited = readFileSync(created.file, 'utf8')
+    expect(edited.match(/请求正文 \/ Request/g)).toHaveLength(1)
+    expect(edited).toContain('新的请求正文')
     await recordRebase(ended, { at: '2026-11-18T06:00:00.000Z', branch: 'agent/x', target: 'main', base: 'b'.repeat(40) })
     await recordRebase(ended, { at: '2026-11-18T06:00:00.000Z', branch: 'agent/x', target: 'main', base: 'b'.repeat(40) })
     const rebased = readFileSync(created.file, 'utf8')

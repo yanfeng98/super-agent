@@ -94,14 +94,14 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    Ticket's latest result, its replies and its labels, and accepts `is:`, `tag:`, `label:`, `author:`, `created:` and
    `updated:` qualifiers (a date or timestamp, with an optional comparison); matching Tickets page fifty at a time
    (`src/app/views/threads.ts`, `src/app/store.ts`). An ended Ticket whose workspace is a linked worktree offers
-   **Merge** (fast-forward the repository's checked-out branch only), **Rebase** (rewrite the Ticket branch onto a moved
+   **Merge** (fast-forward, squash or merge commit into the repository's checked-out branch), **Rebase** (rewrite the Ticket branch onto a moved
    target, move the recorded base and clear the check) and **Discard** (remove the worktree and branch), plus
    **Clean up worktree** after a merge; `POST tickets/:id/merge`, `/rebase`, `/cleanup` and `/discard` run through
    `workspaceRepo`, `mergeWorkspace`, `rebaseWorkspace` and `discardWorkspace` (`src/app/review.ts`), record the
    corresponding Ticket fields (`src/app/runtime.ts`) and append matching archive sections (`src/sources/local.ts`).
    `src/app/check.ts` runs `executor.check` at each ending and `Runtime.mergeTicket` refuses a merge without a passing run
-   dated after that ending (`POST tickets/:id/check`); check runs keep a capped history (`ticket.checkHistory`); a review decision (`Tickets.review`, `POST tickets/:id/review`, `executor.requireReview`) gates a merge and is archived; reviewer notes (`Tickets.addNote`/`removeNote`/`resolveNote`,
-   `POST tickets/:id/notes`, `/notes/:noteId/remove`, `/notes/:noteId/resolve`) can be resolved, reopened, or sent to the
+   dated after that ending (`POST tickets/:id/check`) and a bound pull request's failed CI refuses it too; check runs keep a capped history (`ticket.checkHistory`); a review decision (`Tickets.review`, `POST tickets/:id/review`, `executor.requireReview`) gates a merge and is archived; reviewer notes (`Tickets.addNote`/`removeNote`/`resolveNote`/`replyToNote`,
+   `POST tickets/:id/notes`, `/notes/:noteId/remove`, `/notes/:noteId/resolve`, `/notes/:noteId/replies`) can be resolved, reopened, or sent to the
    Executor as one follow-up, and an open note blocks a merge; related Tickets (`Tickets.link`,
    `POST tickets/:id/related`) and the person-action history appear on the page. `review.spec.ts`, `check.spec.ts`,
    `local.spec.ts`, `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
@@ -116,9 +116,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    creation, and the archive appends a Tags section for each change. The local Source's optional webhook receives a JSON POST when a
    local Ticket asks a question or ends (`src/app/webhook.ts`, `ticket.attention` event). Up to five attachments, 8 MB total, travel base64 with
    `POST local/requests` and are written to `<archive>/<request id>.files/` (`src/sources/local.ts`), with their paths in
-   the request text and archive. **Edit title** renames a Ticket without rewriting its request
+   the request text and archive. **Edit request** replaces the request text a Ticket shows and appends a Request section (`Tickets.editRequest`, `POST tickets/:id/request`), and **Edit title** renames a Ticket without rewriting its request
    (`Tickets.rename`, `POST tickets/:id/title`), updates the local Thread label and appends a Title section to the archive.
-   At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard, rename and label sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
+   A panel inbox records a notification when a Ticket asks a person a question or ends (`src/app/notifications.ts`, `GET notifications`, `POST notifications/:id/read`, `POST notifications/read-all`), and the header shows the unread count. At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard, rename, label and request sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
    request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket
    within two seconds, writes `inbox/done/<file>` and moves bad input to `inbox/rejected/`, with the file name as the
    idempotency key. `scripts/dsh-superagent backup` copies the database online and the ticket archives into `backups/<timestamp>/`.

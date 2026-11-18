@@ -176,6 +176,12 @@ export class Engine {
    */
   renameTicket(ticketId: string, title: string): Ticket { return this.repo.atomic(() => this.tickets.rename(ticketId, title)) }
   /**
+   * A person replaces the request text the ticket shows, leaving the originating Trigger unchanged.
+   * @returns The ticket with the replacement.
+   * @throws UserError when the ticket is unknown or the text is blank.
+   */
+  editRequest(ticketId: string, text: string): Ticket { return this.repo.atomic(() => this.tickets.editRequest(ticketId, text)) }
+  /**
    * A person replaces a ticket's labels.
    * @returns The ticket with its labels.
    * @throws UserError when the ticket is unknown, or the labels are too many or too long.
@@ -207,6 +213,14 @@ export class Engine {
    */
   reviewTicket(ticketId: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
     return this.repo.atomic(() => this.tickets.review(ticketId, decision, note))
+  }
+  /**
+   * Adds a reply to a review note's discussion.
+   * @returns The ticket with the reply.
+   * @throws UserError when the ticket or note is unknown, or the reply is blank.
+   */
+  replyToNote(ticketId: string, noteId: string, text: string): Ticket {
+    return this.repo.atomic(() => this.tickets.replyToNote(ticketId, noteId, text))
   }
   /**
    * Marks a review note resolved, or open again.
@@ -322,7 +336,8 @@ export type EngineForSources = Pick<Engine, 'receive' | 'bindThread' | 'threadCl
 export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivered' | 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'>
 /** What people ask of the Engine, through the panel or the main Session. */
 export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'setTags' | 'approveTicket'
-  | 'linkTicket' | 'addNote' | 'removeNote' | 'resolveNote' | 'reviewTicket' | 'reevaluate' | 'unsubscribe' | 'dismiss'>
+  | 'linkTicket' | 'addNote' | 'removeNote' | 'resolveNote' | 'replyToNote' | 'reviewTicket' | 'editRequest' | 'reevaluate'
+  | 'unsubscribe' | 'dismiss'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>
 /** What the Executor tells the Engine, and what its workers ask of it. */

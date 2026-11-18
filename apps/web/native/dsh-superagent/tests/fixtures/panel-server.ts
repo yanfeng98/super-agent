@@ -93,6 +93,7 @@ export interface PanelServer {
   threads: ThreadRow[]
   threadPages: (key: string, query: { before?: string; around?: string }) => ThreadPageView | undefined
   person: TicketRow[]; search: Pick<ApiResponse<'GET search'>, 'items' | 'threads'>; history: HistoryView
+  notifications: ApiResponse<'GET notifications'>
   requests: { path: string; method: string; body?: unknown }[]
   /** Requests with undeclared query params or invalid body presence; asserted empty after each test. */
   misuse: string[]
@@ -253,6 +254,7 @@ function initial(): PanelServer {
   const defaults = { revision: 0, previousRevision: null, savedAt: '', source: 'defaults' }
   return {
     health: {}, down: false, pending: 0, opened: [], requests: [], misuse: [], queued: new Set(), dropped: [], failing: [],
+    notifications: { items: [], unread: 0 },
     setup: { machine: MACHINE, problem: null, feishuProblem: null,
       accounts: { repository: 'acme/widgets', agent: 'agent-bot', feishu: { appId: 'cli_bot', brand: 'feishu', botId: 'ou_bot',
         name: 'Widgets Bot' } } },
@@ -304,6 +306,20 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     return { tickets: [], threads: server.search.threads, items: server.search.items.filter(item => item.preview.includes(q)),
       more: false, next_offset: null }
   } },
+  'GET notifications': { answer: () => server.notifications },
+  'POST notifications/:id/read': { answer: ({ params }) => {
+    const item = server.notifications.items.find(entry => entry.id === params.id)
+    if (!item) return refuse(404, 'Notification not found')
+    item.read = true
+    server.notifications.unread = server.notifications.items.filter(entry => !entry.read).length
+    return { read: true }
+  } },
+  'POST notifications/read-all': { answer: () => {
+    const unread = server.notifications.items.filter(entry => !entry.read).length
+    for (const item of server.notifications.items) item.read = true
+    server.notifications.unread = 0
+    return { read: unread }
+  } },
   'GET sources': { answer: sourceStatuses },
   'GET settings': { answer: settingsView },
   'POST sources/:id/labels': { answer: () => {
@@ -354,7 +370,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { diff: 'diff --git a/src/a.ts b/src/a.ts\n-旧文案\n+新文案', truncated: false }
   } },
-  'POST tickets/:id/merge': { answer: ({ params }) => {
+  'POST tickets/:id/merge': { query: ['strategy'], answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { merged: true, branch: 'agent/t', target: 'main' }
   } },
@@ -380,6 +396,15 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { notes: [] }
   } },
+  'POST tickets/:id/notes/:noteId/replies': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const note = detail.notes?.find(item => item.id === params.noteId)
+    if (!note) return refuse(404, 'Unknown note')
+    const text = (body as { text: string }).text
+    note.replies = [...(note.replies ?? []), { id: `r${note.replies?.length ?? 0}`, text, at: '2026-11-18T00:00:00Z' }]
+    return { notes: detail.notes }
+  } },
   'POST tickets/:id/notes/:noteId/resolve': { body: true, answer: ({ params, body }) => {
     const detail = server.ticketDetails[params.id]
     if (!detail) return refuse(404, 'Ticket not found')
@@ -394,6 +419,13 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     const input = body as { decision: 'approved' | 'changes-requested'; note?: string }
     detail.reviewed = { at: '2026-11-18T00:00:00Z', decision: input.decision, ...(input.note ? { note: input.note } : {}) }
     return { reviewed: true, decision: input.decision, at: detail.reviewed.at }
+  } },
+  'POST tickets/:id/request': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const text = (body as { text: string }).text
+    detail.request = { ...detail.request!, text, editedAt: '2026-11-18T00:00:00Z' }
+    return { request: { text, at: detail.request.at } }
   } },
   'POST tickets/:id/tags': { body: true, answer: ({ params, body }) => {
     const detail = server.ticketDetails[params.id]

@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -103,6 +103,28 @@ describe('merge and discard', () => {
     expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
     writeFileSync(join(repo, 'a.txt'), 'dirty\n')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/uncommitted/)
+  })
+  it('squashes a ticket branch into one commit when asked', async () => {
+    base()
+    const worktree = join(dir, 'worktree-squash')
+    git('worktree', 'add', '-q', '-b', 'agent/q', worktree)
+    writeFileSync(join(worktree, 'q.txt'), 'squashed\n')
+    gitAt(worktree, 'add', 'q.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
+    await mergeWorkspace(subprocess(), worktree, signal, 'squash')
+    expect(git('log', '--oneline', '-1')).toMatch(/Squash merge agent\/q/)
+    // One parent: the squash commit, not the ticket branch's commit.
+    expect(git('rev-list', '--parents', '-n1', 'HEAD').split(' ')).toHaveLength(2)
+    expect(readFileSync(join(repo, 'q.txt'), 'utf8')).toBe('squashed\n')
+  })
+  it('makes a merge commit when asked, keeping both parents', async () => {
+    base()
+    const worktree = join(dir, 'worktree-merge')
+    git('worktree', 'add', '-q', '-b', 'agent/m', worktree)
+    writeFileSync(join(worktree, 'm.txt'), 'merged\n')
+    gitAt(worktree, 'add', 'm.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
+    await mergeWorkspace(subprocess(), worktree, signal, 'merge')
+    expect(git('rev-list', '--parents', '-n1', 'HEAD').split(' ')).toHaveLength(3)
+    expect(git('log', '--oneline', '-1')).toMatch(/Merge branch 'agent\/m'/)
   })
   it('names the rebase when the repository moved past the ticket branch, then rebases so the merge can fast-forward', async () => {
     base()

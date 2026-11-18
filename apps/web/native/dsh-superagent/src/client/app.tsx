@@ -1,6 +1,6 @@
 /** Root panel shell: header with global search and glossary, top-level navigation tabs, and active route view. */
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import type { SearchView } from './api.ts'
+import { usePoll, type SearchView } from './api.ts'
 import { Button, Dot, Icon, Input, Modal, SegmentedTabs } from './controls.tsx'
 import type { DeploymentForm } from './deployment.tsx'
 import { EvalStatus } from './eval.tsx'
@@ -103,8 +103,22 @@ function SearchResults({ result, query, onClose, onMore, loadingMore }: { result
 }
 
 function Header({ masterId }: { masterId: string | undefined }) {
-  const { t, call, openSession, notify } = usePanel()
+  const { t, call, openSession, notify, navigate } = usePanel()
   const [glossary, setGlossary] = useState(false)
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const { data: inbox, reload: reloadInbox } = usePoll(() => call('GET notifications'), [])
+  const openNotification = async (item: { id: string; ticketId: string }) => {
+    try {
+      await call('POST notifications/:id/read', { id: item.id })
+      await reloadInbox()
+    } catch (failure) { notify(errorText(failure)) }
+    setInboxOpen(false)
+    navigate({ page: 'execution', id: item.ticketId })
+  }
+  const readAll = async () => {
+    try { await call('POST notifications/read-all'); await reloadInbox() }
+    catch (failure) { notify(errorText(failure)) }
+  }
   const [query, setQuery] = useState('')
   const [result, setResult] = useState<{ query: string; value: SearchView }>()
   const [loadingMore, setLoadingMore] = useState(false)
@@ -149,10 +163,25 @@ function Header({ masterId }: { masterId: string | undefined }) {
       </form>
       <Button variant="ghost" size="sm" icon={<Icon name="question" />} aria-label={t('glossary')} title={t('glossary')} aria-haspopup="dialog"
         onClick={() => setGlossary(true)} />
+      <Button variant="ghost" size="sm" icon={<Icon name="message" />} aria-label={t('notifications')} title={t('notifications')}
+        onClick={() => setInboxOpen(true)}>
+        {inbox?.unread ? <span className="dt-count">{inbox.unread}</span> : null}
+      </Button>
       <Button variant="outline" size="sm" icon={<Icon name="session" size={14} />} disabled={!masterId}
         onClick={() => { if (masterId) openSession(masterId).catch(failure => notify(errorText(failure))) }}>{t('openMaster')}</Button>
     </div>
     <Glossary open={glossary} onClose={() => setGlossary(false)} />
+    <Modal open={inboxOpen} onClose={() => setInboxOpen(false)} title={t('notifications')} closeLabel={t('close')}
+      footer={<Button variant="outline" size="sm" onClick={readAll}>{t('notificationsReadAll')}</Button>}>
+      {inbox?.items.length ? <ul className="dt-list">{inbox.items.map(item => <li className="dt-row" key={item.id}>
+        <div className="dt-row-main">
+          <div className="dt-row-meta"><span>{t(`notification.${item.kind}`)}</span><When at={item.at} />
+            {!item.read && <span className="dt-count">{t('notificationsUnread')}</span>}</div>
+          <button type="button" className="dt-open" onClick={() => { void openNotification(item) }}>{item.title}</button>
+          <div className="dt-row-quote">{item.text}</div>
+        </div>
+      </li>)}</ul> : <p className="dt-hint">{t('notificationsEmpty')}</p>}
+    </Modal>
   </header>
 }
 

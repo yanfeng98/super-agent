@@ -283,6 +283,11 @@ export interface Ticket {
    * originating Trigger's `meta.tags`.
    */
   tags?: string[]
+  /**
+   * A person's latest replacement of the request text, for the page and search; the originating Trigger keeps what the
+   * Source delivered, and a worker that already read the request does not receive the edit by itself.
+   */
+  request?: { text: string; at: string }
   decisionId: string
   mandate: Mandate
   /** The Channels of the messages it was accepted from, which its replies go to. */
@@ -331,8 +336,8 @@ export interface Ticket {
   reviewed?: { at: string; decision: 'approved' | 'changes-requested'; note?: string }
   /** When a person rebased the ticket's branch, and the target commit it now starts from. */
   rebased?: { at: string; branch: string; target: string; base: string }
-  /** When a person merged the ticket's branch into the repository, and where. */
-  merged?: { at: string; branch: string; target: string }
+  /** When a person merged the ticket's branch into the repository, where, and how. */
+  merged?: { at: string; branch: string; target: string; strategy?: 'ff' | 'squash' | 'merge' }
   /** When a person discarded the ticket's worktree and branch. */
   discarded?: { at: string }
   /** When a person removed the worktree and branch of a merged ticket, keeping its commits on the target branch. */
@@ -351,6 +356,12 @@ export interface TicketCheck {
   /** Set when `output` keeps only the end of the command's output. */
   truncated?: boolean
 }
+/** One reply in a review note's discussion. */
+export interface TicketNoteReply {
+  id: string
+  text: string
+  at: string
+}
 /** A person's note on a file and optional line of a ticket's changes. */
 export interface TicketNote {
   id: string
@@ -360,6 +371,8 @@ export interface TicketNote {
   at: string
   /** When a person marked the note resolved; an open note keeps its ticket from merging. */
   resolved?: { at: string }
+  /** Replies in the note's discussion, oldest first. */
+  replies?: TicketNoteReply[]
 }
 /** One file git reports as changed or uncommitted, with its short status (`M`, `A`, `D`, `??`). */
 export interface ReviewFile { status: string; path: string }

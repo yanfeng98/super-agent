@@ -1,6 +1,7 @@
 /** Type-only management API contract between the web panel and host routes, imported by the panel without bundling host code. */
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { TicketCheck, TicketNote } from '../core/index.ts'
+import type { Notification } from './notifications.ts'
 import type { PromptConfig, Prompts } from './prompts.ts'
 import type { PromptsView, StateView, TicketPageView } from './http.ts'
 import type { HistoryView } from './settings-history.ts'
@@ -22,6 +23,9 @@ export interface Api {
   'GET state': { response: StateView }
   'GET overview': { response: OverviewView }
   'GET search': { query: { q: string; offset?: number }; response: SearchView }
+  'GET notifications': { response: { items: Notification[]; unread: number } }
+  'POST notifications/:id/read': { response: { read: true } }
+  'POST notifications/read-all': { response: { read: number } }
   'GET sources': { response: SourceStatusView[] }
   'GET settings': { response: SettingsView }
   'POST sources/:id/labels': { response: { added: string[] } }
@@ -38,7 +42,8 @@ export interface Api {
   'POST tickets/:id/stop': { response: { stopped: true } }
   'POST tickets/:id/reopen': { response: { reopened: true } }
   'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
-  'POST tickets/:id/merge': { response: { merged: true; branch: string; target: string } }
+  'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' };
+    response: { merged: true; branch: string; target: string } }
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }
@@ -47,11 +52,13 @@ export interface Api {
   'POST tickets/:id/notes': { body: { file: string; line?: number; text: string }; response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/remove': { response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/resolve': { body: { resolved: boolean }; response: { notes: TicketNote[] } }
+  'POST tickets/:id/notes/:noteId/replies': { body: { text: string }; response: { notes: TicketNote[] } }
   'POST tickets/:id/cleanup': { response: { cleaned: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
   'POST tickets/:id/tags': { body: { tags: string[] }; response: { tags: string[] } }
   'POST tickets/:id/review': { body: { decision: 'approved' | 'changes-requested'; note?: string };
     response: { reviewed: true; decision: 'approved' | 'changes-requested'; at: string } }
+  'POST tickets/:id/request': { body: { text: string }; response: { request: { text: string; at: string } } }
   'POST tickets/:id/approve': { response: { approved: true } }
   'POST local/requests': { body: { title: string; text: string; key?: string; project?: string; tags?: string[];
     files?: { name: string; data: string }[]; hold?: boolean };

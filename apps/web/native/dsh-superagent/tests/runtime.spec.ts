@@ -1835,6 +1835,29 @@ it('blocks a merge on a changes-requested review and on a missing approval when 
   await expect(runtime.mergeTicket(ticket.id)).rejects.not.toThrow(/Review approval is required/)
 })
 
+it('records a panel notification when a worker asks a person and when the ticket ends', async () => {
+  const { ticket, sessionId } = await acceptedTicket()
+  await runTool(sessionId, 'orchestrator_report', { state: 'progress', summary: 'need a decision', human_action: 'Which color?' })
+  expect(runtime.notifications().items[0]).toMatchObject({ kind: 'attention', ticketId: ticket.id, title: '修复回归',
+    text: 'Which color?' })
+  await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  expect(runtime.notifications().items[0]).toMatchObject({ kind: 'ended', ticketId: ticket.id, text: 'completed' })
+  expect(runtime.notifications().unread).toBe(2)
+})
+
+it('refuses to merge a ticket whose bound pull request CI has failed', async () => {
+  const { ticket } = await acceptedTicket()
+  runtime.store.threads.save({ key: 'github:7', ref: { source: 'github', id: '7' }, createdAt: '', subscriptions: [ticket.id],
+    correlated: [], pending: [], meta: { facts: { ci: { label: { zh: 'CI 失败', en: 'CI failed' }, value: '1', problem: true } } } })
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    current.follows = [{ thread: 'github:7', own: true }]
+    runtime.store.tickets.save(current)
+  })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/failing CI/)
+})
+
 it('ends the main Session\'s prompt with its Policy section, each rule on one line, and says orchestrator_eval holds no rules', async () => {
   const settings = runtime.store.settings()
   const rules = settings.policy.rules.map(rule => rule.id === 'copy'

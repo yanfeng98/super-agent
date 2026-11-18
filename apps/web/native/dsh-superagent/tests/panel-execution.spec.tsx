@@ -8,6 +8,20 @@ import { usePanel, mount, remount, all, find, tab, click, type, text, field, at 
 import { MEMBER, server, ticketSummary, threadSummary } from './fixtures/panel-server.ts'
 
 usePanel()
+it('shows unread notifications in the header and opens their Ticket', async () => {
+  server.notifications = { unread: 1, items: [{ id: 'n1', at: '2026-11-18T00:00:00Z', kind: 'attention', ticketId: 't1',
+    title: '修复回归', text: '需要确认按钮颜色' }] }
+  await mount()
+  const bell = document.querySelector('button[aria-label="通知"]') as HTMLButtonElement
+  expect(bell.textContent).toContain('1')
+  await click(bell)
+  const dialog = document.querySelector('[role="dialog"]')!
+  expect(dialog.textContent).toContain('需要确认按钮颜色')
+  await click([...dialog.querySelectorAll('.dt-open')].find(item => item.textContent === '修复回归') as HTMLElement)
+  expect(server.requests.some(request => request.path === 'notifications/n1/read' && request.method === 'POST')).toBe(true)
+  expect(server.requests.some(request => request.path === 'tickets/t1')).toBe(true)
+})
+
 it('lists Tickets under Execution by who they wait on, with the Executor state and its pause as an action', async () => {
   server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单', threads: [{ key: 'github:7',
     source: 'github', title: '#7 x', facts: { number: { value: '#7' }, autoMerge: { label: { zh: '自动合并', en: 'Auto-merge' },
@@ -187,9 +201,24 @@ it('adds a line-anchored review note and sends the notes to the executor as one 
   const followup = server.requests.filter(request => request.path === 'local/followups').at(-1)
   expect(followup?.body).toMatchObject({ thread: 'local:r1' })
   expect(String((followup?.body as { text?: string }).text)).toContain('src/a.ts:12: 改成可选')
+  await click(zh.noteReply)
+  await type(field<HTMLInputElement>(zh.noteReply), '已经处理')
+  await click(zh.noteReplySend)
+  expect(server.requests.find(request => request.path === 'tickets/t1/notes/n1/replies')).toMatchObject({ method: 'POST',
+    body: { text: '已经处理' } })
   await click(zh.noteResolve)
   expect(server.requests.find(request => request.path === 'tickets/t1/notes/n1/resolve')).toMatchObject({ method: 'POST',
     body: { resolved: true } })
+})
+
+it('edits the request text from the Ticket page', async () => {
+  at({ page: 'execution', id: 't1' })
+  await mount()
+  await click(zh.requestEdit)
+  await type(field<HTMLTextAreaElement>(zh.requestEdit), '新的请求正文')
+  await click(zh.requestSave)
+  expect(server.requests.find(request => request.path === 'tickets/t1/request')).toMatchObject({ method: 'POST',
+    body: { text: '新的请求正文' } })
 })
 
 it('shows the review captured when a ticket ended and lets a person reopen it', async () => {
@@ -231,7 +260,8 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
     body: { decision: 'approved' } })
   await click(zh.ticketMerge)
   await click(zh.confirm)
-  expect(server.requests.some(request => request.path === 'tickets/t5/merge' && request.method === 'POST')).toBe(true)
+  expect(server.requests.some(request => request.path.startsWith('tickets/t5/merge') && request.method === 'POST'
+    && request.path.includes('strategy=ff'))).toBe(true)
   await click(zh.ticketDiscard)
   await click(zh.confirm)
   expect(server.requests.some(request => request.path === 'tickets/t5/discard' && request.method === 'POST')).toBe(true)

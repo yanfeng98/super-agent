@@ -65,6 +65,8 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
     ...(stat ? { stat } : {}) }
 }
 
+/** How a merge moves the target branch: fast-forward only, a squashed commit, or a merge commit. */
+export type MergeStrategy = 'ff' | 'squash' | 'merge'
 /** Where a ticket workspace sits in git, and the repository branch a merge would move. */
 export interface WorkspaceRepo {
   /** Main repository root, shared by its worktrees. */
@@ -103,7 +105,8 @@ export async function workspaceRepo(subprocess: SubprocessRuntime, directory: st
  * repository cannot fast-forward.
  * @returns The branch merged and the branch it moved.
  */
-export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<{ branch: string; target: string }> {
+export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
+  strategy: MergeStrategy = 'ff'): Promise<{ branch: string; target: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
@@ -117,8 +120,21 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
       throw error
     })
   if (!ahead) throw new Error(`${repo.target} has commits that ${repo.branch} does not; rebase the ticket branch onto ${repo.target} and merge again`)
-  await runAsWorker(subprocess, ['git', 'merge', '--ff-only', repo.branch], repo.root,
+  const run = (args: string[]) => runAsWorker(subprocess, ['git', ...args], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+  if (strategy === 'ff') {
+    await run(['merge', '--ff-only', repo.branch])
+  } else if (strategy === 'merge') {
+    await run(['merge', '--no-ff', '--no-edit', repo.branch])
+  } else {
+    await run(['merge', '--squash', repo.branch])
+    try { await run(['commit', '-m', `Squash merge ${repo.branch}`]) }
+    catch (error) {
+      // Leave no staged squash or conflict state behind when the commit cannot be made.
+      await run(['reset', '--hard', 'HEAD']).catch(() => undefined)
+      throw error
+    }
+  }
   return { branch: repo.branch, target: repo.target }
 }
 /**

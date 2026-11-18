@@ -110,7 +110,8 @@ export function ticketDetail(host: ViewHost, id: string) {
   if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
   history.sort((a, b) => a.at.localeCompare(b.at))
   const origin = store.triggers.get(ticket.origin.triggerId)
-  const request = origin ? { text: plain(readable(origin.text), true), at: origin.at } : undefined
+  const request = origin ? { text: plain(readable(ticket.request?.text ?? origin.text), true), at: origin.at,
+    ...(ticket.request ? { editedAt: ticket.request.at } : {}) } : undefined
   // A check from before the current ending belongs to work that was resumed and must not be shown as this ending's.
   const checks = ticket.checks && (!ticket.ended || ticket.checks.at >= ticket.ended.at) ? ticket.checks : undefined
   const local = ticket.channels.find(channel => channel.source === 'local')
