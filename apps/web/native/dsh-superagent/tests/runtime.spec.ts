@@ -1760,6 +1760,81 @@ it('gives the Assignment a restart starts the messages the replaced one had deli
   expect(sent()).toBe(2)
 })
 
+it('refuses to merge a ticket whose configured check has not passed since its ending', async () => {
+  const { ticket } = await acceptedTicket()
+  const endedAt = '2026-09-10T00:00:00.000Z'
+  const settings = runtime.store.settings()
+  runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, check: 'pnpm test' } })
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: endedAt, by: 'executor', outcome: 'completed' }
+    current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at: endedAt, output: 'one test failed' }
+    runtime.store.tickets.save(current)
+  })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/has not passed/)
+  // A passing run from before this ending belongs to earlier work and does not lift the gate.
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.checks = { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-09-09T00:00:00.000Z', output: 'passed' }
+    runtime.store.tickets.save(current)
+  })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/has not passed/)
+})
+
+it('refuses to merge a ticket while a review note is open', async () => {
+  const { ticket } = await acceptedTicket()
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    current.notes = [{ id: 'n1', file: 'src/a.ts', line: 3, text: '改成可选', at: '2026-09-10T00:01:00.000Z' }]
+    runtime.store.tickets.save(current)
+  })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/1 review note still open/)
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.notes![0]!.resolved = { at: '2026-09-10T00:02:00.000Z' }
+    runtime.store.tickets.save(current)
+  })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.not.toThrow(/still open/)
+})
+
+it('keeps earlier check runs in the ticket history', async () => {
+  const { ticket } = await acceptedTicket()
+  const settings = runtime.store.settings()
+  runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, check: 'true' } })
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    runtime.store.tickets.save(current)
+  })
+  const first = await runtime.checkTicket(ticket.id)
+  const second = await runtime.checkTicket(ticket.id)
+  expect(first.ok).toBe(true)
+  expect(second.ok).toBe(true)
+  expect(runtime.store.tickets.get(ticket.id)!.checkHistory?.map(run => run.at)).toEqual([first.at, second.at])
+})
+
+it('blocks a merge on a changes-requested review and on a missing approval when one is required', async () => {
+  const { ticket } = await acceptedTicket()
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    runtime.store.tickets.save(current)
+  })
+  runtime.reviewTicket(ticket.id, 'changes-requested')
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/requested changes/)
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    delete current.reviewed
+    runtime.store.tickets.save(current)
+  })
+  const settings = runtime.store.settings()
+  runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, requireReview: true } })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/Review approval is required/)
+  runtime.reviewTicket(ticket.id, 'approved')
+  await expect(runtime.mergeTicket(ticket.id)).rejects.not.toThrow(/Review approval is required/)
+})
+
 it('ends the main Session\'s prompt with its Policy section, each rule on one line, and says orchestrator_eval holds no rules', async () => {
   const settings = runtime.store.settings()
   const rules = settings.policy.rules.map(rule => rule.id === 'copy'

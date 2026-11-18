@@ -33,7 +33,8 @@ export function basisFacts(basis: MandateBasis, rule: Snapshot['rule']): { facts
   if (authority) facts.push({ name: 'legacyAuthority', value: authority })
   return { facts, legacy: authority !== undefined }
 }
-const tagsOf = (store: Pick<Store, 'triggers'>, ticket: Pick<Ticket, 'origin'>): string[] => {
+const tagsOf = (store: Pick<Store, 'triggers'>, ticket: Pick<Ticket, 'origin' | 'tags'>): string[] => {
+  if (ticket.tags) return ticket.tags
   const value = store.triggers.get(ticket.origin.triggerId)?.meta.tags
   return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
 }
@@ -93,11 +94,15 @@ export function ticketDetail(host: ViewHost, id: string) {
   const check = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
     && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
+  const reviewDecision = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
   // The decisions a person made on the Ticket, in the order they happened.
-  const history: { code: 'approved' | 'renamed' | 'rebased' | 'merged' | 'cleaned' | 'discarded'; at: string; title?: string;
-    branch?: string; target?: string }[] = []
+  const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'cleaned' | 'discarded'; at: string;
+    title?: string; tags?: string[]; decision?: 'approved' | 'changes-requested'; note?: string; branch?: string; target?: string }[] = []
   if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
   if (ticket.renamed) history.push({ code: 'renamed', at: ticket.renamed.at, title: ticket.renamed.title })
+  if (ticket.tagged) history.push({ code: 'tagged', at: ticket.tagged.at, tags: ticket.tags ?? [] })
+  if (ticket.reviewed) history.push({ code: 'reviewed', at: ticket.reviewed.at, decision: ticket.reviewed.decision,
+    ...(ticket.reviewed.note ? { note: ticket.reviewed.note } : {}) })
   if (ticket.rebased) history.push({ code: 'rebased', at: ticket.rebased.at, branch: ticket.rebased.branch,
     target: ticket.rebased.target })
   if (ticket.merged) history.push({ code: 'merged', at: ticket.merged.at, branch: ticket.merged.branch, target: ticket.merged.target })
@@ -110,7 +115,7 @@ export function ticketDetail(host: ViewHost, id: string) {
   const checks = ticket.checks && (!ticket.ended || ticket.checks.at >= ticket.ended.at) ? ticket.checks : undefined
   const local = ticket.channels.find(channel => channel.source === 'local')
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
-    rebase, cleanup, check },
+    rebase, cleanup, check, reviewDecision },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
     notes: ticket.notes ?? [],
@@ -120,6 +125,8 @@ export function ticketDetail(host: ViewHost, id: string) {
       return other ? [{ id, number: view.number(other.id), title: other.title }] : []
     }),
     ...checks ? { checks } : {},
+    ...ticket.reviewed ? { reviewed: ticket.reviewed } : {},
+    ...ticket.checkHistory?.length ? { checkHistory: ticket.checkHistory } : {},
     review: ticket.review,
     merged: ticket.merged, discarded: ticket.discarded, cleaned: ticket.cleaned,
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },

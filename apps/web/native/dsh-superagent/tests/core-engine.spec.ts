@@ -1619,3 +1619,41 @@ describe('ignores from the card', () => {
     expect(() => h.engine.decide('5', { kind: 'accept', title: 'Fix', scope: 'small', reason: 'chat' })).toThrow(new UserError('notExplicit'))
   })
 })
+describe('ticket labels', () => {
+  it('replaces labels, trims and dedupes them, clears them, and refuses too many', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    const tagged = h.engine.setTags(ticketId, [' 前端 ', 'p1', '前端'])
+    expect(tagged.tags).toEqual(['前端', 'p1'])
+    expect(tagged.tagged?.at).toBe(tagged.updatedAt)
+    expect(h.engine.setTags(ticketId, []).tags).toBeUndefined()
+    expect(h.repo.tickets.get(ticketId)!.tags).toBeUndefined()
+    expect(() => h.engine.setTags(ticketId, Array.from({ length: 9 }, (_, index) => `t${index}`))).toThrow(UserError)
+    expect(() => h.engine.setTags(ticketId, ['x'.repeat(25)])).toThrow(UserError)
+  })
+})
+describe('review notes', () => {
+  it('marks a note resolved and open again, and refuses an unknown note', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    const added = h.engine.addNote(ticketId, { file: 'src/a.ts', line: 2, text: '改成可选' })
+    const noteId = added.notes![0]!.id
+    const resolved = h.engine.resolveNote(ticketId, noteId, true).notes![0]!
+    expect(resolved.resolved?.at).toBeDefined()
+    expect(h.engine.resolveNote(ticketId, noteId, false).notes![0]!.resolved).toBeUndefined()
+    expect(() => h.engine.resolveNote(ticketId, 'missing', true)).toThrow(UserError)
+  })
+})
+describe('review decisions', () => {
+  it('reviews an ended ticket and refuses an open or unknown one', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    expect(() => h.engine.reviewTicket(ticketId, 'approved')).toThrow(new UserError('reviewNeedsEnded'))
+    h.engine.report(ticketId, { state: 'ready', summary: 'done' })
+    const reviewed = h.engine.reviewTicket(ticketId, 'changes-requested', '  请补测试  ')
+    expect(reviewed.reviewed).toMatchObject({ decision: 'changes-requested', note: '请补测试' })
+    expect(h.engine.reviewTicket(ticketId, 'approved').reviewed).toMatchObject({ decision: 'approved' })
+    expect(h.engine.reviewTicket(ticketId, 'approved').reviewed).not.toHaveProperty('note')
+    expect(() => h.engine.reviewTicket('missing', 'approved')).toThrow(UserError)
+  })
+})

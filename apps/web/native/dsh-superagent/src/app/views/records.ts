@@ -148,6 +148,7 @@ export const ticketLine = (view: Snapshot, ticket: Ticket) => ({
   ...ticketSummary(ticket, view.number(ticket.id)),
   // Tags are labels a person put on the request; they grant nothing and are not sent back to the worker.
   tags: (() => {
+    if (ticket.tags) return ticket.tags
     const value: unknown = view.store.triggers.get(ticket.origin.triggerId)?.meta.tags
     return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
   })(),

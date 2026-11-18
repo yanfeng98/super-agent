@@ -197,6 +197,23 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
+   * Replaces a ticket's labels, which only describe it to people.
+   * @returns The ticket with its labels.
+   * @throws UserError when the ticket is unknown, or more than 8 labels remain or one is over 24 characters.
+   */
+  setTags(ticketId: string, tags: string[]): Ticket {
+    const ticket = this.require(ticketId)
+    const next = [...new Set(tags.map(tag => tag.trim()).filter(Boolean))]
+    if (next.length > 8 || next.some(tag => tag.length > 24)) throw new UserError('invalidTags')
+    if (next.length) ticket.tags = next
+    else delete ticket.tags
+    const at = this.now()
+    ticket.tagged = { at }
+    ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
    * Links or unlinks two tickets, so each page lists the other as related work.
    * @returns The ticket that was linked or unlinked.
    * @throws UserError when either ticket is unknown or both are the same.
@@ -249,6 +266,38 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
+   * Marks a review note resolved, or open again.
+   * @returns The ticket with the note's new state.
+   * @throws UserError when the ticket or the note is unknown.
+   */
+  resolveNote(ticketId: string, noteId: string, resolved: boolean): Ticket {
+    const ticket = this.require(ticketId)
+    const note = ticket.notes?.find(item => item.id === noteId)
+    if (!note) throw new UserError('unknownNote')
+    if (resolved) note.resolved = { at: this.now() }
+    else delete note.resolved
+    ticket.updatedAt = this.now()
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
+   * Records a person's review of an ended ticket's changes.
+   * @returns The ticket with the review.
+   * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
+   */
+  review(ticketId: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
+    const ticket = this.require(ticketId)
+    if (!ticket.ended) throw new UserError('reviewNeedsEnded')
+    if (ticket.merged) throw new UserError('ticketMerged')
+    if (ticket.discarded) throw new UserError('ticketDiscarded')
+    if (ticket.cleaned) throw new UserError('ticketCleaned')
+    const text = note?.trim()
+    ticket.reviewed = { at: this.now(), decision, ...text ? { note: text.slice(0, 2000) } : {} }
+    ticket.updatedAt = ticket.reviewed.at
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
    * Reopens an ended ticket under its unchanged Mandate with a fresh Assignment and a note telling its worker why.
    * @throws UserError when the ticket is unknown, still open, or the current Policy no longer holds its Mandate.
    */
@@ -261,6 +310,7 @@ export class Tickets extends EnginePart {
     if (!this.policy().revalidate(ticket.mandate)) throw new UserError('mandateRevoked')
     const at = this.now()
     delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review; delete ticket.checks
+    delete ticket.reviewed
     const assignment = this.newAssignment(ticket)
     const note: TicketInput = { id: key('input', ticket.id, 'reopened', at), kind: 'text', at,
       text: 'The operator reopened this ended ticket under its original mandate. Continue the assignment from the current '

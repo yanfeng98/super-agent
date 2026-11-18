@@ -65,7 +65,8 @@ function Result({ name, open, children }: { name: ReactNode; open: (() => void) 
     <div className="dt-row-meta">{children}</div>
   </div></li>
 }
-function SearchResults({ result, query, onClose }: { result: SearchView; query: string; onClose: () => void }) {
+function SearchResults({ result, query, onClose, onMore, loadingMore }: { result: SearchView; query: string; onClose: () => void;
+  onMore?: () => void; loadingMore?: boolean }) {
   const { t, navigate } = usePanel()
   const { setup } = usePanelData()
   const empty = !result.items.length && !result.threads.length && !result.tickets.length
@@ -95,6 +96,9 @@ function SearchResults({ result, query, onClose }: { result: SearchView; query: 
         {item.filtered !== undefined && <span>{t('searchFiltered', { reason: reasonLabel(t, item.filtered) })}</span>}
       </Result>)}
     </ul>}
+    {onMore && result.next_offset != null && <div className="dt-row-buttons">
+      <Button variant="outline" size="sm" disabled={loadingMore} onClick={onMore}>{t('loadMore')}</Button>
+    </div>}
   </div>
 }
 
@@ -103,6 +107,7 @@ function Header({ masterId }: { masterId: string | undefined }) {
   const [glossary, setGlossary] = useState(false)
   const [query, setQuery] = useState('')
   const [result, setResult] = useState<{ query: string; value: SearchView }>()
+  const [loadingMore, setLoadingMore] = useState(false)
   // Ignore responses from superseded or cleared search requests.
   const latest = useRef(0)
   const show = (value?: { query: string; value: SearchView }) => { latest.current++; setResult(value) }
@@ -118,8 +123,20 @@ function Header({ masterId }: { masterId: string | undefined }) {
     const text = query.trim()
     if (!text) { show(); return }
     const request = ++latest.current
+    setLoadingMore(false)
     call('GET search', { query: { q: text } }).then(value => { if (request === latest.current) setResult({ query: text, value }) },
       failure => { if (request === latest.current) notify(errorText(failure)) })
+  }
+  const loadMore = () => {
+    if (!result || result.value.next_offset == null) return
+    const request = ++latest.current
+    setLoadingMore(true)
+    call('GET search', { query: { q: result.query, offset: result.value.next_offset } }).then(value => {
+      if (request !== latest.current) return
+      setResult({ query: result.query, value: { ...value, tickets: [...result.value.tickets, ...value.tickets],
+        items: result.value.items, threads: result.value.threads } })
+    }, failure => { if (request === latest.current) notify(errorText(failure)) })
+      .finally(() => { if (request === latest.current) setLoadingMore(false) })
   }
   return <header className="dt-head">
     <div className="dt-head-title"><h1 className="dt-title">{t('title')}</h1></div>
@@ -127,7 +144,8 @@ function Header({ masterId }: { masterId: string | undefined }) {
       <form ref={search} className="dt-search" role="search" onSubmit={submit} onKeyDown={event => { if (event.key === 'Escape') show() }}>
         <Input type="search" icon={<Icon name="search" />} value={query} placeholder={t('searchPlaceholder')} aria-label={t('searchLabel')}
           onChange={event => { setQuery(event.target.value); if (!event.target.value) show() }} />
-        {result && <SearchResults result={result.value} query={result.query} onClose={() => { show() }} />}
+        {result && <SearchResults result={result.value} query={result.query} onClose={() => { show() }} onMore={loadMore}
+          loadingMore={loadingMore} />}
       </form>
       <Button variant="ghost" size="sm" icon={<Icon name="question" />} aria-label={t('glossary')} title={t('glossary')} aria-haspopup="dialog"
         onClick={() => setGlossary(true)} />

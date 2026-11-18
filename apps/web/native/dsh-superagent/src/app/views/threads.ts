@@ -52,38 +52,71 @@ export function threadDetail(host: ViewHost, key: string, before: string | undef
     timeline: shown.map(trigger => triggerView(view, trigger, decisions)), earlier: more ? `${shown[0]!.at}|${shown[0]!.id}` : null }
 }
 export type ThreadDetailView = NonNullable<ReturnType<typeof threadDetail>>
-/** Search qualifiers parsed from a query: `is:open`, `tag:p1`, `author:alice`; anything else stays free text. */
-export interface SearchQuery { text: string; is?: 'open' | 'ended'; tag?: string; author?: string }
+/** A comparison against a ticket timestamp: `>=2026-01-01`, `<2026-02-01`, or a plain date for that day. */
+export interface SearchDate { op: '>=' | '<=' | '>' | '<' | '='; value: string; dateOnly: boolean }
+/** Search qualifiers parsed from a query: `is:open`, `tag:p1` (or `label:p1`), `author:alice`, `created:>=2026-01-01`. */
+export interface SearchQuery { text: string; is?: 'open' | 'ended'; tag?: string; author?: string; created?: SearchDate; updated?: SearchDate }
 /**
  * Splits a search query into the free text and GitHub-like qualifiers.
  * @param query - The text a person typed.
- * @returns The remaining words and the qualifiers they narrowed; an unknown `is:` value stays as text.
+ * @returns The remaining words and the qualifiers they narrowed; an unknown `is:` value or a malformed date stays as text.
  */
 export function parseSearchQuery(query: string): SearchQuery {
   const values: Partial<SearchQuery> = {}
-  const text = query.replace(/(?:^|\s)(is|tag|author):("[^"]*"|\S+)/gi, (_match, name: string, raw: string) => {
+  const text = query.replace(/(?:^|\s)(is|tag|label|author|created|updated):("[^"]*"|\S+)/gi, (_match, name: string, raw: string) => {
     const value = raw.replace(/^"|"$/g, '')
-    if (name.toLowerCase() === 'is') {
+    const qualifier = name.toLowerCase()
+    if (qualifier === 'is') {
       const state = value.toLowerCase()
       if (state === 'open' || state === 'ended') values.is = state
       else return _match
-    } else if (name.toLowerCase() === 'tag') values.tag = value
-    else values.author = value
+    } else if (qualifier === 'tag' || qualifier === 'label') values.tag = value
+    else if (qualifier === 'author') values.author = value
+    else {
+      const date = parseSearchDate(value)
+      if (!date) return _match
+      if (qualifier === 'created' || qualifier === 'updated') values[qualifier] = date
+    }
     return ''
   }).trim()
   return { text, ...values }
 }
 /**
+ * Reads a ticket timestamp comparison, accepting a date or a full timestamp after an optional operator.
+ * @param value - The qualifier's value, such as `>=2026-01-01` or `2026-02-03T04:05:06Z`.
+ * @returns The comparison, or undefined when the value is not a date or timestamp.
+ */
+export function parseSearchDate(value: string): SearchDate | undefined {
+  const match = /^(>=|<=|>|<|=)?(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?))?$/.exec(value)
+  if (!match) return undefined
+  const day = match[2]!
+  const timestamp = match[3] ? `${day}T${match[3]}` : day
+  if (Number.isNaN(Date.parse(timestamp))) return undefined
+  return { op: (match[1] as SearchDate['op'] | undefined) ?? '=', value: match[3] ? new Date(timestamp).toISOString() : day,
+    dateOnly: !match[3] }
+}
+/** Whether a ticket timestamp satisfies a parsed comparison; a date compares the day, a timestamp the instant. */
+const within = (at: string, bound: SearchDate | undefined): boolean => {
+  if (!bound) return true
+  const left = bound.dateOnly ? at.slice(0, 10) : at
+  if (bound.op === '>=') return left >= bound.value
+  if (bound.op === '<=') return left <= bound.value
+  if (bound.op === '>') return left > bound.value
+  if (bound.op === '<') return left < bound.value
+  return left === bound.value
+}
+/**
  * Searches triggers, threads, and tickets by text, ID, source-extracted references (e.g., `#N`, URLs), or cached Feishu AppLinks.
  * Qualifiers narrow Tickets only: `is:open` or `is:ended`, `tag:<name>`, and `author:<id or name>`.
  * @param links - Feishu message AppLinks cached since startup, keyed by chat and message ID.
+ * @param offset - How many matching Tickets to skip, so the panel can append the next page.
  */
-export function search(host: ViewHost, query: string, links: Pick<TextCache, 'entries'>) {
+export function search(host: ViewHost, query: string, links: Pick<TextCache, 'entries'>, offset = 0) {
   const { store, sources } = host
   const parts = parseSearchQuery(query)
   const value = parts.text
-  const narrowed = !!(parts.is || parts.tag || parts.author)
-  if (!value && !narrowed) return { tickets: [], items: [], threads: [], more: false }
+  const narrowed = !!(parts.is || parts.tag || parts.author || parts.created || parts.updated)
+  if (!value && !narrowed) return { tickets: [], items: [], threads: [], more: false, next_offset: null }
   const view = snapshot(host)
   const named = value ? sources.find(value) : { terms: [], threads: [] }
   const terms = new Set([value, ...named.terms])
@@ -99,6 +132,7 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
     ...view.threadsOf(ticket.id).map(thread => thread.key)]
   const replied = new Set(value ? store.receipts.ticketsMatching(value) : [])
   const tags = (ticket: Ticket): string[] => {
+    if (ticket.tags) return ticket.tags
     const value = store.triggers.get(ticket.origin.triggerId)?.meta.tags
     return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
   }
@@ -109,15 +143,16 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   const state = (ticket: Ticket) => !parts.is || (parts.is === 'open' ? !ticket.ended : !!ticket.ended)
   const tagged = (ticket: Ticket) => !parts.tag || tags(ticket).some(tag => tag.toLowerCase() === parts.tag!.toLowerCase())
   const authored = (ticket: Ticket) => !parts.author || actor(ticket).includes(parts.author.toLowerCase())
+  const dated = (ticket: Ticket) => within(ticket.createdAt, parts.created) && within(ticket.updatedAt, parts.updated)
   // The request text is what a person wrote, so a phrase in it finds the Ticket even when its title differs.
   const request = (ticket: Ticket) => ticket.origin.triggerIds.map(id => store.triggers.get(id)?.text ?? '').join('\n').toLowerCase()
   const text = (ticket: Ticket) => !value || reaches(ticket).some(key => named.threads.includes(key))
     || ticket.title.toLowerCase().includes(lower) || request(ticket).includes(lower)
     || (latestReport(ticket)?.summary ?? '').toLowerCase().includes(lower)
     || replied.has(ticket.id) || tags(ticket).some(tag => tag.toLowerCase().includes(lower))
-  const matched = store.tickets.list().filter(ticket => state(ticket) && tagged(ticket) && authored(ticket) && text(ticket))
+  const matched = store.tickets.list().filter(ticket => state(ticket) && tagged(ticket) && authored(ticket) && dated(ticket) && text(ticket))
     .sort(newestFirst)
-  const tickets = matched.slice(0, 50).map(ticket => ticketSummary(ticket, view.number(ticket.id)))
+  const tickets = matched.slice(offset, offset + 50).map(ticket => ticketSummary(ticket, view.number(ticket.id)))
   // Omit automated triggers from threads already included in `threads`.
   const shownThreads = new Set(threads.map(thread => thread.key))
   const item = (trigger: Trigger) => {
@@ -129,7 +164,8 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   }
   const items = [...found.values()].filter(trigger => trigger.human || !shownThreads.has(threadKey(trigger.threads[0]!)))
   const shown = items.sort((a, b) => b.at.localeCompare(a.at))
-  return { tickets, items: shown.slice(0, 30).map(item), threads, more: matched.length > 50 || shown.length > 30 }
+  const nextOffset = matched.length > offset + 50 ? offset + 50 : null
+  return { tickets, items: shown.slice(0, 30).map(item), threads, more: nextOffset !== null || shown.length > 30, next_offset: nextOffset }
 }
 export type SearchView = ReturnType<typeof search>
 export function decisionList(host: ViewHost, kinds: string[], offset: number, limit: number, since = '') {

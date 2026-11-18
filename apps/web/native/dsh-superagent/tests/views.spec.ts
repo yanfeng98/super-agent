@@ -428,10 +428,22 @@ it('lists the tags on requests and filters Tickets by one', () => {
   store.triggers.save({ id: 'e0', source: 'local', threads: [{ source: 'local', id: 'req' }], actor: { source: 'local', id: 'operator' },
     human: true, at, text: '带标签', meta: { tags: ['前端', 'p1'] } })
   store.triggers.save({ id: 'e1', source: 'local', threads: [{ source: 'local', id: 'req2' }], actor: { source: 'local', id: 'operator' },
-    human: true, at, text: '另一个', meta: {} })
-  expect(ticketTags(store)).toEqual(['p1', '前端'])
+    human: true, at, text: '另一个', meta: { tags: ['后端'] } })
+  expect(new Set(ticketTags(store))).toEqual(new Set(['p1', '前端', '后端']))
   expect(ticketList(host, 'open', 0, 20, '前端').items.map(item => item.id)).toEqual(['t1'])
+  expect(ticketList(host, 'open', 0, 20, '后端').items.map(item => item.id)).toEqual(['t2'])
   expect(ticketList(host, 'open', 0, 20).items.map(item => item.id).sort()).toEqual(['t1', 't2'])
+  // Labels a person edited on the Ticket replace the request's, and an empty list clears them instead of falling back.
+  store.tickets.save({ ...store.tickets.get('t1')!, tags: ['设置'], tagged: { at } })
+  expect(new Set(ticketTags(store))).toEqual(new Set(['后端', '设置']))
+  expect(ticketList(host, 'open', 0, 20, '前端').items).toEqual([])
+  expect(ticketList(host, 'open', 0, 20, '设置').items.map(item => item.id)).toEqual(['t1'])
+  expect(ticketList(host, 'open', 0, 20, '后端').items.map(item => item.id)).toEqual(['t2'])
+  expect(ticketDetail(host, 't1')!.history).toContainEqual(expect.objectContaining({ code: 'tagged', tags: ['设置'] }))
+  // An empty list clears the Ticket's labels instead of falling back to the request's.
+  store.tickets.save({ ...store.tickets.get('t2')!, tags: [] })
+  expect(ticketDetail(host, 't2')!.tags).toEqual([])
+  expect(ticketList(host, 'open', 0, 20, '后端').items).toEqual([])
 })
 
 it('narrows Ticket search with is, tag and author qualifiers', () => {
@@ -450,6 +462,13 @@ it('narrows Ticket search with is, tag and author qualifiers', () => {
   expect(ids('is:open')).toEqual(['t1'])
   expect(ids('is:ended')).toEqual(['t2'])
   expect(ids('tag:p1')).toEqual(['t1'])
+  expect(ids('label:p1')).toEqual(['t1'])
+  const day = at.slice(0, 10)
+  expect(ids(`created:${day}`)).toEqual(['t1', 't2'])
+  expect(ids(`created:<${day}`)).toEqual([])
+  expect(ids(`created:>=${day}`)).toEqual(['t1', 't2'])
+  expect(ids(`updated:<=${day}`)).toEqual(['t1', 't2'])
+  expect(ids('created:not-a-date')).toEqual([])
   expect(ids('author:Alice')).toEqual(['t1'])
   expect(ids('author:ou_bob')).toEqual(['t2'])
   expect(ids('is:open 首页')).toEqual(['t1'])
@@ -474,4 +493,15 @@ it('finds a ticket by a reply in its archive as well as by its title', () => {
   expect(search(host, '前端', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
   expect(search(host, '文案修复', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
   expect(search(host, '没有这个词', new Map()).tickets).toEqual([])
+})
+
+it('pages matching Tickets so more than the first fifty are reachable', () => {
+  const host = views()
+  for (let index = 0; index < 55; index += 1) live(`t${index}`)
+  const first = search(host, 't', new Map())
+  expect(first.tickets).toHaveLength(50)
+  expect(first.next_offset).toBe(50)
+  const next = search(host, 't', new Map(), 50)
+  expect(next.tickets).toHaveLength(5)
+  expect(next.next_offset).toBeNull()
 })

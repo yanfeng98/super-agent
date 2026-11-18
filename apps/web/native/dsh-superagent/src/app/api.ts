@@ -21,7 +21,7 @@ type Delivery = 'injected' | 'pending'
 export interface Api {
   'GET state': { response: StateView }
   'GET overview': { response: OverviewView }
-  'GET search': { query: { q: string }; response: SearchView }
+  'GET search': { query: { q: string; offset?: number }; response: SearchView }
   'GET sources': { response: SourceStatusView[] }
   'GET settings': { response: SettingsView }
   'POST sources/:id/labels': { response: { added: string[] } }
@@ -46,8 +46,12 @@ export interface Api {
     response: { related: { id: string; number?: number; title: string }[] } }
   'POST tickets/:id/notes': { body: { file: string; line?: number; text: string }; response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/remove': { response: { notes: TicketNote[] } }
+  'POST tickets/:id/notes/:noteId/resolve': { body: { resolved: boolean }; response: { notes: TicketNote[] } }
   'POST tickets/:id/cleanup': { response: { cleaned: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
+  'POST tickets/:id/tags': { body: { tags: string[] }; response: { tags: string[] } }
+  'POST tickets/:id/review': { body: { decision: 'approved' | 'changes-requested'; note?: string };
+    response: { reviewed: true; decision: 'approved' | 'changes-requested'; at: string } }
   'POST tickets/:id/approve': { response: { approved: true } }
   'POST local/requests': { body: { title: string; text: string; key?: string; project?: string; tags?: string[];
     files?: { name: string; data: string }[]; hold?: boolean };

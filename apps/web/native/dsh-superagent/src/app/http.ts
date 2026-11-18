@@ -70,10 +70,16 @@ export interface HttpHost {
   addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[]
   /** Removes a review note. */
   removeNote(id: string, noteId: string): TicketNote[]
+  /** Marks a review note resolved, or open again. */
+  resolveNote(id: string, noteId: string, resolved: boolean): TicketNote[]
+  /** Records a review of an ended ticket's changes. */
+  reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket
   /** Removes a merged ticket's worktree and branch. */
   cleanupTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
   renameTicket(id: string, title: string): Ticket
+  /** Replaces a ticket's labels. */
+  setTags(id: string, tags: string[]): Ticket
   /** Approves a ticket held for a person's approval. */
   approveTicket(id: string): Ticket
   links(): LinkTarget
@@ -217,7 +223,8 @@ function routes(runtime: HttpHost): Routes {
     'GET state': () => stateView(runtime),
     'GET overview': () => overview(views(runtime), runtime.health, policyVersion(store.settings()),
       executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem),
-    'GET search': ({ query }) => search(views(runtime), query.q ?? '', runtime.sourceLinks),
+    'GET search': ({ query }) => search(views(runtime), query.q ?? '', runtime.sourceLinks,
+      Math.max(0, Math.trunc(Number(query.offset)) || 0)),
     'GET sources': () => sourcesStatus(views(runtime), runtime.health, setupState(runtime)),
     'GET settings': () => settingsView(store, runtime.sources, runtime.health, setupState(runtime), runtime.machine.stateDir),
     'POST sources/:id/labels': ({ params }) => runtime.settings.refreshLabels(params.id),
@@ -267,6 +274,21 @@ function routes(runtime: HttpHost): Routes {
       const { title } = z.object({ title: z.string().trim().min(1).max(120) }).strict().parse(await body())
       return { title: runtime.renameTicket(id, title).title }
     },
+    'POST tickets/:id/review': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { decision, note } = z.object({ decision: z.enum(['approved', 'changes-requested']),
+        note: z.string().trim().max(2000).optional() }).strict().parse(await body())
+      try {
+        const reviewed = runtime.reviewTicket(id, decision, note).reviewed
+        return { reviewed: true as const, decision, at: reviewed?.at ?? '' }
+      } catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/tags': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { tags } = z.object({ tags: z.array(z.string().trim().min(1).max(24)).max(8) }).strict().parse(await body())
+      try { return { tags: runtime.setTags(id, tags).tags ?? [] } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
     'POST tickets/:id/discard': async ({ params }) => {
       const id = ticket(params.id)
       try { await runtime.discardTicket(id); return { discarded: true as const } }
@@ -287,6 +309,12 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/notes/:noteId/remove': ({ params }) => {
       const id = ticket(params.id)
       try { return { notes: runtime.removeNote(id, params.noteId) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/notes/:noteId/resolve': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { resolved } = z.object({ resolved: z.boolean() }).strict().parse(await body())
+      try { return { notes: runtime.resolveNote(id, params.noteId, resolved) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/related': async ({ params, body }) => {

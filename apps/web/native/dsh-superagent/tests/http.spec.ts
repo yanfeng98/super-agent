@@ -7,6 +7,7 @@ import type { HttpHost } from '../src/app/http.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import type { LocalRequest } from '../src/sources/local.ts'
 import { SetupError } from '../src/setup.ts'
+import type { Ticket } from '../src/core/index.ts'
 
 type Handler = (req: unknown, res: unknown) => Promise<void>
 type Headers = Record<string, string | undefined>
@@ -182,7 +183,11 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     linkTicket: (id: string, reference: string, linked: boolean) => { calls.push(`link:${id}:${reference}:${linked}`)
       return { related: [] } },
     addNote: (id: string, input: { file: string; line?: number; text: string }) => { calls.push(`note:${id}:${input.file}`); return [] },
-    removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] } })
+    removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] },
+    resolveNote: (id: string, noteId: string, resolved: boolean) => { calls.push(`resolve:${id}:${noteId}:${resolved}`); return [] },
+    reviewTicket: (id: string, decision: string) => { calls.push(`review:${id}:${decision}`); return { id,
+      reviewed: { at: '2026-11-18T00:00:00Z', decision } } as Ticket },
+    setTags: (id: string, tags: string[]) => { calls.push(`tags:${id}:${tags.join(',')}`); return { id, tags } as Ticket } })
   expect(await call('POST', 'tickets/t1/merge')).toEqual({ status: 200, body: { merged: true, branch: 'agent/t', target: 'main' } })
   expect(await call('POST', 'tickets/t1/discard')).toEqual({ status: 200, body: { discarded: true } })
   expect(await call('POST', 'tickets/t1/rebase')).toEqual({ status: 200, body: { rebased: true, branch: 'agent/t', target: 'main' } })
@@ -192,8 +197,12 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
   expect(await call('POST', 'tickets/t1/related', { ticket: 'T-0002', linked: true })).toEqual({ status: 200, body: { related: [] } })
   expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, text: '改这里' })).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/remove')).toEqual({ status: 200, body: { notes: [] } })
+  expect(await call('POST', 'tickets/t1/notes/n1/resolve', { resolved: true })).toEqual({ status: 200, body: { notes: [] } })
+  expect(await call('POST', 'tickets/t1/tags', { tags: ['前端', 'p1'] })).toEqual({ status: 200, body: { tags: ['前端', 'p1'] } })
+  expect(await call('POST', 'tickets/t1/review', { decision: 'approved' })).toEqual({ status: 200,
+    body: { reviewed: true, decision: 'approved', at: '2026-11-18T00:00:00Z' } })
   expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1', 'link:t1:T-0002:true',
-    'note:t1:src/a.ts', 'unnote:t1:n1'])
+    'note:t1:src/a.ts', 'unnote:t1:n1', 'resolve:t1:n1:true', 'tags:t1:前端,p1', 'review:t1:approved'])
   expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
   const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
     mergeTicket: async () => { throw new Error('The repository has uncommitted changes') } })

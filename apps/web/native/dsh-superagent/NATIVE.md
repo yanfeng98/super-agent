@@ -91,16 +91,18 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    discarded or cleaned up (`src/core/tickets.ts`, `src/core/engine.ts`,
    `src/app/http.ts`, `src/client/ticket.tsx`), and the archive records the reopening; the Changes section reads the committed diff through `GET tickets/:id/diff` (`src/app/review.ts`, `src/client/ticket.tsx`). The new-ticket form sends an
    idempotency key, so a retry after a lost response returns the same Ticket; panel search matches the request text, a
-   Ticket's latest result, its replies and its tags, and accepts `is:`, `tag:` and `author:` qualifiers
+   Ticket's latest result, its replies and its labels, and accepts `is:`, `tag:`, `label:`, `author:`, `created:` and
+   `updated:` qualifiers (a date or timestamp, with an optional comparison); matching Tickets page fifty at a time
    (`src/app/views/threads.ts`, `src/app/store.ts`). An ended Ticket whose workspace is a linked worktree offers
    **Merge** (fast-forward the repository's checked-out branch only), **Rebase** (rewrite the Ticket branch onto a moved
    target, move the recorded base and clear the check) and **Discard** (remove the worktree and branch), plus
    **Clean up worktree** after a merge; `POST tickets/:id/merge`, `/rebase`, `/cleanup` and `/discard` run through
    `workspaceRepo`, `mergeWorkspace`, `rebaseWorkspace` and `discardWorkspace` (`src/app/review.ts`), record the
    corresponding Ticket fields (`src/app/runtime.ts`) and append matching archive sections (`src/sources/local.ts`).
-   `src/app/check.ts` runs `executor.check` at each ending and gates Merge on a passing run dated after that ending
-   (`POST tickets/:id/check`); reviewer notes (`Tickets.addNote`/`removeNote`, `POST tickets/:id/notes`,
-   `/notes/:noteId/remove`) can be sent to the Executor as one follow-up; related Tickets (`Tickets.link`,
+   `src/app/check.ts` runs `executor.check` at each ending and `Runtime.mergeTicket` refuses a merge without a passing run
+   dated after that ending (`POST tickets/:id/check`); check runs keep a capped history (`ticket.checkHistory`); a review decision (`Tickets.review`, `POST tickets/:id/review`, `executor.requireReview`) gates a merge and is archived; reviewer notes (`Tickets.addNote`/`removeNote`/`resolveNote`,
+   `POST tickets/:id/notes`, `/notes/:noteId/remove`, `/notes/:noteId/resolve`) can be resolved, reopened, or sent to the
+   Executor as one follow-up, and an open note blocks a merge; related Tickets (`Tickets.link`,
    `POST tickets/:id/related`) and the person-action history appear on the page. `review.spec.ts`, `check.spec.ts`,
    `local.spec.ts`, `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
 10. **Ticket numbers and command-line intake.** Every Ticket gets a stable `T-000N` number from its creation order
@@ -110,12 +112,13 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    project, and a configured project row may supply its own execution root and prepare command (`projectRoot`/`projectPrepare`
    on the Trigger, `Execution.prepare`); a request may also ask to be held (`hold`), in which case the Executor launches nothing until **Approve**
    (`ticket.hold`, `POST tickets/:id/approve`, stage `person/approval`); up to eight `tags` are stored in the archive, shown on the row and page, matched by search, and usable as an
-   Execution filter (`GET tags`, `GET tickets?tag=`). The local Source's optional webhook receives a JSON POST when a
+   Execution filter (`GET tags`, `GET tickets?tag=`); `POST tickets/:id/tags` replaces them, so labels stay editable after
+   creation, and the archive appends a Tags section for each change. The local Source's optional webhook receives a JSON POST when a
    local Ticket asks a question or ends (`src/app/webhook.ts`, `ticket.attention` event). Up to five attachments, 8 MB total, travel base64 with
    `POST local/requests` and are written to `<archive>/<request id>.files/` (`src/sources/local.ts`), with their paths in
    the request text and archive. **Edit title** renames a Ticket without rewriting its request
    (`Tickets.rename`, `POST tickets/:id/title`), updates the local Thread label and appends a Title section to the archive.
-   At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard and rename sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
+   At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard, rename and label sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
    request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket
    within two seconds, writes `inbox/done/<file>` and moves bad input to `inbox/rejected/`, with the file name as the
    idempotency key. `scripts/dsh-superagent backup` copies the database online and the ticket archives into `backups/<timestamp>/`.

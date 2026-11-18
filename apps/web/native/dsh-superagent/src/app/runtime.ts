@@ -39,7 +39,7 @@ import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordCleanup, recordDiscard,
-  recordMerge, recordRebase, recordRename, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
+  recordMerge, recordRebase, recordRename, recordReview, recordTags, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -271,6 +271,18 @@ export class Runtime extends Service implements SourceHost {
     return ticket
   }
   /**
+   * Replaces a ticket's labels and appends them to its local archive without rewriting the request's front matter.
+   * @returns The ticket with its labels.
+   * @throws UserError when the ticket is unknown, or the labels are too many or too long.
+   */
+  setTags(id: string, tags: string[]): Ticket {
+    const ticket = this.engine.setTags(id, tags)
+    if (ticket.tagged) void recordTags(ticket, ticket.tagged.at, ticket.tags ?? []).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: recording labels in the archive failed: %s', String(error))
+    })
+    return ticket
+  }
+  /**
    * Completes archive records a crash may have left half-written: the close section of ended local tickets, and the merge or
    * discard section of tickets that already recorded one. Runs once after startup; each write is idempotent.
    * @returns The number of close sections added.
@@ -282,6 +294,8 @@ export class Runtime extends Service implements SourceHost {
       try {
         if (ticket.approved) await recordApproval(ticket, ticket.approved.at)
         if (ticket.renamed) await recordRename(ticket, ticket.renamed.at, ticket.renamed.title)
+        if (ticket.tagged) await recordTags(ticket, ticket.tagged.at, ticket.tags ?? [])
+        if (ticket.reviewed) await recordReview(ticket, ticket.reviewed)
         if (!ticket.ended) continue
         if (await archiveNeedsClose(ticket)) {
           let review = ticket.review
@@ -312,7 +326,9 @@ export class Runtime extends Service implements SourceHost {
   /**
    * Fast-forwards the repository's checked-out branch to an ended ticket's branch, then records the merge on the ticket and
    * in its local archive.
-   * @throws when the ticket is unknown or open, has no workspace, was discarded, or git cannot fast-forward.
+   * @throws when the ticket is unknown or open, has no workspace, was discarded, a review requested changes, an approval is
+   * required and missing, an open review note remains, its configured check has not passed since the ending, or git cannot
+   * fast-forward.
    */
   async mergeTicket(id: string): Promise<{ branch: string; target: string }> {
     const ticket = this.store.tickets.get(id)
@@ -320,8 +336,18 @@ export class Runtime extends Service implements SourceHost {
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
     if (ticket.merged) throw new Error('The ticket branch was already merged')
+    if (ticket.reviewed?.decision === 'changes-requested') {
+      throw new Error('A review requested changes; address them and approve the review before merging')
+    }
+    if (this.store.settings().executor.requireReview && ticket.reviewed?.decision !== 'approved') {
+      throw new Error('Review approval is required before merging')
+    }
+    const open = ticket.notes?.filter(note => !note.resolved).length ?? 0
+    if (open) throw new Error(`${open} review note${open === 1 ? '' : 's'} still open; resolve them before merging`)
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
+    const blocked = mergeBlockedByCheck(this.store.settings().executor.check, ticket.checks, ticket.ended.at)
+    if (blocked) throw new Error(blocked)
     const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
     const at = now()
     this.store.atomic(() => {
@@ -347,6 +373,25 @@ export class Runtime extends Service implements SourceHost {
    */
   removeNote(id: string, noteId: string): TicketNote[] {
     return this.engine.removeNote(id, noteId).notes ?? []
+  }
+  /**
+   * Marks a review note resolved, or open again.
+   * @returns The ticket's notes after the change.
+   */
+  resolveNote(id: string, noteId: string, resolved: boolean): TicketNote[] {
+    return this.engine.resolveNote(id, noteId, resolved).notes ?? []
+  }
+  /**
+   * Records a person's review of an ended ticket's changes and appends it to the local archive.
+   * @returns The ticket with the review.
+   * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
+   */
+  reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
+    const ticket = this.engine.reviewTicket(id, decision, note)
+    if (ticket.reviewed) void recordReview(ticket, ticket.reviewed).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: recording a review in the archive failed: %s', String(error))
+    })
+    return ticket
   }
   /**
    * Links or unlinks another ticket, named by its id or `T-000N`, on both tickets' pages.
@@ -392,10 +437,15 @@ export class Runtime extends Service implements SourceHost {
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
       if (!current) return
-      current.checks = checks
-      this.store.tickets.save(current)
+      this.recordCheck(current, checks)
     })
     return checks
+  }
+  /** Records a check run as the ticket's latest and appends it to the capped history. */
+  private recordCheck(ticket: Ticket, check: TicketCheck): void {
+    ticket.checks = check
+    ticket.checkHistory = [...(ticket.checkHistory ?? []), check].slice(-10)
+    this.store.tickets.save(ticket)
   }
   /**
    * Rebases an ended ticket's branch onto the repository's checked-out branch, so a later merge can fast-forward.
@@ -421,8 +471,9 @@ export class Runtime extends Service implements SourceHost {
       if (current.execution) current.execution = { ...current.execution, base: result.base }
       if (review) current.review = review
       current.rebased = { at, ...result }
-      // Upstream commits changed the tree the check ran on, so the merge gate waits for a fresh run.
+      // Upstream commits changed the tree the check ran on and the review approved, so both wait for a fresh pass.
       delete current.checks
+      delete current.reviewed
       this.store.tickets.save(current)
     })
     try { await recordRebase(ticket, { at, ...result }) }
@@ -503,12 +554,14 @@ export class Runtime extends Service implements SourceHost {
         checks = await workspaceCheck(ctx.subprocess, ticket.execution.directory, command, this.stopped.signal,
           Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value])))
       } catch (error) { ctx.logger.warn('dsh-superagent: running the workspace check failed: %s', String(error)) }
-      if (checks && stillEnded()) this.store.atomic(() => {
-        const current = this.store.tickets.get(ticket.id)
-        if (!current?.ended || current.ended.at !== ticket.ended?.at) return
-        current.checks = checks
-        this.store.tickets.save(current)
-      })
+      if (checks && stillEnded()) {
+        const run = checks
+        this.store.atomic(() => {
+          const current = this.store.tickets.get(ticket.id)
+          if (!current?.ended || current.ended.at !== ticket.ended?.at) return
+          this.recordCheck(current, run)
+        })
+      }
     }
     if (!stillEnded()) return
     try { await closeArchive(ticket, review, this.store.tickets.number(ticket.id), checks) }
@@ -557,6 +610,9 @@ export class Runtime extends Service implements SourceHost {
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
       linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),
       addNote: (id, input) => runtime.addNote(id, input), removeNote: (id, noteId) => runtime.removeNote(id, noteId),
+      resolveNote: (id, noteId, resolved) => runtime.resolveNote(id, noteId, resolved),
+      reviewTicket: (id, decision, note) => runtime.reviewTicket(id, decision, note),
+      setTags: (id, tags) => runtime.setTags(id, tags),
       cleanupTicket: id => runtime.cleanupTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
       approveTicket: id => runtime.approveTicket(id) }
   }

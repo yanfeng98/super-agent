@@ -436,6 +436,27 @@ export async function recordRename(ticket: Pick<Ticket, 'channels'>, at: string,
     ['- status: renamed', `- title: ${JSON.stringify(title)}`, `- by: ${OPERATOR}`])
 }
 /**
+ * Appends a ticket's labels to its archive, so edits are recorded instead of rewriting the request's front matter.
+ * @param ticket - The ticket whose labels changed.
+ * @param at - When they changed.
+ * @param tags - The labels after the change; an empty list records that the ticket has none.
+ */
+export async function recordTags(ticket: Pick<Ticket, 'channels'>, at: string, tags: string[]): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:tags:${at} -->`, `${at} · 标签 / Tags`,
+    ['- status: tagged', ...tags.map(tag => `- tag: ${JSON.stringify(tag)}`), `- by: ${OPERATOR}`])
+}
+/**
+ * Appends a person's review of a ticket's changes to its archive.
+ * @param ticket - The reviewed ticket.
+ * @param reviewed - When it was reviewed, the decision, and any note.
+ */
+export async function recordReview(ticket: Pick<Ticket, 'channels'>, reviewed: { at: string;
+  decision: 'approved' | 'changes-requested'; note?: string }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:reviewed:${reviewed.at} -->`, `${reviewed.at} · 评审 / Review`,
+    ['- status: reviewed', `- decision: ${reviewed.decision}`, ...(reviewed.note ? [`- note: ${oneLine(reviewed.note)}`] : []),
+      `- by: ${OPERATOR}`])
+}
+/**
  * Appends the merge of a ticket's branch into the repository to its archive.
  * @param ticket - The ticket whose branch was merged.
  * @param merged - When, which branch, and the branch it moved.
