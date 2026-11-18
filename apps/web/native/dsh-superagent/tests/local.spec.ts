@@ -11,7 +11,7 @@ import { environmentOf } from '../src/app/execution-environment.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { appendFollowup, appendReply, archiveDir, archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, drainInbox,
-  localKind, OPERATOR, recordRename, reopenArchive, seedPolicy }
+  localKind, OPERATOR, recordRename, reopenArchive, seedPolicy, webhookFor }
   from '../src/sources/local.ts'
 import { testDeployment } from './fixtures/deployment.ts'
 
@@ -214,11 +214,22 @@ describe('local tickets', () => {
     expect(store.settings().policy.sources.local?.allowed).toEqual([])
   })
 
+  it('reads the notification webhook only while the Source is on', () => {
+    const h = harness()
+    const base = h.store.settings()
+    h.store.saveSettings(SettingsSchema.parse({ ...base, sources: { ...base.sources,
+      local: { enabled: true, config: { webhook: 'http://127.0.0.1:9/hook' } } } }))
+    expect(webhookFor(h.store.settings())).toBe('http://127.0.0.1:9/hook')
+    h.store.saveSettings(SettingsSchema.parse({ ...base, sources: { ...base.sources, local: { enabled: false, config: {} } } }))
+    expect(webhookFor(h.store.settings())).toBe('')
+    expect(() => localKind.schema.parse({ webhook: 'ftp://example.test/hook' })).toThrow()
+  })
+
   it('defaults the archive to the state directory and rejects a relative path', () => {
-    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '' })).toBe('/srv/state/tickets')
-    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox' })).toBe('/srv/inbox')
+    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '', webhook: '' })).toBe('/srv/state/tickets')
+    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox', webhook: '' })).toBe('/srv/inbox')
     expect(() => localKind.schema.parse({ archive: 'inbox' })).toThrow()
-    expect(localKind.schema.parse({})).toEqual({ archive: '' })
+    expect(localKind.schema.parse({})).toEqual({ archive: '', webhook: '' })
   })
 
   it('exposes the project label as DSH_SUPERAGENT_PROJECT for the ticket workspace', async () => {

@@ -93,6 +93,8 @@ export interface DomainEvents {
   'ticket.reopened': { ticketId: string }
   /** A person approved a held ticket, so its first Assignment may launch. */
   'ticket.approved': { ticketId: string }
+  /** A worker asked a person a question, so the ticket now waits for an answer. */
+  'ticket.attention': { ticketId: string; question: string }
   'ticket.ended': { ticketId: string; by: TicketEndBy; outcome: TicketOutcome; reason?: string }
   'assignment.started': { ticketId: string; assignmentId: string }
   'assignment.ended': { ticketId: string; assignmentId: string; reason: string }

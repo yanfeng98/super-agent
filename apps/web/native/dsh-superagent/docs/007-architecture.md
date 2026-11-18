@@ -345,6 +345,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/tools/executor.ts` | An Executor Session's tools |
 | `src/app/http.ts` | The `/orchestrator/api` routes: the same-origin check, request limits and one status per kind of failure |
 | `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files |
+| `src/app/webhook.ts` | A local Ticket's question or ending as a best-effort JSON POST to the configured webhook |
 | `src/app/api.ts` | `Api`, every route with its parameters, query, body and response, and the filters of the lists; it imports only types, so the panel bundles it |
 | `src/app/views/text.ts` | The two forms of a view's text: `preview`, plain text on one line, and `markdown` without HTML; `plain` and `readable` |
 | `src/app/views/records.ts` | The rows the views share: Triggers, Tickets, Threads, Decisions and Channel links, and `ownersOf`, the owners of follow-ups as one request reads them |
@@ -414,6 +415,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
 | `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward merge and discard of a linked worktree |
+| `tests/webhook.spec.ts` | The webhook POST and a non-2xx answer |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, and which stay quiet |
 | `tests/commands.spec.ts` | CLI calls as the deployment's accounts, the Channels' answers, and repository-scoped GitHub calls |
 | `tests/feishu-read.spec.ts`, `tests/github-read.spec.ts` | Feishu and GitHub reads |
