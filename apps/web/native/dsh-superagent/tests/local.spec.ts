@@ -416,4 +416,25 @@ describe('local tickets', () => {
       cleaned: { at: '2026-11-18T04:00:00.000Z' } })
     expect(() => h.engine.reopenTicket(request.id)).toThrow(/removed after its merge/)
   })
+
+  it('links two tickets on both pages, refuses a self link, and unlinks them', () => {
+    const h = harness()
+    const ticket = (id: string) => ({ id, title: id, decisionId: 'd1', channels: [], assignments: [], inputs: [], undelivered: [],
+      createdAt: '2026-11-18T00:00:00.000Z', updatedAt: '2026-11-18T00:00:00.000Z',
+      origin: { triggerId: id, triggerIds: [id] },
+      mandate: { strength: 'explicit' as const, policyVersion: 'v', basis: { via: 'listed' as const },
+        actor: { source: 'local', id: OPERATOR }, scope: '' } })
+    h.store.tickets.save(ticket('t1')); h.store.tickets.save(ticket('t2'))
+    h.engine.linkTicket('t1', 't2', true)
+    expect(h.store.tickets.get('t1')!.related).toEqual(['t2'])
+    expect(h.store.tickets.get('t2')!.related).toEqual(['t1'])
+    // Linking again changes nothing.
+    h.engine.linkTicket('t1', 't2', true)
+    expect(h.store.tickets.get('t1')!.related).toEqual(['t2'])
+    expect(() => h.engine.linkTicket('t1', 't1', true)).toThrow(/itself/)
+    expect(() => h.engine.linkTicket('t1', 'missing', true)).toThrow(/Unknown ticket/)
+    h.engine.linkTicket('t1', 't2', false)
+    expect(h.store.tickets.get('t1')!.related).toBeUndefined()
+    expect(h.store.tickets.get('t2')!.related).toBeUndefined()
+  })
 })

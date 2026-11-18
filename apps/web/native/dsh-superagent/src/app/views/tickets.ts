@@ -92,10 +92,24 @@ export function ticketDetail(host: ViewHost, id: string) {
   const rebase = finish && !!ticket.execution?.directory
   const check = !liveTicket(ticket) && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
+  // The decisions a person made on the Ticket, in the order they happened.
+  const history: { code: 'approved' | 'renamed' | 'merged' | 'cleaned' | 'discarded'; at: string; title?: string; branch?: string;
+    target?: string }[] = []
+  if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
+  if (ticket.renamed) history.push({ code: 'renamed', at: ticket.renamed.at, title: ticket.renamed.title })
+  if (ticket.merged) history.push({ code: 'merged', at: ticket.merged.at, branch: ticket.merged.branch, target: ticket.merged.target })
+  if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at })
+  if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
+  history.sort((a, b) => a.at.localeCompare(b.at))
   const local = ticket.channels.find(channel => channel.source === 'local')
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
     rebase, cleanup, check },
     ...local?.address.file ? { archive: local.address.file } : {},
+    history,
+    related: (ticket.related ?? []).flatMap(id => {
+      const other = store.tickets.get(id)
+      return other ? [{ id, number: view.number(other.id), title: other.title }] : []
+    }),
     ...ticket.checks ? { checks: ticket.checks } : {},
     review: ticket.review,
     merged: ticket.merged, discarded: ticket.discarded, cleaned: ticket.cleaned,

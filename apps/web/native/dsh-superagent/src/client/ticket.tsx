@@ -40,7 +40,7 @@ function InputList({ inputs }: { inputs: Input[] }) {
 
 /** Adds a person's message to a local ticket's Thread, which its worker reads as an Input and an ended ticket resumes on. */
 function LocalReply({ thread, onDone }: { thread: string; onDone: () => Promise<void> }) {
-  const { t, call, notify } = usePanel()
+  const { t, call, notify, navigate } = usePanel()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const submit = async (event: FormEvent) => {
@@ -130,15 +130,29 @@ function MandateDetails({ ticket, actor }: { ticket: TicketPageView; actor: stri
 }
 
 export function TicketPage({ id }: { id: string }) {
-  const { t, call, notify } = usePanel()
+  const { t, call, notify, navigate } = usePanel()
   const { data, error, reload } = usePoll(() => call('GET tickets/:id', { id }), [id])
   const [diff, setDiff] = useState<{ diff: string; truncated: boolean; error?: string }>()
   const [diffBusy, setDiffBusy] = useState(false)
   const [checkBusy, setCheckBusy] = useState(false)
+  const [relatedRef, setRelatedRef] = useState('')
+  const [relatedBusy, setRelatedBusy] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [renamingBusy, setRenamingBusy] = useState(false)
   const after = async (request: Promise<unknown>) => { await request; await reload() }
+  const relate = async (reference: string, linked: boolean) => {
+    setRelatedBusy(true)
+    try { await after(call('POST tickets/:id/related', { id, body: { ticket: reference, linked } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setRelatedBusy(false) }
+  }
+  const addRelated = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!relatedRef.trim()) return
+    await relate(relatedRef.trim(), true)
+    setRelatedRef('')
+  }
   const runCheck = async () => {
     setCheckBusy(true)
     try { await after(call('POST tickets/:id/check', { id })) }
@@ -289,6 +303,15 @@ export function TicketPage({ id }: { id: string }) {
     </div>}
     {data.cleaned && <Hint>{t('cleanedHint')}</Hint>}
     {data.discarded && <Hint>{t('discardedHint')}</Hint>}
+    {data.history.length > 0 && <Section title={t('historyTitle')} hint={t('historyHint')}>
+      <ul className="dt-list">{data.history.map(item => <li className="dt-row" key={`${item.code}:${item.at}`}>
+        <div className="dt-row-main">
+          <div className="dt-row-title">{t(`history.${item.code}`)}</div>
+          <div className="dt-row-meta"><When at={item.at} />{item.title && <span>{item.title}</span>}
+            {item.branch && <span className="dt-mono">{item.branch} → {item.target}</span>}</div>
+        </div>
+      </li>)}</ul>
+    </Section>}
     <MandateDetails ticket={data} actor={actor} />
     {undelivered.length > 0 && <Section title={t('undeliveredInputs')} count={undelivered.length}>
       <Hint>{data.deliveryError ? t('inputRetryHint') : data.paused ? t('inputPausedHint') : t('inputWaitingHint')}</Hint>
@@ -319,6 +342,24 @@ export function TicketPage({ id }: { id: string }) {
         { count: data.inputs.length - undelivered.length })}>
         <InputList inputs={data.inputs.filter(input => input.delivered)} />
       </Details>}
+      <Details icon="hash" title={t('relatedTitle')}>
+        <Hint>{t('relatedHint')}</Hint>
+        {data.related.length > 0 && <ul className="dt-list">{data.related.map(item => <li className="dt-row" key={item.id}>
+          <div className="dt-row-main"><div className="dt-row-title">{item.number
+            ? <span className="dt-ticket-number">{ticketRef(item.number)}</span> : null}
+            <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: item.id })}>{item.title}</button>
+          </div></div>
+          <div className="dt-row-actions"><Button variant="ghost" size="sm" disabled={relatedBusy}
+            onClick={() => relate(item.id, false)}>{t('remove')}</Button></div>
+        </li>)}</ul>}
+        <form className="dt-form" onSubmit={addRelated}>
+          <div className="dt-row-meta">
+            <Input className="dt-mono" value={relatedRef} placeholder={t('relatedPlaceholder')} aria-label={t('relatedPlaceholder')}
+              onChange={event => setRelatedRef(event.target.value)} />
+            <Button variant="outline" type="submit" disabled={!relatedRef.trim() || relatedBusy}>{t('relatedAdd')}</Button>
+          </div>
+        </form>
+      </Details>
       <Details icon="hash" title={t('identifiers')}>
         <KeyValues rows={[[t('ticketId'), <span className="dt-mono">{data.id}</span>], [t('executionDirectory'), <span
           className="dt-mono">{data.directory ?? t('empty')}</span>],

@@ -197,6 +197,27 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
+   * Links or unlinks two tickets, so each page lists the other as related work.
+   * @returns The ticket that was linked or unlinked.
+   * @throws UserError when either ticket is unknown or both are the same.
+   */
+  link(ticketId: string, otherId: string, linked: boolean): Ticket {
+    if (ticketId === otherId) throw new UserError('selfLink')
+    const ticket = this.require(ticketId)
+    const other = this.require(otherId)
+    const at = this.now()
+    for (const [value, id] of [[ticket, otherId], [other, ticketId]] as const) {
+      const ids = new Set(value.related ?? [])
+      if (linked) ids.add(id)
+      else ids.delete(id)
+      if (ids.size) value.related = [...ids]
+      else delete value.related
+      value.updatedAt = at
+      this.repo.tickets.save(value)
+    }
+    return ticket
+  }
+  /**
    * Reopens an ended ticket under its unchanged Mandate with a fresh Assignment and a note telling its worker why.
    * @throws UserError when the ticket is unknown, still open, or the current Policy no longer holds its Mandate.
    */

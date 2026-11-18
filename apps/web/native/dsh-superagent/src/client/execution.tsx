@@ -94,6 +94,7 @@ export function ExecutionStatus({ filter: current, state, reload }: {
   const { data, error, reload: reloadTickets } = usePoll(() => call('GET tickets', {
     query: { state: current, limit, ...tag ? { tag } : {} } }), [current, limit, tag])
   const { data: tagData } = usePoll(() => call('GET tags'), [])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const { paused, load: { maxWorkers } } = state
   // Pausing uses its own block revision so toggling pause does not invalidate an open Execution settings draft.
   const pause = async () => { await call('POST executor/pause', { body: { paused: !paused } }); await reload() }
@@ -101,6 +102,25 @@ export function ExecutionStatus({ filter: current, state, reload }: {
     label: t('processingPaused') }
     : { tone: 'ongoing', label: t('executorRunning') }
   const action = paused ? 'resumeProcessing' : 'pauseProcessing'
+  const toggle = (id: string) => setSelected(current => {
+    const next = new Set(current)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const chosen = data?.items.filter(item => selected.has(item.id)) ?? []
+  const stopSelected = chosen.filter(item => item.state === 'open').map(item => item.id)
+  const mergeSelected = chosen.filter(item => item.state === 'ended').map(item => item.id)
+  const runBulk = async (verb: 'stop' | 'merge', ids: string[]) => {
+    const request: (id: string) => Promise<unknown> = verb === 'stop' ? (id: string) => call('POST tickets/:id/stop', { id })
+      : (id: string) => call('POST tickets/:id/merge', { id })
+    const results = await Promise.allSettled(ids.map(request))
+    const failed = results.filter(result => result.status === 'rejected').length
+    notify(failed ? t('bulkFailed', { failed, total: ids.length }) : t('bulkDone', { count: ids.length }))
+    setSelected(new Set())
+    await reload()
+    await reloadTickets()
+  }
   return <>
     <StatusHead hint={t('executionStatusIntro')} settings="execution" />
     <div className="dt-row-meta dt-status-line">
@@ -132,9 +152,24 @@ export function ExecutionStatus({ filter: current, state, reload }: {
     </div>
     {current === 'idle' && <Hint>{t('idleHint')}</Hint>}
     <LoadState error={error} loading={!data} />
-    {data && (data.items.length ? <ul className="dt-list">{data.items.map(ticket => ticket.stage === 'person'
-      ? <TicketLine key={ticket.id} ticket={ticket} question
-        onChanged={reloadTickets} /> : <TicketLine key={ticket.id} ticket={ticket} />)}</ul> : <Hint>{t('none')}</Hint>)}
+    {data && <>
+      {chosen.length > 0 && <div className="dt-row-meta dt-status-line">
+        <span className="dt-hint">{t('selectedCount', { count: chosen.length })}</span>
+        <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(data.items.map(item => item.id)))}>{t('selectAll')}</Button>
+        <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>{t('clearSelection')}</Button>
+        {stopSelected.length > 0 && <ConfirmButton variant="outline" icon="stop" label={t('bulkStop', { count: stopSelected.length })}
+          title={t('bulkStop')} message={t('bulkStopConfirm', { count: stopSelected.length })}
+          onConfirm={() => runBulk('stop', stopSelected)} />}
+        {mergeSelected.length > 0 && <ConfirmButton variant="outline" icon="decision" label={t('bulkMerge', { count: mergeSelected.length })}
+          title={t('bulkMerge')} message={t('bulkMergeConfirm', { count: mergeSelected.length })}
+          onConfirm={() => runBulk('merge', mergeSelected)} />}
+      </div>}
+      {data.items.length ? <ul className="dt-list">{data.items.map(ticket => ticket.stage === 'person'
+        ? <TicketLine key={ticket.id} ticket={ticket} question onChanged={reloadTickets}
+          select={{ checked: selected.has(ticket.id), onToggle: () => toggle(ticket.id) }} />
+        : <TicketLine key={ticket.id} ticket={ticket}
+          select={{ checked: selected.has(ticket.id), onToggle: () => toggle(ticket.id) }} />)}</ul> : <Hint>{t('none')}</Hint>}
+    </>}
     {data?.next_offset != null && <LoadMore onMore={() => setLimit(limit + 20)} />}
     <NewTicket open={creating} onClose={() => setCreating(false)} />
   </>

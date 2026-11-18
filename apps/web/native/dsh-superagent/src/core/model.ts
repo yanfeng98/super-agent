@@ -307,6 +307,8 @@ export interface Ticket {
   review?: TicketReview
   /** Outcome of the configured workspace check, run in the worktree when the ticket ended. */
   checks?: TicketCheck
+  /** Other tickets this one relates to, such as the work it builds on or depends on. */
+  related?: string[]
   /** Set when the request asked to wait for a person's approval before its first Assignment runs. */
   hold?: { at: string }
   /** When a person approved a held ticket. */

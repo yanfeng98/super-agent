@@ -69,6 +69,30 @@ it('stops an open Ticket from its page after confirmation', async () => {
   expect(server.requests.some(request => request.path === 'tickets/t1/stop' && request.method === 'POST')).toBe(true)
 })
 
+it('stops or merges the selected Tickets from the Execution list in one action', async () => {
+  server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单' })]
+  server.tickets.ended = [ticketSummary({ id: 't3', title: '旧工单', number: 9, state: 'ended', actions: { retry: false, stop: false } },
+    { stage: 'ended' })]
+  await mount()
+  await click(zh['tab.execution'])
+  const boxes = all('input[type="checkbox"]')
+  expect(boxes).toHaveLength(2)
+  for (const box of boxes) await click(box)
+  await click(all('button').find(button => button.textContent === zh.bulkStop.replace('{count}', '2'))!)
+  await click(zh.confirm)
+  expect(server.requests.filter(request => request.method === 'POST' && request.path.endsWith('/stop')).map(request => request.path))
+    .toEqual(['tickets/t1/stop', 'tickets/t2/stop'])
+  // Selection clears after the run, so the next bulk action starts from an empty set.
+  expect(text()).not.toContain(zh.selectedCount.replace('{count}', '2'))
+  await click(zh['ticket.ended'])
+  const ended = all('input[type="checkbox"]')
+  await click(ended[0]!)
+  const merge = all('button').find(button => button.textContent === zh.bulkMerge.replace('{count}', '1'))
+  await click(merge!)
+  await click(zh.confirm)
+  expect(server.requests.some(request => request.method === 'POST' && request.path === 'tickets/t3/merge')).toBe(true)
+})
+
 it('shows a Ticket with its stage, its Mandate details with the Trigger and Decision behind it, its Threads, and the rest behind disclosures', async () => {
   await mount()
   await click(all('.dt-open').find(button => button.textContent === '修复回归')!)
@@ -94,12 +118,29 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
   expect(tab(zh['tab.trigger']).getAttribute('aria-selected')).toBe('true')
 })
 
+it('links and unlinks related Tickets from a Ticket page', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!, related: [{ id: 't2', number: 2, title: '相关工单' }] }
+  await mount()
+  await click(zh.relatedTitle)
+  expect(text()).toContain('T-0002')
+  await click(all('button').find(button => button.textContent === zh.remove)!)
+  expect(server.requests.find(request => request.path === 'tickets/t1/related')).toMatchObject({ method: 'POST',
+    body: { ticket: 't2', linked: false } })
+  await type(field<HTMLInputElement>(zh.relatedPlaceholder), 'T-0003')
+  await click(zh.relatedAdd)
+  expect(server.requests.filter(request => request.path === 'tickets/t1/related').at(-1)).toMatchObject({ method: 'POST',
+    body: { ticket: 'T-0003', linked: true } })
+})
+
 it('shows the review captured when a ticket ended and lets a person reopen it', async () => {
   const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
   server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true },
     checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
+    history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题' },
+      { code: 'merged', at: '2026-11-18T00:02:00Z', branch: 'agent/t5', target: 'main' }],
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
   await mount()
@@ -114,6 +155,8 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('pnpm test')
   expect(text()).toContain('1 test failed')
   expect(text()).toContain(zh.checksRun)
+  expect(text()).toContain(zh['history.merged'])
+  expect(text()).toContain('agent/t5 → main')
   await click(zh.renameTicket)
   await type(field<HTMLInputElement>(zh.newTicketTitle), '新的标题')
   await click(zh.save)

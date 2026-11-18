@@ -42,6 +42,8 @@ export interface Api {
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }
+  'POST tickets/:id/related': { body: { ticket: string; linked: boolean };
+    response: { related: { id: string; number?: number; title: string }[] } }
   'POST tickets/:id/cleanup': { response: { cleaned: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
   'POST tickets/:id/approve': { response: { approved: true } }

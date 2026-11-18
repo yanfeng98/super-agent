@@ -74,7 +74,7 @@ function SearchResults({ result, query, onClose }: { result: SearchView; query: 
   return <div className="dt-search-results" role="region" aria-label={t('searchLabel')}>
     <div className="dt-search-head">
       <span className="dt-hint">{empty ? t(setup?.accounts?.feishu ? 'searchNone' : 'searchNoneGithub')
-        : t(result.items.length >= 20 ? 'searchFoundCapped' : 'searchFound', counts)}</span>
+        : t(result.more ? 'searchFoundCapped' : 'searchFound', counts)}</span>
       <Button variant="ghost" size="sm" icon={<Icon name="close" size={14} />} aria-label={t('close')} onClick={onClose} />
     </div>
     {!empty && <ul className="dt-list">

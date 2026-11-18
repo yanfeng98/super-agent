@@ -64,6 +64,8 @@ export interface HttpHost {
   rebaseTicket(id: string): Promise<{ branch: string; target: string }>
   /** Runs the executor's check command in an ended ticket's worktree. */
   checkTicket(id: string): Promise<TicketCheck>
+  /** Links or unlinks another ticket, named by id or display number. */
+  linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
   /** Removes a merged ticket's worktree and branch. */
   cleanupTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
@@ -269,6 +271,13 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/rebase': async ({ params }) => {
       const id = ticket(params.id)
       try { return { rebased: true as const, ...await runtime.rebaseTicket(id) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/related': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { ticket: reference, linked } = z.object({ ticket: z.string().trim().min(1).max(200), linked: z.boolean() }).strict()
+        .parse(await body())
+      try { return runtime.linkTicket(id, reference, linked) }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/check': async ({ params }) => {
