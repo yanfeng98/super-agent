@@ -26,7 +26,6 @@
       - option "openai"
       - option "openai-codex" [selected]
       - option "opencode-go"
-      - option "xai"
       - option "xiaomi-token-plan-cn"
       - option "zai-coding-cn"
     - text: 登录

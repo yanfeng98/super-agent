@@ -1286,6 +1286,7 @@ describe('configurable-provider directory', () => {
       'radius',
       'together',
       'vercel-ai-gateway',
+      'xai',
       'xiaomi',
       'xiaomi-token-plan-sgp',
       'xiaomi-token-plan-ams',

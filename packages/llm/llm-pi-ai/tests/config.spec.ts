@@ -112,6 +112,7 @@ describe('withheld catalog providers', () => {
     'radius',
     'together',
     'vercel-ai-gateway',
+    'xai',
     'xiaomi',
     'xiaomi-token-plan-sgp',
     'xiaomi-token-plan-ams',
