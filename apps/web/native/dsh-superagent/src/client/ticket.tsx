@@ -141,6 +141,13 @@ export function TicketPage({ id }: { id: string }) {
   const [noteText, setNoteText] = useState('')
   const [notesBusy, setNotesBusy] = useState(false)
   const [reviewBusy, setReviewBusy] = useState(false)
+  const [mergeStrategy, setMergeStrategy] = useState<'ff' | 'squash' | 'merge'>('ff')
+  const [replyNoteId, setReplyNoteId] = useState<string>()
+  const [replyDraft, setReplyDraft] = useState('')
+  const [replyBusy, setReplyBusy] = useState(false)
+  const [editingRequest, setEditingRequest] = useState(false)
+  const [requestDraft, setRequestDraft] = useState('')
+  const [requestBusy, setRequestBusy] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [renamingBusy, setRenamingBusy] = useState(false)
@@ -230,11 +237,29 @@ export function TicketPage({ id }: { id: string }) {
     catch (failure) { notify(errorText(failure)) }
     finally { setNotesBusy(false) }
   }
+  const saveRequest = async (event: FormEvent) => {
+    event.preventDefault()
+    setRequestBusy(true)
+    try {
+      await after(call('POST tickets/:id/request', { id, body: { text: requestDraft.trim() } }))
+      setEditingRequest(false)
+    } catch (failure) { notify(errorText(failure)) }
+    finally { setRequestBusy(false) }
+  }
   const reviewChanges = async (decision: 'approved' | 'changes-requested') => {
     setReviewBusy(true)
     try { await after(call('POST tickets/:id/review', { id, body: { decision } })) }
     catch (failure) { notify(errorText(failure)) }
     finally { setReviewBusy(false) }
+  }
+  const replyToNote = async (event: FormEvent, noteId: string) => {
+    event.preventDefault()
+    setReplyBusy(true)
+    try {
+      await after(call('POST tickets/:id/notes/:noteId/replies', { id, noteId, body: { text: replyDraft.trim() } }))
+      setReplyNoteId(undefined); setReplyDraft('')
+    } catch (failure) { notify(errorText(failure)) }
+    finally { setReplyBusy(false) }
   }
   const resolveNote = async (noteId: string, resolved: boolean) => {
     setNotesBusy(true)
@@ -298,8 +323,22 @@ export function TicketPage({ id }: { id: string }) {
       <span className="dt-banner-label">{t('deliveryFailedPrefix')}</span>{data.deliveryError}
     </p>}
     {data.request && <Section title={t('requestTitle')} hint={t('requestHint')}>
-      <div className="dt-row-meta"><When at={data.request.at} /></div>
-      <ClampText text={data.request.text} />
+      <div className="dt-row-meta"><When at={data.request.at} />
+        {data.request.editedAt && <span>{t('requestEditedAt', { time: when(data.request.editedAt, t('lang')) })}</span>}</div>
+      {editingRequest ? <form className="dt-form" onSubmit={saveRequest}>
+        <textarea className="dt-textarea" rows={6} maxLength={20_000} value={requestDraft} aria-label={t('requestEdit')}
+          onChange={event => setRequestDraft(event.target.value)} />
+        <div className="dt-row-buttons">
+          <Button variant="outline" type="submit" disabled={requestBusy || !requestDraft.trim()}>{t('requestSave')}</Button>
+          <Button variant="ghost" type="button" onClick={() => setEditingRequest(false)}>{t('cancel')}</Button>
+        </div>
+      </form> : <>
+        <ClampText text={data.request.text} />
+        <div className="dt-row-actions">
+          <Button variant="ghost" size="sm" onClick={() => { setRequestDraft(data.request!.text); setEditingRequest(true) }}>
+            {t('requestEdit')}</Button>
+        </div>
+      </>}
     </Section>}
     {data.replies.length > 0 && <Section title={t('repliesTitle')} count={data.replies.length} hint={t('repliesHint')}>
       <ul className="dt-list">{data.replies.slice().reverse().map(reply => <li key={reply.id} className="dt-row">
@@ -358,8 +397,22 @@ export function TicketPage({ id }: { id: string }) {
             <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line ? `:${note.line}` : ''}</span><When at={note.at} />
               {note.resolved && <Tag tone="success">{t('noteResolvedTag')}</Tag>}</div>
             <div className="dt-row-quote">{note.text}</div>
+            {note.replies?.map(reply => <div className="dt-row-quote" key={reply.id}>
+              <span className="dt-hint">{t('noteReply')} · <When at={reply.at} /></span>
+              <div>{reply.text}</div>
+            </div>)}
+            {replyNoteId === note.id && <form className="dt-form" onSubmit={event => replyToNote(event, note.id)}>
+              <Input value={replyDraft} maxLength={2000} aria-label={t('noteReply')} placeholder={t('noteReplyPlaceholder')}
+                onChange={event => setReplyDraft(event.target.value)} />
+              <div className="dt-row-buttons">
+                <Button variant="outline" type="submit" disabled={replyBusy || !replyDraft.trim()}>{t('noteReplySend')}</Button>
+                <Button variant="ghost" type="button" onClick={() => setReplyNoteId(undefined)}>{t('cancel')}</Button>
+              </div>
+            </form>}
           </div>
           <div className="dt-row-actions">
+            <Button variant="ghost" size="sm" disabled={notesBusy}
+              onClick={() => { setReplyNoteId(note.id); setReplyDraft('') }}>{t('noteReply')}</Button>
             <Button variant="ghost" size="sm" disabled={notesBusy}
               onClick={() => resolveNote(note.id, !note.resolved)}>{note.resolved ? t('noteReopen') : t('noteResolve')}</Button>
             <Button variant="ghost" size="sm" disabled={notesBusy}
@@ -385,8 +438,18 @@ export function TicketPage({ id }: { id: string }) {
       {(data.actions.rebase || data.actions.merge || data.actions.discard) && <div className="dt-row-actions">
         {data.actions.rebase && <ConfirmButton variant="outline" icon="refresh" label={t('ticketRebase')} title={t('rebaseTitle')}
           message={t('rebaseConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/rebase', { id }))} />}
-        {data.actions.merge && <ConfirmButton variant="outline" icon="decision" label={t('ticketMerge')} title={t('mergeTitle')}
-          message={t('mergeConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/merge', { id }))} />}
+        {data.actions.merge && <>
+          <label className="dt-field-inline"><span className="dt-hint">{t('mergeStrategy')}</span>
+            <select className="dt-select" aria-label={t('mergeStrategy')} value={mergeStrategy}
+              onChange={event => setMergeStrategy(event.target.value as 'ff' | 'squash' | 'merge')}>
+              <option value="ff">{t('merge.ff')}</option>
+              <option value="squash">{t('merge.squash')}</option>
+              <option value="merge">{t('merge.merge')}</option>
+            </select></label>
+          <ConfirmButton variant="outline" icon="decision" label={t('ticketMerge')} title={t('mergeTitle')}
+            message={t('mergeConfirm', { title: data.title })}
+            onConfirm={() => after(call('POST tickets/:id/merge', { id, query: { strategy: mergeStrategy } }))} />
+        </>}
         {data.actions.discard && <ConfirmButton variant="outline" icon="trash" label={t('ticketDiscard')} title={t('discardTitle')}
           message={t('discardConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/discard', { id }))} />}
       </div>}

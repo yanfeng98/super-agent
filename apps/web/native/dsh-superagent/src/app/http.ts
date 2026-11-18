@@ -3,6 +3,7 @@ import { isLoopbackHost } from '@deepseek-ai/dsh-host-webserver'
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { z } from 'zod'
+import type { Notification } from './notifications.ts'
 import { THREAD_FILTERS, TICKET_FILTERS, type Api, type ApiResponse, type RouteParams } from './api.ts'
 import { sourceSkills } from './context.ts'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
@@ -56,8 +57,8 @@ export interface HttpHost {
   configured(): boolean
   /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
   ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }>
-  /** Fast-forwards the repository to an ended ticket's branch and records the merge. */
-  mergeTicket(id: string): Promise<{ branch: string; target: string }>
+  /** Merges an ended ticket's branch into the repository and records the merge. */
+  mergeTicket(id: string, strategy?: 'ff' | 'squash' | 'merge'): Promise<{ branch: string; target: string }>
   /** Removes an ended ticket's linked worktree and branch. */
   discardTicket(id: string): Promise<void>
   /** Rebases an ended ticket's branch onto the repository's checked-out branch. */
@@ -72,8 +73,18 @@ export interface HttpHost {
   removeNote(id: string, noteId: string): TicketNote[]
   /** Marks a review note resolved, or open again. */
   resolveNote(id: string, noteId: string, resolved: boolean): TicketNote[]
+  /** Adds a reply to a review note's discussion. */
+  replyToNote(id: string, noteId: string, text: string): TicketNote[]
   /** Records a review of an ended ticket's changes. */
   reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket
+  /** The newest panel notifications and the unread count. */
+  notifications(): { items: Notification[]; unread: number }
+  /** Marks one notification read. */
+  readNotification(id: string): boolean
+  /** Marks every notification read. */
+  readAllNotifications(): number
+  /** Replaces the request text the ticket shows. */
+  editRequest(id: string, text: string): Ticket
   /** Removes a merged ticket's worktree and branch. */
   cleanupTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
@@ -223,6 +234,12 @@ function routes(runtime: HttpHost): Routes {
     'GET state': () => stateView(runtime),
     'GET overview': () => overview(views(runtime), runtime.health, policyVersion(store.settings()),
       executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem),
+    'GET notifications': () => runtime.notifications(),
+    'POST notifications/:id/read': ({ params }) => {
+      if (!runtime.readNotification(params.id)) throw new RouteError(404, 'Notification not found')
+      return { read: true }
+    },
+    'POST notifications/read-all': () => ({ read: runtime.readAllNotifications() }),
     'GET search': ({ query }) => search(views(runtime), query.q ?? '', runtime.sourceLinks,
       Math.max(0, Math.trunc(Number(query.offset)) || 0)),
     'GET sources': () => sourcesStatus(views(runtime), runtime.health, setupState(runtime)),
@@ -264,9 +281,10 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/reopen': ({ params }) => { const id = ticket(params.id); runtime.engine.reopenTicket(id); return { reopened: true } },
     'POST tickets/:id/approve': ({ params }) => { const id = ticket(params.id); runtime.approveTicket(id); return { approved: true } },
     'GET tickets/:id/diff': async ({ params }) => { const id = ticket(params.id); return runtime.ticketDiff(id) },
-    'POST tickets/:id/merge': async ({ params }) => {
+    'POST tickets/:id/merge': async ({ params, query }) => {
       const id = ticket(params.id)
-      try { return { merged: true as const, ...await runtime.mergeTicket(id) } }
+      const strategy = z.enum(['ff', 'squash', 'merge']).default('ff').parse(query.strategy)
+      try { return { merged: true as const, ...await runtime.mergeTicket(id, strategy) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/title': async ({ params, body }) => {
@@ -281,6 +299,14 @@ function routes(runtime: HttpHost): Routes {
       try {
         const reviewed = runtime.reviewTicket(id, decision, note).reviewed
         return { reviewed: true as const, decision, at: reviewed?.at ?? '' }
+      } catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/request': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { text } = z.object({ text: z.string().trim().min(1).max(20_000) }).strict().parse(await body())
+      try {
+        const ticket = runtime.editRequest(id, text)
+        return { request: ticket.request ?? { text, at: '' } }
       } catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/tags': async ({ params, body }) => {
@@ -309,6 +335,12 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/notes/:noteId/remove': ({ params }) => {
       const id = ticket(params.id)
       try { return { notes: runtime.removeNote(id, params.noteId) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/notes/:noteId/replies': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { text } = z.object({ text: z.string().trim().min(1).max(2000) }).strict().parse(await body())
+      try { return { notes: runtime.replyToNote(id, params.noteId, text) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/notes/:noteId/resolve': async ({ params, body }) => {

@@ -1642,6 +1642,9 @@ describe('review notes', () => {
     expect(resolved.resolved?.at).toBeDefined()
     expect(h.engine.resolveNote(ticketId, noteId, false).notes![0]!.resolved).toBeUndefined()
     expect(() => h.engine.resolveNote(ticketId, 'missing', true)).toThrow(UserError)
+    const replied = h.engine.replyToNote(ticketId, noteId, '  已处理  ')
+    expect(replied.notes![0]!.replies).toEqual([expect.objectContaining({ text: '已处理' })])
+    expect(() => h.engine.replyToNote(ticketId, noteId, '  ')).toThrow(UserError)
   })
 })
 describe('review decisions', () => {
@@ -1655,5 +1658,15 @@ describe('review decisions', () => {
     expect(h.engine.reviewTicket(ticketId, 'approved').reviewed).toMatchObject({ decision: 'approved' })
     expect(h.engine.reviewTicket(ticketId, 'approved').reviewed).not.toHaveProperty('note')
     expect(() => h.engine.reviewTicket('missing', 'approved')).toThrow(UserError)
+  })
+})
+
+describe('request edits', () => {
+  it('replaces the text the ticket shows and refuses a blank one', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    const edited = h.engine.editRequest(ticketId, '  新的请求  ')
+    expect(edited.request).toMatchObject({ text: '新的请求' })
+    expect(() => h.engine.editRequest(ticketId, '   ')).toThrow(UserError)
   })
 })

@@ -493,6 +493,11 @@ it('finds a ticket by a reply in its archive as well as by its title', () => {
   expect(search(host, '前端', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
   expect(search(host, '文案修复', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
   expect(search(host, '没有这个词', new Map()).tickets).toEqual([])
+  // A person's request edit replaces the text the page shows and search matches.
+  store.tickets.save({ ...store.tickets.get('t1')!, request: { text: '把按钮文案改成保存并加图标', at } })
+  expect(ticketDetail(host, 't1')!.request).toMatchObject({ text: '把按钮文案改成保存并加图标', editedAt: at })
+  expect(search(host, '加图标', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
+  expect(search(host, '旧的请求正文', new Map()).tickets).toEqual([])
 })
 
 it('pages matching Tickets so more than the first fifty are reachable', () => {

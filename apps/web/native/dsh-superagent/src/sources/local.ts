@@ -446,6 +446,15 @@ export async function recordTags(ticket: Pick<Ticket, 'channels'>, at: string, t
     ['- status: tagged', ...tags.map(tag => `- tag: ${JSON.stringify(tag)}`), `- by: ${OPERATOR}`])
 }
 /**
+ * Appends a person's replacement of the request text to its archive, so the edit is recorded next to the original.
+ * @param ticket - The edited ticket.
+ * @param request - When it was edited and the text after the edit.
+ */
+export async function recordRequestEdit(ticket: Pick<Ticket, 'channels'>, request: { at: string; text: string }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:request:${request.at} -->`, `${request.at} · 请求正文 / Request`,
+    ['- status: request-edited', `- by: ${OPERATOR}`, '', request.text])
+}
+/**
  * Appends a person's review of a ticket's changes to its archive.
  * @param ticket - The reviewed ticket.
  * @param reviewed - When it was reviewed, the decision, and any note.
@@ -461,9 +470,11 @@ export async function recordReview(ticket: Pick<Ticket, 'channels'>, reviewed: {
  * @param ticket - The ticket whose branch was merged.
  * @param merged - When, which branch, and the branch it moved.
  */
-export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at: string; branch: string; target: string }): Promise<void> {
+export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at: string; branch: string; target: string;
+  strategy?: 'ff' | 'squash' | 'merge' }): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:merged:${merged.at} -->`, `${merged.at} · 已合并 / Merged`,
-    ['- status: merged', `- branch: ${merged.branch}`, `- target: ${merged.target}`, `- by: ${OPERATOR}`])
+    ['- status: merged', `- branch: ${merged.branch}`, `- target: ${merged.target}`,
+      ...(merged.strategy ? [`- strategy: ${merged.strategy}`] : []), `- by: ${OPERATOR}`])
 }
 /**
  * Appends a rebase of the ticket branch to its archive, once per time.

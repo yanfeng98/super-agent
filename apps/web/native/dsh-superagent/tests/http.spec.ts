@@ -185,8 +185,11 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     addNote: (id: string, input: { file: string; line?: number; text: string }) => { calls.push(`note:${id}:${input.file}`); return [] },
     removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] },
     resolveNote: (id: string, noteId: string, resolved: boolean) => { calls.push(`resolve:${id}:${noteId}:${resolved}`); return [] },
+    replyToNote: (id: string, noteId: string, text: string) => { calls.push(`reply:${id}:${noteId}:${text}`); return [] },
     reviewTicket: (id: string, decision: string) => { calls.push(`review:${id}:${decision}`); return { id,
       reviewed: { at: '2026-11-18T00:00:00Z', decision } } as Ticket },
+    editRequest: (id: string, text: string) => { calls.push(`request:${id}:${text}`); return { id,
+      request: { text, at: '2026-11-18T00:00:00Z' } } as Ticket },
     setTags: (id: string, tags: string[]) => { calls.push(`tags:${id}:${tags.join(',')}`); return { id, tags } as Ticket } })
   expect(await call('POST', 'tickets/t1/merge')).toEqual({ status: 200, body: { merged: true, branch: 'agent/t', target: 'main' } })
   expect(await call('POST', 'tickets/t1/discard')).toEqual({ status: 200, body: { discarded: true } })
@@ -198,11 +201,14 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
   expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, text: '改这里' })).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/remove')).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/resolve', { resolved: true })).toEqual({ status: 200, body: { notes: [] } })
+  expect(await call('POST', 'tickets/t1/notes/n1/replies', { text: '已处理' })).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/tags', { tags: ['前端', 'p1'] })).toEqual({ status: 200, body: { tags: ['前端', 'p1'] } })
   expect(await call('POST', 'tickets/t1/review', { decision: 'approved' })).toEqual({ status: 200,
     body: { reviewed: true, decision: 'approved', at: '2026-11-18T00:00:00Z' } })
+  expect(await call('POST', 'tickets/t1/request', { text: '新的正文' })).toEqual({ status: 200,
+    body: { request: { text: '新的正文', at: '2026-11-18T00:00:00Z' } } })
   expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1', 'link:t1:T-0002:true',
-    'note:t1:src/a.ts', 'unnote:t1:n1', 'resolve:t1:n1:true', 'tags:t1:前端,p1', 'review:t1:approved'])
+    'note:t1:src/a.ts', 'unnote:t1:n1', 'resolve:t1:n1:true', 'reply:t1:n1:已处理', 'tags:t1:前端,p1', 'review:t1:approved', 'request:t1:新的正文'])
   expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
   const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
     mergeTicket: async () => { throw new Error('The repository has uncommitted changes') } })
@@ -225,4 +231,25 @@ it('approves a held ticket through the panel', async () => {
   expect(await call('POST', 'tickets/t1/approve')).toEqual({ status: 200, body: { approved: true } })
   expect(approved).toEqual(['t1'])
   expect(await call('POST', 'tickets/t9/approve')).toMatchObject({ status: 404 })
+})
+
+it('passes the requested merge strategy, defaulting to fast-forward', async () => {
+  const seen: (string | undefined)[] = []
+  const call = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
+    mergeTicket: async (_id: string, strategy?: string) => { seen.push(strategy); return { branch: 'agent/t', target: 'main' } } })
+  expect(await call('POST', 'tickets/t1/merge?strategy=squash')).toMatchObject({ status: 200, body: { merged: true } })
+  expect(await call('POST', 'tickets/t1/merge?strategy=merge')).toMatchObject({ status: 200, body: { merged: true } })
+  expect(await call('POST', 'tickets/t1/merge')).toMatchObject({ status: 200, body: { merged: true } })
+  expect(await call('POST', 'tickets/t1/merge?strategy=rebase')).toMatchObject({ status: 400 })
+  expect(seen).toEqual(['squash', 'merge', 'ff'])
+})
+
+it('lists notifications and marks one or all read', async () => {
+  const item = { id: 'n1', at: '2026-11-18T00:00:00Z', kind: 'attention' as const, ticketId: 't1', title: '修复回归', text: '哪种颜色？' }
+  const call = serve({ notifications: () => ({ items: [item], unread: 1 }), readNotification: (id: string) => id === 'n1',
+    readAllNotifications: () => 1 })
+  expect(await call('GET', 'notifications')).toEqual({ status: 200, body: { items: [item], unread: 1 } })
+  expect(await call('POST', 'notifications/n1/read')).toEqual({ status: 200, body: { read: true } })
+  expect(await call('POST', 'notifications/n9/read')).toMatchObject({ status: 404 })
+  expect(await call('POST', 'notifications/read-all')).toEqual({ status: 200, body: { read: 1 } })
 })
