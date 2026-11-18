@@ -56,7 +56,7 @@ pnpm dsh web
 
 ## 与上游的差异
 
-对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-13 的 `master`（`0.2.2-rc.3` 发布线），对比时间为 2026-11-16。截至 `ant-ling` 移除提交，`main` 相对上游有 43 个提交、362 个文件（+19,979/−895 行）；下表按当前分支统计，不含本次 README 更新。上游继续前进后需要重新比对。逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
+对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-17 的 `master`（`0.2.2-rc.4` 发布线），对比时间为 2026-11-18。`main` 相对该基线有 96 个提交、1417 个文件（+287,114/−1,035 行），行数主要由两个内置原生包 `apps/web/native/dsh-im` 与 `apps/web/native/dsh-superagent` 构成。上游继续前进后需要重新比对。本次同步的过程、冲突处理与验证见 [`logs/00057`](logs/00057-同步上游0.2.2-rc.4.md)；逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
 
 2026-11-17 起新增的原生 IM 机器人（含 `/goal`、`/plan`）及 Slack/Telegram/Discord/WhatsApp 四渠道移除未计入上述统计，见 [`logs/00027`](logs/00027-原生集成dsh-im.md)、[`logs/00028`](logs/00028-移除四渠道.md)、[`logs/00033`](logs/00033-移除Matrix与Office.md) 与 [`logs/00037`](logs/00037-移除企业微信应用渠道.md)。
 
@@ -93,7 +93,7 @@ pnpm dsh web
 ### 原生 IM 机器人
 
 - 社区插件 `dsh-im` 已以源码形式内置到 `apps/web/native/dsh-im/`（基线 5.10.0），并作为 `dsh-web-app` bundle 的默认依赖挂载；`dsh web` 与 Desktop 首次启动即出现「IM bots」设置页，不需要再安装外部插件。内置渠道为微信、飞书、钉钉、企业微信、QQ、iMessage 和邮箱；Slack、Telegram、Discord、WhatsApp、Matrix、企业微信自建应用以及 AI Office 连接器不包含在这个原生构建中。
-- 内置副本适配 DSH `0.2.2-rc.3` 的客户端模块名与服务访问方式，修正了 Cordis 4.1 下 `ctx.root` 的无注入访问问题，并关闭了针对上游 npm 包的自更新，避免把内置实现替换成外部版本。
+- 内置副本适配 DSH `0.2.2-rc.4` 的客户端模块名与服务访问方式，修正了 Cordis 4.1 下 `ctx.root` 的无注入访问问题，并关闭了针对上游 npm 包的自更新，避免把内置实现替换成外部版本；构建与测试在上游 rc.4 同步后无需修改即通过。
 - `/goal` 与 `/plan` 已提升为所有内置渠道的原生命令：命令直接委派给当前会话绑定的 DSH Host 命令网关，复用 DSH 的持久化目标与自动续跑，不经过模型提示词。
 - 上游同步、构建与本地修改记录见 [`apps/web/native/dsh-im/NATIVE.md`](apps/web/native/dsh-im/NATIVE.md)；变更记录见 [`logs/00027`](logs/00027-原生集成dsh-im.md)、[`logs/00028`](logs/00028-移除四渠道.md)、[`logs/00033`](logs/00033-移除Matrix与Office.md) 与 [`logs/00037`](logs/00037-移除企业微信应用渠道.md)。
 
@@ -103,7 +103,7 @@ pnpm dsh web
 - 使用步骤（专用 agent 账号、面板配置、发起请求、跟进/暂停/重试、主动模式与飞书启用）见 [内置副本快速开始](apps/web/native/dsh-superagent/docs/006-deployment.md#quick-start) 与 [NATIVE.md](apps/web/native/dsh-superagent/NATIVE.md)。
 - 默认启用本地工单与 GitHub Source、关闭 Feishu Source；GitHub 仓库与 agent 账号现在可选，未配置时 GitHub Source 不轮询，本地工单照常运行。在「执行 → 新建工单」里写请求即可开工，每个工单归档为 Markdown 文件（默认 `<stateDir>/tickets/<请求 id>.md`），请求、回复与结果都写在里面，工单页显示请求全文与归档文件路径，「回复与结果」列出同一批消息，并提供「回复工单」表单用于回答代理提问或补充说明。状态目录默认 `<DSH_HOME>/state/superagent`。
 - 工单还支持：结束时的 git 审查（分支/提交/变更文件/未提交改动）与按需 diff、快进合并、落后时变基、丢弃或清理已合并的 worktree、编辑标题、重新打开、结束后的稳定编号 `T-000N`、新建时「先审阅再执行」的批准门、最多 5 个附件（8 MB）、标签与标签筛选、项目级执行根/prepare 命令、结束时检查命令（配置后合并要求通过）、关联工单、按文件/行评审备注（可一次发给执行器）、操作历史与列表批量停止/清理，以及来源级通知 Webhook。命令行可用 `scripts/dsh-superagent ticket` 投递请求、`backup` 在线备份数据库与归档；细节见 [006 deployment](apps/web/native/dsh-superagent/docs/006-deployment.md)。
-- 内置副本适配 DSH `0.2.2-rc.3`：Session 转录优先读 live Agent、未加载时回退持久化日志；设置表单只读判断改用 `writable`；`stateDir` 默认 `<DSH_HOME>/state/superagent` 并兼容 Windows 绝对路径；模型选择测试按 0.2.2 流程重写；修复飞书事件消费的 health 竞态。
+- 内置副本适配 DSH `0.2.2-rc.4`：Session 转录优先读 live Agent、未加载时回退持久化日志；设置表单只读判断改用 `writable`；`stateDir` 默认 `<DSH_HOME>/state/superagent` 并兼容 Windows 绝对路径；模型选择测试按 0.2.2 流程重写；修复飞书事件消费的 health 竞态。同步 rc.4 时补上 Loader 1.0.0-rc.9 的 `applyEntryPatches(...).data` 读取，其余改动（`working_directory` 工具、`subagent` 的 `cwd`、`create_worktree`、`ProfileContext.overlays`、SQLite 持久化）均未触及它的代码。
 - 管理 API 跟随 Web 绑定地址（默认 `127.0.0.1`，含 `127.0.0.2`、`::1`、容器/LAN 地址），仍受 DSH Web 认证、`x-orchestrator-request` 与同源检查保护。
 - 上游同步与本地修改记录见 [`apps/web/native/dsh-superagent/NATIVE.md`](apps/web/native/dsh-superagent/NATIVE.md)；变更记录见 [`logs/00038`](logs/00038-原生集成dsh-superagent.md)、[`logs/00041`](logs/00041-本地工单系统.md)、[`logs/00042`](logs/00042-工单审查通知与重开.md)、[`logs/00044`](logs/00044-工单对账重命名与标签筛选.md)、[`logs/00045`](logs/00045-本地工单附件.md)、[`logs/00046`](logs/00046-工单批准门.md)、[`logs/00047`](logs/00047-工单Webhook通知.md)、[`logs/00048`](logs/00048-项目执行配置.md)、[`logs/00049`](logs/00049-修复审计发现.md)、[`logs/00051`](logs/00051-工单全文变基与清理.md)、[`logs/00052`](logs/00052-工单检查命令.md)、[`logs/00053`](logs/00053-搜索批量关联与历史.md)、[`logs/00054`](logs/00054-工单评审备注.md) 与 [`logs/00055`](logs/00055-修复复核问题.md) 与 [`logs/00056`](logs/00056-文档与日志同步.md)。
 
