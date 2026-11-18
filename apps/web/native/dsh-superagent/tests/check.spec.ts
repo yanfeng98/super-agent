@@ -55,4 +55,10 @@ it('refuses a merge while a configured check has no passing run, and allows it o
   expect(mergeBlockedByCheck('pnpm test', { command: 'pnpm test', ok: false, exitCode: 1, at: '', output: '' }))
     .toMatch(/has not passed/)
   expect(mergeBlockedByCheck('pnpm test', { command: 'pnpm test', ok: true, exitCode: 0, at: '', output: '' })).toBeUndefined()
+  // Only a run after this ending counts; a pass from before the ticket was resumed does not gate the new work.
+  const endedAt = '2026-11-18T00:00:00.000Z'
+  expect(mergeBlockedByCheck('pnpm test', { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-17T23:00:00.000Z',
+    output: '' }, endedAt)).toMatch(/has not passed/)
+  expect(mergeBlockedByCheck('pnpm test', { command: 'pnpm test', ok: true, exitCode: 0, at: endedAt, output: '' }, endedAt))
+    .toBeUndefined()
 })

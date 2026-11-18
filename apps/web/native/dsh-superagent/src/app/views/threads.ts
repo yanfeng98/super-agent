@@ -66,7 +66,7 @@ export function parseSearchQuery(query: string): SearchQuery {
     if (name.toLowerCase() === 'is') {
       const state = value.toLowerCase()
       if (state === 'open' || state === 'ended') values.is = state
-      else return ` ${value}`
+      else return _match
     } else if (name.toLowerCase() === 'tag') values.tag = value
     else values.author = value
     return ''

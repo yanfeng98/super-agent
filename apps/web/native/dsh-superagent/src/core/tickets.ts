@@ -257,9 +257,10 @@ export class Tickets extends EnginePart {
     if (liveTicket(ticket)) throw new UserError('ticketOpen')
     if (ticket.discarded) throw new UserError('ticketDiscarded')
     if (ticket.cleaned) throw new UserError('ticketCleaned')
+    if (ticket.merged) throw new UserError('ticketMerged')
     if (!this.policy().revalidate(ticket.mandate)) throw new UserError('mandateRevoked')
     const at = this.now()
-    delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review
+    delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review; delete ticket.checks
     const assignment = this.newAssignment(ticket)
     const note: TicketInput = { id: key('input', ticket.id, 'reopened', at), kind: 'text', at,
       text: 'The operator reopened this ended ticket under its original mandate. Continue the assignment from the current '

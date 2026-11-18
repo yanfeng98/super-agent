@@ -110,10 +110,10 @@ export function ExecutionStatus({ filter: current, state, reload }: {
   })
   const chosen = data?.items.filter(item => selected.has(item.id)) ?? []
   const stopSelected = chosen.filter(item => item.state === 'open').map(item => item.id)
-  const mergeSelected = chosen.filter(item => item.state === 'ended').map(item => item.id)
-  const runBulk = async (verb: 'stop' | 'merge', ids: string[]) => {
+  const cleanupSelected = chosen.filter(item => item.actions.cleanup).map(item => item.id)
+  const runBulk = async (verb: 'stop' | 'cleanup', ids: string[]) => {
     const request: (id: string) => Promise<unknown> = verb === 'stop' ? (id: string) => call('POST tickets/:id/stop', { id })
-      : (id: string) => call('POST tickets/:id/merge', { id })
+      : (id: string) => call('POST tickets/:id/cleanup', { id })
     const results = await Promise.allSettled(ids.map(request))
     const failed = results.filter(result => result.status === 'rejected').length
     notify(failed ? t('bulkFailed', { failed, total: ids.length }) : t('bulkDone', { count: ids.length }))
@@ -160,9 +160,9 @@ export function ExecutionStatus({ filter: current, state, reload }: {
         {stopSelected.length > 0 && <ConfirmButton variant="outline" icon="stop" label={t('bulkStop', { count: stopSelected.length })}
           title={t('bulkStop')} message={t('bulkStopConfirm', { count: stopSelected.length })}
           onConfirm={() => runBulk('stop', stopSelected)} />}
-        {mergeSelected.length > 0 && <ConfirmButton variant="outline" icon="decision" label={t('bulkMerge', { count: mergeSelected.length })}
-          title={t('bulkMerge')} message={t('bulkMergeConfirm', { count: mergeSelected.length })}
-          onConfirm={() => runBulk('merge', mergeSelected)} />}
+        {cleanupSelected.length > 0 && <ConfirmButton variant="outline" icon="trash" label={t('bulkCleanup', { count: cleanupSelected.length })}
+          title={t('bulkCleanup')} message={t('bulkCleanupConfirm', { count: cleanupSelected.length })}
+          onConfirm={() => runBulk('cleanup', cleanupSelected)} />}
       </div>}
       {data.items.length ? <ul className="dt-list">{data.items.map(ticket => ticket.stage === 'person'
         ? <TicketLine key={ticket.id} ticket={ticket} question onChanged={reloadTickets}

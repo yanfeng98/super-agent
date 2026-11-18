@@ -76,7 +76,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     const trigger = value.kind === 'trigger' ? store.triggers.get(value.triggerId) : undefined
     const handback = trigger && store.triggers.disposition(trigger.id)?.handbacks?.find(item => item.ticketId === id)
     const shown = trigger && { id: trigger.id, actor: view.actor(trigger.actor, trigger.human), human: trigger.human,
-      preview: preview(trigger.text), body: plain(readable(trigger.text), true), thread: threadKey(trigger.threads[0]!),
+      preview: preview(trigger.text), thread: threadKey(trigger.threads[0]!),
       ...handback ? { handback: { reason: handback.reason, at: handback.at } } : {} }
     const text = (value.kind === 'text' || value.kind === 'note') && value.text ? { text: markdown(value.text) } : {}
     return { ...value, ...text, delivered: !ticket.undelivered.includes(value.id), ...shown ? { trigger: shown } : {} }
@@ -85,33 +85,41 @@ export function ticketDetail(host: ViewHost, id: string) {
   const human = ticket.mandate.basis.via !== 'bot'
   const line = ticketLine(view, ticket)
   // Reopening needs the current Policy to still hold the ticket's Mandate, as the reopen command itself checks.
-  const reopen = !liveTicket(ticket) && !ticket.discarded && !ticket.cleaned
+  const reopen = !liveTicket(ticket) && !ticket.discarded && !ticket.cleaned && !ticket.merged
     && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
   // Ending a ticket's workspace state is offered once it ended, has a review, and was neither merged nor discarded.
   const finish = !liveTicket(ticket) && !!ticket.review?.branch && !ticket.merged && !ticket.discarded
   const rebase = finish && !!ticket.execution?.directory
-  const check = !liveTicket(ticket) && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
+  const check = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
+    && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   // The decisions a person made on the Ticket, in the order they happened.
-  const history: { code: 'approved' | 'renamed' | 'merged' | 'cleaned' | 'discarded'; at: string; title?: string; branch?: string;
-    target?: string }[] = []
+  const history: { code: 'approved' | 'renamed' | 'rebased' | 'merged' | 'cleaned' | 'discarded'; at: string; title?: string;
+    branch?: string; target?: string }[] = []
   if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
   if (ticket.renamed) history.push({ code: 'renamed', at: ticket.renamed.at, title: ticket.renamed.title })
+  if (ticket.rebased) history.push({ code: 'rebased', at: ticket.rebased.at, branch: ticket.rebased.branch,
+    target: ticket.rebased.target })
   if (ticket.merged) history.push({ code: 'merged', at: ticket.merged.at, branch: ticket.merged.branch, target: ticket.merged.target })
   if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at })
   if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
   history.sort((a, b) => a.at.localeCompare(b.at))
+  const origin = store.triggers.get(ticket.origin.triggerId)
+  const request = origin ? { text: plain(readable(origin.text), true), at: origin.at } : undefined
+  // A check from before the current ending belongs to work that was resumed and must not be shown as this ending's.
+  const checks = ticket.checks && (!ticket.ended || ticket.checks.at >= ticket.ended.at) ? ticket.checks : undefined
   const local = ticket.channels.find(channel => channel.source === 'local')
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
     rebase, cleanup, check },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
     notes: ticket.notes ?? [],
+    ...request ? { request } : {},
     related: (ticket.related ?? []).flatMap(id => {
       const other = store.tickets.get(id)
       return other ? [{ id, number: view.number(other.id), title: other.title }] : []
     }),
-    ...ticket.checks ? { checks: ticket.checks } : {},
+    ...checks ? { checks } : {},
     review: ticket.review,
     merged: ticket.merged, discarded: ticket.discarded, cleaned: ticket.cleaned,
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },

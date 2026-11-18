@@ -39,7 +39,7 @@ import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordCleanup, recordDiscard,
-  recordMerge, recordRename, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
+  recordMerge, recordRebase, recordRename, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -297,10 +297,13 @@ export class Runtime extends Service implements SourceHost {
           // A follow-up may have resumed the ticket while the review was captured.
           const current = this.store.tickets.get(ticket.id)
           if (!current?.ended || current.ended.at !== ticket.ended?.at) continue
-          await closeArchive(ticket, review, this.store.tickets.number(ticket.id))
+          const checks = current.checks && (!current.ended || current.checks.at >= current.ended.at) ? current.checks : undefined
+          await closeArchive(ticket, review, this.store.tickets.number(ticket.id), checks)
           repaired++
         }
+        if (ticket.rebased) await recordRebase(ticket, ticket.rebased)
         if (ticket.merged) await recordMerge(ticket, ticket.merged)
+        if (ticket.cleaned) await recordCleanup(ticket, ticket.cleaned.at)
         if (ticket.discarded) await recordDiscard(ticket, ticket.discarded.at)
       } catch (error) { this.ctx.logger.warn('dsh-superagent: completing the archive of ticket %s failed: %s', ticket.id, String(error)) }
     }
@@ -331,10 +334,6 @@ export class Runtime extends Service implements SourceHost {
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a merge in the archive failed: %s', String(error)) }
     return result
   }
-  /**
-   * Removes an ended ticket's linked worktree and branch, then records the discard on the ticket and in its archive.
-   * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
-   */
   /**
    * Adds a person's note on a file and line of a ticket's changes.
    * @returns The ticket's notes after the addition.
@@ -382,6 +381,7 @@ export class Runtime extends Service implements SourceHost {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can run its check')
+    if (ticket.merged) throw new Error('The ticket branch was already merged; its check no longer gates anything')
     if (ticket.discarded || ticket.cleaned) throw new Error('The ticket workspace was removed')
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
@@ -399,6 +399,8 @@ export class Runtime extends Service implements SourceHost {
   }
   /**
    * Rebases an ended ticket's branch onto the repository's checked-out branch, so a later merge can fast-forward.
+   * The recorded base moves to the target's commit, so the review and diff exclude upstream commits, and a prior check is
+   * cleared because the branch now runs on a different tree.
    * @throws when the ticket is not ended, was merged or discarded, has no workspace, or the rebase cannot finish cleanly.
    */
   async rebaseTicket(id: string): Promise<{ branch: string; target: string }> {
@@ -410,14 +412,22 @@ export class Runtime extends Service implements SourceHost {
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
     const result = await rebaseWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
-    const review = await captureReview(this.ctx.subprocess, ticket, this.stopped.signal)
-    if (review) this.store.atomic(() => {
+    const rebased = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base: result.base } : undefined }
+    const review = await captureReview(this.ctx.subprocess, rebased, this.stopped.signal)
+    const at = now()
+    this.store.atomic(() => {
       const current = this.store.tickets.get(id)
       if (!current) return
-      current.review = review
+      if (current.execution) current.execution = { ...current.execution, base: result.base }
+      if (review) current.review = review
+      current.rebased = { at, ...result }
+      // Upstream commits changed the tree the check ran on, so the merge gate waits for a fresh run.
+      delete current.checks
       this.store.tickets.save(current)
     })
-    return result
+    try { await recordRebase(ticket, { at, ...result }) }
+    catch (error) { this.ctx.logger.warn('dsh-superagent: recording a rebase in the archive failed: %s', String(error)) }
+    return { branch: result.branch, target: result.target }
   }
   /**
    * Removes a merged ticket's worktree and deletes its branch, whose commits the target branch already has.
@@ -441,6 +451,10 @@ export class Runtime extends Service implements SourceHost {
     try { await recordCleanup(ticket, at) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a workspace cleanup in the archive failed: %s', String(error)) }
   }
+  /**
+   * Removes an ended ticket's linked worktree and branch, then records the discard on the ticket and in its archive.
+   * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
+   */
   async discardTicket(id: string): Promise<void> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
@@ -489,9 +503,9 @@ export class Runtime extends Service implements SourceHost {
         checks = await workspaceCheck(ctx.subprocess, ticket.execution.directory, command, this.stopped.signal,
           Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value])))
       } catch (error) { ctx.logger.warn('dsh-superagent: running the workspace check failed: %s', String(error)) }
-      if (checks) this.store.atomic(() => {
+      if (checks && stillEnded()) this.store.atomic(() => {
         const current = this.store.tickets.get(ticket.id)
-        if (!current) return
+        if (!current?.ended || current.ended.at !== ticket.ended?.at) return
         current.checks = checks
         this.store.tickets.save(current)
       })

@@ -69,10 +69,10 @@ it('stops an open Ticket from its page after confirmation', async () => {
   expect(server.requests.some(request => request.path === 'tickets/t1/stop' && request.method === 'POST')).toBe(true)
 })
 
-it('stops or merges the selected Tickets from the Execution list in one action', async () => {
+it('stops or cleans up the selected Tickets from the Execution list in one action', async () => {
   server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单' })]
-  server.tickets.ended = [ticketSummary({ id: 't3', title: '旧工单', number: 9, state: 'ended', actions: { retry: false, stop: false } },
-    { stage: 'ended' })]
+  server.tickets.ended = [ticketSummary({ id: 't3', title: '旧工单', number: 9, state: 'ended',
+    actions: { retry: false, stop: false, cleanup: true } }, { stage: 'ended' })]
   await mount()
   await click(zh['tab.execution'])
   const boxes = all('input[type="checkbox"]')
@@ -87,10 +87,10 @@ it('stops or merges the selected Tickets from the Execution list in one action',
   await click(zh['ticket.ended'])
   const ended = all('input[type="checkbox"]')
   await click(ended[0]!)
-  const merge = all('button').find(button => button.textContent === zh.bulkMerge.replace('{count}', '1'))
-  await click(merge!)
+  const cleanup = all('button').find(button => button.textContent === zh.bulkCleanup.replace('{count}', '1'))
+  await click(cleanup!)
   await click(zh.confirm)
-  expect(server.requests.some(request => request.method === 'POST' && request.path === 'tickets/t3/merge')).toBe(true)
+  expect(server.requests.some(request => request.method === 'POST' && request.path === 'tickets/t3/cleanup')).toBe(true)
 })
 
 it('shows a Ticket with its stage, its Mandate details with the Trigger and Decision behind it, its Threads, and the rest behind disclosures', async () => {
@@ -98,7 +98,8 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
   await click(all('.dt-open').find(button => button.textContent === '修复回归')!)
   expect(document.querySelector('.dt-page-title h2')?.textContent).toBe('修复回归')
   // Progress is in the Channels and the Session, so the page has no report section; replies come from the outbox receipts.
-  expect(all('.dt-section-title').map(title => title.querySelector('.dt-section-name')?.textContent)).toEqual(['回复与结果', '授权详情', '未送达的输入', '订阅的线程'])
+  expect(all('.dt-section-title').map(title => title.querySelector('.dt-section-name')?.textContent)).toEqual(['原始请求', '回复与结果', '授权详情',
+    '未送达的输入', '订阅的线程'])
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh.executingLabel)
   expect(document.querySelector('.dt-status-line .dt-stage .dt-spinner')).not.toBeNull()
   // A Thread this Ticket follows reads as subscribed on its page, though no other Ticket follows it.
@@ -116,6 +117,14 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
     'DSH_SUPERAGENT_GITHUB_NUMBER—'])
   await click(document.querySelector<HTMLElement>('.dt-trigger-link')!)
   expect(tab(zh['tab.trigger']).getAttribute('aria-selected')).toBe('true')
+})
+
+it('shows the full request body on a Ticket page', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
+    request: { text: `短预览\n\n${'细节 '.repeat(100)}结尾标记`, at: '2026-09-22T00:03:00Z' } }
+  await mount()
+  expect(text()).toContain('结尾标记')
 })
 
 it('links and unlinks related Tickets from a Ticket page', async () => {
@@ -161,6 +170,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true },
     checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
     history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题' },
+      { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main' },
       { code: 'merged', at: '2026-11-18T00:02:00Z', branch: 'agent/t5', target: 'main' }],
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
@@ -176,6 +186,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('pnpm test')
   expect(text()).toContain('1 test failed')
   expect(text()).toContain(zh.checksRun)
+  expect(text()).toContain(zh['history.rebased'])
   expect(text()).toContain(zh['history.merged'])
   expect(text()).toContain('agent/t5 → main')
   await click(zh.renameTicket)
@@ -302,7 +313,7 @@ it('gives a Ticket a bot\'s message started its basis, marks a Thread it follows
   threads: [threadSummary(), { ...threadSummary({ key: 'github:7', title: '#7 相关 Issue' }), context: true }],
   inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'e2', at: '2026-09-22T00:03:00Z', delivered: true, trigger: { id: 'e2',
     actor: { source: 'feishu', id: MEMBER, name: { zh: 'Alice', en: 'Alice' } }, human: true, preview: '顺便加一个页面',
-    body: '顺便加一个页面，入口放在设置里。', thread: 'feishu:oc_1:om_root',
+    thread: 'feishu:oc_1:om_root',
     handback: { reason: 'Asks for a new page', at: '2026-09-22T00:05:00Z' } } }] }
   at({ page: 'execution', id: 't1' })
   await mount()

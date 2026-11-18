@@ -12,12 +12,15 @@ const OUTPUT_LIMIT = 4_000
 /**
  * Whether a configured check keeps a ticket's branch from merging.
  * @param command - The executor's configured check command; empty means no gate.
- * @param check - The latest check run on the ticket, if any.
+ * @param check - The check run recorded on the ticket, if any.
+ * @param endedAt - When the ticket ended; a check from before that ending belongs to earlier work and does not count.
  * @returns The reason to refuse the merge, or undefined when the merge may proceed.
  */
-export const mergeBlockedByCheck = (command: string, check: TicketCheck | undefined): string | undefined =>
-  !command.trim() || check?.ok ? undefined
-    : 'The configured workspace check has not passed; run it from the ticket page and fix any failure before merging'
+export const mergeBlockedByCheck = (command: string, check: TicketCheck | undefined, endedAt?: string): string | undefined => {
+  if (!command.trim()) return undefined
+  if (check?.ok && (!endedAt || check.at >= endedAt)) return undefined
+  return 'The configured workspace check has not passed; run it from the ticket page and fix any failure before merging'
+}
 /**
  * Runs `command` with `sh -c` in `directory` and captures whether it passed, its exit code, and the end of its output.
  * @param env - Environment variables the check command reads, such as the ticket's execution variables.

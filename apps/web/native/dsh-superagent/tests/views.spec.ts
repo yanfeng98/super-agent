@@ -348,7 +348,7 @@ it('offers merge, discard and rebase only on an ended ticket with a review branc
   store.tickets.save(ended)
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: true, merge: true, discard: true, rebase: true, cleanup: false })
   store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' } })
-  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ merge: false, discard: false, rebase: false, cleanup: true })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: false, merge: false, discard: false, rebase: false, cleanup: true })
   store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' }, cleaned: { at } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ cleanup: false, reopen: false })
   store.tickets.save({ ...ended, discarded: { at } })
@@ -370,6 +370,23 @@ it('offers a check run on an ended ticket with a workspace when a check command 
   // An open ticket has no workspace check yet.
   store.tickets.save({ ...store.tickets.get('t1')!, ended: undefined, checks: undefined })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ check: false })
+})
+
+it('lists the person actions on a ticket in time order', () => {
+  const host = views()
+  live('t1')
+  store.tickets.save({ ...store.tickets.get('t1')!,
+    approved: { at: '2026-09-20T00:00:00Z' },
+    renamed: { at: '2026-09-21T00:00:00Z', title: '新的标题' },
+    rebased: { at: '2026-09-22T00:00:00Z', branch: 'agent/t1', target: 'main', base: 'c'.repeat(40) },
+    merged: { at: '2026-09-23T00:00:00Z', branch: 'agent/t1', target: 'main' },
+    cleaned: { at: '2026-09-24T00:00:00Z' } })
+  expect(ticketDetail(host, 't1')!.history).toEqual([
+    { code: 'approved', at: '2026-09-20T00:00:00Z' },
+    { code: 'renamed', at: '2026-09-21T00:00:00Z', title: '新的标题' },
+    { code: 'rebased', at: '2026-09-22T00:00:00Z', branch: 'agent/t1', target: 'main' },
+    { code: 'merged', at: '2026-09-23T00:00:00Z', branch: 'agent/t1', target: 'main' },
+    { code: 'cleaned', at: '2026-09-24T00:00:00Z' }])
 })
 
 it('lists review notes with their file, line and text', () => {
@@ -394,17 +411,14 @@ it('shows the full request text and the archive file on a local ticket\'s page',
   const channel = { source: 'local', thread: 'local:req_1', address: { request: 'req_1', file: '/tmp/tickets/req_1.md' } }
   store.triggers.save({ id: 'e9', source: 'local', threads: [{ source: 'local', id: 'req_1' }], actor: { source: 'local', id: 'operator' },
     human: true, at, text, channel, meta: { requestId: 'req_1', messageId: 'req_1', title: '整理首页' } })
-  store.tickets.save({ ...store.tickets.get('t1')!, channels: [channel],
+  store.tickets.save({ ...store.tickets.get('t1')!, origin: { triggerId: 'e9', triggerIds: ['e9'] }, channels: [channel],
     inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'e9', at }] })
   const page = ticketDetail(host, 't1')!
   expect(page.archive).toBe('/tmp/tickets/req_1.md')
-  const input = page.inputs[0]!
-  expect(input.kind).toBe('trigger')
-  const trigger = input.kind === 'trigger' ? input.trigger : undefined
   // A preview stays short for compact rows, while the page carries the request in full.
-  expect(trigger?.preview.length).toBeLessThanOrEqual(160)
-  expect(trigger?.body).toContain('整理首页')
-  expect(trigger?.body.length).toBeGreaterThan(160)
+  expect(page.request).toMatchObject({ at })
+  expect(page.request!.text).toContain('整理首页')
+  expect(page.request!.text.length).toBeGreaterThan(160)
 })
 
 it('lists the tags on requests and filters Tickets by one', () => {

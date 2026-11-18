@@ -445,6 +445,16 @@ export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at
     ['- status: merged', `- branch: ${merged.branch}`, `- target: ${merged.target}`, `- by: ${OPERATOR}`])
 }
 /**
+ * Appends a rebase of the ticket branch to its archive, once per time.
+ * @param ticket - The ticket whose branch was rebased.
+ * @param rebased - When it was rebased, the branch, the target, and the new base.
+ */
+export async function recordRebase(ticket: Pick<Ticket, 'channels'>, rebased: { at: string; branch: string; target: string;
+  base: string }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:rebased:${rebased.at} -->`, `${rebased.at} · 已变基 / Rebased`,
+    ['- status: rebased', `- branch: ${rebased.branch}`, `- target: ${rebased.target}`, `- base: ${rebased.base}`, `- by: ${OPERATOR}`])
+}
+/**
  * Appends the discard of a ticket's worktree and branch to its archive.
  * @param ticket - The ticket whose worktree was discarded.
  * @param at - When it was discarded.
