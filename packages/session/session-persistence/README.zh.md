@@ -51,7 +51,7 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 
 每一次日志读写都流经返回的 `SessionHandle`；不存在按 id 寻址的 append 或 load 方法。`handle.read(offset?, length?)` 返回 `{ eventState, events }`：外层 slice 属于调用方，`eventState` 则区分由调用方独占的 `detached` 事件图与可能同时位于后端缓存中的 `shared-frozen` 事件图。该状态由生成方确定，即使切片为空也会保留。两种状态都能直接接管而无需复制；需要可变事件的消费方必须先克隆事件。读取绝不包含撕裂尾部，同一句柄上的重复读取绝不会观察到比先前读取更旧的状态，写句柄也能读到自己成功的 append。`handle.append(events)` 追加一个连续批次，其第一个 `seq` 等于已存储 next-seq；完成时的持久化是尽力而为的——批次被接受、有序，并对同一后端实例上的读取可见，只有完成的 `flush` 才承诺它在崩溃后依然存在（交付的 JSONL 后端恰好会立即持久化每个批次）。`handle.flush()` 是持久性屏障，同时把空的已创建会话实体化，使其可被持久列出。`handle.close()` 幂等且不可取消：读句柄释放本地资源；写句柄完成待处理的持久化并释放写所有权。一旦某次 `append` 或 `flush` 完成，其后在同一后端实例上开始的读取——无论经由任何句柄，还是经由 `stat`/`list`——至少能观察到该前缀。
 
-`remove(id)` 是唯一会让既有身份不可观察的操作：它删除该会话完整的制品集合，而不是某一代际；此后 `stat`/`list` 不再报告该 id，`open` 以未找到拒绝。它要求独占访问：当本进程仍有打开的句柄或待创建项持有该会话，或其他进程持有其写租约时，后端以 `SessionPersistenceBusyError` 拒绝；会话不存在时以 `SessionPersistenceNotFoundError` 拒绝。活跃写方必须先关闭——删除从不等待或抢占写方。把已提交制品保持为仅追加的后端无法删除会话，改为报告 `SessionPersistenceRemoveUnsupportedError`；随产品交付的 SQLite 后端即如此，JSONL 后端实现删除。
+`remove(id)` 是唯一会让既有身份不可观察的操作：它删除该会话完整的制品集合，而不是某一代际；此后 `stat`/`list` 不再报告该 id，`open` 以未找到拒绝。它要求独占访问：当本进程仍有打开的句柄或待创建项持有该会话，或其他进程持有其写租约时，后端以 `SessionPersistenceBusyError` 拒绝；会话不存在时以 `SessionPersistenceNotFoundError` 拒绝。活跃写方必须先关闭——删除从不等待或抢占写方。把已提交制品保持为仅追加的后端无法删除会话：它把 `canRemove` 报为 `false`，并以 `SessionPersistenceRemoveUnsupportedError` 拒绝；随产品交付的 SQLite 后端即如此，JSONL 后端实现删除。Host 操作先读 `canRemove`，因此拒绝时不会关闭会话。
 
 ### 所有权与可见性
 
@@ -93,7 +93,7 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 - **持久性。** `append` 尽力而为地持久化；`flush`——逐句柄或服务级——是承诺存储并同时把空会话实体化的屏障。
 - **遇到未知或无效格式时拒绝读取。** `validateStoredEvents` 拒绝未知事件词汇与已废弃的预发布形态；`assertVersion` 拒绝外来格式版本。
 - **每个后端实例单写者。** 提供方的进程内认领在 `create`/`open('write')` 时取得，在句柄关闭时释放。
-- **删除既独占又完整。** `remove` 删除且只删除一个会话的全部代际；任何句柄、待创建项或其他进程的写租约持有它时拒绝；删除后，共享该存储的所有实例的 `stat`、`list` 与 `open` 都不再包含该身份。只有能删除已提交会话的后端才实现删除；SQLite 后端报告 `SessionPersistenceRemoveUnsupportedError`。
+- **删除既独占又完整。** `remove` 删除且只删除一个会话的全部代际；任何句柄、待创建项或其他进程的写租约持有它时拒绝；删除后，共享该存储的所有实例的 `stat`、`list` 与 `open` 都不再包含该身份。只有能删除已提交会话的后端才实现删除；SQLite 后端把 `canRemove` 报为 `false`，并以 `SessionPersistenceRemoveUnsupportedError` 拒绝。
 
 ### 源码地图
 

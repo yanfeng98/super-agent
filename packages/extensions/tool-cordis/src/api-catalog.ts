@@ -3430,6 +3430,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'one snapshot per stored session.',
       },
       {
+        signature: 'readonly canRemove: boolean = false',
+        description: 'Whether remove deletes a stored Session. A backend whose storage keeps committed artifacts append-only leaves this `false`, and callers check it before releasing a Session that removal would then have closed without deleting.',
+        parameters: [],
+      },
+      {
         signature: 'remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void>',
         description: 'Permanently remove one stored session and every durable artifact it owns.\n\nRemoval requires exclusive access: a backend refuses while an open handle or a pending creation holds the session in this process, or while another process holds its write lease. Once it resolves, the identity is absent from `stat`, `list`, and `open` on this and every other backend instance that shares the storage. Removal is not a generation operation: it deletes the session\'s complete artifact set, not one observed generation.',
         parameters: [{ name: 'id', description: 'the stored session to remove.' }, { name: 'options', description: 'optional cancellation observed before removal work starts.' }],

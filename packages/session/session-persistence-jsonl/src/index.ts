@@ -645,6 +645,8 @@ export class JsonlSessionPersistence extends SessionPersistence {
     return snapshots
   }
 
+  override readonly canRemove = true
+
   /**
    * Permanently remove one stored session: every committed generation, its
    * lock file, and its session directory. Exclusive access is enforced twice

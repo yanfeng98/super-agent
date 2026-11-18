@@ -57,6 +57,9 @@ export class SessionDeletion {
         { sessionId },
       )
     }
+    // A backend that cannot delete can never satisfy this request, so the refusal
+    // precedes the deletion fence and the Agent release it would otherwise close.
+    if (!this.persistence().canRemove) throw this.unsupportedRemoval(sessionId)
     const activity = await this.activity(sessionId)
     if (activity.length > 0) {
       throw new RemoteError(
@@ -162,15 +165,7 @@ export class SessionDeletion {
         if (disposed) return
         throw new RemoteError('session/not-found', `session "${sessionId}" not found`, { sessionId }, { cause: error })
       }
-      if (error instanceof SessionPersistenceRemoveUnsupportedError) {
-        throw new RemoteError(
-          'session/delete-unsupported',
-          `session "${sessionId}" cannot be deleted: the configured session storage keeps committed sessions`
-          + ' append-only and supports no removal; switch the profile to dsh-session-persistence-jsonl to delete',
-          { sessionId },
-          { cause: error },
-        )
-      }
+      if (error instanceof SessionPersistenceRemoveUnsupportedError) throw this.unsupportedRemoval(sessionId, error)
       throw new RemoteError(
         'gateway/internal',
         `failed to delete stored session "${sessionId}": ${String(error)}`,
@@ -178,6 +173,24 @@ export class SessionDeletion {
         { cause: error },
       )
     }
+  }
+
+  /**
+   * The refusal for a backend whose storage keeps committed Sessions
+   * append-only. The message names the backend that can delete, because the
+   * dialog otherwise reports a limitation the user cannot act on.
+   * @param sessionId - Session whose deletion cannot proceed.
+   * @param cause - the persistence failure this refusal reports, when one threw.
+   * @returns the Host refusal the delete dialog renders.
+   */
+  private unsupportedRemoval(sessionId: SessionId, cause?: unknown): RemoteError {
+    return new RemoteError(
+      'session/delete-unsupported',
+      `session "${sessionId}" cannot be deleted: the configured session storage keeps committed sessions`
+      + ' append-only and supports no removal; switch the profile to dsh-session-persistence-jsonl to delete',
+      { sessionId },
+      cause === undefined ? undefined : { cause },
+    )
   }
 
   /**
