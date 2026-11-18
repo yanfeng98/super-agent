@@ -31,6 +31,7 @@ interface FixtureOptions {
   readonly stored?: readonly SessionHeader[]
   readonly liveAgent?: boolean
   readonly disposeAgent?: boolean
+  readonly canRemove?: boolean
   readonly remove?: (sessionId: SessionId) => Promise<void>
   readonly forget?: (sessionId: SessionId) => Promise<void>
 }
@@ -50,6 +51,7 @@ async function fixture(options: FixtureOptions = {}) {
   ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
     list: async () => stored,
     remove,
+    canRemove: options.canRemove ?? true,
   }) as never)
   const forget = vi.fn(options.forget ?? (async () => {}))
   ctx.provide('workspaceRegistry', { forgetSession: forget } as never)
@@ -134,6 +136,21 @@ describe('session deletion', () => {
       code: 'session/subagent',
     })
     expect(f.remove).not.toHaveBeenCalled()
+  })
+
+  it('refuses append-only storage before releasing the Agent or touching any reference', async () => {
+    const f = await fixture({ stored: [header('append-only')], liveAgent: true, disposeAgent: true, canRemove: false })
+
+    await expect(f.deletion.delete({ sessionId: brandString<SessionId>('append-only') })).rejects.toMatchObject({
+      code: 'session/delete-unsupported',
+      details: { sessionId: 'append-only' },
+    })
+    // The conversation stays usable: no fence, no disposal, no storage call.
+    expect(f.disposeAgent).not.toHaveBeenCalled()
+    expect(f.remove).not.toHaveBeenCalled()
+    expect(f.forget).not.toHaveBeenCalled()
+    expect(f.began).toEqual([])
+    expect(f.removed).toEqual([])
   })
 
   it('reports an unknown Session as not found', async () => {

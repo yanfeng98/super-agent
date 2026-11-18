@@ -246,6 +246,14 @@ export abstract class SessionPersistence extends Service {
   abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
 
   /**
+   * Whether {@link remove} deletes a stored Session. A backend whose storage
+   * keeps committed artifacts append-only leaves this `false`, and callers
+   * check it before releasing a Session that removal would then have closed
+   * without deleting.
+   */
+  readonly canRemove: boolean = false
+
+  /**
    * Permanently remove one stored session and every durable artifact it owns.
    *
    * Removal requires exclusive access: a backend refuses while an open handle
@@ -263,7 +271,13 @@ export abstract class SessionPersistence extends Service {
    *   its committed artifacts append-only and cannot delete them.
    */
   remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void> {
-    options?.signal?.throwIfAborted()
+    // A Promise-returning method reports every refusal through the returned
+    // promise, including one raised by the caller's own abort signal.
+    try {
+      options?.signal?.throwIfAborted()
+    } catch (error: unknown) {
+      return Promise.reject(error)
+    }
     return Promise.reject(new SessionPersistenceRemoveUnsupportedError(id))
   }
 }
