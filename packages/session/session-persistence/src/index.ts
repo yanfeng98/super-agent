@@ -273,12 +273,10 @@ export abstract class SessionPersistence extends Service {
   remove(id: SessionId, options?: SessionPersistenceRemoveOptions): Promise<void> {
     // A Promise-returning method reports every refusal through the returned
     // promise, including one raised by the caller's own abort signal.
-    try {
+    return Promise.resolve().then(() => {
       options?.signal?.throwIfAborted()
-    } catch (error: unknown) {
-      return Promise.reject(error)
-    }
-    return Promise.reject(new SessionPersistenceRemoveUnsupportedError(id))
+      throw new SessionPersistenceRemoveUnsupportedError(id)
+    })
   }
 }
 

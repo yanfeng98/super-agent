@@ -465,6 +465,10 @@ async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persiste
  * @param options - replay fixture selection and pacing.
  * @returns the running scaffold.
  */
+/** Rows this fork adds on top of upstream; the shared web e2e scaffold runs upstream surfaces. */
+const FORK_ONLY_ROWS = ['ui-boot-animation', 'dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu',
+  'dsh-superagent-local'] as const
+
 export async function launchWebScaffold(options: LaunchOptions = {}): Promise<WebScaffold> {
   requireDist()
   const {
@@ -626,6 +630,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // workspace, keeping the composition untouched.
     { id: 'agent-instructions', disabled: true },
     { id: 'session-title-llm', disabled: true },
+    // Fork-only rows have their own suites and side effects no scenario asserts:
+    // the intro paints a full-window overlay over the mount, and the superagent
+    // host creates a Workspace and master Session at boot, which would shift every
+    // row count and settings golden these upstream scenarios compare.
+    ...FORK_ONLY_ROWS.filter(id => composedRows.some(row => row.id === id)).map(id => ({ id, disabled: true })),
     // Fixture sessions must never leave the process: the shipped row defaults
     // to the production OTLP endpoint (or whatever DSH_TELEMETRY_OTLP_URL
     // names in the ambient environment). A scenario with a local collector
