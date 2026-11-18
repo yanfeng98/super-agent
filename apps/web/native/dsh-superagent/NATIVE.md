@@ -93,7 +93,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    `local.spec.ts`, `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
 10. **Ticket numbers and command-line intake.** Every Ticket gets a stable `T-000N` number from its creation order
    (`src/app/store.ts`, shown by `src/app/views/records.ts`, `src/client/rows.tsx` and `src/client/ticket.tsx`, and written
-   into the archive's close by `src/sources/local.ts`). `scripts/dsh-superagent ticket --title … --text …` drops a JSON
+   into the archive's close by `src/sources/local.ts`). A request may also carry a `project` label, which is archived and
+   exposed as `DSH_SUPERAGENT_PROJECT` (`src/app/execution-environment.ts`) so a prepare command can pick a repository per
+   project; up to eight `tags` are stored in the archive and shown on the row and page, and search matches them. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
    request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket
    within two seconds, writes `inbox/done/<file>` and moves bad input to `inbox/rejected/`, with the file name as the
    idempotency key. `scripts/dsh-superagent backup` copies the database online and the ticket archives into `backups/<timestamp>/`.

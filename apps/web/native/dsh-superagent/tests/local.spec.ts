@@ -7,6 +7,7 @@ import { Store } from '../src/app/store.ts'
 import { Commands } from '../src/infra/commands.ts'
 import { HealthBoard } from '../src/infra/health.ts'
 import { SettingsSchema, settingsPolicy } from '../src/policy.ts'
+import { environmentOf } from '../src/app/execution-environment.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { appendFollowup, appendReply, archiveDir, closeArchive, createLocalFollowup, createLocalRequest, drainInbox, localKind, OPERATOR,
@@ -45,15 +46,19 @@ function harness({ allow = true, enabled = true } = {}) {
 describe('local tickets', () => {
   it('archives the request, ingests its Trigger, and queues its Ticket', async () => {
     const h = harness()
-    const created = await createLocalRequest(h.host, { title: '修复登录页', text: '登录页在窄屏下溢出，请修好。' })
+    const created = await createLocalRequest(h.host, { title: '修复登录页', text: '登录页在窄屏下溢出，请修好。', project: 'web',
+      tags: ['前端', 'p1'] })
     expect(created.request).toMatch(/^local-\d{8}T\d{6}-[0-9a-f]{8}$/)
     expect(created.thread).toBe(`local:${created.request}`)
     const file = readFileSync(created.file, 'utf8')
     expect(file).toContain('title: "修复登录页"')
     expect(file).toContain('# 修复登录页')
+    expect(file).toContain('project: "web"')
+    expect(file).toContain('tags: ["前端","p1"]')
     expect(file).toContain('登录页在窄屏下溢出，请修好。')
     const trigger = h.store.triggers.get(created.trigger)
     expect(trigger).toMatchObject({ source: 'local', actor: { source: 'local', id: OPERATOR }, human: true, addressed: 'direct',
+      meta: { project: 'web', tags: ['前端', 'p1'] },
       text: '修复登录页\n\n登录页在窄屏下溢出，请修好。',
       channel: { source: 'local', thread: created.thread, address: { request: created.request, file: created.file } } })
     expect(h.store.threads.get(created.thread)?.ref).toEqual({ source: 'local', id: created.request })
@@ -214,6 +219,19 @@ describe('local tickets', () => {
     expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox' })).toBe('/srv/inbox')
     expect(() => localKind.schema.parse({ archive: 'inbox' })).toThrow()
     expect(localKind.schema.parse({})).toEqual({ archive: '' })
+  })
+
+  it('exposes the project label as DSH_SUPERAGENT_PROJECT for the ticket workspace', async () => {
+    const h = harness()
+    const created = await createLocalRequest(h.host, { title: '多项目', text: '按项目选仓库。', project: 'api' })
+    const candidate = h.candidates.at(-1)!
+    const decision = h.engine.decide(created.trigger, { kind: 'accept', title: '多项目', scope: '准备', reason: 'requested',
+      acknowledgement: '开始。', evalId: candidate.evalId })
+    const ticket = h.store.tickets.get(decision.ticketId!)!
+    const variables = environmentOf({ deployment: h.deployment, sources: h.sources, settings: h.store.settings(),
+      ticket: { id: ticket.id, name: 'project-ticket', directory: join(dir, 'work', 'project-ticket') },
+      trigger: h.store.triggers.get(created.trigger) })
+    expect(Object.fromEntries(variables.map(variable => [variable.key, variable.value])).DSH_SUPERAGENT_PROJECT).toBe('api')
   })
 
   it('turns a command-line request from the inbox into a ticket and records the result', async () => {

@@ -174,6 +174,7 @@ export function TicketPage({ id }: { id: string }) {
     <div className="dt-row-meta dt-status-line">
       <StageMark state={status.dot} icon={status.icon} label={status.label} />
       {data.number ? <LabelValue label={t('ticketNumberLabel')} value={ticketRef(data.number)} /> : null}
+      {data.tags.map(tag => <Tag key={tag} tone="quiet">{tag}</Tag>)}
       <LabelValue label={t('ticketMandateLabel')} value={valueLabel(t, 'strength', data.mandate.strength)} />
       <LabelValue label={t('ticketActorLabel')} value={`${valueLabel(t, 'source', data.mandate.actor.source)} · ${actor}`} />
       <LabelValue label={t('ticketUpdatedLabel')} value={when(data.updatedAt, t('lang'))} />
