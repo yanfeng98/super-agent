@@ -54,8 +54,8 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
   await mount()
   await click(all('.dt-open').find(button => button.textContent === '修复回归')!)
   expect(document.querySelector('.dt-page-title h2')?.textContent).toBe('修复回归')
-  // Progress is in the Channels and the Session, so the page has no report section.
-  expect(all('.dt-section-title').map(title => title.querySelector('.dt-section-name')?.textContent)).toEqual(['授权详情', '未送达的输入', '订阅的线程'])
+  // Progress is in the Channels and the Session, so the page has no report section; replies come from the outbox receipts.
+  expect(all('.dt-section-title').map(title => title.querySelector('.dt-section-name')?.textContent)).toEqual(['回复与结果', '授权详情', '未送达的输入', '订阅的线程'])
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh.executingLabel)
   expect(document.querySelector('.dt-status-line .dt-stage .dt-spinner')).not.toBeNull()
   // A Thread this Ticket follows reads as subscribed on its page, though no other Ticket follows it.
@@ -221,4 +221,38 @@ it('sends one stop for a double click on Confirm', async () => {
   const confirm = find(zh.confirm)
   await act(async () => { confirm.click(); confirm.click() })
   expect(server.requests.filter(request => request.path === 'tickets/t1/stop')).toHaveLength(1)
+})
+
+it('creates a local ticket from Execution and opens its Thread', async () => {
+  await mount()
+  await click(zh['tab.execution'])
+  await click(zh.newTicket)
+  const dialog = document.querySelector('[role="dialog"]')!
+  expect(dialog.textContent).toContain(zh.newTicketHint)
+  await type(field<HTMLInputElement>(zh.newTicketTitle), '修复登录页')
+  await type(field<HTMLTextAreaElement>(zh.newTicketText), '窄屏下登录按钮溢出，请修好。')
+  await click(zh.createTicket)
+  expect(server.requests.find(request => request.path === 'local/requests')).toMatchObject({ method: 'POST',
+    body: { title: '修复登录页', text: '窄屏下登录按钮溢出，请修好。' } })
+  expect(JSON.parse(sessionStorage.getItem('dsh-superagent/route')!)).toMatchObject({ route: { page: 'trigger', id: 'local:local-1' } })
+})
+
+it('does not offer a reply box for a local Thread the Ticket only follows for context', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!, threads: [{ ...threadSummary({ key: 'local:other', source: 'local',
+    title: '别人的工单' }), context: true }] }
+  await mount()
+  expect(text()).not.toContain(zh.localReplyTitle)
+})
+
+it('replies to a local ticket from its page', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!, threads: [threadSummary({ key: 'local:req1', source: 'local',
+    title: '本地请求' })], channels: [{ source: 'local', url: '', label: { zh: '本地工单', en: 'Local ticket' } }] }
+  await mount()
+  expect(text()).toContain(zh.localReplyTitle)
+  await type(field<HTMLTextAreaElement>(zh.localReplyLabel), '按这个方案做')
+  await click(zh.localReplySend)
+  expect(server.requests.find(request => request.path === 'local/followups')).toMatchObject({ method: 'POST',
+    body: { thread: 'local:req1', text: '按这个方案做' } })
 })

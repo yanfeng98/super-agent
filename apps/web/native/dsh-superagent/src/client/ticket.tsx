@@ -1,7 +1,7 @@
 /** Ticket detail page: stage and actions, Mandate details, undelivered/delivered Inputs, subscribed Threads, and Assignments. */
-import { useState, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, usePoll, type TicketPageView } from './api.ts'
-import { DisclosureRow, Dot, Icon, Tag, type IconName } from './controls.tsx'
+import { Button, DisclosureRow, Dot, Icon, Tag, type IconName } from './controls.tsx'
 import { decisionMark, reportDot, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
@@ -37,6 +37,29 @@ function InputList({ inputs }: { inputs: Input[] }) {
     earlier={run.earlier.map(shown)} />)}</ul>
 }
 
+/** Adds a person's message to a local ticket's Thread, which its worker reads as an Input and an ended ticket resumes on. */
+function LocalReply({ thread, onDone }: { thread: string; onDone: () => Promise<void> }) {
+  const { t, call, notify } = usePanel()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    try {
+      await call('POST local/followups', { body: { thread, text: text.trim() } })
+      setText('')
+      await onDone()
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error))
+    } finally { setBusy(false) }
+  }
+  return <form className="dt-form" onSubmit={submit}>
+    <label className="dt-field"><span className="dt-field-head">{t('localReplyLabel')}</span>
+      <textarea className="dt-textarea" rows={3} required maxLength={20000} aria-label={t('localReplyLabel')} value={text}
+        placeholder={t('localReplyPlaceholder')} onChange={event => setText(event.target.value)} /></label>
+    <div className="dt-row-buttons"><Button variant="primary" type="submit" disabled={!text.trim() || busy}>{t('localReplySend')}</Button></div>
+  </form>
+}
 function Details({ icon, title, open = false, children }: { icon: IconName; title: ReactNode; open?: boolean; children: ReactNode }) {
   const [shown, setShown] = useState(open)
   return <DisclosureRow icon={<Icon name={icon} />} title={title} open={shown} onToggle={() => setShown(!shown)}>
@@ -125,6 +148,8 @@ export function TicketPage({ id }: { id: string }) {
     return reason ? t('endedAt', { time, outcome, reason }) : t('endedAtShort', { time, outcome })
   })()
   const channel = data.channels[0]
+  // Only the Ticket's own local Thread takes a reply; a context-only Thread belongs to another Ticket.
+  const localThread = data.threads.find(thread => thread.source === 'local' && !thread.context)
   return <>
     <PageHead title={data.title}>
       {opening?.url && <ActionLink href={opening.url}>{t('openThread', { source: valueLabel(t, 'source', opening.source) })}</ActionLink>}
@@ -144,7 +169,8 @@ export function TicketPage({ id }: { id: string }) {
     {data.attention && <div className="dt-banner"><span className="dt-banner-label">{t('attentionPrefix')}</span><MarkdownLite
       text={data.attention.question} />
       {channel && <div className="dt-banner-actions">
-        <ActionLink href={channel.url} icon="message">{t('answerIn', { source: valueLabel(t, 'source', channel.source) })}</ActionLink>
+        {channel.url ? <ActionLink href={channel.url} icon="message">{t('answerIn', { source: valueLabel(t, 'source', channel.source) })}</ActionLink>
+          : <span className="dt-hint">{t('localReplyHint')}</span>}
       </div>}</div>}
     {/* Ordinary progress stays in the Session/Channels; only a report that halted work (blocked/failed) is shown here. */}
     {data.actions.retry && data.summary && <p className={`dt-banner${failed ? ' dt-danger' : ''}${failedText ? ' dt-mono' : ''}`}>
@@ -153,6 +179,23 @@ export function TicketPage({ id }: { id: string }) {
     {data.deliveryError && <p className="dt-banner dt-danger dt-mono">
       <span className="dt-banner-label">{t('deliveryFailedPrefix')}</span>{data.deliveryError}
     </p>}
+    {data.replies.length > 0 && <Section title={t('repliesTitle')} count={data.replies.length} hint={t('repliesHint')}>
+      <ul className="dt-list">{data.replies.slice().reverse().map(reply => <li key={reply.id} className="dt-row">
+        <div className="dt-row-main">
+          <div className="dt-row-title">{valueLabel(t, 'reply', reply.kind)}</div>
+          <div className="dt-row-meta">
+            {reply.status !== 'sent' && <Tag tone={reply.status === 'dropped' ? 'danger' : 'neutral'}>{valueLabel(t, 'replyStatus',
+              reply.status)}</Tag>}
+            {reply.at && <When at={reply.at} />}
+            {reply.dropped && <span>{reasonLabel(t, reply.dropped.reason)}</span>}
+          </div>
+          <div className="dt-row-quote"><MarkdownLite text={reply.text} /></div>
+        </div>
+      </li>)}</ul>
+    </Section>}
+    {localThread && <Section title={t('localReplyTitle')} hint={t('localReplyHint')}>
+      <LocalReply thread={localThread.key} onDone={reload} />
+    </Section>}
     <MandateDetails ticket={data} actor={actor} />
     {undelivered.length > 0 && <Section title={t('undeliveredInputs')} count={undelivered.length}>
       <Hint>{data.deliveryError ? t('inputRetryHint') : data.paused ? t('inputPausedHint') : t('inputWaitingHint')}</Hint>
@@ -175,7 +218,8 @@ export function TicketPage({ id }: { id: string }) {
       </Details>}
       <Details icon="message" title={t('term.channel')}>
         <ul className="dt-plain-list">{data.channels.map((item, index) => <li key={index}>
-          <ExternalLink href={item.url} icon={item.source === 'github' ? 'pull' : 'message'}>{localized(t, item.label)}</ExternalLink>
+          {item.url ? <ExternalLink href={item.url} icon={item.source === 'github' ? 'pull' : 'message'}>{localized(t, item.label)}</ExternalLink>
+            : <span className="dt-inline-link dt-icon-link"><Icon name="message" size={13} />{localized(t, item.label)}</span>}
         </li>)}</ul>
       </Details>
       {data.inputs.length > undelivered.length && <Details icon="inbox" title={t('deliveredInputs',

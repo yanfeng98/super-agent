@@ -1,9 +1,9 @@
 /** Execution status view (active Tickets and pause control) and Execution settings group (Executor capacity and workspace environment). */
-import { useRef, useState } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { TICKET_FILTERS, type TicketFilter } from '../app/api.ts'
 import { LIMITS } from '../limits.ts'
 import { usePoll, type SettingsView, type SourceView, type StateView } from './api.ts'
-import { DisclosureRow, Icon, InfoTip, Input, Pill } from './controls.tsx'
+import { Button, DisclosureRow, Icon, InfoTip, Input, Modal, Pill } from './controls.tsx'
 import { SaveBar } from './draft.tsx'
 import { usePanel } from './provider.tsx'
 import { TicketLine } from './rows.tsx'
@@ -11,11 +11,44 @@ import { ConfigHistory, Field, Fields, ModelField, numberOf, useBlockDraft, useS
 import { localized } from './text.ts'
 import { ConfirmButton, Hint, LabelValue, LoadMore, LoadState, Section, StatusHead } from './widgets.tsx'
 
+/** Creates a local ticket: the request is archived as Markdown and its Trigger starts a Ticket. */
+function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t, call, navigate, notify } = usePanel()
+  const [title, setTitle] = useState('')
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    try {
+      const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim() } })
+      setTitle(''); setText(''); setBusy(false); onClose()
+      navigate({ page: 'trigger', id: created.thread, query: { trigger: created.trigger } })
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error))
+      setBusy(false)
+    }
+  }
+  const ready = !!title.trim() && !!text.trim() && !busy
+  return <Modal open={open} onClose={onClose} title={t('newTicket')} closeLabel={t('close')} description={t('newTicketHint')}
+    footer={<><Button variant="outline" onClick={onClose}>{t('cancel')}</Button>
+      <Button variant="primary" type="submit" form="dt-new-ticket" disabled={!ready}>{t('createTicket')}</Button></>}>
+    <form id="dt-new-ticket" className="dt-form" onSubmit={submit}>
+      <label className="dt-field"><span className="dt-field-head">{t('newTicketTitle')}</span>
+        <Input value={title} maxLength={120} required aria-label={t('newTicketTitle')} placeholder={t('newTicketTitlePlaceholder')}
+          onChange={event => setTitle(event.target.value)} /></label>
+      <label className="dt-field"><span className="dt-field-head">{t('newTicketText')}</span>
+        <textarea className="dt-textarea" rows={6} maxLength={20000} required aria-label={t('newTicketText')}
+          placeholder={t('newTicketTextPlaceholder')} value={text} onChange={event => setText(event.target.value)} /></label>
+    </form>
+  </Modal>
+}
 export function ExecutionStatus({ filter: current, state, reload }: {
   filter: TicketFilter; state: StateView; reload: () => Promise<void>
 }) {
   const { t, call, navigate } = usePanel()
   const [limit, setLimit] = useState(20)
+  const [creating, setCreating] = useState(false)
   const { data, error, reload: reloadTickets } = usePoll(() => call('GET tickets', { query: { state: current, limit } }), [current, limit])
   const { paused, load: { maxWorkers } } = state
   // Pausing uses its own block revision so toggling pause does not invalidate an open Execution settings draft.
@@ -32,6 +65,7 @@ export function ExecutionStatus({ filter: current, state, reload }: {
         <LabelValue label={t('executingLabel')}
           value={`${state.load.running} / ${maxWorkers}`} /><LabelValue label={t('queuedLabel')} value={state.load.queued} />
       </>}
+      <Button variant="outline" icon={<Icon name="plus" />} onClick={() => setCreating(true)}>{t('newTicket')}</Button>
       <ConfirmButton variant="outline" icon={paused ? 'play' : 'pause'} label={t(action)} title={t(action)} message={t(paused
         ? 'resumeProcessingConfirm' : 'pauseProcessingConfirm')}
         onConfirm={pause} />
@@ -47,6 +81,7 @@ export function ExecutionStatus({ filter: current, state, reload }: {
       ? <TicketLine key={ticket.id} ticket={ticket} question
         onChanged={reloadTickets} /> : <TicketLine key={ticket.id} ticket={ticket} />)}</ul> : <Hint>{t('none')}</Hint>)}
     {data?.next_offset != null && <LoadMore onMore={() => setLimit(limit + 20)} />}
+    <NewTicket open={creating} onClose={() => setCreating(false)} />
   </>
 }
 

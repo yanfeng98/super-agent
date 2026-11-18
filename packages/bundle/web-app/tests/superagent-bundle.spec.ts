@@ -18,11 +18,12 @@ describe('built-in Superagent', () => {
     expect(manifest().dependencies?.['dsh-superagent']).toBe('workspace:*')
   })
 
-  it('mounts the Host plugin, the GitHub Source, the disabled Feishu Source and the two agent presets', () => {
+  it('mounts the Host plugin, the local and GitHub Sources, the disabled Feishu Source and the two agent presets', () => {
     const patch = readFileSync(resolve(bundleRoot, 'cordis.patch.yml'), 'utf8')
     expect(patch).toMatch(/- id: dsh-superagent\n\s+name: dsh-superagent\n/)
     expect(patch).toMatch(/- id: dsh-superagent-github\n\s+name: dsh-superagent\/github-watch\n/)
     expect(patch).toMatch(/- id: dsh-superagent-feishu\n\s+name: dsh-superagent\/feishu-watch\n\s+disabled: true\n/)
+    expect(patch).toMatch(/- id: dsh-superagent-local\n\s+name: dsh-superagent\/local\n/)
     const patches = manifest().dsh?.bundle?.patch ?? []
     expect(patches).toContain('./presets/superagent-worker.patch.yml')
     expect(patches).toContain('./presets/superagent-router.patch.yml')
@@ -51,6 +52,7 @@ describe('built-in Superagent', () => {
     expect(native.exports?.['.']).toEqual({ types: './lib/index.d.ts', default: './lib/index.js' })
     expect(native.exports?.['./github-watch']).toBe('./lib/github-watch.js')
     expect(native.exports?.['./feishu-watch']).toBe('./lib/feishu-watch.js')
+    expect(native.exports?.['./local']).toBe('./lib/local.js')
     expect(native.exports?.['./client']).toBe('./lib/client.js')
     expect(native.dsh?.client?.platform).toBe('web')
   })

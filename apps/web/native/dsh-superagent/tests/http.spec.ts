@@ -5,6 +5,7 @@ import { PromptConflict } from '../src/app/prompts.ts'
 import { SettingsConflict } from '../src/app/settings.ts'
 import type { HttpHost } from '../src/app/http.ts'
 import { SettingsSchema } from '../src/policy.ts'
+import type { LocalRequest } from '../src/sources/local.ts'
 import { SetupError } from '../src/setup.ts'
 
 type Handler = (req: unknown, res: unknown) => Promise<void>
@@ -102,4 +103,40 @@ it('answers a prompt save that lost a race with 409, and a settings body over 12
   expect(await call('PUT', 'settings/executor', { value, revision: 0 })).toEqual({ status: 400,
     body: { error: `Request exceeds ${128 * 1024} bytes` } })
   expect(saves).toEqual([])
+})
+
+it('creates a local ticket only when setup resolved, the Source is on, and the operator is allowed', async () => {
+  const created: unknown[] = []
+  const call = serve({
+    configured: () => true,
+    store: { settings: () => SettingsSchema.parse({ policy: { sources: { local: { allowed: [{ id: 'operator' }] } } },
+      sources: { local: { enabled: true, config: {} } } }), blockRevision: () => 1,
+      threads: { get: (key: string) => key === 'local:r' ? { ref: { source: 'local', id: 'r' } } : undefined } },
+    sources: { instance: () => ({ enabled: true, config: {} }), policyPart: () => ({ allowed: [{ id: 'operator', name: 'Operator' }] }) },
+    settings: { save: async () => ({}) },
+    localRequest: async (input: LocalRequest) => { created.push(input); return { request: 'r', thread: 'local:r', trigger: 'local:r', file: '/tmp/r.md' } },
+    localFollowup: async (input: { thread: string; text: string }) => ({ trigger: 'f1', thread: input.thread }),
+  })
+  expect(await call('POST', 'local/requests', { title: '修复登录页', text: '窄屏溢出' })).toEqual({ status: 200,
+    body: { request: 'r', thread: 'local:r', trigger: 'local:r', file: '/tmp/r.md' } })
+  expect(created).toEqual([{ title: '修复登录页', text: '窄屏溢出' }])
+  expect(await call('POST', 'local/followups', { thread: 'local:r', text: '补充' })).toEqual({ status: 200,
+    body: { trigger: 'f1', thread: 'local:r' } })
+  expect(await call('POST', 'local/followups', { thread: '', text: 'x' })).toMatchObject({ status: 400 })
+  expect(await call('POST', 'local/followups', { thread: 'local:missing', text: 'x' })).toEqual({ status: 400,
+    body: { error: 'The local ticket Thread is unknown' } })
+  // Unknown fields and empty fields are refused before anything is written.
+  expect(await call('POST', 'local/requests', { title: 'x', text: 'y', extra: 1 })).toMatchObject({ status: 400 })
+  expect(await call('POST', 'local/requests', { title: ' ', text: 'y' })).toMatchObject({ status: 400 })
+  const off = serve({ configured: () => true, store: { settings: () => SettingsSchema.parse({}) }, sources: { instance: () => ({ enabled: false }) } })
+  expect(await off('POST', 'local/requests', { title: 'x', text: 'y' })).toMatchObject({ status: 400, body: { error: expect.stringContaining('off') } })
+  const unset = serve({ configured: () => false })
+  expect(await unset('POST', 'local/requests', { title: 'x', text: 'y' })).toMatchObject({ status: 400, body: { error: expect.stringContaining('setup') } })
+  // A Source whose saved Policy part allows nobody refuses instead of silently queueing a Trigger no Ticket can take.
+  const nobody = serve({ configured: () => true,
+    store: { settings: () => SettingsSchema.parse({ policy: { sources: { local: { allowed: [] } } },
+      sources: { local: { enabled: true, config: {} } } }), blockRevision: () => 1 },
+    sources: { instance: () => ({ enabled: true, config: {} }) }, settings: { save: async () => ({}) } })
+  expect(await nobody('POST', 'local/requests', { title: 'x', text: 'y' })).toEqual({ status: 400,
+    body: { error: 'The local Source allows nobody; add the operator under Policy → On each Source' } })
 })

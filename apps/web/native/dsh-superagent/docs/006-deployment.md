@@ -4,7 +4,7 @@ Use this guide to install, configure and operate dsh-superagent. It covers accou
 
 ## Built-in copy
 
-This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the GitHub Source on and Feishu off. There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the repository, the agent CLI and the Policy in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation, its accounts and its operations, which apply to the built-in copy too.
+This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source and the GitHub Source on and Feishu off. GitHub is optional: without a repository and an agent account, setup succeeds and you create work from the panel (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the repository, the agent CLI and the Policy in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation, its accounts and its operations, which apply to the built-in copy too.
 
 ### Quick start
 
@@ -27,7 +27,24 @@ This checkout mounts dsh-superagent in its Web profile: after `pnpm install && p
 5. In **Settings → Execution**, set the directory root and a prepare command that creates a worktree per Ticket (see the prepare-command example under Settings below).
 6. From an allowed account, comment `@<agent login> <request>` on an Issue or pull request; Overview shows the Ticket within the polling interval.
 
-Editing an Issue body to add a mention is not received; post a comment instead. Without a repository and account the runtime stays paused, so nothing polls.
+Editing an Issue body to add a mention is not received; post a comment instead.
+
+Without GitHub, skip steps 2–5 and create tickets from the panel instead; setup no longer waits for a repository or an account.
+
+### Local tickets
+
+With the `local` Source on, **Execution → New ticket** takes a title and a request. The request becomes a Trigger, the main Session accepts it, and its Executor works in a directory under the Execution settings (an empty prepare command leaves it empty). Every ticket has one Markdown file: `<archive>/<request id>.md`, where `<archive>` is the local Source's **Archive directory**, or `<stateDir>/tickets` when empty. The file holds the request, then one section for each reply the agent sends (acknowledgement, result, notice), so the run's outcome is recorded next to the request.
+
+- On a fresh install, the first request saves the Source's Policy part with the operator on the allowed list, so no extra configuration is needed. Removing that entry stops new tickets until it is added back.
+- The ticket page lists the same replies under **Replies and results**, with each message's delivery status, so the panel and the file agree.
+- A local ticket's page also has a reply box. Its message is appended to the same file as a follow-up, delivered to the Ticket's Executor as an Input, and resumes an ended Ticket. Use it to answer the agent's question when a Ticket waits for a person.
+- Set **Execution → Directory root** to a checkout or workspace when the work needs files; the archive directory may point into that checkout to keep tickets with the code. To give each ticket a checkout of an existing repository, leave the root at its default and use a prepare command such as:
+
+  ```sh
+  git -C /path/to/the/project worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" HEAD
+  ```
+- A partly configured GitHub Source (a repository without its CLI, or an account the CLI cannot reach) still fails the deployment check, which pauses every Source, including local tickets. Clear both fields or fix the account.
+- Without a GitHub account, git has no agent identity to commit as. The worker git configuration then carries the neutral author `dsh-superagent <dsh-superagent@localhost>`; the Delivery requirements prompt can name another author.
 
 ### Enabling Feishu
 
@@ -59,8 +76,8 @@ Both presets run with `danger-full-access` as the operator's OS user and read me
 ## Prerequisites
 
 - Node.js 22.19+ or 24+, pnpm, git 2.32+, Python 3.8+ and tmux
-- GitHub CLI (`gh`) 2.48 or later. Source CLI fields must point to `gh` or `lark-cli` wrappers; the host relies on their subcommands and output formats.
-- A repository on github.com; GitHub Enterprise Server is not supported. To create a checkout per Ticket, keep a local clone from which the prepare command can add worktrees. Install `git-lfs` if that repository uses Git LFS.
+- For the GitHub Source: GitHub CLI (`gh`) 2.48 or later. Source CLI fields must point to `gh` or `lark-cli` wrappers; the host relies on their subcommands and output formats.
+- For the GitHub Source: a repository on github.com; GitHub Enterprise Server is not supported. To create a checkout per Ticket, keep a local clone from which the prepare command can add worktrees. Install `git-lfs` if that repository uses Git LFS.
 - A model provider configured for DeepSeek Harness. dsh-superagent uses the profile's default model unless the Eval or Execution settings name another.
 - For Feishu: `lark-cli` (tested with 1.0.90) and a Feishu or Lark app with a bot
 
@@ -182,7 +199,7 @@ Check dsh-superagent: run `scripts/dsh-superagent --profile superagent status` i
 
 Setup must succeed before polling or work starts. Overview lists missing requirements and links to their settings. A settings change runs setup again. If you fix something outside the application, such as CLI authentication, choose **Check again**.
 
-1. **Sources.** Set the GitHub repository (`owner/name`) and agent CLI, for example `/home/me/.local/bin/gh-agent`. Requests normally arrive through the agent account's notifications. A new Issue or comment mentioning the account arrives on the next poll; adding a mention by editing an existing Issue body does not. Post a new comment instead. For Feishu, set the bot CLI, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
+1. **Sources.** The local Source sets the Markdown archive directory. For GitHub, set the repository (`owner/name`) and agent CLI, for example `/home/me/.local/bin/gh-agent`. Requests normally arrive through the agent account's notifications. A new Issue or comment mentioning the account arrives on the next poll; adding a mention by editing an existing Issue body does not. Post a new comment instead. For Feishu, set the bot CLI, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
 2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the GitHub accounts and Feishu users who may ask for work; until a list has someone, no request can become a Ticket. With Feishu, a chat can be chosen to sync the list from, at startup and on **Sync now**.
 3. **Execution.** The directory root and a prepare command. To give each Ticket a checkout of the repository:
 
@@ -210,6 +227,8 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 | `GET settings` | `blocks`: `policy`, `eval` and `executor`, each with its `value` and its `revision`; `sources`: the Source instances, each with `id`, `kind`, `installed`, its block's `value`, `{"enabled": …, "config": {…}}`, and `revision`, its kind's form, and its setup `problem` when it has one; `policyVersion`; and `environment`, the execution environment's `root` and `variables` |
 | `GET sources` | Each Source's status: `state` (`missing`, `off`, `error`, `setup`, `starting`, `paused` or `ready`), the `health` of its parts, its setup `problem`, the last day's `stats`, the Triggers it `filtered` in that day, and the messages it `dropped` in that day, newest drop first, each with its `channel`, `preview`, `ticket` (`id` and `title`) when it was for one, its `thread` when the store has it, and `dropped.at` and `dropped.reason`, `channelGone` or `channelIgnored` |
 | `PUT settings/<block>` with `{"value": …, "revision": n}` | Saves one block: `saved`, the block's new `revision`, `policy_changed` and `restarting`. `value` is the whole block, as `GET settings` holds it; a missing key takes its default |
+| `POST local/requests` with `{"title": …, "text": …}` | Creates a local ticket and archives it: `request`, `thread`, `trigger` and `file` |
+| `POST local/followups` with `{"thread": …, "text": …}` | Appends a person's message to a local ticket's Thread and archives it: `trigger` and `thread` |
 | `POST executor/pause` with `{"paused": true}` or `false` | Pauses or resumes processing: `paused` |
 | `POST setup/check` | Runs setup again by restarting dsh-superagent: `restarting: true`. Refused when setup has nothing to fix |
 | `POST policy-sync/<source id>` | Syncs that Source's allowed list now: `policy`, the Source's part as saved |
@@ -266,7 +285,7 @@ A file in `worker-bin` or `worker-gitconfig` that dsh-superagent did not write s
 
 ## Try it
 
-From an allowed GitHub account, open an Issue or post a comment containing `@<agent login> <request>`. Within a polling interval (one minute by default), Overview should show a Ticket. The agent acknowledges the request, works in its own Session and directory, and delivers in the original conversation. For Feishu, mention the bot in a configured chat.
+From an allowed GitHub account, open an Issue or post a comment containing `@<agent login> <request>`. Within a polling interval (one minute by default), Overview should show a Ticket. The agent acknowledges the request, works in its own Session and directory, and delivers in the original conversation. For Feishu, mention the bot in a configured chat. Without GitHub or Feishu, create the ticket under **Execution → New ticket**; its replies and results appear on the ticket page and in its Markdown file.
 
 ### Everyday use
 
@@ -305,6 +324,11 @@ Setup problems appear on the overview with a link to the fix, in the panel's lan
 | `git does not read the github.com credential configuration dsh-superagent writes` | Install git 2.32 or later |
 | A Ticket fails with `The git configuration of the repository in … sets …` | Remove the named credential or `http.*.extraheader` settings from the clone's `.git/config` |
 | `… was not written by dsh-superagent` | Move the named file out of `<stateDir>/worker-bin` or `<stateDir>/worker-gitconfig`, or choose another `stateDir` |
+| `The local Source is off; turn it on in Settings → Sources` | Enable the local Source on the Sources settings |
+| `The local Source allows nobody; add the operator under Policy → On each Source` | Add `operator` to the local Source's allowed list |
+| `The local ticket Thread is unknown` | The page names a Thread another Source owns or one that no longer exists; reopen the Ticket from Execution |
+| `The local Source filtered the request` | The Source was turned off while the request was created, or its scope no longer listens; check the Source |
+| A local Ticket's archive file cannot be written | Set **Archive directory** to an absolute, writable directory; the default is `<stateDir>/tickets` |
 | `The bot lark-cli allows user identities` | Point the Feishu Source at a bot-only configuration, as in Feishu bot above |
 | `The bot lark-cli does not work.` or `The bot identity of app … is …` | Check the configuration's app id and secret |
 | `The Feishu bot is not a member of the chat.` | Add the bot to the chat in the chat's settings; the next attempt succeeds |

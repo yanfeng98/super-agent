@@ -6,6 +6,7 @@ import { Store } from '../src/app/store.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuKind } from '../src/sources/feishu.ts'
+import { localKind } from '../src/sources/local.ts'
 import { githubKind } from '../src/sources/github.ts'
 import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail } from '../src/app/views/tickets.ts'
@@ -154,6 +155,15 @@ it('does not show a follow-up that reached a ticket as waiting for an Eval, thou
 const load = { running: 0, queued: 0 }
 const problems = (host: ReturnType<typeof views>, health: Parameters<typeof overview>[1] = {}) =>
   overview(host, health, 'v1', load).problems
+
+it('counts a Source kind\'s default allowed senders, so a fresh local-ticket install is not told that nobody may ask', () => {
+  store.saveSettings(SettingsSchema.parse({}))
+  const withLocal = new SourceRegistry(() => store.settings())
+  withLocal.register(localKind)
+  expect(problems({ store, sources: withLocal, links })).not.toContainEqual({ kind: 'no-allowed' })
+  // Without a kind that defaults to allowed senders, the problem is still reported.
+  expect(problems({ store, sources: new SourceRegistry(() => store.settings()), links })).toContainEqual({ kind: 'no-allowed' })
+})
 
 it('lists an Eval past its deadline, and as dsh-superagent\'s own errors only parts no Source or Policy sync reports', () => {
   const host = views()

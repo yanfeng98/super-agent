@@ -80,6 +80,9 @@ export function ticketDetail(host: ViewHost, id: string) {
       ...assignment.state === 'running' && assignment.report && assignment.report.state !== 'progress' && stage !== 'working'
         ? { turnEndedAt: assignment.report.at } : {} })),
     inputs: ticket.inputs.slice().reverse().map(input),
+    // What the ticket sent to its Channel, which the panel otherwise shows only where the Source's own UI can.
+    replies: store.receipts.ofTicket(id).map(receipt => ({ id: receipt.id, kind: receipt.kind, status: receipt.status,
+      text: markdown(receipt.text), at: receipt.at ?? '', ...receipt.dropped ? { dropped: receipt.dropped } : {} })),
     // Threads followed for context only (e.g., related issues) grant no authority and are marked with `context: true`.
     threads: view.threadsOf(id).map(thread => ({ ...threadSummary(view, thread),
       ...thread.context?.includes(id) ? { context: true as const } : {} })) }

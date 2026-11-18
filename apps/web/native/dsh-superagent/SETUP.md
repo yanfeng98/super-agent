@@ -1,6 +1,6 @@
 # SETUP
 
-> **Built-in copy:** this checkout already mounts dsh-superagent in its Web profile. Skip the install, profile and plugin steps; configure the repository and the agent CLI in the **Superagent** panel (or through the Management API of `docs/006-deployment.md`). The account, CLI and bot preparation below still applies.
+> **Built-in copy:** this checkout already mounts dsh-superagent in its Web profile. Skip the install, profile and plugin steps. GitHub is optional: to use it, configure the repository and the agent CLI in the **Superagent** panel (or through the Management API of `docs/006-deployment.md`); to work without it, create tickets in the panel under **Execution → New ticket** and skip the repository, account and CLI preparation below. The bot preparation still applies to Feishu.
 
 Instructions for an agent that sets up dsh-superagent with its operator. If you are a person, ask your coding agent to read this file and follow it.
 
