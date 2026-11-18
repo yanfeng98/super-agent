@@ -91,6 +91,8 @@ export interface DomainEvents {
   'ticket.resumed': { ticketId: string; triggerId: string }
   /** A person reopened an ended ticket under its unchanged Mandate; a fresh Assignment starts. */
   'ticket.reopened': { ticketId: string }
+  /** A person approved a held ticket, so its first Assignment may launch. */
+  'ticket.approved': { ticketId: string }
   'ticket.ended': { ticketId: string; by: TicketEndBy; outcome: TicketOutcome; reason?: string }
   'assignment.started': { ticketId: string; assignmentId: string }
   'assignment.ended': { ticketId: string; assignmentId: string; reason: string }

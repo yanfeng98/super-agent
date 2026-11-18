@@ -12,7 +12,7 @@ export function ticketMark(t: T, ticket: TicketStage & Pick<TicketSummary, 'ende
     case 'person': {
       const action = ticket.action
       const icon: IconName = action === 'review' ? 'review' : action === 'failed' ? 'alert' : action === 'blocked' ? 'blocked'
-        : action === 'delivery' ? 'inbox' : 'ask'
+        : action === 'delivery' ? 'inbox' : action === 'approval' ? 'decision' : 'ask'
       return { label: t(`stage.${action}`), tone: action === 'failed' ? 'danger' : 'warning', dot: action === 'failed' ? 'error'
         : 'warning', icon }
     }

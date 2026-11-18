@@ -24,7 +24,8 @@ export type LocalConfig = z.infer<typeof LocalConfigSchema>
 /** One file sent with a panel request, as its name and base64 content. */
 export type LocalAttachment = { name: string; data: string }
 /** A panel request; `key` is the client's idempotency key, `project` a label a prepare command may route on, and `tags` labels for people. */
-export type LocalRequest = { title: string; text: string; key?: string; project?: string; tags?: string[]; files?: LocalAttachment[] }
+export type LocalRequest = { title: string; text: string; key?: string; project?: string; tags?: string[]; files?: LocalAttachment[];
+  hold?: boolean }
 export interface LocalRequestResult { request: string; thread: string; trigger: string; file: string }
 /** Stored result per client idempotency key, so retrying a creation returns the ticket it already made. */
 const REQUEST_RESULTS = family<LocalRequestResult, [key: string]>('local-request:')
@@ -49,13 +50,14 @@ const REQUEST_LABELS: Record<string, Localized> = {
  * @param file - Absolute path of the ticket's archive file.
  */
 export async function writeRequest(file: string, request: { id: string; title: string; text: string; at: string; project?: string;
-  tags?: string[] }): Promise<void> {
+  tags?: string[]; hold?: boolean }): Promise<void> {
   await mkdir(dirname(file), { recursive: true })
   // Front matter is one line per field, and the title also becomes the heading, so a pasted line break becomes a space.
   const title = request.title.replace(/\s+/g, ' ').trim()
   const project = request.project?.trim() ? `project: ${JSON.stringify(request.project.trim())}\n` : ''
   const tags = request.tags?.length ? `tags: ${JSON.stringify(request.tags)}\n` : ''
-  await writeFile(file, `---\nid: ${request.id}\ntitle: ${JSON.stringify(title)}\nsource: ${SOURCE}\n${project}${tags}created: ${request.at}\n---\n\n# ${title}\n\n${request.text.trim()}\n`, { flag: 'wx' })
+  const hold = request.hold ? 'hold: true\n' : ''
+  await writeFile(file, `---\nid: ${request.id}\ntitle: ${JSON.stringify(title)}\nsource: ${SOURCE}\n${project}${tags}${hold}created: ${request.at}\n---\n\n# ${title}\n\n${request.text.trim()}\n`, { flag: 'wx' })
 }
 /** One writer at a time per archive file, so a read-check-append pair cannot interleave with another write to it. */
 const archiveTails = new Map<string, Promise<unknown>>()
@@ -267,7 +269,7 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
   const title = input.title.replace(/\s+/g, ' ').trim()
   const file = archiveFile(archiveDir(ctx.deployment, config), id)
   await writeRequest(file, { id, title, text: input.text, at, ...input.project ? { project: input.project } : {},
-    ...input.tags?.length ? { tags: input.tags } : {} })
+    ...input.tags?.length ? { tags: input.tags } : {}, ...input.hold ? { hold: true } : {} })
   let attachments: string[] = []
   try { attachments = await writeAttachments(dirname(file), id, input.files ?? []) }
   catch (error) { await rm(file, { force: true }); throw error }
@@ -280,7 +282,8 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
     text: `${title}\n\n${input.text}${attachmentList}`,
     channel: { source: SOURCE, thread, address: { request: id, file } },
     meta: { requestId: id, messageId: id, title, ...input.project ? { project: input.project } : {},
-      ...input.tags?.length ? { tags: input.tags } : {}, ...idempotency ? { idempotency } : {} },
+      ...input.tags?.length ? { tags: input.tags } : {}, ...input.hold ? { hold: true } : {},
+      ...idempotency ? { idempotency } : {} },
   }
   // Describe the Thread after the intake created it; describing an absent Thread is a no-op.
   const received = await ctx.receive(trigger)
@@ -330,7 +333,7 @@ export async function createLocalFollowup(host: SourceHost, input: LocalFollowup
 export const inboxDir = (deployment: { stateDir: string }): string => join(deployment.stateDir, 'inbox')
 const INBOX_REQUEST = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),
   key: z.string().trim().min(8).max(200).optional(), project: z.string().trim().min(1).max(60).optional(),
-  tags: z.array(z.string().trim().min(1).max(24)).max(8).optional() }).strict()
+  tags: z.array(z.string().trim().min(1).max(24)).max(8).optional(), hold: z.boolean().optional() }).strict()
 /**
  * Ingests the JSON requests a command-line client drops into `<stateDir>/inbox`, writing each result to
  * `done/<file>` and moving invalid or refused files to `rejected/`. A request without a key uses its file name, so a
@@ -378,6 +381,15 @@ async function appendLifecycle(ticket: Pick<Ticket, 'channels'>, marker: string,
     if (existing === undefined || existing.includes(marker)) return
     await appendFile(file, ['', `## ${heading}`, '', marker, ...lines, ''].join('\n'))
   })
+}
+/**
+ * Appends a person's approval of a held ticket to its archive, once per approval.
+ * @param ticket - The approved ticket.
+ * @param at - When it was approved.
+ */
+export async function recordApproval(ticket: Pick<Ticket, 'channels'>, at: string): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:approved:${at} -->`, `${at} · 批准 / Approved`,
+    ['- status: approved', `- by: ${OPERATOR}`])
 }
 /**
  * Appends a ticket's new title to its archive, so the file records the rename instead of rewriting the request.

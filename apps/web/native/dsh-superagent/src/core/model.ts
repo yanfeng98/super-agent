@@ -305,6 +305,8 @@ export interface Ticket {
   execution?: Execution
   /** Git facts captured when the ticket ended, so its page shows what changed without opening the worktree. */
   review?: TicketReview
+  /** Set when the request asked to wait for a person's approval before its first Assignment runs. */
+  hold?: { at: string }
   /** When a person merged the ticket's branch into the repository, and where. */
   merged?: { at: string; branch: string; target: string }
   /** When a person discarded the ticket's worktree and branch. */

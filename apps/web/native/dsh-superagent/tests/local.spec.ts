@@ -40,7 +40,7 @@ function harness({ allow = true, enabled = true } = {}) {
   const parts: SourceContextDeps = { store, engine, outbox, commands, sources, deployment, ready: Promise.resolve(), configured: () => true,
     receive }
   const host = { ...parts, context: (kind: { kind: string; health: readonly string[] }) => sourceContextOf(parts, kind) }
-  return { host, store, engine, sources, assessor, candidates, deployment, commands }
+  return { host, store, engine, sources, assessor, candidates, deployment, commands, executor }
 }
 
 describe('local tickets', () => {
@@ -244,6 +244,20 @@ describe('local tickets', () => {
     const archive = readFileSync(created.file, 'utf8')
     expect(archive).toContain('附件 / Attachments')
     expect(archive).toContain(stored)
+  })
+
+  it('holds a request for approval and approves it', async () => {
+    const h = harness()
+    const created = await createLocalRequest(h.host, { title: '等批准', text: '先别执行。', hold: true })
+    expect(h.store.triggers.get(created.trigger)?.meta.hold).toBe(true)
+    const candidate = h.candidates.at(-1)!
+    const decision = h.engine.decide(created.trigger, { kind: 'accept', title: '等批准', scope: '批准', reason: 'requested',
+      acknowledgement: '已接单。', evalId: candidate.evalId })
+    const ticket = h.store.tickets.get(decision.ticketId!)!
+    h.store.tickets.save({ ...ticket, hold: { at: new Date().toISOString() } })
+    expect(h.engine.approveTicket(ticket.id).hold).toBeUndefined()
+    expect(h.executor.start).toHaveBeenCalledTimes(2)
+    expect(() => h.engine.approveTicket(ticket.id)).toThrow(/does not wait/)
   })
 
   it('turns a command-line request from the inbox into a ticket and records the result', async () => {

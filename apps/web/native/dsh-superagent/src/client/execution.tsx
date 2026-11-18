@@ -28,6 +28,7 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tags, setTags] = useState('')
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
+  const [hold, setHold] = useState(false)
   const [busy, setBusy] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   // One key per unchanged draft, so a retry after a lost response returns the ticket the first attempt made.
@@ -42,8 +43,8 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
       const attachments = await Promise.all(files.map(async file => ({ name: file.name, data: await readAttachment(file) })))
       const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim(), key: idempotency.current,
         ...project.trim() ? { project: project.trim() } : {}, ...labels.length ? { tags: labels } : {},
-        ...attachments.length ? { files: attachments } : {} } })
-      setTitle(''); setProject(''); setTags(''); setText(''); setFiles([]); idempotency.current = undefined
+        ...attachments.length ? { files: attachments } : {}, ...hold ? { hold: true } : {} } })
+      setTitle(''); setProject(''); setTags(''); setText(''); setFiles([]); setHold(false); idempotency.current = undefined
       if (fileInput.current) fileInput.current.value = ''
       setBusy(false); onClose()
       navigate({ page: 'trigger', id: created.thread, query: { trigger: created.trigger } })
@@ -66,6 +67,8 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
       <label className="dt-field"><span className="dt-field-head">{t('newTicketTags')}</span>
         <Input value={tags} maxLength={200} aria-label={t('newTicketTags')} placeholder={t('newTicketTagsPlaceholder')}
           onChange={event => { idempotency.current = undefined; setTags(event.target.value) }} /></label>
+      <label className="dt-check"><input type="checkbox" checked={hold}
+        onChange={event => { idempotency.current = undefined; setHold(event.target.checked) }} /> {t('newTicketHold')}</label>
       <label className="dt-field"><span className="dt-field-head">{t('newTicketFiles')}</span>
         <input ref={fileInput} type="file" multiple className="dt-file" aria-label={t('newTicketFiles')}
           onChange={event => { idempotency.current = undefined; setFiles([...event.target.files ?? []].slice(0, 5)) }} />

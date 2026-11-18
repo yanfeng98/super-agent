@@ -162,6 +162,24 @@ export class Tickets extends EnginePart {
     return this.require(ticketId)
   }
   /**
+   * Approves a ticket that waits for approval, so its pending Assignment may launch.
+   * @throws UserError when the ticket is unknown, has ended, does not wait for approval, or has no pending Assignment.
+   */
+  approve(ticketId: string): Ticket {
+    const ticket = this.require(ticketId)
+    if (!liveTicket(ticket)) throw new UserError('ticketEnded')
+    if (!ticket.hold) throw new UserError('notHeld')
+    const assignment = latestAssignment(ticket)
+    if (!assignment || assignment.state !== 'pending') throw new UserError('notRetryable')
+    const at = this.now()
+    delete ticket.hold
+    ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    this.emit('ticket.approved', { ticketId: ticket.id })
+    this.options.executor.start(ticket, assignment)
+    return this.require(ticketId)
+  }
+  /**
    * Renames a ticket; its threads, channels and inputs keep their recorded text.
    * @throws UserError when the ticket is unknown or the title is blank.
    */

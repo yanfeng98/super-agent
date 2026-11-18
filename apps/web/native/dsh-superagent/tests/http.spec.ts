@@ -190,3 +190,12 @@ it('renames a ticket, refusing a blank title or an unknown ticket', async () => 
   expect(await call('POST', 'tickets/t1/title', { title: '   ' })).toMatchObject({ status: 400 })
   expect(await call('POST', 'tickets/t9/title', { title: 'x' })).toMatchObject({ status: 404 })
 })
+
+it('approves a held ticket through the panel', async () => {
+  const approved: string[] = []
+  const call = serve({ store: { tickets: { get: (id: string) => id === 't1' ? { id } : undefined } },
+    approveTicket: (id: string) => { approved.push(id); return { id } } })
+  expect(await call('POST', 'tickets/t1/approve')).toEqual({ status: 200, body: { approved: true } })
+  expect(approved).toEqual(['t1'])
+  expect(await call('POST', 'tickets/t9/approve')).toMatchObject({ status: 404 })
+})
