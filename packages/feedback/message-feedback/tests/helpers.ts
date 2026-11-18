@@ -150,7 +150,7 @@ class TestPersistence extends SessionPersistence {
     }))
   }
 
-  async remove(id: SessionId): Promise<void> {
+  override async remove(id: SessionId): Promise<void> {
     if (!this.durable.delete(id)) throw new SessionPersistenceNotFoundError(id)
   }
 

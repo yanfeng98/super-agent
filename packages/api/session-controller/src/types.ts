@@ -16,12 +16,12 @@ import type { SessionActivity, WorkspaceId } from '@deepseek-ai/dsh-workspace/ty
 
 export type { SessionActivity } from '@deepseek-ai/dsh-workspace/types'
 
+export type { SessionListMetadata } from '@deepseek-ai/dsh-session-query/types'
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Eligible latest failed turn/end for an empty prompt, or null. */
     conversationContinuation: SessionSeq | null
-    /** Persisted facts used to summarize a Session without activating it. */
-    sessionListMetadata: SessionListMetadata
     /**
      * Image-intake limits enforced by the Session prompt endpoint. Boot
      * constant, excluded from Session summary payloads: every Session shares
@@ -29,14 +29,6 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
      */
     imageLimits: SessionProjectionSummaryExcluded<ImageAttachmentLimits>
   }
-}
-
-/** Persisted hints used to summarize a cold Session. */
-export interface SessionListMetadata {
-  /** Whether the folded prefix contains no turn. */
-  readonly blank: boolean
-  /** Latest human-authored prompt time in the folded prefix. */
-  readonly lastPromptAt: number | null
 }
 
 /**
@@ -221,6 +213,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/in-use': { readonly sessionId: SessionId }
     /** Deletion refused a subagent conversation, which is removed with its parent catalog. */
     'session/subagent': { readonly sessionId: SessionId }
+    /**
+     * Deletion is unavailable because the configured storage backend keeps
+     * committed Sessions append-only; nothing was removed.
+     */
+    'session/delete-unsupported': { readonly sessionId: SessionId }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
       readonly childSessionId: SessionId

@@ -189,7 +189,7 @@ class TestPersistence extends SessionPersistence {
     })
   }
 
-  remove(id: SessionIdType): Promise<void> {
+  override remove(id: SessionIdType): Promise<void> {
     if (!TestPersistence.entries.delete(id)) return Promise.reject(new SessionPersistenceNotFoundError(id))
     TestPersistence.revisions.delete(id)
     TestPersistence.reads.delete(id)

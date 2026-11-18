@@ -23,6 +23,7 @@ import {
   SessionHandleClosedError,
   SessionPersistenceBusyError,
   SessionPersistenceNotFoundError,
+  SessionPersistenceRemoveUnsupportedError,
   SessionReadOnlyError,
 } from '../src/index.ts'
 import type { SessionHandle, SessionPersistence } from '../src/index.ts'
@@ -47,6 +48,12 @@ export interface ContractBackend extends ContractBackendInstance {
    * simulating a crash mid-write. Enables the torn-tail tests.
    */
   corruptTail?: (id: SessionId, cwd: string | undefined) => Promise<void>
+  /**
+   * Whether the backend deletes a committed session. Omitted means
+   * `supported`; an `unsupported` backend keeps committed artifacts
+   * append-only and is held to refusing removal instead.
+   */
+  removal?: 'supported' | 'unsupported'
 }
 
 /** Build a minimal {@link SessionHeader} for a session id. */
@@ -614,7 +621,8 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
     })
 
     it('remove deletes every artifact and leaves other sessions intact', async () => {
-      const { persistence, dispose } = await make()
+      const { persistence, dispose, removal } = await make()
+      if (removal === 'unsupported') return
       try {
         const removed = meta('remove-target', '/work')
         const kept = meta('remove-kept', '/work')
@@ -644,7 +652,8 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
     })
 
     it('remove refuses while a handle still owns the session, then succeeds after close', async () => {
-      const { persistence, dispose } = await make()
+      const { persistence, dispose, removal } = await make()
+      if (removal === 'unsupported') return
       try {
         const m = meta('remove-busy', '/work')
         const writer = await persistence.create(m)
@@ -659,7 +668,8 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
     })
 
     it('remove observes cancellation before touching storage', async () => {
-      const { persistence, dispose } = await make()
+      const { persistence, dispose, removal } = await make()
+      if (removal === 'unsupported') return
       try {
         const m = meta('remove-abort', '/work')
         const writer = await persistence.create(m)
@@ -679,7 +689,7 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
     it('remove is visible to a fresh instance over the same storage', async () => {
       const backend = await make()
       try {
-        if (backend.reopen === undefined) return
+        if (backend.reopen === undefined || backend.removal === 'unsupported') return
         const m = meta('remove-reopen', '/work')
         const writer = await backend.persistence.create(m)
         await writer.append(oneTurnLog())
@@ -695,6 +705,27 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
         }
       } finally {
         await backend.dispose()
+      }
+    })
+
+    it('an append-only backend refuses removal and keeps the stored session', async () => {
+      const { persistence, dispose, removal } = await make()
+      if (removal !== 'unsupported') return
+      try {
+        const m = meta('remove-unsupported', '/work')
+        const writer = await persistence.create(m)
+        await writer.append(oneTurnLog())
+        await writer.close()
+
+        await expect(persistence.remove(m.id)).rejects.toBeInstanceOf(SessionPersistenceRemoveUnsupportedError)
+        // The refusal leaves the whole artifact set observable and readable.
+        expect(await persistence.stat(m.id)).toBeDefined()
+        expect((await persistence.list()).map(snapshot => snapshot.header.id)).toContain(m.id)
+        const reader = await persistence.open(m.id, 'read')
+        expect((await reader.read()).events).toEqual(oneTurnLog())
+        await reader.close()
+      } finally {
+        await dispose()
       }
     })
   })

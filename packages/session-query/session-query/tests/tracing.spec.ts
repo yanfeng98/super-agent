@@ -123,7 +123,7 @@ class TracePersistence extends SessionPersistence {
     })
   }
 
-  remove(id: SessionIdType): Promise<void> {
+  override remove(id: SessionIdType): Promise<void> {
     if (!TracePersistence.entries.delete(id)) return Promise.reject(new SessionPersistenceNotFoundError(id))
     return Promise.resolve()
   }
