@@ -220,6 +220,7 @@ const ticketDetail = (): TicketPageView => ({
   inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'e2', at: '2026-09-22T00:03:00Z', delivered: false,
     trigger: { id: 'e2', actor: actor('feishu', MEMBER), human: true, preview: '顺便改标题', thread: 'feishu:oc_1:om_root' } },
   { id: 'i2', kind: 'policy-changed', at: '2026-09-22T00:04:00Z', delivered: true, from: 'aaaaaaaaaaaaaaaa', to: 'bbbbbbbbbbbbbbbb' }],
+  replies: [{ id: 'r1', kind: 'reply', status: 'sent', text: '已修好，见 PR', at: '2026-09-22T00:05:00Z' }],
 })
 function threadPage(key: string, { before, around }: { before?: string; around?: string }): ThreadPageView | undefined {
   if (key !== threadSummary().key) return undefined
@@ -338,6 +339,9 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     server.tickets.open = []; server.person = server.person.filter(ticket => ticket.id !== params.id)
     return { stopped: true }
   } },
+  'POST local/requests': { body: true, answer: ({ body }) => ({ request: 'local-1', thread: 'local:local-1', trigger: 'local:local-1',
+    file: `/tmp/${String((body as { title?: string }).title ?? 'new')}.md` }) },
+  'POST local/followups': { body: true, answer: () => ({ trigger: 'local:f1', thread: 'local:local-1' }) },
   'POST executor/pause': { body: true, answer: ({ body }) => {
     server.settings = { ...server.settings, paused: body.paused }
     server.revisions.pause = (server.revisions.pause ?? 0) + 1

@@ -45,11 +45,14 @@ export function overview(host: ViewHost, health: HealthMap, policyVersionValue: 
   const running = instances.filter(instance => instance.enabled && instance.installed).map(instance => sourceHealth(sources, instance, health))
   // Exclude source-owned and policy-sync health entries so only core runtime errors surface as `runtime-error`.
   const sourceParts = new Set(instances.flatMap(instance => sources.kind(instance.kind)?.health ?? []))
+  // A kind's default Policy part names senders before the first save (the local ticket Source names the operator), so count it too.
+  const allowed = anyoneAllowed(settings) || instances.some(instance => instance.enabled && instance.installed
+    && (sources.policyPart(instance.id)?.allowed.length ?? 0) > 0)
   const problems = [
     ...(setup ? [{ kind: 'setup' as const, ...setup }] : []),
     ...(running.length ? [] : [{ kind: 'no-source' as const }]),
     // Only allowed senders can originate work, so empty allowlists mean no request can ever become a ticket.
-    ...(anyoneAllowed(settings) ? [] : [{ kind: 'no-allowed' as const }]),
+    ...(allowed ? [] : [{ kind: 'no-allowed' as const }]),
     ...running.flatMap(source => source.health.filter(item => item.state === 'error').map(item => ({ kind: 'source-error' as const, source: { id: source.id, title: source.title, health: item } }))),
     ...(settings.paused ? [{ kind: 'executor-paused' as const }] : []),
     // Unavailable Evals behind the `evals` health entry are listed individually as `eval-unavailable` below.

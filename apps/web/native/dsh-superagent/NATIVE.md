@@ -4,9 +4,10 @@ This directory is the source-vendored copy of [`yanfeng98/nano-dsh-superagent-pr
 that ships with this Super Agent checkout as a built-in capability. It is not installed from npm and it is not a third-party
 profile plugin.
 
-It is a proactive coding agent for one GitHub repository: it listens to GitHub (and optionally Feishu), evaluates requests
-under a Policy, turns authorized ones into Tickets, and runs each Ticket in its own DSH Session and directory. The
-**Superagent** entry in the Web sidebar opens its panel.
+It is a proactive coding agent that takes requests from local tickets created in its panel, GitHub, or Feishu, evaluates
+them under a Policy, turns authorized ones into Tickets, and runs each Ticket in its own DSH Session and directory. Every
+local ticket is archived as a Markdown file that also receives the agent's replies and results. The **Superagent** entry in
+the Web sidebar opens its panel.
 
 ## Baseline
 
@@ -20,19 +21,19 @@ under a Policy, turns authorized ones into Tickets, and runs each Ticket in its 
 - `pnpm-workspace.yaml` lists `apps/web/native/dsh-superagent`.
 - `packages/bundle/web-app/package.json` depends on `dsh-superagent` as a workspace package.
 - `packages/bundle/web-app/cordis.patch.yml` inserts the `dsh-superagent` row (Host plugin plus the browser panel from its
-  `dsh.client` declaration), the `github-watch` Source and the `feishu-watch` Source (disabled).
+  `dsh.client` declaration), the `github-watch` and `local` Sources, and the `feishu-watch` Source (disabled).
 - `packages/bundle/web-app/presets/superagent-worker.patch.yml` and `superagent-router.patch.yml` define the two agent presets
   its Sessions run under (`dsh-superagent-worker`, `dsh-superagent-router`); the Web bundle lists them in `dsh.bundle.patch`.
   Their sandbox rows use `superagent-` ids because a preset row id must not repeat a host row's.
 - `packages/bundle/web-app/tests/superagent-bundle.spec.ts` guards the dependency, the mounted rows and both presets.
 - `scripts/build.ts` runs the package's own `tsdown` build before the Web shell build, producing `lib/index.js`,
-  `lib/client.js`, `lib/github-watch.js` and `lib/feishu-watch.js`.
+  `lib/client.js`, `lib/github-watch.js`, `lib/feishu-watch.js` and `lib/local.js`.
 - No profile edit, plugin-market install, or `dsh plugin add` is needed. A fresh clone needs the usual
   `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop).
 
-Without a GitHub repository and agent account the panel opens on its setup page: the runtime stays paused and no Source
-polls. Configure the repository and the agent CLI in the panel (or with the Management API of `docs/006-deployment.md`) to
-start it.
+Without a GitHub repository and agent account the runtime still starts: the GitHub Source reports that it is unconfigured
+and polls nothing, while the local Source accepts tickets from **Execution → New ticket**. Configure the repository and the
+agent CLI in the panel (or with the Management API of `docs/006-deployment.md`) to use the GitHub Source too.
 
 The state directory defaults to `<DSH_HOME>/state/superagent` (with `DSH_HOME` defaulting to `~/.dsh`), so the built-in
 copy starts without machine configuration. Set `stateDir` in the profile's `cordis.patch.yml` to relocate it.
@@ -67,7 +68,17 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 5. **Management API bind.** `src/app/http.ts` follows the Web server's bound host (loopback aliases included) instead of
    requiring `127.0.0.1`, so a container or LAN bind keeps its panel. DSH's Web authentication, the
    `x-orchestrator-request` header and the same-origin check still protect every route.
-6. **Built-in documentation.** `docs/006-deployment.md` opens with a **Built-in copy** section (no profile, default state
+6. **Local tickets and optional GitHub.** `src/sources/local.ts` (exported as `./local`) adds a panel-driven Source: the
+   management routes `POST local/requests` and `POST local/followups` write `<archive>/<request id>.md`, ingest Triggers whose
+   actor is `operator`, and append every outbound message to the same file; the ticket page lists those receipts under
+   **Replies and results** and offers a reply box for the follow-ups (`src/app/views/tickets.ts`, `src/app/store.ts`). Setup no longer requires a repository and an account: `resolveDeployment`
+   resolves an empty GitHub deployment when the Source names neither, `writeEnvironment` writes a failing `gh` shim, no
+   GitHub credential helper, and the neutral author `dsh-superagent <dsh-superagent@localhost>`, and the GitHub Source
+   reports `githubUnset`. Receipts record the time of their last delivery state, and the overview counts a kind's default
+   Policy part (`src/app/views/overview.ts`) so a fresh install is not told that nobody may ask. `local.spec.ts`,
+   `deployment.spec.ts`, `environment.spec.ts`, `http.spec.ts`, `views.spec.ts` and `panel-execution.spec.tsx` cover it.
+7. **No-GitHub worker prompt.** `prompts/work.md` tells a worker that an empty `$DSH_SUPERAGENT_GITHUB_ACCOUNT` means there is no GitHub account, so it commits locally (setting `user.name` and `user.email` itself when git has none) and does not push, open a pull request or call `gh`; without this, a local ticket's worker would follow the upstream push/PR instructions and fail.
+8. **Built-in documentation.** `docs/006-deployment.md` opens with a **Built-in copy** section (no profile, default state
    directory, API follows the bind), and `README.md` and `SETUP.md` point at the built-in path instead of the standalone
    install. The rest of the upstream documents describe the standalone deployment and still apply.
 
@@ -82,13 +93,14 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,197 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,217 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
-- `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers with the
-  setup problem until a repository and account are configured, and `<DSH_HOME>/state/superagent` is created.
-- Usage starts at [docs/006-deployment.md#quick-start](docs/006-deployment.md#quick-start): the agent account and `gh`
-  wrapper, the three settings groups, the first request, everyday follow-ups, Feishu enabling and troubleshooting.
+- `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a
+  setup problem even when GitHub is unconfigured, and `<DSH_HOME>/state/superagent` is created.
+- Usage starts at [docs/006-deployment.md#quick-start](docs/006-deployment.md#quick-start): local tickets, the agent account
+  and `gh` wrapper for GitHub, the three settings groups, the first request, everyday follow-ups, Feishu enabling and
+  troubleshooting.
 - A clean worktree `pnpm install && pnpm run build` includes the `Superagent plugin` gate before the Web build.
 
 ## Syncing upstream
@@ -103,7 +115,8 @@ rewriting its test idioms.
 
 - Executor Sessions run with the profile's permissions as the operator's OS user. The command shims and git configuration
   under the state directory are defaults, not a security boundary; use a dedicated OS account for isolation.
-- Feishu stays disabled until a bot CLI is configured; GitHub needs an agent account with write access to the repository.
+- Feishu stays disabled until a bot CLI is configured; the GitHub Source needs an agent account with write access to the
+  repository, and stays quiet without one.
 - The upstream documents describe installing the bundle into a separate `superagent` profile. The built-in copy needs no
   such profile; `docs/006-deployment.md` starts with the built-in path.
 - The management API follows the Web server's bind address. On a non-loopback bind it is reachable from that network;

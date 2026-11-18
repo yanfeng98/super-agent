@@ -86,6 +86,9 @@
     - id: dsh-superagent-feishu
       name: dsh-superagent/feishu-watch
       disabled: true
+    # Local tickets: requests created in the panel, archived as Markdown.
+    - id: dsh-superagent-local
+      name: dsh-superagent/local
 
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download

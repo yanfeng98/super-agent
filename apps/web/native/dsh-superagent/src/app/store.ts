@@ -15,7 +15,7 @@ export interface TimelinePlace { at: string; id: string }
 /** Why a message was dropped: its conversation can never receive it (`channelGone`), or its Source no longer listens to it (`channelIgnored`). */
 export type DropReason = 'channelGone' | 'channelIgnored'
 /** Outbound message receipt tracked in the outbox from the moment it is queued (`pending`, `sent`, or `dropped`); delivery attempt counts live on its `reply` effect. */
-export interface Receipt extends OutboundMessage { status: ReplyStatus; dropped?: { at: string; reason: DropReason } }
+export interface Receipt extends OutboundMessage { status: ReplyStatus; at?: string; dropped?: { at: string; reason: DropReason } }
 /** A dropped outbound message receipt, with the timestamp and reason it was dropped. */
 export type Dropped = Receipt & { dropped: { at: string; reason: DropReason } }
 /** Saved settings snapshot with the policy version and ticket notifications it produced (`internal` saves have no origin). */
@@ -255,6 +255,8 @@ export class Store implements Repositories {
     get: (id: string): Receipt | undefined => this.values<Receipt>('SELECT value FROM outbox WHERE id = ?', id)[0],
     /** Pending message receipts, oldest first. */
     waiting: (): Receipt[] => this.values("SELECT value FROM outbox WHERE value ->> '$.status' = 'pending' ORDER BY rowid"),
+    /** Receipts for one ticket, oldest first, as the ticket page lists them. */
+    ofTicket: (ticketId: string): Receipt[] => this.values("SELECT value FROM outbox WHERE value ->> '$.ticketId' = ? ORDER BY rowid", ticketId),
     /** True if an earlier message for the same ticket and conversation is still pending with fewer than `failures` consecutive failed `reply` effect attempts. */
     behind: (id: string, failures: number): boolean => !!this.db.prepare(`SELECT 1 FROM outbox earlier
       JOIN outbox message ON message.id = ? LEFT JOIN effect ON effect.kind = 'reply' AND effect.key = earlier.id
@@ -264,7 +266,7 @@ export class Store implements Repositories {
      * @returns Whether the message ID was newly recorded.
      */
     add: (message: OutboundMessage): boolean => {
-      const receipt: Receipt = { ...message, status: 'pending' }
+      const receipt: Receipt = { ...message, status: 'pending', at: new Date().toISOString() }
       return Number(this.db.prepare('INSERT OR IGNORE INTO outbox (id, value) VALUES (?, ?)').run(message.id, JSON.stringify(receipt)).changes) > 0
     },
     /**
@@ -272,7 +274,9 @@ export class Store implements Repositories {
      * was withdrawn while being sent so its ID cannot be queued again.
      */
     settle: (message: OutboundMessage, outcome: 'sent' | DropReason): void => {
-      const settled = outcome === 'sent' ? { status: 'sent' } : { status: 'dropped', dropped: { at: new Date().toISOString(), reason: outcome } }
+      const at = new Date().toISOString()
+      // The timestamp follows the message's last state change, so the panel shows when it was sent rather than queued.
+      const settled = outcome === 'sent' ? { status: 'sent', at } : { status: 'dropped', at, dropped: { at, reason: outcome } }
       const { id, channel, text, kind, ticketId } = message
       const updated = this.db.prepare("UPDATE outbox SET value = json_patch(value, ?) WHERE id = ? AND value ->> '$.status' = 'pending'")
         .run(JSON.stringify(settled), id)

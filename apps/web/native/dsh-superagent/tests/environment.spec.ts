@@ -32,6 +32,16 @@ describe('worker shims', () => {
     const { stdout } = await exec('gh', ['api', 'user'], { env: { PATH: path }, timeout: 10_000 })
     expect(JSON.parse(stdout)).toEqual({ login: 'agent-bot', config: `${dir}/agent-config`, path: [join(dir, 'venv'), join(dir, 'real'), '/usr/bin', '/bin'].join(':') })
   })
+  it('works without a GitHub account: `gh` reports why and git gets no GitHub credential helper', async () => {
+    await writeEnvironment(testDeployment({ stateDir: dir, github: { cli: '', login: '', noreply: '' } }), [])
+    await expect(exec(join(workerBin(dir), 'gh'), ['api', 'user'])).rejects.toMatchObject({ code: 1,
+      stderr: 'gh is unavailable: this installation has no GitHub account.\n' })
+    const config = readFileSync(workerGitConfig(dir), 'utf8')
+    expect(config).toContain('[user]')
+    expect(config).toContain('name = dsh-superagent')
+    expect(config).not.toContain('credential "https://github.com"')
+    expect(config).not.toContain('insteadOf')
+  })
   it('make `lark-cli` fail without a Feishu bot and each blocked command fail with the agent\'s login', async () => {
     await writeEnvironment(testDeployment({ stateDir: dir, feishu: undefined }), ['personal-gh'])
     const bin = workerBin(dir)

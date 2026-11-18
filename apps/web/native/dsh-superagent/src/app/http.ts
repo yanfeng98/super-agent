@@ -21,6 +21,8 @@ import type { Store } from './store.ts'
 import type { TextCache } from './cache.ts'
 import type { LinkTarget, ViewHost } from './views/records.ts'
 import type { Variable } from './execution-environment.ts'
+import { createLocalFollowup, createLocalRequest, OPERATOR, seedPolicy, type LocalFollowup, type LocalFollowupResult,
+  type LocalRequest, type LocalRequestResult } from '../sources/local.ts'
 import { policyHistory } from './settings-history.ts'
 import { overview } from './views/overview.ts'
 import { settingsView } from './views/settings.ts'
@@ -41,6 +43,10 @@ export interface HttpHost {
   readonly health: Record<string, Health>
   readonly machine: Machine
   readonly masterId: string
+  /** Creates a ticket request made in the panel, archives it, and ingests its Trigger. */
+  readonly localRequest: (input: LocalRequest) => Promise<LocalRequestResult>
+  /** Adds a message to an existing local ticket's Thread. */
+  readonly localFollowup: (input: LocalFollowup) => Promise<LocalFollowupResult>
   /** Resolves once startup finishes or setup determines what is still missing. */
   readonly ready: Promise<void>
   /** Resolved deployment; throws if read while waiting for setup (`!configured()`). */
@@ -140,6 +146,9 @@ interface Input<K extends keyof Api> {
 type Routes = { [K in keyof Api]: (input: Input<K>) => ApiResponse<K> | Promise<ApiResponse<K>> }
 const offset = z.coerce.number().int().nonnegative().catch(0)
 const limit = (fallback: number, max: number) => z.coerce.number().int().positive().catch(fallback).transform(value => Math.min(max, value))
+const LOCAL_BODY_BYTES = 256 * 1024
+const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000) }).strict()
+const LocalFollowupSchema = z.object({ thread: z.string().min(1), text: z.string().trim().min(1).max(20_000) }).strict()
 const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000) })
 const ThreadsQuery = z.object({ filter: z.enum(THREAD_FILTERS).catch('subscribed'), offset, limit: limit(20, 1000) })
 const ThreadQuery = z.object({ limit: limit(50, 100), before: z.string().optional(), around: z.string().optional() })
@@ -151,6 +160,18 @@ const SourceBlock = z.templateLiteral(['source:', z.string().regex(/^[a-z][a-z0-
 const SettingsBlockSchema = z.union([z.enum(['policy', 'eval', 'executor']), SourceBlock])
 const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().nonnegative() })
 
+/**
+ * Refuses local ticket requests while setup is pending, the Source is off, or nobody may create tickets.
+ * The first call saves the Source's default Policy part, so an unconfigured installation is not filtered for want of an operator.
+ */
+async function checkLocalSource(runtime: HttpHost): Promise<void> {
+  if (!runtime.configured()) throw new RouteError(400, 'dsh-superagent is waiting for the setup check')
+  if (!runtime.sources.instance('local')?.enabled) throw new RouteError(400, 'The local Source is off; turn it on in Settings → Sources')
+  await seedPolicy(runtime)
+  if (!runtime.store.settings().policy.sources.local?.allowed.some(entry => entry.id === OPERATOR)) {
+    throw new RouteError(400, 'The local Source allows nobody; add the operator under Policy → On each Source')
+  }
+}
 function routes(runtime: HttpHost): Routes {
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
@@ -195,6 +216,20 @@ function routes(runtime: HttpHost): Routes {
     'GET tickets/:id': ({ params }) => ticketPage(runtime, params.id),
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
+    'POST local/requests': async input => {
+      const request = LocalRequestSchema.parse(await input.body(LOCAL_BODY_BYTES))
+      await checkLocalSource(runtime)
+      return runtime.localRequest(request)
+    },
+    'POST local/followups': async input => {
+      const followup = LocalFollowupSchema.parse(await input.body(LOCAL_BODY_BYTES))
+      await checkLocalSource(runtime)
+      // A caller names the Thread, so an unknown one is bad input rather than a server fault.
+      if (runtime.store.threads.get(followup.thread)?.ref.source !== 'local') {
+        throw new RouteError(400, 'The local ticket Thread is unknown')
+      }
+      return runtime.localFollowup(followup)
+    },
     'POST executor/pause': async ({ body }) => runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel'),
     'PUT settings/:block': async ({ params, body }) => {
       const block = SettingsBlockSchema.parse(params.block)
