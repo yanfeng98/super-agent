@@ -28,7 +28,7 @@ import { overview } from './views/overview.ts'
 import { settingsView } from './views/settings.ts'
 import { sourcesStatus, type SetupState } from './views/sources.ts'
 import { decisionList, search, threadDetail, threadList } from './views/threads.ts'
-import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
+import { executorLoad, ticketDetail, ticketList, ticketTags } from './views/tickets.ts'
 
 export interface HttpHost {
   readonly store: Store
@@ -60,6 +60,8 @@ export interface HttpHost {
   mergeTicket(id: string): Promise<{ branch: string; target: string }>
   /** Removes an ended ticket's linked worktree and branch. */
   discardTicket(id: string): Promise<void>
+  /** Renames a ticket without changing the recorded request text. */
+  renameTicket(id: string, title: string): Ticket
   links(): LinkTarget
   ticketEnvironment(ticket: Ticket): Variable[]
   checkSetup(): void
@@ -159,7 +161,8 @@ const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), 
   tags: z.array(z.string().trim().min(1).max(24)).max(8).optional(),
 }).strict()
 const LocalFollowupSchema = z.object({ thread: z.string().min(1), text: z.string().trim().min(1).max(20_000) }).strict()
-const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000) })
+const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000),
+  tag: z.string().trim().max(24).optional() })
 const ThreadsQuery = z.object({ filter: z.enum(THREAD_FILTERS).catch('subscribed'), offset, limit: limit(20, 1000) })
 const ThreadQuery = z.object({ limit: limit(50, 100), before: z.string().optional(), around: z.string().optional() })
 const DecisionsQuery = z.object({ kind: z.string().default(''), window: z.literal('24h').optional().catch(undefined), offset,
@@ -220,9 +223,10 @@ function routes(runtime: HttpHost): Routes {
     },
     'POST decisions/:id/dismiss': ({ params }) => { runtime.engine.dismiss(params.id); return { dismissed: true } },
     'GET tickets': ({ query }) => {
-      const { state, offset, limit } = TicketsQuery.parse(query)
-      return ticketList(views(runtime), state, offset, limit)
+      const { state, offset, limit, tag } = TicketsQuery.parse(query)
+      return ticketList(views(runtime), state, offset, limit, tag)
     },
+    'GET tags': () => ({ tags: ticketTags(store) }),
     'GET tickets/:id': ({ params }) => ticketPage(runtime, params.id),
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
@@ -232,6 +236,11 @@ function routes(runtime: HttpHost): Routes {
       const id = ticket(params.id)
       try { return { merged: true as const, ...await runtime.mergeTicket(id) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/title': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { title } = z.object({ title: z.string().trim().min(1).max(120) }).strict().parse(await body())
+      return { title: runtime.renameTicket(id, title).title }
     },
     'POST tickets/:id/discard': async ({ params }) => {
       const id = ticket(params.id)

@@ -326,8 +326,10 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     ({ items: query.kind === 'ignore' ? [] : [acceptDecision()], next_offset: null }) },
   'POST decisions/:id/dismiss': { answer: ({ params }) => params.id === 'u1' ? { dismissed: true } : refuse(404,
     'Unavailable Eval not found') },
-  'GET tickets': { query: ['state', 'offset', 'limit'], answer: ({ query }) => page(server.tickets[query.state === 'ended' ? 'ended'
-    : 'open']) },
+  'GET tickets': { query: ['state', 'offset', 'limit', 'tag'], answer: ({ query }) => page(server.tickets[query.state === 'ended' ? 'ended'
+    : 'open'].filter(ticket => !query.tag || ticket.tags.includes(query.tag))) },
+  'GET tags': { answer: () => ({ tags: [...new Set([...server.tickets.open, ...server.tickets.ended, ...server.person]
+    .flatMap(ticket => ticket.tags))].sort() }) },
   'GET tickets/:id': { answer: ({ params }) => server.ticketDetails[params.id] ?? refuse(404, 'Ticket not found') },
   'POST tickets/:id/retry': { answer: ({ params }) => {
     const ticket = ticketOf(params.id)
@@ -355,6 +357,10 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/discard': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { discarded: true }
+  } },
+  'POST tickets/:id/title': { body: true, answer: ({ params, body }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { title: String((body as { title?: unknown }).title ?? '') }
   } },
   'POST local/requests': { body: true, answer: ({ body }) => ({ request: 'local-1', thread: 'local:local-1', trigger: 'local:local-1',
     file: `/tmp/${String((body as { title?: string }).title ?? 'new')}.md` }) },

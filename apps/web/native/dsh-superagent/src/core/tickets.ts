@@ -162,6 +162,19 @@ export class Tickets extends EnginePart {
     return this.require(ticketId)
   }
   /**
+   * Renames a ticket; its threads, channels and inputs keep their recorded text.
+   * @throws UserError when the ticket is unknown or the title is blank.
+   */
+  rename(ticketId: string, title: string): Ticket {
+    const ticket = this.require(ticketId)
+    const next = title.replace(/\s+/g, ' ').trim()
+    if (!next) throw new UserError('emptyTitle')
+    ticket.title = next
+    ticket.updatedAt = this.now()
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
    * Reopens an ended ticket under its unchanged Mandate with a fresh Assignment and a note telling its worker why.
    * @throws UserError when the ticket is unknown, still open, or the current Policy no longer holds its Mandate.
    */

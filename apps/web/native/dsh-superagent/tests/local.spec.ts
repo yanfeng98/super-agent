@@ -10,8 +10,8 @@ import { SettingsSchema, settingsPolicy } from '../src/policy.ts'
 import { environmentOf } from '../src/app/execution-environment.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
-import { appendFollowup, appendReply, archiveDir, closeArchive, createLocalFollowup, createLocalRequest, drainInbox, localKind, OPERATOR,
-  reopenArchive, seedPolicy }
+import { appendFollowup, appendReply, archiveDir, archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, drainInbox,
+  localKind, OPERATOR, recordRename, reopenArchive, seedPolicy }
   from '../src/sources/local.ts'
 import { testDeployment } from './fixtures/deployment.ts'
 
@@ -283,7 +283,10 @@ describe('local tickets', () => {
     const ended = h.store.tickets.get(ticket.id)!
     const review = { capturedAt: '2026-11-18T03:00:00.000Z', branch: 'agent/login-fix', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏按钮' }], files: [{ status: 'M', path: 'src/login.css' }], dirty: [], stat: '1 file changed' }
+    // A restart completes an ending whose archive write a crash interrupted.
+    expect(await archiveNeedsClose(ended)).toBe(true)
     await closeArchive(ended, review, 7)
+    expect(await archiveNeedsClose(ended)).toBe(false)
     await closeArchive(ended, review, 7)
     const file = readFileSync(created.file, 'utf8')
     expect(file).toContain('关闭 / Closed')
@@ -295,7 +298,15 @@ describe('local tickets', () => {
     expect(file).toContain('branch: agent/login-fix')
     expect(file).toContain('修复窄屏按钮')
     expect(file).toContain('src/login.css')
+    await recordRename(ended, '2026-11-18T04:30:00.000Z', '新的标题')
+    await recordRename(ended, '2026-11-18T04:30:00.000Z', '新的标题')
+    expect(readFileSync(created.file, 'utf8').match(/标题 \/ Title/g)).toHaveLength(1)
+    expect(readFileSync(created.file, 'utf8')).toContain('title: "新的标题"')
     await reopenArchive(ended, '2026-11-18T04:00:00.000Z')
+    await recordRename(ended, '2026-11-18T04:30:00.000Z', '新的标题')
+    await recordRename(ended, '2026-11-18T04:30:00.000Z', '新的标题')
+    expect(readFileSync(created.file, 'utf8').match(/标题 \/ Title/g)).toHaveLength(1)
+    expect(readFileSync(created.file, 'utf8')).toContain('title: "新的标题"')
     await reopenArchive(ended, '2026-11-18T04:00:00.000Z')
     const reopenedFile = readFileSync(created.file, 'utf8')
     expect(reopenedFile.match(/重新打开 \/ Reopened/g)).toHaveLength(1)

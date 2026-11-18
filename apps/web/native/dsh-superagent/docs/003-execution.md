@@ -32,6 +32,8 @@ The main Session uses `dsh-superagent-router`, with the same 5-second shell and 
 
 When a Ticket first launches, the Executor records the workspace's current commit as its base. When the Ticket ends, it collects the workspace's branch, head, the commits added since that base, the files they changed, and any work left uncommitted, and stores them on the Ticket. The panel shows them under **Changes**, with **View diff** reading the committed diff on demand, and a local Ticket's archive receives the same facts with its ending. A workspace that is not a git repository records the reason instead, so a Ticket without version control still ends normally. Reopening a Ticket clears the review and captures it again at the next end.
 
+A crash between an ending and its archive write can leave the Markdown behind; after the next startup, each ended local Ticket whose archive lacks its close section gets it (with the review), and recorded merges, discards and renames are completed, so the archive catches up without repeating work.
+
 An ended Ticket whose workspace is a linked git worktree offers **Merge** and **Discard**. Merge fast-forwards the branch checked out in the main working tree to the Ticket's branch and refuses when that tree is dirty, when the Ticket branch is checked out there, or when the move would not fast-forward, so it never writes a merge commit or leaves a conflict state. Discard removes the linked worktree and deletes its branch, including uncommitted work; the repository and its other worktrees stay. Both actions record their time on the Ticket and append a section to a local Ticket's archive.
 
 ### Background work and worker slots

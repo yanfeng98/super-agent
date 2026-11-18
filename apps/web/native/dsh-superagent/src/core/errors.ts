@@ -9,6 +9,7 @@ export const USER_ERRORS = {
   unknownPromptPart: ['refused', 'Unknown built-in prompt part {part}'],
   ticketEnded: ['refused', 'Ticket has ended'],
   ticketOpen: ['refused', 'Ticket is already open'],
+  emptyTitle: ['refused', 'A ticket title cannot be empty'],
   assignmentEnded: ['refused', 'Assignment has ended; a newer assignment owns this ticket'],
   evalFinished: ['refused', 'Eval {eval} has finished or a later eval replaced it; decide the trigger\'s current eval'],
   notAdmissible: ['refused', 'Trigger is not admissible: {reason}'],

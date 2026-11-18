@@ -36,7 +36,8 @@ import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff } from './review.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
-import { closeArchive, createLocalFollowup, createLocalRequest, recordDiscard, recordMerge, reopenArchive } from '../sources/local.ts'
+import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordDiscard, recordMerge, recordRename,
+  reopenArchive, ticketArchive } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -215,6 +216,51 @@ export class Runtime extends Service implements SourceHost {
     catch (error) { return { diff: '', truncated: false, error: String(error) } }
   }
   /**
+   * Renames an ended or open ticket, updates the label of its local origin Thread, and appends the new title to its local
+   * archive without rewriting the original request.
+   * @throws UserError when the ticket is unknown or the title is blank.
+   */
+  renameTicket(id: string, title: string): Ticket {
+    const ticket = this.engine.renameTicket(id, title)
+    const ref = this.store.triggers.get(ticket.origin.triggerId)?.threads[0]
+    if (ref?.source === 'local') this.store.threads.describe(`${ref.source}:${ref.id}`, { label: ticket.title })
+    const at = now()
+    void recordRename(ticket, at, ticket.title).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: recording a rename in the archive failed: %s', String(error))
+    })
+    return ticket
+  }
+  /**
+   * Completes archive records a crash may have left half-written: the close section of ended local tickets, and the merge or
+   * discard section of tickets that already recorded one. Runs once after startup; each write is idempotent.
+   * @returns The number of close sections added.
+   */
+  async reconcileArchives(): Promise<number> {
+    let repaired = 0
+    for (const ticket of this.store.tickets.list()) {
+      if (!ticket.ended || !ticketArchive(ticket)) continue
+      try {
+        if (await archiveNeedsClose(ticket)) {
+          let review = ticket.review
+          if (!review) {
+            review = await captureReview(this.ctx.subprocess, ticket, this.stopped.signal)
+            if (review) this.store.atomic(() => {
+              const current = this.store.tickets.get(ticket.id)
+              if (!current) return
+              current.review = review
+              this.store.tickets.save(current)
+            })
+          }
+          await closeArchive(ticket, review, this.store.tickets.number(ticket.id))
+          repaired++
+        }
+        if (ticket.merged) await recordMerge(ticket, ticket.merged)
+        if (ticket.discarded) await recordDiscard(ticket, ticket.discarded.at)
+      } catch (error) { this.ctx.logger.warn('dsh-superagent: completing the archive of ticket %s failed: %s', ticket.id, String(error)) }
+    }
+    return repaired
+  }
+  /**
    * Fast-forwards the repository's checked-out branch to an ended ticket's branch, then records the merge on the ticket and
    * in its local archive.
    * @throws when the ticket is unknown or open, has no workspace, was discarded, or git cannot fast-forward.
@@ -303,6 +349,10 @@ export class Runtime extends Service implements SourceHost {
     this.passes.start()
     this.effects.start()
     this.runtimeHealth.set({ state: 'ready', detail: 'Orchestrator is ready', at: now() })
+    // A crash between an ending and its archive write leaves the archive behind; complete those records once at startup.
+    void this.reconcileArchives().catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: completing archive records failed: %s', String(error))
+    })
   }
   private httpHost(): HttpHost {
     const runtime = this
@@ -314,7 +364,7 @@ export class Runtime extends Service implements SourceHost {
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
-      discardTicket: id => runtime.discardTicket(id) }
+      discardTicket: id => runtime.discardTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title) }
   }
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }

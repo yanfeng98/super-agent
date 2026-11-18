@@ -30,7 +30,8 @@ export interface Api {
   'POST triggers/:id/requeue': { response: { queued: boolean } }
   'GET decisions': { query?: Paged & { kind?: string; window?: '24h' }; response: DecisionListView }
   'POST decisions/:id/dismiss': { response: { dismissed: true } }
-  'GET tickets': { query?: Paged & { state?: TicketFilter }; response: TicketListView }
+  'GET tickets': { query?: Paged & { state?: TicketFilter; tag?: string }; response: TicketListView }
+  'GET tags': { response: { tags: string[] } }
   'GET tickets/:id': { response: TicketPageView }
   'POST tickets/:id/retry': { response: { retried: true } }
   'POST tickets/:id/stop': { response: { stopped: true } }
@@ -38,6 +39,7 @@ export interface Api {
   'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
   'POST tickets/:id/merge': { response: { merged: true; branch: string; target: string } }
   'POST tickets/:id/discard': { response: { discarded: true } }
+  'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
   'POST local/requests': { body: { title: string; text: string; key?: string; project?: string; tags?: string[] };
     response: { request: string; thread: string; trigger: string; file: string } }
   'POST local/followups': { body: { thread: string; text: string }; response: { trigger: string; thread: string } }

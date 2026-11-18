@@ -33,11 +33,22 @@ export function basisFacts(basis: MandateBasis, rule: Snapshot['rule']): { facts
   if (authority) facts.push({ name: 'legacyAuthority', value: authority })
   return { facts, legacy: authority !== undefined }
 }
-export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'], offset: number, limit: number) {
+const tagsOf = (store: Store, ticket: Pick<Ticket, 'origin'>): string[] => {
+  const value = store.triggers.get(ticket.origin.triggerId)?.meta.tags
+  return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
+}
+/** Every tag on any ticket's request, sorted, for the Execution filter. */
+export function ticketTags(store: Pick<Store, 'tickets' | 'triggers'>): string[] {
+  const all = new Set<string>()
+  for (const ticket of store.tickets.list()) for (const tag of tagsOf(store as Store, ticket)) all.add(tag)
+  return [...all].sort((a, b) => a.localeCompare(b))
+}
+export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'], offset: number, limit: number, tag?: string) {
   const view = snapshot(host)
   const { store } = view
   const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket) : ticketStage(ticket).stage === stage
-  const tickets = (stage === 'ended' ? store.tickets.list() : store.tickets.open()).filter(shown).sort(newestFirst)
+  const tickets = (stage === 'ended' ? store.tickets.list() : store.tickets.open()).filter(shown)
+    .filter(ticket => !tag || tagsOf(store, ticket).includes(tag)).sort(newestFirst)
   const result = page(tickets, offset, limit)
   return { ...result, items: result.items.map(ticket => ticketRow(view, ticket)) }
 }

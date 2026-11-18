@@ -175,3 +175,11 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
   expect(await refused('POST', 'tickets/t1/merge')).toEqual({ status: 400,
     body: { error: 'The repository has uncommitted changes' } })
 })
+
+it('renames a ticket, refusing a blank title or an unknown ticket', async () => {
+  const call = serve({ store: { tickets: { get: (id: string) => id === 't1' ? { id } : undefined } },
+    renameTicket: (id: string, title: string) => ({ id, title }) })
+  expect(await call('POST', 'tickets/t1/title', { title: '新的标题' })).toEqual({ status: 200, body: { title: '新的标题' } })
+  expect(await call('POST', 'tickets/t1/title', { title: '   ' })).toMatchObject({ status: 400 })
+  expect(await call('POST', 'tickets/t9/title', { title: 'x' })).toMatchObject({ status: 404 })
+})

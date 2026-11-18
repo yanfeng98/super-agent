@@ -63,13 +63,16 @@ export function ExecutionStatus({ filter: current, state, reload }: {
 }) {
   const { t, call, navigate, notify } = usePanel()
   const [limit, setLimit] = useState(20)
+  const [tag, setTag] = useState('')
   const [creating, setCreating] = useState(false)
   const [notifying, setNotifying] = useState(notificationsEnabled)
   const enableNotify = async () => {
     if (await enableNotifications()) setNotifying(true)
     else notify(t('notificationsDenied'))
   }
-  const { data, error, reload: reloadTickets } = usePoll(() => call('GET tickets', { query: { state: current, limit } }), [current, limit])
+  const { data, error, reload: reloadTickets } = usePoll(() => call('GET tickets', {
+    query: { state: current, limit, ...tag ? { tag } : {} } }), [current, limit, tag])
+  const { data: tagData } = usePoll(() => call('GET tags'), [])
   const { paused, load: { maxWorkers } } = state
   // Pausing uses its own block revision so toggling pause does not invalidate an open Execution settings draft.
   const pause = async () => { await call('POST executor/pause', { body: { paused: !paused } }); await reload() }
@@ -93,6 +96,14 @@ export function ExecutionStatus({ filter: current, state, reload }: {
         ? 'resumeProcessingConfirm' : 'pauseProcessingConfirm')}
         onConfirm={pause} />
     </div>
+    {!!tagData?.tags.length && <div className="dt-row-meta dt-status-line">
+      <label className="dt-field-inline"><span className="dt-hint">{t('tagFilter')}</span>
+        <select className="dt-select" aria-label={t('tagFilter')} value={tag}
+          onChange={event => { setLimit(20); setTag(event.target.value) }}>
+          <option value="">{t('tagFilterAll')}</option>
+          {tagData.tags.map(item => <option key={item} value={item}>{item}</option>)}
+        </select></label>
+    </div>}
     <div className="dt-filters">
       {TICKET_FILTERS.map(value => <Pill key={value} active={current === value}
         onClick={() => { setLimit(20); navigate({ page: 'execution', query: value === 'open' ? {} : { filter: value } },
