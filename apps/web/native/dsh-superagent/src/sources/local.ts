@@ -21,8 +21,10 @@ const LocalConfigSchema = z.object({
     .default(''),
 }).strict()
 export type LocalConfig = z.infer<typeof LocalConfigSchema>
+/** One file sent with a panel request, as its name and base64 content. */
+export type LocalAttachment = { name: string; data: string }
 /** A panel request; `key` is the client's idempotency key, `project` a label a prepare command may route on, and `tags` labels for people. */
-export type LocalRequest = { title: string; text: string; key?: string; project?: string; tags?: string[] }
+export type LocalRequest = { title: string; text: string; key?: string; project?: string; tags?: string[]; files?: LocalAttachment[] }
 export interface LocalRequestResult { request: string; thread: string; trigger: string; file: string }
 /** Stored result per client idempotency key, so retrying a creation returns the ticket it already made. */
 const REQUEST_RESULTS = family<LocalRequestResult, [key: string]>('local-request:')
@@ -88,6 +90,26 @@ export async function appendFollowup(file: string, entry: { at: string; text: st
 export const ticketArchive = (ticket: Pick<Ticket, 'channels'>): string | undefined =>
   ticket.channels.flatMap(channel => channel.source === SOURCE ? [channel.address.file] : []).find((file): file is string => !!file)
 const oneLine = (text: string, limit = 2000): string => text.replace(/\s+/g, ' ').trim().slice(0, limit)
+/**
+ * Writes a request's attachments beside its archive file, under `<request id>.files`, with sanitized unique names.
+ * @returns The absolute paths a worker may read.
+ */
+async function writeAttachments(directory: string, request: string, files: LocalAttachment[]): Promise<string[]> {
+  if (!files.length) return []
+  const target = join(directory, `${request}.files`)
+  await mkdir(target, { recursive: true, mode: 0o700 })
+  const used = new Set<string>()
+  const paths: string[] = []
+  for (const [index, file] of files.entries()) {
+    let name = file.name.replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 80).trim() || `file-${index + 1}`
+    if (used.has(name)) name = `${index + 1}-${name}`
+    used.add(name)
+    const path = join(target, name)
+    await writeFile(path, Buffer.from(file.data, 'base64'), { mode: 0o600 })
+    paths.push(path)
+  }
+  return paths
+}
 /** A ticket's display number as the panel and the archive write it, such as `T-0001`. */
 export const displayNumber = (number: number | undefined): string | undefined => number ? `T-${String(number).padStart(4, '0')}` : undefined
 /** Git facts of one ended ticket as archive lines; omitted fields do not appear. */
@@ -246,11 +268,16 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
   const file = archiveFile(archiveDir(ctx.deployment, config), id)
   await writeRequest(file, { id, title, text: input.text, at, ...input.project ? { project: input.project } : {},
     ...input.tags?.length ? { tags: input.tags } : {} })
+  let attachments: string[] = []
+  try { attachments = await writeAttachments(dirname(file), id, input.files ?? []) }
+  catch (error) { await rm(file, { force: true }); throw error }
+  const attachmentList = attachments.length ? `\n\nAttachments:\n${attachments.map(path => `- ${path}`).join('\n')}` : ''
+  if (attachments.length) await appendFile(file, `\n## 附件 / Attachments\n\n${attachments.map(path => `- ${path}`).join('\n')}\n`)
   const trigger: Trigger = {
     id: key(SOURCE, id), source: SOURCE, threads: [{ source: SOURCE, id }],
     actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct', at,
     // The person's title leads the request text, so the Session that accepts it can keep that wording.
-    text: `${title}\n\n${input.text}`,
+    text: `${title}\n\n${input.text}${attachmentList}`,
     channel: { source: SOURCE, thread, address: { request: id, file } },
     meta: { requestId: id, messageId: id, title, ...input.project ? { project: input.project } : {},
       ...input.tags?.length ? { tags: input.tags } : {}, ...idempotency ? { idempotency } : {} },
@@ -261,6 +288,7 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
   if (received === 'filtered') {
     // No Ticket will read the file, so remove it rather than leave an archive no part of the panel shows.
     await rm(file, { force: true })
+    if (attachments.length) await rm(join(dirname(file), `${id}.files`), { recursive: true, force: true })
     throw new Error('The local Source filtered the request; check the Source and the Policy')
   }
   const result = { request: id, thread, trigger: trigger.id, file }

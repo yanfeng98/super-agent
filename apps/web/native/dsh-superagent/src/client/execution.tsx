@@ -12,6 +12,13 @@ import { ConfigHistory, Field, Fields, ModelField, numberOf, useBlockDraft, useS
 import { localized } from './text.ts'
 import { ConfirmButton, Hint, LabelValue, LoadMore, LoadState, Section, StatusHead } from './widgets.tsx'
 
+/** Reads a picked file as base64, without the data-URL prefix. */
+const readAttachment = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => { const result = String(reader.result ?? ''); resolve(result.slice(result.indexOf(',') + 1)) }
+  reader.onerror = () => reject(reader.error ?? new Error('Could not read the attachment'))
+  reader.readAsDataURL(file)
+})
 const requestKey = (): string => globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.random().toString(16).slice(2)}`
 /** Creates a local ticket: the request is archived as Markdown and its Trigger starts a Ticket. */
 function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -20,7 +27,9 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [project, setProject] = useState('')
   const [tags, setTags] = useState('')
   const [text, setText] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
   // One key per unchanged draft, so a retry after a lost response returns the ticket the first attempt made.
   const idempotency = useRef<string | undefined>(undefined)
   const submit = async (event: FormEvent) => {
@@ -29,9 +38,14 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
     idempotency.current ??= requestKey()
     try {
       const labels = [...new Set(tags.split(',').map(tag => tag.trim()).filter(Boolean))]
+      if (files.reduce((total, file) => total + file.size, 0) > 8 * 1024 * 1024) throw new Error(t('attachmentsTooLarge'))
+      const attachments = await Promise.all(files.map(async file => ({ name: file.name, data: await readAttachment(file) })))
       const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim(), key: idempotency.current,
-        ...project.trim() ? { project: project.trim() } : {}, ...labels.length ? { tags: labels } : {} } })
-      setTitle(''); setProject(''); setTags(''); setText(''); idempotency.current = undefined; setBusy(false); onClose()
+        ...project.trim() ? { project: project.trim() } : {}, ...labels.length ? { tags: labels } : {},
+        ...attachments.length ? { files: attachments } : {} } })
+      setTitle(''); setProject(''); setTags(''); setText(''); setFiles([]); idempotency.current = undefined
+      if (fileInput.current) fileInput.current.value = ''
+      setBusy(false); onClose()
       navigate({ page: 'trigger', id: created.thread, query: { trigger: created.trigger } })
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error))
@@ -52,6 +66,10 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
       <label className="dt-field"><span className="dt-field-head">{t('newTicketTags')}</span>
         <Input value={tags} maxLength={200} aria-label={t('newTicketTags')} placeholder={t('newTicketTagsPlaceholder')}
           onChange={event => { idempotency.current = undefined; setTags(event.target.value) }} /></label>
+      <label className="dt-field"><span className="dt-field-head">{t('newTicketFiles')}</span>
+        <input ref={fileInput} type="file" multiple className="dt-file" aria-label={t('newTicketFiles')}
+          onChange={event => { idempotency.current = undefined; setFiles([...event.target.files ?? []].slice(0, 5)) }} />
+        <Hint>{t('newTicketFilesHint')}</Hint></label>
       <label className="dt-field"><span className="dt-field-head">{t('newTicketText')}</span>
         <textarea className="dt-textarea" rows={6} maxLength={20000} required aria-label={t('newTicketText')}
           placeholder={t('newTicketTextPlaceholder')} value={text} onChange={event => { idempotency.current = undefined; setText(event.target.value) }} /></label>

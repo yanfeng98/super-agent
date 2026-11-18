@@ -155,10 +155,19 @@ type Routes = { [K in keyof Api]: (input: Input<K>) => ApiResponse<K> | Promise<
 const offset = z.coerce.number().int().nonnegative().catch(0)
 const limit = (fallback: number, max: number) => z.coerce.number().int().positive().catch(fallback).transform(value => Math.min(max, value))
 const LOCAL_BODY_BYTES = 256 * 1024
+/** Local requests may carry up to five base64 attachments, within this decoded total. */
+const LOCAL_REQUEST_BYTES = 12 * 1024 * 1024
+const LOCAL_FILES_BYTES = 8 * 1024 * 1024
+const LocalAttachmentSchema = z.object({
+  name: z.string().trim().min(1).max(120).refine(name => !/[\\/]/.test(name) && name !== '.' && name !== '..',
+    'A file name without a path'),
+  data: z.string().min(1).regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Base64 content'),
+}).strict()
 const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),
   key: z.string().trim().min(8).max(200).optional(),
   project: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'Letters, digits, dot, dash or underscore').optional(),
   tags: z.array(z.string().trim().min(1).max(24)).max(8).optional(),
+  files: z.array(LocalAttachmentSchema).max(5).optional(),
 }).strict()
 const LocalFollowupSchema = z.object({ thread: z.string().min(1), text: z.string().trim().min(1).max(20_000) }).strict()
 const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000),
@@ -248,7 +257,9 @@ function routes(runtime: HttpHost): Routes {
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST local/requests': async input => {
-      const request = LocalRequestSchema.parse(await input.body(LOCAL_BODY_BYTES))
+      const request = LocalRequestSchema.parse(await input.body(LOCAL_REQUEST_BYTES))
+      const bytes = (request.files ?? []).reduce((total, file) => total + Math.floor(file.data.length * 3 / 4), 0)
+      if (bytes > LOCAL_FILES_BYTES) throw new RouteError(400, 'Attachments exceed 8 MiB')
       await checkLocalSource(runtime)
       return runtime.localRequest(request)
     },

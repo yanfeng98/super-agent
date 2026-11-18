@@ -96,7 +96,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    into the archive's close by `src/sources/local.ts`). A request may also carry a `project` label, which is archived and
    exposed as `DSH_SUPERAGENT_PROJECT` (`src/app/execution-environment.ts`) so a prepare command can pick a repository per
    project; up to eight `tags` are stored in the archive, shown on the row and page, matched by search, and usable as an
-   Execution filter (`GET tags`, `GET tickets?tag=`). **Edit title** renames a Ticket without rewriting its request
+   Execution filter (`GET tags`, `GET tickets?tag=`). Up to five attachments, 8 MB total, travel base64 with
+   `POST local/requests` and are written to `<archive>/<request id>.files/` (`src/sources/local.ts`), with their paths in
+   the request text and archive. **Edit title** renames a Ticket without rewriting its request
    (`Tickets.rename`, `POST tickets/:id/title`), updates the local Thread label and appends a Title section to the archive.
    At startup, `Runtime.reconcileArchives` completes close, merge, discard and rename sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
    request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket

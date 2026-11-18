@@ -234,6 +234,18 @@ describe('local tickets', () => {
     expect(Object.fromEntries(variables.map(variable => [variable.key, variable.value])).DSH_SUPERAGENT_PROJECT).toBe('api')
   })
 
+  it('writes attachments beside the archive and lists their paths in the request', async () => {
+    const h = harness()
+    const created = await createLocalRequest(h.host, { title: '带附件', text: '看附件。',
+      files: [{ name: 'log.txt', data: Buffer.from('hello').toString('base64') }] })
+    const stored = join(dir, 'tickets', `${created.request}.files`, 'log.txt')
+    expect(readFileSync(stored, 'utf8')).toBe('hello')
+    expect(h.store.triggers.get(created.trigger)?.text).toContain(`- ${stored}`)
+    const archive = readFileSync(created.file, 'utf8')
+    expect(archive).toContain('附件 / Attachments')
+    expect(archive).toContain(stored)
+  })
+
   it('turns a command-line request from the inbox into a ticket and records the result', async () => {
     const h = harness()
     const inbox = join(dir, 'inbox')

@@ -123,6 +123,13 @@ it('creates a local ticket only when setup resolved, the Source is on, and the o
   // A key shorter than 8 characters is refused before the Source writes anything.
   expect(await call('POST', 'local/requests', { title: 'x', text: 'y', key: 'short' })).toMatchObject({ status: 400 })
   expect(created).toHaveLength(1)
+  // Attachments travel as base64 with the request; a file name with a path is refused.
+  expect(await call('POST', 'local/requests', { title: '文件', text: '看附件', files: [{ name: 'a.txt', data: 'aGk=' }] }))
+    .toMatchObject({ status: 200 })
+  expect(created.at(-1)).toMatchObject({ files: [{ name: 'a.txt', data: 'aGk=' }] })
+  expect(await call('POST', 'local/requests', { title: 'x', text: 'y', files: [{ name: 'a/b.txt', data: 'aGk=' }] }))
+    .toMatchObject({ status: 400 })
+  expect(created).toHaveLength(2)
   expect(await call('POST', 'local/followups', { thread: 'local:r', text: '补充' })).toEqual({ status: 200,
     body: { trigger: 'f1', thread: 'local:r' } })
   expect(await call('POST', 'local/followups', { thread: '', text: 'x' })).toMatchObject({ status: 400 })

@@ -40,7 +40,8 @@ export interface Api {
   'POST tickets/:id/merge': { response: { merged: true; branch: string; target: string } }
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
-  'POST local/requests': { body: { title: string; text: string; key?: string; project?: string; tags?: string[] };
+  'POST local/requests': { body: { title: string; text: string; key?: string; project?: string; tags?: string[];
+    files?: { name: string; data: string }[] };
     response: { request: string; thread: string; trigger: string; file: string } }
   'POST local/followups': { body: { thread: string; text: string }; response: { trigger: string; thread: string } }
   'POST executor/pause': { body: { paused: boolean }; response: { paused: boolean } }
