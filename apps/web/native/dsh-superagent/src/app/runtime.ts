@@ -159,7 +159,11 @@ export class Runtime extends Service implements SourceHost {
           // ending sends no webhook and writes no archive section.
           if (event.type === 'ticket.attention' || event.type === 'ticket.ended') this.store.afterCommit(() => { this.notifyWebhook(event) })
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
-          if (ended) this.store.afterCommit(() => { void this.finishTicket(ended, ctx) })
+          if (ended) this.store.afterCommit(() => {
+            void this.finishTicket(ended, ctx).catch((error: unknown) => {
+              ctx.logger.warn('dsh-superagent: completing the ending of ticket %s failed: %s', ended.id, String(error))
+            })
+          })
           if (event.type === 'ticket.reopened') {
             const reopened = store.tickets.get(event.data.ticketId)
             if (reopened) this.store.afterCommit(() => {
@@ -222,11 +226,6 @@ export class Runtime extends Service implements SourceHost {
     catch (error) { return { diff: '', truncated: false, error: String(error) } }
   }
   /**
-   * Renames an ended or open ticket, updates the label of its local origin Thread, and appends the new title to its local
-   * archive without rewriting the original request.
-   * @throws UserError when the ticket is unknown or the title is blank.
-   */
-  /**
    * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
    * failure is logged and the ticket is unaffected.
    */
@@ -255,6 +254,11 @@ export class Runtime extends Service implements SourceHost {
     })
     return ticket
   }
+  /**
+   * Renames an ended or open ticket, updates the label of its local origin Thread, and appends the new title to its local
+   * archive without rewriting the original request.
+   * @throws UserError when the ticket is unknown or the title is blank.
+   */
   renameTicket(id: string, title: string): Ticket {
     const ticket = this.engine.renameTicket(id, title)
     const ref = this.store.triggers.get(ticket.origin.triggerId)?.threads[0]
