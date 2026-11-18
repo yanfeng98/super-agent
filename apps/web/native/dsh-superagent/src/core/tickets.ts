@@ -445,6 +445,8 @@ export class Tickets extends EnginePart {
   wake(ticketId: string): void {
     const ticket = this.repo.tickets.get(ticketId)
     if (!ticket || liveTicket(ticket) || ticket.ended?.by === 'human' || !ticket.undelivered.length) return
+    // A merged, discarded or cleaned Ticket cannot take new work under its Mandate; its messages go back to Eval instead.
+    if (ticket.merged || ticket.discarded || ticket.cleaned) { this.refuse(ticket); return }
     const policy = this.policy()
     if (policy.paused) return
     if (!policy.revalidate(ticket.mandate)) { this.refuse(ticket); return }
@@ -452,7 +454,8 @@ export class Tickets extends EnginePart {
     const first = ticket.undelivered.map(id => ticket.inputs.find(input => input.id === id)).find(input => input?.kind === 'trigger' && input.human)
     if (first?.kind !== 'trigger') return
     const at = this.now()
-    delete ticket.ended; ticket.updatedAt = at
+    delete ticket.ended; delete ticket.review; delete ticket.checks; delete ticket.reviewed
+    ticket.updatedAt = at
     const assignment = this.newAssignment(ticket)
     // Prepend the resumed marker so it is delivered ahead of the waiting messages.
     const resumed: TicketInput = { id: key('input', ticket.id, 'resumed', first.triggerId), kind: 'resumed', triggerId: first.triggerId, at }

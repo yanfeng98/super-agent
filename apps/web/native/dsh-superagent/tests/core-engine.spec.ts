@@ -320,6 +320,36 @@ describe('resume and stop', () => {
     expect(h.repo.tickets.get(ticketId)).toMatchObject({ inputs: expect.arrayContaining([expect.objectContaining({ kind: 'resumed' })]) })
     expect(h.repo.tickets.get(ticketId)).not.toHaveProperty('ended')
   })
+  it('drops the review and check of the ending when new work resumes the ticket', async () => {
+    const h = harness()
+    const ticketId = await ended(h, 'executor')
+    const stored = h.repo.tickets.get(ticketId)!
+    h.repo.tickets.save({ ...stored, review: { capturedAt: '2026-09-23T00:00:00Z', commits: [], files: [], dirty: [] },
+      checks: { command: 'test', ok: true, exitCode: 0, at: '2026-09-23T00:00:00Z', output: '' },
+      reviewed: { at: '2026-09-23T00:00:00Z', decision: 'approved' } })
+    h.engine.receive(trigger('2', { actor: guest }))
+    h.pump()
+    const ticket = h.repo.tickets.get(ticketId)!
+    expect(ticket).not.toHaveProperty('ended')
+    expect(ticket).not.toHaveProperty('review')
+    expect(ticket).not.toHaveProperty('checks')
+    expect(ticket).not.toHaveProperty('reviewed')
+  })
+  it('refuses to resume a merged ticket and sends its message to Eval', async () => {
+    const h = harness()
+    const ticketId = await ended(h, 'executor')
+    const stored = h.repo.tickets.get(ticketId)!
+    h.repo.tickets.save({ ...stored, ended: { at: '2026-09-23T00:00:00Z', by: 'executor', outcome: 'merged' },
+      merged: { at: '2026-09-23T00:00:00Z', branch: 'agent/t', target: 'main' } })
+    const before = h.requests.length
+    h.engine.receive(trigger('2', { actor: guest }))
+    h.pump()
+    const ticket = h.repo.tickets.get(ticketId)!
+    expect(ticket.merged).toBeDefined()
+    expect(ticket.ended).toMatchObject({ outcome: 'merged' })
+    expect(ticket.undelivered).toEqual([])
+    expect(h.requests.length).toBeGreaterThan(before)
+  })
   it('resumes an ended ticket at once when a person attaches a message to it', async () => {
     const h = harness()
     const ticketId = await ended(h, 'executor')
