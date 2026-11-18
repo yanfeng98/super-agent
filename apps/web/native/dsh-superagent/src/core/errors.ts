@@ -10,6 +10,7 @@ export const USER_ERRORS = {
   ticketEnded: ['refused', 'Ticket has ended'],
   ticketOpen: ['refused', 'Ticket is already open'],
   emptyTitle: ['refused', 'A ticket title cannot be empty'],
+  notHeld: ['refused', 'This ticket does not wait for approval'],
   assignmentEnded: ['refused', 'Assignment has ended; a newer assignment owns this ticket'],
   evalFinished: ['refused', 'Eval {eval} has finished or a later eval replaced it; decide the trigger\'s current eval'],
   notAdmissible: ['refused', 'Trigger is not admissible: {reason}'],

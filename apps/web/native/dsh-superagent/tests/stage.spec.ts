@@ -14,6 +14,8 @@ const ended = { at: '', by: 'executor' as const, reason: 'closed', outcome: 'clo
 // The rows of the docs/003 table, in order; a Ticket that matches several rows takes the first.
 describe('ticketStage', () => {
   it.each([
+    ['a held Ticket', ticket({ hold: { at: '' } }), { stage: 'person', action: 'approval' }],
+    ['hold before delivery', ticket({ hold: { at: '' }, delivery: { error: 'offline', at: '' } }), { stage: 'person', action: 'approval' }],
     ['an undelivered Input', ticket({ delivery: { error: 'offline', at: '' } }), { stage: 'person', action: 'delivery' }],
     ['delivery before answer and review', ticket({ delivery: { error: 'offline', at: '' }, attention, assignments: [reported('ready')] }), { stage: 'person', action: 'delivery' }],
     ['an Attention', ticket({ attention }), { stage: 'person', action: 'answer' }],

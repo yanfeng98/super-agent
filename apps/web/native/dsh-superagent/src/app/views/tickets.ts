@@ -88,7 +88,8 @@ export function ticketDetail(host: ViewHost, id: string) {
   const reopen = !liveTicket(ticket) && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
   // Ending a ticket's workspace state is offered once it ended, has a review, and was neither merged nor discarded.
   const finish = !liveTicket(ticket) && !!ticket.review?.branch && !ticket.merged && !ticket.discarded
-  return { ...line, actions: { ...line.actions, reopen, merge: finish, discard: finish }, review: ticket.review,
+  return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish },
+    review: ticket.review,
     merged: ticket.merged, discarded: ticket.discarded,
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },
     basis: basisFacts(ticket.mandate.basis, view.rule), paused: store.settings().paused,

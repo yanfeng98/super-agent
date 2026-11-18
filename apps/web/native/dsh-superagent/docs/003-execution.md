@@ -8,6 +8,7 @@ Each open Ticket has one stage, determined by what it is waiting for. Read the t
 
 | Stage | Condition | Panel label |
 | --- | --- | --- |
+| person / approval | The request asked to wait for a person's approval, so its first Assignment has not launched | Awaiting approval |
 | person / delivery | Delivering an Input to the Executor Session failed; it is retried after 2 seconds, then after a delay that doubles up to a minute, and a success, a new Assignment or the Ticket's end clears it | Input undelivered |
 | person / answer | It has an Attention | Awaiting answer |
 | person / review | The latest Report is `ready` | Awaiting review |
@@ -31,6 +32,8 @@ The main Session uses `dsh-superagent-router`, with the same 5-second shell and 
 ### Workspace review
 
 When a Ticket first launches, the Executor records the workspace's current commit as its base. When the Ticket ends, it collects the workspace's branch, head, the commits added since that base, the files they changed, and any work left uncommitted, and stores them on the Ticket. The panel shows them under **Changes**, with **View diff** reading the committed diff on demand, and a local Ticket's archive receives the same facts with its ending. A workspace that is not a git repository records the reason instead, so a Ticket without version control still ends normally. Reopening a Ticket clears the review and captures it again at the next end.
+
+A held Ticket launches no worker until **Approve** clears `ticket.hold`; the approval is recorded on the Ticket and in a local Ticket's archive. A held Ticket that is stopped and later reopened returns to approval, because the hold is still set.
 
 A crash between an ending and its archive write can leave the Markdown behind; after the next startup, each ended local Ticket whose archive lacks its close section gets it (with the review), and recorded merges, discards and renames are completed, so the archive catches up without repeating work.
 

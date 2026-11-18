@@ -62,6 +62,8 @@ export interface HttpHost {
   discardTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
   renameTicket(id: string, title: string): Ticket
+  /** Approves a ticket held for a person's approval. */
+  approveTicket(id: string): Ticket
   links(): LinkTarget
   ticketEnvironment(ticket: Ticket): Variable[]
   checkSetup(): void
@@ -168,6 +170,7 @@ const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), 
   project: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'Letters, digits, dot, dash or underscore').optional(),
   tags: z.array(z.string().trim().min(1).max(24)).max(8).optional(),
   files: z.array(LocalAttachmentSchema).max(5).optional(),
+  hold: z.boolean().optional(),
 }).strict()
 const LocalFollowupSchema = z.object({ thread: z.string().min(1), text: z.string().trim().min(1).max(20_000) }).strict()
 const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000),
@@ -240,6 +243,7 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST tickets/:id/reopen': ({ params }) => { const id = ticket(params.id); runtime.engine.reopenTicket(id); return { reopened: true } },
+    'POST tickets/:id/approve': ({ params }) => { const id = ticket(params.id); runtime.approveTicket(id); return { approved: true } },
     'GET tickets/:id/diff': async ({ params }) => { const id = ticket(params.id); return runtime.ticketDiff(id) },
     'POST tickets/:id/merge': async ({ params }) => {
       const id = ticket(params.id)

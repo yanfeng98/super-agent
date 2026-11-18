@@ -2,6 +2,7 @@
 // The Execution status, a Ticket, and the Execution settings.
 import { act } from 'react'
 import { expect, it } from 'vitest'
+import type { TicketPageView } from '../src/client/api.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { usePanel, mount, remount, all, find, tab, click, type, text, field, at } from './fixtures/panel.tsx'
 import { MEMBER, server, ticketSummary, threadSummary } from './fixtures/panel-server.ts'
@@ -48,6 +49,16 @@ it('filters Tickets by a tag', async () => {
   expect(server.requests.some(request => request.path.includes('tag=') && decodeURIComponent(request.path).includes('tag=前端'))).toBe(true)
 })
 
+it('approves a held ticket from its page', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!, stage: 'person', action: 'approval',
+    actions: { ...server.ticketDetails.t1!.actions, approve: true } } as TicketPageView
+  await mount()
+  expect(text()).toContain(zh['stage.approval'])
+  await click(zh.approveTicket)
+  expect(server.requests.some(request => request.path === 'tickets/t1/approve' && request.method === 'POST')).toBe(true)
+})
+
 it('stops an open Ticket from its page after confirmation', async () => {
   await mount()
   await click('修复回归')
@@ -87,7 +98,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, merge: true, discard: true },
+  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true },
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
   await mount()
@@ -240,7 +251,7 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   const fields = { id: 't3', title: '已合并的工单', state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, merge: false, discard: false } }
+  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])

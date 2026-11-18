@@ -36,8 +36,8 @@ import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff } from './review.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
-import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordDiscard, recordMerge, recordRename,
-  reopenArchive, ticketArchive } from '../sources/local.ts'
+import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordDiscard, recordMerge,
+  recordRename, reopenArchive, ticketArchive } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -220,6 +220,18 @@ export class Runtime extends Service implements SourceHost {
    * archive without rewriting the original request.
    * @throws UserError when the ticket is unknown or the title is blank.
    */
+  /**
+   * Approves a held ticket, letting its pending Assignment launch, and records the approval in its local archive.
+   * @throws UserError when the ticket is unknown, ended, not held, or has no pending Assignment.
+   */
+  approveTicket(id: string): Ticket {
+    const ticket = this.engine.approveTicket(id)
+    const at = now()
+    void recordApproval(ticket, at).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: recording an approval in the archive failed: %s', String(error))
+    })
+    return ticket
+  }
   renameTicket(id: string, title: string): Ticket {
     const ticket = this.engine.renameTicket(id, title)
     const ref = this.store.triggers.get(ticket.origin.triggerId)?.threads[0]
@@ -364,7 +376,8 @@ export class Runtime extends Service implements SourceHost {
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
-      discardTicket: id => runtime.discardTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title) }
+      discardTicket: id => runtime.discardTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
+      approveTicket: id => runtime.approveTicket(id) }
   }
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }

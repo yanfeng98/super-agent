@@ -178,6 +178,8 @@ export function TicketPage({ id }: { id: string }) {
       {data.actions.retry && <ConfirmButton variant="outline" icon="refresh" label={t('retry')} title={t('retryTitle')}
         message={t('retryConfirm', { title: data.title })}
         onConfirm={() => after(call('POST tickets/:id/retry', { id }))} />}
+      {data.actions.approve && <Button variant="primary" icon={<Icon name="decision" />}
+        onClick={() => after(call('POST tickets/:id/approve', { id }))}>{t('approveTicket')}</Button>}
       <Button variant="outline" icon={<Icon name="settings" />} onClick={() => { setTitleDraft(data.title); setRenaming(true) }}>
         {t('renameTicket')}</Button>
       {data.actions.reopen && <ConfirmButton variant="outline" icon="refresh" label={t('reopen')} title={t('reopenTitle')}

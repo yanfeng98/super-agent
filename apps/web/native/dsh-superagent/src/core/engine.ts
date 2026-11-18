@@ -175,6 +175,11 @@ export class Engine {
    * @throws UserError when the ticket is unknown or the title is blank.
    */
   renameTicket(ticketId: string, title: string): Ticket { return this.repo.atomic(() => this.tickets.rename(ticketId, title)) }
+  /**
+   * A person approves a held ticket, letting its pending Assignment launch.
+   * @throws UserError when the ticket is unknown, ended, not held, or has no pending Assignment.
+   */
+  approveTicket(ticketId: string): Ticket { return this.repo.atomic(() => this.tickets.approve(ticketId)) }
 
   // The Executor
 
@@ -273,8 +278,8 @@ export type EngineForSources = Pick<Engine, 'receive' | 'bindThread' | 'threadCl
 /** What the main Session asks of the Engine. */
 export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivered' | 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'>
 /** What people ask of the Engine, through the panel or the main Session. */
-export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'reevaluate' | 'unsubscribe'
-  | 'dismiss'>
+export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'approveTicket'
+  | 'reevaluate' | 'unsubscribe' | 'dismiss'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>
 /** What the Executor tells the Engine, and what its workers ask of it. */
