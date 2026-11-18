@@ -33,10 +33,10 @@ import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
-import { captureReview, workspaceDiff } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff } from './review.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
-import { closeArchive, createLocalFollowup, createLocalRequest, reopenArchive } from '../sources/local.ts'
+import { closeArchive, createLocalFollowup, createLocalRequest, recordDiscard, recordMerge, reopenArchive } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -215,6 +215,53 @@ export class Runtime extends Service implements SourceHost {
     catch (error) { return { diff: '', truncated: false, error: String(error) } }
   }
   /**
+   * Fast-forwards the repository's checked-out branch to an ended ticket's branch, then records the merge on the ticket and
+   * in its local archive.
+   * @throws when the ticket is unknown or open, has no workspace, was discarded, or git cannot fast-forward.
+   */
+  async mergeTicket(id: string): Promise<{ branch: string; target: string }> {
+    const ticket = this.store.tickets.get(id)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
+    if (ticket.discarded) throw new Error('The ticket worktree was discarded')
+    const directory = ticket.execution?.directory
+    if (!directory) throw new Error('This ticket has no workspace')
+    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+    const at = now()
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      if (!current) return
+      current.merged = { at, ...result }
+      this.store.tickets.save(current)
+    })
+    try { await recordMerge(ticket, { at, ...result }) }
+    catch (error) { this.ctx.logger.warn('dsh-superagent: recording a merge in the archive failed: %s', String(error)) }
+    return result
+  }
+  /**
+   * Removes an ended ticket's linked worktree and branch, then records the discard on the ticket and in its archive.
+   * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
+   */
+  async discardTicket(id: string): Promise<void> {
+    const ticket = this.store.tickets.get(id)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (!ticket.ended) throw new Error('Only an ended ticket can be discarded')
+    if (ticket.merged) throw new Error('The ticket branch was merged; discarding it now would delete the merged branch')
+    if (ticket.discarded) throw new Error('The ticket worktree was already discarded')
+    const directory = ticket.execution?.directory
+    if (!directory) throw new Error('This ticket has no workspace')
+    await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+    const at = now()
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      if (!current) return
+      current.discarded = { at }
+      this.store.tickets.save(current)
+    })
+    try { await recordDiscard(ticket, at) }
+    catch (error) { this.ctx.logger.warn('dsh-superagent: recording a discard in the archive failed: %s', String(error)) }
+  }
+  /**
    * Captures an ended ticket's workspace facts into `ticket.review` for the panel, and appends the ending, summary, and
    * review to its local archive. Runs after the ending transaction, so a capture failure leaves the ending intact.
    */
@@ -266,7 +313,8 @@ export class Runtime extends Service implements SourceHost {
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
-      ticketDiff: id => runtime.ticketDiff(id) }
+      ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
+      discardTicket: id => runtime.discardTicket(id) }
   }
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }

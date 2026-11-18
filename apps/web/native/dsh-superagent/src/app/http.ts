@@ -56,6 +56,10 @@ export interface HttpHost {
   configured(): boolean
   /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
   ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }>
+  /** Fast-forwards the repository to an ended ticket's branch and records the merge. */
+  mergeTicket(id: string): Promise<{ branch: string; target: string }>
+  /** Removes an ended ticket's linked worktree and branch. */
+  discardTicket(id: string): Promise<void>
   links(): LinkTarget
   ticketEnvironment(ticket: Ticket): Variable[]
   checkSetup(): void
@@ -221,6 +225,16 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST tickets/:id/reopen': ({ params }) => { const id = ticket(params.id); runtime.engine.reopenTicket(id); return { reopened: true } },
     'GET tickets/:id/diff': async ({ params }) => { const id = ticket(params.id); return runtime.ticketDiff(id) },
+    'POST tickets/:id/merge': async ({ params }) => {
+      const id = ticket(params.id)
+      try { return { merged: true as const, ...await runtime.mergeTicket(id) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/discard': async ({ params }) => {
+      const id = ticket(params.id)
+      try { await runtime.discardTicket(id); return { discarded: true as const } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
     'POST local/requests': async input => {
       const request = LocalRequestSchema.parse(await input.body(LOCAL_BODY_BYTES))
       await checkLocalSource(runtime)

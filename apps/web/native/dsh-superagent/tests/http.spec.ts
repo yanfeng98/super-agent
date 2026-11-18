@@ -160,3 +160,18 @@ it('serves a ticket workspace diff on demand, and refuses an unknown ticket', as
   expect(await call('GET', 'tickets/t1/diff')).toEqual({ status: 200, body: { diff: 'diff for t1', truncated: false } })
   expect(await call('GET', 'tickets/t2/diff')).toMatchObject({ status: 404 })
 })
+
+it('merges or discards a ticket workspace, and reports a git refusal as a bad request', async () => {
+  const calls: string[] = []
+  const call = serve({ store: { tickets: { get: (id: string) => id === 't1' ? { id } : undefined } },
+    mergeTicket: async (id: string) => { calls.push(`merge:${id}`); return { branch: 'agent/t', target: 'main' } },
+    discardTicket: async (id: string) => { calls.push(`discard:${id}`) } })
+  expect(await call('POST', 'tickets/t1/merge')).toEqual({ status: 200, body: { merged: true, branch: 'agent/t', target: 'main' } })
+  expect(await call('POST', 'tickets/t1/discard')).toEqual({ status: 200, body: { discarded: true } })
+  expect(calls).toEqual(['merge:t1', 'discard:t1'])
+  expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
+  const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
+    mergeTicket: async () => { throw new Error('The repository has uncommitted changes') } })
+  expect(await refused('POST', 'tickets/t1/merge')).toEqual({ status: 400,
+    body: { error: 'The repository has uncommitted changes' } })
+})

@@ -85,8 +85,12 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    **Reopen** action restore an ended Ticket under its still-valid Mandate (`src/core/tickets.ts`, `src/core/engine.ts`,
    `src/app/http.ts`, `src/client/ticket.tsx`), and the archive records the reopening; the Changes section reads the committed diff through `GET tickets/:id/diff` (`src/app/review.ts`, `src/client/ticket.tsx`). The new-ticket form sends an
    idempotency key, so a retry after a lost response returns the same Ticket; panel search matches a Ticket's latest result
-   and the text of its replies (`src/app/views/threads.ts`, `src/app/store.ts`). `review.spec.ts`, `local.spec.ts`,
-   `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
+   and the text of its replies (`src/app/views/threads.ts`, `src/app/store.ts`). An ended Ticket whose workspace is a
+   linked worktree offers **Merge** (fast-forward the repository's checked-out branch only) and **Discard** (remove the
+   worktree and branch); `POST tickets/:id/merge` and `POST tickets/:id/discard` run through `workspaceRepo`,
+   `mergeWorkspace` and `discardWorkspace` (`src/app/review.ts`), record `ticket.merged` or `ticket.discarded`
+   (`src/app/runtime.ts`) and append the matching archive section (`src/sources/local.ts`). `review.spec.ts`,
+   `local.spec.ts`, `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
 10. **Ticket numbers and command-line intake.** Every Ticket gets a stable `T-000N` number from its creation order
    (`src/app/store.ts`, shown by `src/app/views/records.ts`, `src/client/rows.tsx` and `src/client/ticket.tsx`, and written
    into the archive's close by `src/sources/local.ts`). `scripts/dsh-superagent ticket --title … --text …` drops a JSON

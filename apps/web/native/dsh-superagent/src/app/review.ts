@@ -1,4 +1,5 @@
 /** Captures the git facts of a ticket's workspace when it ends, so the panel shows what changed without opening the worktree. */
+import { basename, dirname } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket, TicketReview } from '../core/index.ts'
 import { runAsWorker } from '../infra/environment.ts'
@@ -61,4 +62,65 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
   const dirty = (status ?? '').split('\n').filter(Boolean).slice(0, LIMIT).map(line => ({ status: line.slice(0, 2).trim(), path: line.slice(3) }))
   return { capturedAt, ...(branch && branch !== 'HEAD' ? { branch } : {}), ...(base ? { base } : {}), head, commits, files: changed, dirty,
     ...(stat ? { stat } : {}) }
+}
+
+/** Where a ticket workspace sits in git, and the repository branch a merge would move. */
+export interface WorkspaceRepo {
+  /** Main repository root, shared by its worktrees. */
+  root: string
+  branch: string
+  head: string
+  /** Branch checked out in the main working tree, which a merge would fast-forward. */
+  target: string
+  /** Whether the main working tree has uncommitted changes. */
+  dirty: boolean
+  /** False when the ticket works directly in the repository instead of a linked worktree. */
+  linked: boolean
+}
+/**
+ * Reads a ticket workspace's branch, repository root, and the branch checked out there.
+ * @returns undefined when the workspace is not a git repository on a branch.
+ */
+export async function workspaceRepo(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<WorkspaceRepo | undefined> {
+  const git = (cwd: string, args: string[]) => runAsWorker(subprocess, ['git', ...args], cwd,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
+  const branch = await git(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
+  if (!branch || branch === 'HEAD') return undefined
+  const head = await git(directory, ['rev-parse', 'HEAD']).catch(() => undefined)
+  const common = await git(directory, ['rev-parse', '--path-format=absolute', '--git-common-dir']).catch(() => undefined)
+  if (!head || !common) return undefined
+  const root = basename(common) === '.git' ? dirname(common) : common
+  const target = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
+  if (!target || target === 'HEAD') return undefined
+  const dirty = (await git(root, ['status', '--porcelain']).catch(() => '')).length > 0
+  return { root, branch, head, target, dirty, linked: root !== directory }
+}
+/**
+ * Fast-forwards the repository's checked-out branch to the ticket branch, so no merge commit or conflict state is created.
+ * @throws when the workspace is not a linked worktree, the repository is dirty, the branch is checked out there, or the
+ * repository cannot fast-forward.
+ * @returns The branch merged and the branch it moved.
+ */
+export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<{ branch: string; target: string }> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
+  if (repo.dirty) throw new Error('The repository has uncommitted changes; commit or stash them before merging')
+  if (repo.target === repo.branch) throw new Error('The repository already has the ticket branch checked out')
+  await runAsWorker(subprocess, ['git', 'merge', '--ff-only', repo.branch], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+  return { branch: repo.branch, target: repo.target }
+}
+/**
+ * Removes the ticket's linked worktree and deletes its branch; the repository itself and other worktrees stay.
+ * @throws when the workspace is not a linked worktree or either removal fails.
+ */
+export async function discardWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<void> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo.linked) throw new Error('This ticket works in the repository itself; remove its changes yourself')
+  await runAsWorker(subprocess, ['git', 'worktree', 'remove', '--force', directory], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+  await runAsWorker(subprocess, ['git', 'branch', '-D', repo.branch], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
 }

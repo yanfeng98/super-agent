@@ -233,6 +233,14 @@ export function TicketPage({ id }: { id: string }) {
       {diff?.error && <Hint>{diff.error}</Hint>}
       {diff && !diff.error && (diff.diff ? <pre className="dt-workspace-diff">{diff.diff}</pre> : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
+      {(data.actions.merge || data.actions.discard) && <div className="dt-row-actions">
+        {data.actions.merge && <ConfirmButton variant="outline" icon="decision" label={t('ticketMerge')} title={t('mergeTitle')}
+          message={t('mergeConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/merge', { id }))} />}
+        {data.actions.discard && <ConfirmButton variant="outline" icon="trash" label={t('ticketDiscard')} title={t('discardTitle')}
+          message={t('discardConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/discard', { id }))} />}
+      </div>}
+      {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}
+      {data.discarded && <Hint>{t('discardedHint')}</Hint>}
     </Section>}
     <MandateDetails ticket={data} actor={actor} />
     {undelivered.length > 0 && <Section title={t('undeliveredInputs')} count={undelivered.length}>

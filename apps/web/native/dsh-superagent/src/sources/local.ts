@@ -327,6 +327,34 @@ export async function drainInbox(host: SourceHost): Promise<number> {
   }
   return handled
 }
+/** Appends one lifecycle section to the archive under a marker that keeps a retried operation from duplicating it. */
+async function appendLifecycle(ticket: Pick<Ticket, 'channels'>, marker: string, heading: string, lines: string[]): Promise<void> {
+  const file = ticketArchive(ticket)
+  if (!file) return
+  await serialized(file, async () => {
+    const existing = await readFile(file, 'utf8').catch(() => undefined)
+    if (existing === undefined || existing.includes(marker)) return
+    await appendFile(file, ['', `## ${heading}`, '', marker, ...lines, ''].join('\n'))
+  })
+}
+/**
+ * Appends the merge of a ticket's branch into the repository to its archive.
+ * @param ticket - The ticket whose branch was merged.
+ * @param merged - When, which branch, and the branch it moved.
+ */
+export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at: string; branch: string; target: string }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:merged:${merged.at} -->`, `${merged.at} · 已合并 / Merged`,
+    ['- status: merged', `- branch: ${merged.branch}`, `- target: ${merged.target}`, `- by: ${OPERATOR}`])
+}
+/**
+ * Appends the discard of a ticket's worktree and branch to its archive.
+ * @param ticket - The ticket whose worktree was discarded.
+ * @param at - When it was discarded.
+ */
+export async function recordDiscard(ticket: Pick<Ticket, 'channels'>, at: string): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:discarded:${at} -->`, `${at} · 已丢弃 / Discarded`,
+    ['- status: discarded', `- by: ${OPERATOR}`])
+}
 export const name = 'dsh-superagent-local'
 export const inject = ['orchestrator']
 export function apply(ctx: Context): void {
