@@ -317,6 +317,8 @@ export interface Ticket {
   approved?: { at: string }
   /** The latest title a person gave the ticket, so a crash can complete its archive section. */
   renamed?: { at: string; title: string }
+  /** When a person rebased the ticket's branch, and the target commit it now starts from. */
+  rebased?: { at: string; branch: string; target: string; base: string }
   /** When a person merged the ticket's branch into the repository, and where. */
   merged?: { at: string; branch: string; target: string }
   /** When a person discarded the ticket's worktree and branch. */

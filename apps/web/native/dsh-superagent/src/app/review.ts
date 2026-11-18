@@ -124,11 +124,12 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
 /**
  * Rebases the ticket branch onto the repository's checked-out branch, so a merge can fast-forward after the repository moved.
  * A conflicted rebase is aborted, leaving the workspace on its previous commits.
- * @returns The branch rebased and the branch it moved onto.
+ * @returns The branch rebased, the branch it moved onto, and the target's commit that is now the workspace's base.
  * @throws when the workspace is not a linked worktree, the repository already has the ticket branch checked out, or the
  * rebase cannot finish cleanly.
  */
-export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<{ branch: string; target: string }> {
+export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<{ branch: string;
+  target: string; base: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; rebase its branch manually')
@@ -143,7 +144,9 @@ export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: 
     })
     throw error
   }
-  return { branch: repo.branch, target: repo.target }
+  const base = (await runAsWorker(subprocess, ['git', 'rev-parse', repo.target], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))).trim()
+  return { branch: repo.branch, target: repo.target, base }
 }
 /**
  * Removes the ticket's linked worktree and deletes its branch; the repository itself and other worktrees stay.
@@ -155,6 +158,15 @@ export async function discardWorkspace(subprocess: SubprocessRuntime, directory:
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; remove its changes yourself')
+  if (options.merged) {
+    // Refuse before removing the worktree when the target does not contain the branch, so new commits cannot be lost.
+    const contained = await runAsWorker(subprocess, ['git', 'merge-base', '--is-ancestor', repo.branch, repo.target], repo.root,
+      AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(() => true).catch((error: unknown) => {
+      if (error instanceof CliError && error.exitCode === 1) return false
+      throw error
+    })
+    if (!contained) throw new Error(`${repo.target} does not contain ${repo.branch}; merge it before cleaning up`)
+  }
   await runAsWorker(subprocess, ['git', 'worktree', 'remove', '--force', directory], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
   await runAsWorker(subprocess, ['git', 'branch', options.merged ? '-d' : '-D', repo.branch], repo.root,

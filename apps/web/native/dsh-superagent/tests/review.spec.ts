@@ -113,7 +113,13 @@ describe('merge and discard', () => {
     // The repository takes a commit of its own, so the ticket branch is no longer a fast-forward.
     writeFileSync(join(repo, 'a.txt'), 'main moved\n'); git('commit', '-qam', 'main work')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/rebase the ticket branch onto/)
-    expect(await rebaseWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/r', target: git('branch', '--show-current') })
+    const rebased = await rebaseWorkspace(subprocess(), worktree, signal)
+    expect(rebased).toEqual({ branch: 'agent/r', target: git('branch', '--show-current'), base: git('rev-parse', 'HEAD') })
+    // With the recorded base moved to the target's commit, the review lists only the ticket's own commit and file.
+    const review = (await captureReview(subprocess(), { ...ticket(rebased.base),
+      execution: { name: 't1', directory: worktree, assignment: '', base: rebased.base } }, signal))!
+    expect(review.commits.map(commit => commit.subject)).toEqual(['ticket work'])
+    expect(review.files).toEqual([{ status: 'A', path: 'b.txt' }])
     expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/r', target: git('branch', '--show-current') })
     expect(git('log', '--oneline', '-1')).toMatch(/ticket work/)
     // The rebased history sits on top of the repository commit.
@@ -130,6 +136,15 @@ describe('merge and discard', () => {
     await discardWorkspace(subprocess(), worktree, signal, { merged: true })
     expect(existsSync(worktree)).toBe(false)
     expect(() => git('show-ref', '--verify', '--quiet', 'refs/heads/agent/clean')).toThrow()
+  })
+  it('refuses a merged cleanup when the target does not contain the branch, keeping its worktree', async () => {
+    base()
+    const worktree = join(dir, 'worktree-unmerged-clean')
+    git('worktree', 'add', '-q', '-b', 'agent/unmerged', worktree)
+    writeFileSync(join(worktree, 'b.txt'), 'not merged\n')
+    gitAt(worktree, 'add', 'b.txt'); gitAt(worktree, 'commit', '-q', '-m', 'not merged')
+    await expect(discardWorkspace(subprocess(), worktree, signal, { merged: true })).rejects.toThrow(/does not contain/)
+    expect(existsSync(join(worktree, 'b.txt'))).toBe(true)
   })
   it('removes a linked worktree and its branch, and refuses the repository itself', async () => {
     base()

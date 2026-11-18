@@ -123,8 +123,10 @@ export function ticketSummary(ticket: Ticket, number?: number) {
   const stage = ticketStage(ticket)
   const note = ticketNote(ticket, stage)
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
+  const cleanup = !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, tags: [] as string[], state, ...stage, ...note ? { note } : {},
-    actions: { retry: canRetry(ticket), stop: liveTicket(ticket) }, strength: ticket.mandate.strength, ended: ticket.ended,
+    actions: { retry: canRetry(ticket), stop: liveTicket(ticket), ...cleanup ? { cleanup: true as const } : {} },
+    strength: ticket.mandate.strength, ended: ticket.ended,
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },
       assignments: ticket.assignments.length, inputs: ticket.inputs.length, undelivered: ticket.undelivered.length,
     // Every started Assignment of a Ticket runs in its one shared worker Session.

@@ -12,7 +12,7 @@ import { ticketExecution } from '../src/executor/dsh.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { appendFollowup, appendReply, archiveDir, archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, drainInbox,
-  localKind, OPERATOR, recordRename, reopenArchive, seedPolicy, webhookFor }
+  localKind, OPERATOR, recordCleanup, recordRebase, recordRename, reopenArchive, seedPolicy, webhookFor }
   from '../src/sources/local.ts'
 import { testDeployment } from './fixtures/deployment.ts'
 
@@ -381,6 +381,14 @@ describe('local tickets', () => {
     await recordRename(ended, '2026-11-18T04:30:00.000Z', '新的标题')
     expect(readFileSync(created.file, 'utf8').match(/标题 \/ Title/g)).toHaveLength(1)
     expect(readFileSync(created.file, 'utf8')).toContain('title: "新的标题"')
+    await recordCleanup(ended, '2026-11-18T05:00:00.000Z')
+    await recordCleanup(ended, '2026-11-18T05:00:00.000Z')
+    expect(readFileSync(created.file, 'utf8').match(/已清理 \/ Cleaned up/g)).toHaveLength(1)
+    await recordRebase(ended, { at: '2026-11-18T06:00:00.000Z', branch: 'agent/x', target: 'main', base: 'b'.repeat(40) })
+    await recordRebase(ended, { at: '2026-11-18T06:00:00.000Z', branch: 'agent/x', target: 'main', base: 'b'.repeat(40) })
+    const rebased = readFileSync(created.file, 'utf8')
+    expect(rebased.match(/已变基 \/ Rebased/g)).toHaveLength(1)
+    expect(rebased).toContain(`- base: ${'b'.repeat(40)}`)
     await reopenArchive(ended, '2026-11-18T04:00:00.000Z')
     const reopenedFile = readFileSync(created.file, 'utf8')
     expect(reopenedFile.match(/重新打开 \/ Reopened/g)).toHaveLength(1)
@@ -411,8 +419,11 @@ describe('local tickets', () => {
     h.store.tickets.save({ ...h.store.tickets.get(request.id)!, ended: { at: '2026-11-18T03:00:00.000Z', by: 'human',
       outcome: 'stopped' }, discarded: { at: '2026-11-18T03:00:00.000Z' } })
     expect(() => h.engine.reopenTicket(request.id)).toThrow(/discarded/)
-    // A worktree cleaned up after its merge is gone too.
-    h.store.tickets.save({ ...h.store.tickets.get(request.id)!, discarded: undefined,
+    // A merged branch cannot take new work under the same ticket, and a worktree cleaned up after its merge is gone too.
+    h.store.tickets.save({ ...h.store.tickets.get(request.id)!, discarded: undefined, merged: { at: '2026-11-18T04:00:00.000Z',
+      branch: 'agent/t1', target: 'main' } })
+    expect(() => h.engine.reopenTicket(request.id)).toThrow(/already merged/)
+    h.store.tickets.save({ ...h.store.tickets.get(request.id)!, merged: undefined,
       cleaned: { at: '2026-11-18T04:00:00.000Z' } })
     expect(() => h.engine.reopenTicket(request.id)).toThrow(/removed after its merge/)
   })

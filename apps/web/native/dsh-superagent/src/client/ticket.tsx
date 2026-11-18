@@ -24,7 +24,6 @@ function InputLine({ input, earlier = [] }: { input: Input; earlier?: { id: stri
       <div className="dt-row-meta">{input.kind === 'trigger' && <span>{valueLabel(t, 'input', input.kind)}</span>}<When
         at={input.at} /></div>
       {(input.kind === 'text' || input.kind === 'note') && input.text && <div className="dt-row-quote"><MarkdownLite text={input.text} /></div>}
-      {trigger?.body && <div className="dt-row-quote"><ClampText text={trigger.body} /></div>}
       {trigger?.handback && <Hint>{t('inputHandedBack', { reason: trigger.handback.reason })}</Hint>}
       <Earlier items={earlier} />
     </div>
@@ -263,6 +262,10 @@ export function TicketPage({ id }: { id: string }) {
     {data.deliveryError && <p className="dt-banner dt-danger dt-mono">
       <span className="dt-banner-label">{t('deliveryFailedPrefix')}</span>{data.deliveryError}
     </p>}
+    {data.request && <Section title={t('requestTitle')} hint={t('requestHint')}>
+      <div className="dt-row-meta"><When at={data.request.at} /></div>
+      <ClampText text={data.request.text} />
+    </Section>}
     {data.replies.length > 0 && <Section title={t('repliesTitle')} count={data.replies.length} hint={t('repliesHint')}>
       <ul className="dt-list">{data.replies.slice().reverse().map(reply => <li key={reply.id} className="dt-row">
         <div className="dt-row-main">
