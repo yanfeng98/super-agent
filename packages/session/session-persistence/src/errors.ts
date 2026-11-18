@@ -49,6 +49,19 @@ export class SessionPersistenceBusyError extends Error {
   }
 }
 
+/**
+ * Removal is not available for this backend: its storage keeps committed
+ * Sessions as an append-only artifact set that the backend cannot delete.
+ * Nothing was removed, and the identity keeps every artifact it had.
+ */
+export class SessionPersistenceRemoveUnsupportedError extends Error {
+  /** @param sessionId - the session the backend cannot remove. */
+  constructor(readonly sessionId: SessionId) {
+    super(`session "${sessionId}": this storage backend cannot remove a committed session`)
+    this.name = 'SessionPersistenceRemoveUnsupportedError'
+  }
+}
+
 /** A mutation (`append`/`flush`) was called on a read handle. */
 export class SessionReadOnlyError extends Error {
   /**

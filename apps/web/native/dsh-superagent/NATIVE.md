@@ -47,7 +47,12 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 2. **Default state directory.** `src/deployment.ts` defaults `stateDir` to `<DSH_HOME>/state/superagent` through
    `defaultStateDir()`, so the plugin starts in a fresh profile without configuration; the absolute-path check accepts POSIX
    roots, Windows drive roots and UNC paths. `tests/deployment.spec.ts` covers the default.
-3. **DSH 0.2.1-alpha.2 → 0.2.2-rc.3 API adaptation:**
+3. **DSH 0.2.1-alpha.2 → 0.2.2 API adaptation:**
+   - `tests/bundle-patch.spec.ts` reads the patched entry list from `applyEntryPatches(...).data`; Loader 1.0.0-rc.9
+     returns `{ data, index }`, and Include 1.2.0 parses the patch as YAML 1.2.
+   - Session persistence gained `remove`, which the SQLite backend refuses; the plugin deletes nothing and needs no change.
+   - The `working_directory` model tool and the `subagent` `cwd` parameter are gone; the preset rows already name neither,
+     and `enter_worktree`/`exit_worktree` replace `create_worktree`.
    - `src/app/resources.ts` reads a Ticket's transcript from the live Agent's Session (`ctx.agents.get(...).session.snapshotEvents()`),
      and falls back to the stored log through `sessionPersistence.open(id, 'read')` when an earlier process left the Session
      unloaded; the 0.2.1 `sessionController.inspect()` method no longer exists.

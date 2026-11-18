@@ -165,7 +165,7 @@ class TestPersistence extends SessionPersistence {
     return Promise.resolve({ header: structuredClone(entry.meta), revision: entryRevision(entry) })
   }
 
-  remove(id: SessionIdType): Promise<void> {
+  override remove(id: SessionIdType): Promise<void> {
     if (!TestPersistence.entries.delete(id)) return Promise.reject(new SessionPersistenceNotFoundError(id))
     return Promise.resolve()
   }

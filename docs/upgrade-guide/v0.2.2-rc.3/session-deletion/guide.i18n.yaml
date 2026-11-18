@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/session-deletion/guide.md
 /:
-  en: aa217f598c54b400
-  zh: 700c0a736461833a
-/session-persistence-requires-a-removal-method:
-  en: 0c3d5aed8bfd9b7d
-  zh: c9b4daeba7998ac5
-/session-persistence-requires-a-removal-method/change:
-  en: db93dca044f3e0ff
-  zh: b35cb25c16175c31
-/session-persistence-requires-a-removal-method/migration:
-  en: f2212a00e6853afd
-  zh: 71e074d4ea477797
+  en: 6f474a88d2ef3f12
+  zh: 9d8db17f3c0dede7
+/session-persistence-declares-whether-it-can-remove-a-session:
+  en: b33ace13a2f43619
+  zh: aa4bc642b9253d9c
+/session-persistence-declares-whether-it-can-remove-a-session/change:
+  en: a4a00cdb6343fb8b
+  zh: 7be5614f7541b00f
+/session-persistence-declares-whether-it-can-remove-a-session/migration:
+  en: 237ff19511a561ad
+  zh: eaf2d8ff44959e9f

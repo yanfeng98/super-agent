@@ -11,10 +11,12 @@ async function patched(): Promise<Row[]> {
   const cordis = createRequire(createRequire(import.meta.url).resolve('@deepseek-ai/cordis/package.json'))
   const include = cordis.resolve('@deepseek-ai/cordis-plugin-include')
   const { parseEntryYaml, applyEntryPatches } = await import(include) as {
-    parseEntryYaml(text: string): unknown; applyEntryPatches(data: Row[], patches: unknown[], warn: (message: string) => void): Row[] }
+    parseEntryYaml(text: string): unknown
+    applyEntryPatches(data: Row[], patches: unknown[], warn: (message: string) => void): { data: Row[] }}
   const patches = parseEntryYaml(readFileSync(join(import.meta.dirname, '..', 'cordis.patch.yml'), 'utf8')) as unknown[]
   const warnings: string[] = []
-  const rows = applyEntryPatches([], patches, message => { warnings.push(message) })
+  // Loader 1.0.0-rc.9 returns the patched entries and their index instead of the entry list.
+  const { data: rows } = applyEntryPatches([], patches, message => { warnings.push(message) })
   expect(warnings).toEqual([])
   return rows
 }

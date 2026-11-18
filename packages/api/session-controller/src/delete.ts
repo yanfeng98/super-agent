@@ -11,6 +11,7 @@ import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import {
   SessionPersistenceBusyError,
   SessionPersistenceNotFoundError,
+  SessionPersistenceRemoveUnsupportedError,
   type SessionPersistence,
 } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
@@ -160,6 +161,15 @@ export class SessionDeletion {
       if (error instanceof SessionPersistenceNotFoundError) {
         if (disposed) return
         throw new RemoteError('session/not-found', `session "${sessionId}" not found`, { sessionId }, { cause: error })
+      }
+      if (error instanceof SessionPersistenceRemoveUnsupportedError) {
+        throw new RemoteError(
+          'session/delete-unsupported',
+          `session "${sessionId}" cannot be deleted: the configured session storage keeps committed sessions`
+          + ' append-only and supports no removal; switch the profile to dsh-session-persistence-jsonl to delete',
+          { sessionId },
+          { cause: error },
+        )
       }
       throw new RemoteError(
         'gateway/internal',

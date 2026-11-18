@@ -40,7 +40,7 @@ async function fixture(options: FixtureOptions = {}) {
   const ctx = new Context()
   roots.push(ctx)
   await ctx.plugin(SessionStore)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   const stored = [...options.stored ?? []]
   const remove = vi.fn(options.remove ?? (async (sessionId: SessionId) => {
     const index = stored.findIndex(entry => entry.id === sessionId)
@@ -223,7 +223,7 @@ describe('session deletion', () => {
     const ctx = new Context()
     roots.push(ctx)
     await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
+    await installSessionReadTestServices(ctx)
     ctx.provide('workspaceRegistry', { forgetSession: async () => {} } as never)
     ctx.provide('agents', { get: () => undefined } as never)
     const agents = new ApiSessionAgentController(ctx)

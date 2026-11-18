@@ -796,7 +796,7 @@ describe('delete action', () => {
     const { settleSessionDelete, ask } = deleteDialog(deleteSession)
     ask()
     fireEvent.click(screen.getByRole('button', { name: '删除' }))
-    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('此会话正在使用中。请稍后重试。') })
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('此会话仍被占用，可能另一个窗口或 DSH 实例正打开它。请关闭后再试。') })
     expect(settleSessionDelete).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: '删除' }))
