@@ -51,7 +51,7 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
 - A Ticket's **Changes** section takes review notes anchored to a file and optional line, such as `src/login.css:42`. **Send notes to the Executor** turns the notes into one follow-up on the Ticket's local Thread, so the worker receives them as one message; notes stay on the Ticket until removed.
 - A Ticket's page can link another Ticket by its number, such as `T-0003`. Both pages list the link, which records related or dependent work but changes no execution state. The page also lists the person actions taken on the Ticket, and the Execution list's selection stops open Tickets or cleans up the worktrees of merged ones in one action.
 - The Execution list filters by tag when any request has one.
-- A crash between an ending and its archive write is repaired after the next startup: the close, approval, merge, discard and rename sections are completed from the database. A deleted or moved archive file is not recreated.
+- A crash between an ending and its archive write is repaired after the next startup: the close, approval, rebase, merge, cleanup, discard and rename sections are completed from the database. A deleted or moved archive file is not recreated.
 - A request may carry up to eight **tags** (for example a component and a priority), stored in the archive's front matter and shown on the Ticket's row and page. They label work for a person; they grant no authority, are not sent to the worker, and are matched by search.
 - **Settings → Sources → 本地工单 → 项目** maps a project label to its own execution root and prepare command. A ticket whose request names that project is created under `<root>/<ticket name>` and runs the row's prepare command instead of the global one; an empty root keeps the Execution root, and an empty command keeps the global command. Worker model and concurrency stay global.
 - A request may carry an optional **project** label (letters, digits, dot, dash, underscore). It is written to the archive's front matter and exposed to the prepare command and worker as `DSH_SUPERAGENT_PROJECT`, so one prepare command can create a worktree from a different repository or directory per project, for example a `case "$DSH_SUPERAGENT_PROJECT"` branch. A configured project row can also set the execution root and prepare command, as described above. The worker model and concurrency stay global.
@@ -221,7 +221,7 @@ Setup must succeed before polling or work starts. Overview lists missing require
 
 1. **Sources.** The local Source sets the Markdown archive directory. For GitHub, set the repository (`owner/name`) and agent CLI, for example `/home/me/.local/bin/gh-agent`. Requests normally arrive through the agent account's notifications. A new Issue or comment mentioning the account arrives on the next poll; adding a mention by editing an existing Issue body does not. Post a new comment instead. For Feishu, set the bot CLI, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
 2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the GitHub accounts and Feishu users who may ask for work; until a list has someone, no request can become a Ticket. With Feishu, a chat can be chosen to sync the list from, at startup and on **Sync now**.
-3. **Execution.** The directory root, a prepare command, and optionally a check command. The check runs in the worktree when each Ticket ends; once configured, a merge requires the latest run to pass. To give each Ticket a checkout of the repository:
+3. **Execution.** The directory root, a prepare command, and optionally a check command. The check runs in the worktree when each Ticket ends; once configured, a merge requires a passing run after the Ticket's latest ending. To give each Ticket a checkout of the repository:
 
    ```sh
    git -C /home/me/src/widgets fetch --no-tags "https://github.com/$DSH_SUPERAGENT_GITHUB_REPOSITORY.git" "${DSH_SUPERAGENT_GITHUB_PR_HEAD:-HEAD}:refs/dsh-superagent/$DSH_SUPERAGENT_TICKET" &&
@@ -251,7 +251,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 | `POST local/followups` with `{"thread": …, "text": …}` | Appends a person's message to a local ticket's Thread and archives it: `trigger` and `thread` |
 | `GET tickets?state=<filter>&tag=<tag>` | Ticket rows filtered by stage and, optionally, an exact request tag |
 | `GET tags` | Every tag on a request, sorted, for the Execution filter |
-| `POST tickets/<id>/reopen`, `POST tickets/<id>/approve` | Reopens an ended Ticket under its Mandate, or approves a held Ticket: `reopened: true` / `approved: true` |
+| `POST tickets/<id>/reopen`, `POST tickets/<id>/approve` | Reopens an ended Ticket under its Mandate unless its branch was merged or its worktree was discarded or cleaned up, or approves a held Ticket: `reopened: true` / `approved: true` |
 | `POST tickets/<id>/title` with `{"title": …}` | Renames a Ticket without changing its request: `title` |
 | `POST tickets/<id>/retry`, `POST tickets/<id>/stop` | Retries or stops a Ticket, as the panel does |
 | `POST tickets/<id>/merge`, `POST tickets/<id>/discard` | Fast-forwards the repository to the Ticket branch (`merged: true`, `branch`, `target`), or removes its linked worktree and branch (`discarded: true`) |
