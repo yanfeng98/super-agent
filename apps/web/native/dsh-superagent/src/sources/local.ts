@@ -20,6 +20,11 @@ const LocalConfigSchema = z.object({
   archive: z.string().trim().refine(absolute, 'An absolute path, or empty for <stateDir>/tickets')
     .default(''),
   webhook: z.string().trim().refine(value => value === '' || /^https?:\/\/\S+$/.test(value), 'An http(s) URL, or empty').default(''),
+  projects: z.array(z.object({
+    name: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'Letters, digits, dot, dash or underscore'),
+    root: z.string().trim().refine(absolute, 'An absolute path, or empty').default(''),
+    prepare: z.string().trim().max(4000).default(''),
+  }).strict()).max(20).default([]),
 }).strict()
 export type LocalConfig = z.infer<typeof LocalConfigSchema>
 /** One file sent with a panel request, as its name and base64 content. */
@@ -274,6 +279,10 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
   const thread = `${SOURCE}:${id}`
   // A title is one line in the front matter, the heading and the Thread label.
   const title = input.title.replace(/\s+/g, ' ').trim()
+  // A project label may carry its own root and prepare command; a label without a row keeps the global settings.
+  const project = input.project ? config.projects.find(item => item.name === input.project) : undefined
+  const projectMeta = project ? { ...project.root ? { projectRoot: project.root } : {},
+    ...project.prepare ? { projectPrepare: project.prepare } : {} } : {}
   const file = archiveFile(archiveDir(ctx.deployment, config), id)
   await writeRequest(file, { id, title, text: input.text, at, ...input.project ? { project: input.project } : {},
     ...input.tags?.length ? { tags: input.tags } : {}, ...input.hold ? { hold: true } : {} })
@@ -289,7 +298,7 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
     text: `${title}\n\n${input.text}${attachmentList}`,
     channel: { source: SOURCE, thread, address: { request: id, file } },
     meta: { requestId: id, messageId: id, title, ...input.project ? { project: input.project } : {},
-      ...input.tags?.length ? { tags: input.tags } : {}, ...input.hold ? { hold: true } : {},
+      ...projectMeta, ...input.tags?.length ? { tags: input.tags } : {}, ...input.hold ? { hold: true } : {},
       ...idempotency ? { idempotency } : {} },
   }
   // Describe the Thread after the intake created it; describing an absent Thread is a no-op.

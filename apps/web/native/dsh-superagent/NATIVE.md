@@ -95,7 +95,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    (`src/app/store.ts`, shown by `src/app/views/records.ts`, `src/client/rows.tsx` and `src/client/ticket.tsx`, and written
    into the archive's close by `src/sources/local.ts`). A request may also carry a `project` label, which is archived and
    exposed as `DSH_SUPERAGENT_PROJECT` (`src/app/execution-environment.ts`) so a prepare command can pick a repository per
-   project; a request may also ask to be held (`hold`), in which case the Executor launches nothing until **Approve**
+   project, and a configured project row may supply its own execution root and prepare command (`projectRoot`/`projectPrepare`
+   on the Trigger, `Execution.prepare`); a request may also ask to be held (`hold`), in which case the Executor launches nothing until **Approve**
    (`ticket.hold`, `POST tickets/:id/approve`, stage `person/approval`); up to eight `tags` are stored in the archive, shown on the row and page, matched by search, and usable as an
    Execution filter (`GET tags`, `GET tickets?tag=`). The local Source's optional webhook receives a JSON POST when a
    local Ticket asks a question or ends (`src/app/webhook.ts`, `ticket.attention` event). Up to five attachments, 8 MB total, travel base64 with
