@@ -36,6 +36,8 @@ export interface Api {
   'POST tickets/:id/stop': { response: { stopped: true } }
   'POST tickets/:id/reopen': { response: { reopened: true } }
   'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
+  'POST tickets/:id/merge': { response: { merged: true; branch: string; target: string } }
+  'POST tickets/:id/discard': { response: { discarded: true } }
   'POST local/requests': { body: { title: string; text: string; key?: string };
     response: { request: string; thread: string; trigger: string; file: string } }
   'POST local/followups': { body: { thread: string; text: string }; response: { trigger: string; thread: string } }

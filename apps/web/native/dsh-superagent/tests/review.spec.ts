@@ -1,11 +1,11 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -34,8 +34,9 @@ const subprocess = (): SubprocessRuntime => ({
   },
 }) as unknown as SubprocessRuntime
 
-const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8',
+const gitAt = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8',
   env: { ...process.env, GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: '1' } }).trim()
+const git = (...args: string[]): string => gitAt(repo, ...args)
 const ticket = (base?: string): Ticket => ({ execution: { name: 't1', directory: repo, assignment: '', ...base ? { base } : {} } }) as Ticket
 
 describe('captureReview', () => {
@@ -77,5 +78,36 @@ describe('captureReview', () => {
     mkdirSync(plain)
     const outside = await captureReview(subprocess(), { execution: { name: 't2', directory: plain, assignment: '' } } as Ticket, signal)
     expect(outside).toMatchObject({ commits: [], files: [], dirty: [], error: expect.stringMatching(/not a git repository/) })
+  })
+})
+
+describe('merge and discard', () => {
+  const base = (): string => {
+    git('init', '-q')
+    writeFileSync(join(repo, 'a.txt'), 'one\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'base')
+    return git('rev-parse', 'HEAD')
+  }
+  it('fast-forwards the checked-out branch from a linked worktree, and refuses a dirty repository', async () => {
+    base()
+    const worktree = join(dir, 'worktree')
+    git('worktree', 'add', '-q', '-b', 'agent/t', worktree)
+    writeFileSync(join(worktree, 'a.txt'), 'two\n')
+    gitAt(worktree, 'add', 'a.txt'); gitAt(worktree, 'commit', '-q', '-m', 'change')
+    const head = gitAt(worktree, 'rev-parse', 'HEAD')
+    expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
+    expect(git('rev-parse', 'HEAD')).toBe(head)
+    // The main working tree must be clean; an uncommitted file blocks the merge.
+    writeFileSync(join(repo, 'dirty.txt'), 'x\n')
+    await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/uncommitted/)
+  })
+  it('removes a linked worktree and its branch, and refuses the repository itself', async () => {
+    base()
+    const worktree = join(dir, 'worktree-discard')
+    git('worktree', 'add', '-q', '-b', 'agent/discard', worktree)
+    await discardWorkspace(subprocess(), worktree, signal)
+    expect(existsSync(worktree)).toBe(false)
+    expect(() => git('show-ref', '--verify', '--quiet', 'refs/heads/agent/discard')).toThrow()
+    await expect(discardWorkspace(subprocess(), repo, signal)).rejects.toThrow(/repository itself/)
   })
 })

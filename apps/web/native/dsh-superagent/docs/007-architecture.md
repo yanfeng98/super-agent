@@ -413,7 +413,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
-| `tests/review.spec.ts` | A ticket workspace's review: branch, commits since the launch base, changed and uncommitted files, and a non-git directory |
+| `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward merge and discard of a linked worktree |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, and which stay quiet |
 | `tests/commands.spec.ts` | CLI calls as the deployment's accounts, the Channels' answers, and repository-scoped GitHub calls |
 | `tests/feishu-read.spec.ts`, `tests/github-read.spec.ts` | Feishu and GitHub reads |

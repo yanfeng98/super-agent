@@ -339,6 +339,17 @@ it('numbers tickets in creation order and keeps the number across edits', () => 
   expect(ticketDetail(host, 't1')!.number).toBe(1)
 })
 
+it('offers merge and discard only on an ended ticket with a review branch that is neither merged nor discarded', () => {
+  const host = views()
+  live('t1')
+  const ended = { ...store.tickets.get('t1')!, ended: { at, by: 'executor' as const, outcome: 'completed' as const },
+    review: { capturedAt: at, branch: 'agent/t1', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [], files: [], dirty: [] } }
+  store.tickets.save(ended)
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: true, merge: true, discard: true })
+  store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' } })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ merge: false, discard: false })
+})
+
 it('finds a ticket by a reply in its archive as well as by its title', () => {
   const host = views()
   host.sources.register(localKind)
