@@ -89,7 +89,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    section with the outcome, summary and those facts (`src/sources/local.ts`). `POST tickets/:id/reopen` and the panel's
    **Reopen** action restore an ended Ticket under its still-valid Mandate unless its branch was merged or its worktree was
    discarded or cleaned up (`src/core/tickets.ts`, `src/core/engine.ts`,
-   `src/app/http.ts`, `src/client/ticket.tsx`), and the archive records the reopening; the Changes section reads the committed diff through `GET tickets/:id/diff` (`src/app/review.ts`, `src/client/ticket.tsx`). The new-ticket form sends an
+   `src/app/http.ts`, `src/client/ticket.tsx`), and the archive records the reopening; a person's message that resumes an ended
+   Ticket clears its previous review, check and review decision, while a merged, discarded or cleaned Ticket does not resume and
+   its message goes back to Eval; the Changes section reads the committed diff through `GET tickets/:id/diff` (`src/app/review.ts`, `src/client/ticket.tsx`). The new-ticket form sends an
    idempotency key, so a retry after a lost response returns the same Ticket; panel search matches the request text, a
    Ticket's latest result, its replies and its labels, and accepts `is:`, `tag:`, `label:`, `author:`, `created:` and
    `updated:` qualifiers (a date or timestamp, with an optional comparison); matching Tickets page fifty at a time
@@ -118,7 +120,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    `POST local/requests` and are written to `<archive>/<request id>.files/` (`src/sources/local.ts`), with their paths in
    the request text and archive. **Edit request** replaces the request text a Ticket shows and appends a Request section (`Tickets.editRequest`, `POST tickets/:id/request`), and **Edit title** renames a Ticket without rewriting its request
    (`Tickets.rename`, `POST tickets/:id/title`), updates the local Thread label and appends a Title section to the archive.
-   A panel inbox records a notification when a Ticket asks a person a question or ends (`src/app/notifications.ts`, `GET notifications`, `POST notifications/:id/read`, `POST notifications/read-all`), and the header shows the unread count. At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard, rename, label and request sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
+   A panel inbox records a notification when a Ticket asks a person a question or ends (`src/app/notifications.ts`, `GET notifications`, `POST notifications/:id/read`, `POST notifications/read-all`), and the header shows the unread count. At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard, rename, label, request and review sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
    request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket
    within two seconds, writes `inbox/done/<file>` and moves bad input to `inbox/rejected/`, with the file name as the
    idempotency key. `scripts/dsh-superagent backup` copies the database online and the ticket archives into `backups/<timestamp>/`.
