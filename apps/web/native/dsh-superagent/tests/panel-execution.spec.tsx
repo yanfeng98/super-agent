@@ -258,10 +258,12 @@ it('creates a local ticket from Execution and opens its Thread', async () => {
   const dialog = document.querySelector('[role="dialog"]')!
   expect(dialog.textContent).toContain(zh.newTicketHint)
   await type(field<HTMLInputElement>(zh.newTicketTitle), '修复登录页')
+  await type(field<HTMLInputElement>(zh.newTicketProject), 'web')
+  await type(field<HTMLInputElement>(zh.newTicketTags), '前端, p1')
   await type(field<HTMLTextAreaElement>(zh.newTicketText), '窄屏下登录按钮溢出，请修好。')
   await click(zh.createTicket)
   const sent = server.requests.find(request => request.path === 'local/requests')!
-  expect(sent).toMatchObject({ method: 'POST', body: { title: '修复登录页', text: '窄屏下登录按钮溢出，请修好。' } })
+  expect(sent).toMatchObject({ method: 'POST', body: { title: '修复登录页', text: '窄屏下登录按钮溢出，请修好。', project: 'web', tags: ['前端', 'p1'] } })
   // One idempotency key accompanies the draft, so retrying after a lost response cannot create a second ticket.
   expect((sent.body as { key?: string }).key).toMatch(/^[\da-f-]{8,}$/)
   expect(JSON.parse(sessionStorage.getItem('dsh-superagent/route')!)).toMatchObject({ route: { page: 'trigger', id: 'local:local-1' } })

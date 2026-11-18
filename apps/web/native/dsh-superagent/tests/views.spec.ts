@@ -359,6 +359,10 @@ it('finds a ticket by a reply in its archive as well as by its title', () => {
   store.receipts.add({ id: 'r1', channel: { source: 'local', thread: 'local:r', address: { request: 'r' } }, kind: 'reply',
     ticketId: 't1', text: '把按钮文案改成保存' })
   expect(search(host, '按钮文案', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
+  // A tag on the request is searchable too.
+  store.triggers.save({ id: 'e0', source: 'local', threads: [{ source: 'local', id: 'req' }], actor: { source: 'local', id: 'operator' },
+    human: true, at, text: '文案修复', meta: { tags: ['前端'] } })
+  expect(search(host, '前端', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
   expect(search(host, '文案修复', new Map()).tickets.map(item => item.id)).toEqual(['t1'])
   expect(search(host, '没有这个词', new Map()).tickets).toEqual([])
 })

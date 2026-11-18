@@ -74,8 +74,13 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   const reaches = (ticket: Ticket) => [...(ticket.follows ?? []).map(follow => follow.thread),
     ...view.threadsOf(ticket.id).map(thread => thread.key)]
   const replied = new Set(store.receipts.ticketsMatching(value))
+  const tags = (ticket: Ticket): string[] => {
+    const value = store.triggers.get(ticket.origin.triggerId)?.meta.tags
+    return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
+  }
   const matches = (ticket: Ticket) => reaches(ticket).some(key => named.threads.includes(key)) || ticket.title.toLowerCase().includes(lower)
     || (latestReport(ticket)?.summary ?? '').toLowerCase().includes(lower) || replied.has(ticket.id)
+    || tags(ticket).some(tag => tag.toLowerCase().includes(lower))
   const tickets = store.tickets.list().filter(matches).sort(newestFirst).slice(0, 10)
     .map(ticket => ticketSummary(ticket, view.number(ticket.id)))
   // Omit automated triggers from threads already included in `threads`.

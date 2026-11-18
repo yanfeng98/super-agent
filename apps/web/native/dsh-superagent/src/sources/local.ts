@@ -21,8 +21,8 @@ const LocalConfigSchema = z.object({
     .default(''),
 }).strict()
 export type LocalConfig = z.infer<typeof LocalConfigSchema>
-/** A panel request; `key` is the client's idempotency key, so a retry after a lost response returns the first result. */
-export type LocalRequest = { title: string; text: string; key?: string }
+/** A panel request; `key` is the client's idempotency key, `project` a label a prepare command may route on, and `tags` labels for people. */
+export type LocalRequest = { title: string; text: string; key?: string; project?: string; tags?: string[] }
 export interface LocalRequestResult { request: string; thread: string; trigger: string; file: string }
 /** Stored result per client idempotency key, so retrying a creation returns the ticket it already made. */
 const REQUEST_RESULTS = family<LocalRequestResult, [key: string]>('local-request:')
@@ -46,11 +46,14 @@ const REQUEST_LABELS: Record<string, Localized> = {
  * Writes the request that starts a ticket as a Markdown file, refusing to overwrite an existing one.
  * @param file - Absolute path of the ticket's archive file.
  */
-export async function writeRequest(file: string, request: { id: string; title: string; text: string; at: string }): Promise<void> {
+export async function writeRequest(file: string, request: { id: string; title: string; text: string; at: string; project?: string;
+  tags?: string[] }): Promise<void> {
   await mkdir(dirname(file), { recursive: true })
   // Front matter is one line per field, and the title also becomes the heading, so a pasted line break becomes a space.
   const title = request.title.replace(/\s+/g, ' ').trim()
-  await writeFile(file, `---\nid: ${request.id}\ntitle: ${JSON.stringify(title)}\nsource: ${SOURCE}\ncreated: ${request.at}\n---\n\n# ${title}\n\n${request.text.trim()}\n`, { flag: 'wx' })
+  const project = request.project?.trim() ? `project: ${JSON.stringify(request.project.trim())}\n` : ''
+  const tags = request.tags?.length ? `tags: ${JSON.stringify(request.tags)}\n` : ''
+  await writeFile(file, `---\nid: ${request.id}\ntitle: ${JSON.stringify(title)}\nsource: ${SOURCE}\n${project}${tags}created: ${request.at}\n---\n\n# ${title}\n\n${request.text.trim()}\n`, { flag: 'wx' })
 }
 /** One writer at a time per archive file, so a read-check-append pair cannot interleave with another write to it. */
 const archiveTails = new Map<string, Promise<unknown>>()
@@ -233,14 +236,16 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
   // A title is one line in the front matter, the heading and the Thread label.
   const title = input.title.replace(/\s+/g, ' ').trim()
   const file = archiveFile(archiveDir(ctx.deployment, config), id)
-  await writeRequest(file, { id, title, text: input.text, at })
+  await writeRequest(file, { id, title, text: input.text, at, ...input.project ? { project: input.project } : {},
+    ...input.tags?.length ? { tags: input.tags } : {} })
   const trigger: Trigger = {
     id: key(SOURCE, id), source: SOURCE, threads: [{ source: SOURCE, id }],
     actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct', at,
     // The person's title leads the request text, so the Session that accepts it can keep that wording.
     text: `${title}\n\n${input.text}`,
     channel: { source: SOURCE, thread, address: { request: id, file } },
-    meta: { requestId: id, messageId: id, title, ...idempotency ? { idempotency } : {} },
+    meta: { requestId: id, messageId: id, title, ...input.project ? { project: input.project } : {},
+      ...input.tags?.length ? { tags: input.tags } : {}, ...idempotency ? { idempotency } : {} },
   }
   // Describe the Thread after the intake created it; describing an absent Thread is a no-op.
   const received = await ctx.receive(trigger)
@@ -288,7 +293,8 @@ export async function createLocalFollowup(host: SourceHost, input: LocalFollowup
 /** Directory a command-line client drops ticket requests into, under the state directory. */
 export const inboxDir = (deployment: { stateDir: string }): string => join(deployment.stateDir, 'inbox')
 const INBOX_REQUEST = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),
-  key: z.string().trim().min(8).max(200).optional() }).strict()
+  key: z.string().trim().min(8).max(200).optional(), project: z.string().trim().min(1).max(60).optional(),
+  tags: z.array(z.string().trim().min(1).max(24)).max(8).optional() }).strict()
 /**
  * Ingests the JSON requests a command-line client drops into `<stateDir>/inbox`, writing each result to
  * `done/<file>` and moving invalid or refused files to `rejected/`. A request without a key uses its file name, so a

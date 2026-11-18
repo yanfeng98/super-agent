@@ -123,7 +123,7 @@ export function ticketSummary(ticket: Ticket, number?: number) {
   const stage = ticketStage(ticket)
   const note = ticketNote(ticket, stage)
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
-  return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, state, ...stage, ...note ? { note } : {},
+  return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, tags: [] as string[], state, ...stage, ...note ? { note } : {},
     actions: { retry: canRetry(ticket), stop: liveTicket(ticket) }, strength: ticket.mandate.strength, ended: ticket.ended,
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },
       assignments: ticket.assignments.length, inputs: ticket.inputs.length, undelivered: ticket.undelivered.length,
@@ -143,6 +143,9 @@ export function threadFacts(store: Store, thread: Thread) {
 }
 export type ThreadFactsView = ReturnType<typeof threadFacts>
 export const ticketLine = (view: Snapshot, ticket: Ticket) => ({ ...ticketSummary(ticket, view.number(ticket.id)),
+  // Tags are labels a person put on the request; they grant nothing and are not sent back to the worker.
+  tags: (Array.isArray(view.store.triggers.get(ticket.origin.triggerId)?.meta.tags)
+    ? (view.store.triggers.get(ticket.origin.triggerId)?.meta.tags as unknown[]) : []).filter((tag): tag is string => typeof tag === 'string'),
   threads: view.threadsOf(ticket.id).map(thread => threadFacts(view.store, thread)) })
 export function threadTitle(store: Pick<Store, 'read'>, thread: Thread): string {
   const label = attribute(thread.meta.label)

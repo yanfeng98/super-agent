@@ -154,7 +154,10 @@ const offset = z.coerce.number().int().nonnegative().catch(0)
 const limit = (fallback: number, max: number) => z.coerce.number().int().positive().catch(fallback).transform(value => Math.min(max, value))
 const LOCAL_BODY_BYTES = 256 * 1024
 const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),
-  key: z.string().trim().min(8).max(200).optional() }).strict()
+  key: z.string().trim().min(8).max(200).optional(),
+  project: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'Letters, digits, dot, dash or underscore').optional(),
+  tags: z.array(z.string().trim().min(1).max(24)).max(8).optional(),
+}).strict()
 const LocalFollowupSchema = z.object({ thread: z.string().min(1), text: z.string().trim().min(1).max(20_000) }).strict()
 const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000) })
 const ThreadsQuery = z.object({ filter: z.enum(THREAD_FILTERS).catch('subscribed'), offset, limit: limit(20, 1000) })

@@ -17,6 +17,8 @@ const requestKey = (): string => globalThis.crypto?.randomUUID?.() ?? `local-${D
 function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, call, navigate, notify } = usePanel()
   const [title, setTitle] = useState('')
+  const [project, setProject] = useState('')
+  const [tags, setTags] = useState('')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   // One key per unchanged draft, so a retry after a lost response returns the ticket the first attempt made.
@@ -26,8 +28,10 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
     setBusy(true)
     idempotency.current ??= requestKey()
     try {
-      const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim(), key: idempotency.current } })
-      setTitle(''); setText(''); idempotency.current = undefined; setBusy(false); onClose()
+      const labels = [...new Set(tags.split(',').map(tag => tag.trim()).filter(Boolean))]
+      const created = await call('POST local/requests', { body: { title: title.trim(), text: text.trim(), key: idempotency.current,
+        ...project.trim() ? { project: project.trim() } : {}, ...labels.length ? { tags: labels } : {} } })
+      setTitle(''); setProject(''); setTags(''); setText(''); idempotency.current = undefined; setBusy(false); onClose()
       navigate({ page: 'trigger', id: created.thread, query: { trigger: created.trigger } })
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error))
@@ -42,6 +46,12 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
       <label className="dt-field"><span className="dt-field-head">{t('newTicketTitle')}</span>
         <Input value={title} maxLength={120} required aria-label={t('newTicketTitle')} placeholder={t('newTicketTitlePlaceholder')}
           onChange={event => { idempotency.current = undefined; setTitle(event.target.value) }} /></label>
+      <label className="dt-field"><span className="dt-field-head">{t('newTicketProject')}</span>
+        <Input value={project} maxLength={60} aria-label={t('newTicketProject')} placeholder={t('newTicketProjectPlaceholder')}
+          onChange={event => { idempotency.current = undefined; setProject(event.target.value) }} /></label>
+      <label className="dt-field"><span className="dt-field-head">{t('newTicketTags')}</span>
+        <Input value={tags} maxLength={200} aria-label={t('newTicketTags')} placeholder={t('newTicketTagsPlaceholder')}
+          onChange={event => { idempotency.current = undefined; setTags(event.target.value) }} /></label>
       <label className="dt-field"><span className="dt-field-head">{t('newTicketText')}</span>
         <textarea className="dt-textarea" rows={6} maxLength={20000} required aria-label={t('newTicketText')}
           placeholder={t('newTicketTextPlaceholder')} value={text} onChange={event => { idempotency.current = undefined; setText(event.target.value) }} /></label>
