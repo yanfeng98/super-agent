@@ -134,10 +134,17 @@ export function TicketPage({ id }: { id: string }) {
   const { data, error, reload } = usePoll(() => call('GET tickets/:id', { id }), [id])
   const [diff, setDiff] = useState<{ diff: string; truncated: boolean; error?: string }>()
   const [diffBusy, setDiffBusy] = useState(false)
+  const [checkBusy, setCheckBusy] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [renamingBusy, setRenamingBusy] = useState(false)
   const after = async (request: Promise<unknown>) => { await request; await reload() }
+  const runCheck = async () => {
+    setCheckBusy(true)
+    try { await after(call('POST tickets/:id/check', { id })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setCheckBusy(false) }
+  }
   const rename = async (event: FormEvent) => {
     event.preventDefault()
     setRenamingBusy(true)
@@ -259,6 +266,20 @@ export function TicketPage({ id }: { id: string }) {
           message={t('mergeConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/merge', { id }))} />}
         {data.actions.discard && <ConfirmButton variant="outline" icon="trash" label={t('ticketDiscard')} title={t('discardTitle')}
           message={t('discardConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/discard', { id }))} />}
+      </div>}
+    </Section>}
+    {(data.checks || data.actions.check) && <Section title={t('checksTitle')} hint={t('checksHint')}>
+      {data.checks ? <>
+        <KeyValues rows={[[t('statusTitle'), <span className="dt-inline-link"><Dot state={data.checks.ok ? 'done' : 'error'}
+          label={data.checks.ok ? t('checksPassed') : t('checksFailedUnknown')} />{data.checks.ok ? t('checksPassed')
+          : data.checks.exitCode === null ? t('checksFailedUnknown') : t('checksFailed', { code: data.checks.exitCode })}</span>],
+          [t('checkCommand'), <span className="dt-mono">{data.checks.command}</span>],
+          [t('checksAt'), when(data.checks.at, t('lang'))]]} />
+        {data.checks.output && <pre className="dt-workspace-diff">{data.checks.output}</pre>}
+        {data.checks.truncated && <Hint>{t('checksTruncated')}</Hint>}
+      </> : <Hint>{t('checksNotRun')}</Hint>}
+      {data.actions.check && <div className="dt-row-actions">
+        <Button variant="outline" size="sm" disabled={checkBusy} onClick={runCheck}>{t('checksRun')}</Button>
       </div>}
     </Section>}
     {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}

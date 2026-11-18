@@ -305,6 +305,8 @@ export interface Ticket {
   execution?: Execution
   /** Git facts captured when the ticket ended, so its page shows what changed without opening the worktree. */
   review?: TicketReview
+  /** Outcome of the configured workspace check, run in the worktree when the ticket ended. */
+  checks?: TicketCheck
   /** Set when the request asked to wait for a person's approval before its first Assignment runs. */
   hold?: { at: string }
   /** When a person approved a held ticket. */
@@ -319,6 +321,17 @@ export interface Ticket {
   cleaned?: { at: string }
   /** The latest failed delivery of an Input to its worker, until a delivery succeeds. */
   delivery?: { error: string; at: string }
+}
+/** Outcome of one run of the executor's check command in a ticket workspace. */
+export interface TicketCheck {
+  command: string
+  ok: boolean
+  exitCode: number | null
+  at: string
+  /** Captured output, keeping the end of a long run where failures usually appear. */
+  output: string
+  /** Set when `output` keeps only the end of the command's output. */
+  truncated?: boolean
 }
 /** One file git reports as changed or uncommitted, with its short status (`M`, `A`, `D`, `??`). */
 export interface ReviewFile { status: string; path: string }

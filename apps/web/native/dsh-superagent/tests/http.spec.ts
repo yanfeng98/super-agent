@@ -176,12 +176,16 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     mergeTicket: async (id: string) => { calls.push(`merge:${id}`); return { branch: 'agent/t', target: 'main' } },
     discardTicket: async (id: string) => { calls.push(`discard:${id}`) },
     rebaseTicket: async (id: string) => { calls.push(`rebase:${id}`); return { branch: 'agent/t', target: 'main' } },
+    checkTicket: async (id: string) => { calls.push(`check:${id}`); return { command: 'pnpm test', ok: true, exitCode: 0, at: '',
+      output: 'passed' } },
     cleanupTicket: async (id: string) => { calls.push(`cleanup:${id}`) } })
   expect(await call('POST', 'tickets/t1/merge')).toEqual({ status: 200, body: { merged: true, branch: 'agent/t', target: 'main' } })
   expect(await call('POST', 'tickets/t1/discard')).toEqual({ status: 200, body: { discarded: true } })
   expect(await call('POST', 'tickets/t1/rebase')).toEqual({ status: 200, body: { rebased: true, branch: 'agent/t', target: 'main' } })
+  expect(await call('POST', 'tickets/t1/check')).toEqual({ status: 200, body: { checks: { command: 'pnpm test', ok: true, exitCode: 0,
+    at: '', output: 'passed' } } })
   expect(await call('POST', 'tickets/t1/cleanup')).toEqual({ status: 200, body: { cleaned: true } })
-  expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'cleanup:t1'])
+  expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1'])
   expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
   const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
     mergeTicket: async () => { throw new Error('The repository has uncommitted changes') } })

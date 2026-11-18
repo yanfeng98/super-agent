@@ -203,6 +203,11 @@ export function ExecutionSettings() {
               placeholder={t('prepareCommandEmpty')} value={value.prepare}
               onChange={event => edit({ prepare: event.target.value })} />
           </Field>
+          <Field label={t('checkCommand')} hint={t('checkCommandHint')}>
+            <textarea className="dt-textarea dt-mono" rows={2} maxLength={LIMITS.prepareCommand} spellCheck={false}
+              placeholder={t('checkCommandEmpty')} value={value.check}
+              onChange={event => edit({ check: event.target.value })} />
+          </Field>
           <EnvironmentVariables groups={environment.variables} sources={sources} onPick={insert} />
           <Field label={t('blockedCommands')} hint={t('blockedCommandsHint')}>
             <Input className="dt-mono" value={value.blockedCommands} placeholder={t('blockedCommandsNone')} spellCheck={false}

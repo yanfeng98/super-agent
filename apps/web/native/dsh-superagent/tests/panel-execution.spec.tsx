@@ -98,7 +98,8 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false },
+  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true },
+    checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
   await mount()
@@ -109,6 +110,10 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('agent/t5')
   expect(text()).toContain('修复窄屏')
   expect(text()).toContain('src/a.ts')
+  // The configured check's failure is visible on the page with its output.
+  expect(text()).toContain('pnpm test')
+  expect(text()).toContain('1 test failed')
+  expect(text()).toContain(zh.checksRun)
   await click(zh.renameTicket)
   await type(field<HTMLInputElement>(zh.newTicketTitle), '新的标题')
   await click(zh.save)
@@ -253,7 +258,7 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   const fields = { id: 't3', title: '已合并的工单', state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true } }
+  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true, check: false } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])

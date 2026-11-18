@@ -11,7 +11,7 @@ import { PromptConflict, SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, b
 import { policyVersion } from '../policy.ts'
 import { SettingsConflict, type Settings } from './settings.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
-import { UserError, type EngineForPeople, type Ticket } from '../core/index.ts'
+import { UserError, type EngineForPeople, type Ticket, type TicketCheck } from '../core/index.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import type { DshExecutor } from '../executor/dsh.ts'
 import type { Health } from '../sources/host.ts'
@@ -62,6 +62,8 @@ export interface HttpHost {
   discardTicket(id: string): Promise<void>
   /** Rebases an ended ticket's branch onto the repository's checked-out branch. */
   rebaseTicket(id: string): Promise<{ branch: string; target: string }>
+  /** Runs the executor's check command in an ended ticket's worktree. */
+  checkTicket(id: string): Promise<TicketCheck>
   /** Removes a merged ticket's worktree and branch. */
   cleanupTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
@@ -267,6 +269,11 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/rebase': async ({ params }) => {
       const id = ticket(params.id)
       try { return { rebased: true as const, ...await runtime.rebaseTicket(id) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/check': async ({ params }) => {
+      const id = ticket(params.id)
+      try { return { checks: await runtime.checkTicket(id) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/cleanup': async ({ params }) => {

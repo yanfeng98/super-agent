@@ -13,8 +13,8 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, reasonText, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket, type TicketReview,
-  type Trigger } from '../core/index.ts'
+import { Engine, key, reasonText, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket, type TicketCheck,
+  type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -33,6 +33,7 @@ import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
+import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, workspaceDiff } from './review.ts'
 import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
@@ -335,6 +336,29 @@ export class Runtime extends Service implements SourceHost {
    * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
    */
   /**
+   * Runs the executor's check command in an ended ticket's worktree and records its outcome on the ticket.
+   * @throws when the ticket is unknown, still open, has no workspace, or no check command is configured.
+   */
+  async checkTicket(id: string): Promise<TicketCheck> {
+    const ticket = this.store.tickets.get(id)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (!ticket.ended) throw new Error('Only an ended ticket can run its check')
+    if (ticket.discarded || ticket.cleaned) throw new Error('The ticket workspace was removed')
+    const directory = ticket.execution?.directory
+    if (!directory) throw new Error('This ticket has no workspace')
+    const command = this.store.settings().executor.check.trim()
+    if (!command) throw new Error('No workspace check command is configured')
+    const env = Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value]))
+    const checks = await workspaceCheck(this.ctx.subprocess, directory, command, this.stopped.signal, env)
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      if (!current) return
+      current.checks = checks
+      this.store.tickets.save(current)
+    })
+    return checks
+  }
+  /**
    * Rebases an ended ticket's branch onto the repository's checked-out branch, so a later merge can fast-forward.
    * @throws when the ticket is not ended, was merged or discarded, has no workspace, or the rebase cannot finish cleanly.
    */
@@ -418,7 +442,23 @@ export class Runtime extends Service implements SourceHost {
       current.review = review
       this.store.tickets.save(current)
     })
-    try { await closeArchive(ticket, review, this.store.tickets.number(ticket.id)) }
+    // The configured check runs once per ending, so a merge can require its result instead of trusting the agent's report.
+    const command = this.store.settings().executor.check.trim()
+    let checks: TicketCheck | undefined
+    if (command && ticket.execution?.directory) {
+      try {
+        checks = await workspaceCheck(ctx.subprocess, ticket.execution.directory, command, this.stopped.signal,
+          Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value])))
+      } catch (error) { ctx.logger.warn('dsh-superagent: running the workspace check failed: %s', String(error)) }
+      if (checks) this.store.atomic(() => {
+        const current = this.store.tickets.get(ticket.id)
+        if (!current) return
+        current.checks = checks
+        this.store.tickets.save(current)
+      })
+    }
+    if (!stillEnded()) return
+    try { await closeArchive(ticket, review, this.store.tickets.number(ticket.id), checks) }
     catch (error) { ctx.logger.warn('dsh-superagent: recording the ending in the archive failed: %s', String(error)) }
   }
   checkSetup(): void { this.setup.check() }
@@ -461,7 +501,7 @@ export class Runtime extends Service implements SourceHost {
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
-      discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id),
+      discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
       cleanupTicket: id => runtime.cleanupTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
       approveTicket: id => runtime.approveTicket(id) }
   }

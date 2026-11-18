@@ -344,7 +344,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/tools/main.ts` | The main Session's tools |
 | `src/app/tools/executor.ts` | An Executor Session's tools |
 | `src/app/http.ts` | The `/orchestrator/api` routes: the same-origin check, request limits and one status per kind of failure |
-| `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files |
+| `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files; rebase onto the repository branch, fast-forward merge, and worktree removal |
+| `src/app/check.ts` | The executor's check command in a ticket workspace: pass/fail with exit code and captured output, and whether it blocks a merge |
 | `src/app/webhook.ts` | A local Ticket's question or ending as a best-effort JSON POST to the configured webhook |
 | `src/app/api.ts` | `Api`, every route with its parameters, query, body and response, and the filters of the lists; it imports only types, so the panel bundles it |
 | `src/app/views/text.ts` | The two forms of a view's text: `preview`, plain text on one line, and `markdown` without HTML; `plain` and `readable` |
@@ -414,7 +415,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
-| `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward merge and discard of a linked worktree |
+| `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward merge, rebase after the repository moved, and removal of a linked worktree |
+| `tests/check.spec.ts` | The workspace check command: pass/fail with exit code and environment, truncated output, and the merge gate |
 | `tests/webhook.spec.ts` | The webhook POST and a non-2xx answer |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, and which stay quiet |
 | `tests/commands.spec.ts` | CLI calls as the deployment's accounts, the Channels' answers, and repository-scoped GitHub calls |
