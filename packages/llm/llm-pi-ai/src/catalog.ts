@@ -284,6 +284,17 @@ function servesChat(provider: Provider): boolean {
  * An international account keeps working
  * through an `openai-completions` custom model API at
  * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
+ * `meta` is Meta's first-party model API at `https://api.meta.ai/v1`, serving
+ * six chat models through the `openai-responses` protocol: `muse-spark-1.1`,
+ * `muse-spark-1.2`, `muse-spark-1.2-contributor`, `muse-spark-1.3`,
+ * `muse-spark-1.3-contributor`, and `muse-wonder-1.0`. The two
+ * `-contributor` ids also appear unchanged on `opencode-go` with identical
+ * capabilities and catalog costs, while the other four appear on no other
+ * served route, so withholding it removes model coverage as well as a serving
+ * surface. `openai-responses` is one of the selectable custom model API
+ * protocols, so a deployment that needs those models can add
+ * `https://api.meta.ai/v1` as an `openai-responses` custom model API under a
+ * different provider id.
  * `mistral` is Mistral AI's own platform endpoint rather than a reseller, so
  * withholding it removes model coverage as well as a serving surface: three of
  * its 40 entries map to a model on a served route — the Z.AI GLM entries it
@@ -346,6 +357,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'google-vertex',
   'groq',
   'huggingface',
+  'meta',
   'minimax',
   'mistral',
   'moonshotai',

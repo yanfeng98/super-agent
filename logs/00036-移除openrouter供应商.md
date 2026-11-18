@@ -5,6 +5,7 @@
 - **判断依据**：用户要求移除该供应商且不能破坏现有功能。沿用既有的 `WITHHELD_PROVIDERS` 机制：目录、模型解析、发现、登录与可配置供应商列表都不再出现该路由，不修改 `node_modules` 里的 pi-ai 包。移除代价按目录逐条核算：396 个 id 中 95 个在去掉厂商前缀并忽略标点后与另一条已提供路由的模型 id 相同、2 个按显示名对应，其余 299 个没有其他内置路由——18 个 `~…-latest` 浮动别名、14 个 `:free` 变体、5 个 `openrouter/*` 路由 id、1 个 `unbiased/*` 别名、裸 `auto` 路由，以及 36 个厂商前缀下的 260 个条目（其中 77 个是 `:batch` 变体）。这是本系列里第一条「移除面同时包含模型覆盖」的聚合路由：此前移除 `vercel-ai-gateway`、`huggingface`、`together`、`groq` 时，承接方正是 `openrouter`，因此本轮同时重算了全部既有路由的覆盖口径。其端点仍可作 OpenAI 兼容自定义模型 API 接回。
 - **范围**：`packages/llm/llm-pi-ai`（目录控制点与测试）、用户指南、包 README、升级指南、根 README、Web golden 与 e2e 断言、`logs/`（含全部旧日志的承接说明校正）。
 
+- **后续变更（00040）**：`meta` 已于 [00040](00040-移除meta供应商.md) 移除。声明 OAuth 的已提供路由由 7 条变为 6 条，可用 OAuth 流程由 6 条变为 5 条；本记录「设置页实际出现登录按钮的仍是 6 条」的口径有误：`ProviderEditor` 只在 native auth 的 `env` 为空且声明 OAuth 时渲染登录按钮（`native-keyless` golden 也只有 `openai-codex` 一张卡片），因此登录按钮始终只有 `openai-codex` 一个。`openrouter` 的移除代价（396 个 id、299 个无其他内置路由）不受影响；现行路由总数为 12 条、179 个模型，见 [00009](00009-模型供应商清理汇总.md) 顶部的「后续变更（00040）」。
 ## 1. 变更
 
 | 位置 | 变更 |
