@@ -26,7 +26,6 @@
       - option "openai"
       - option "openai-codex"
       - option "opencode-go"
-      - option "xai"
       - option "xiaomi-token-plan-cn"
       - option "zai-coding-cn"
     - text: API 密钥

@@ -288,13 +288,25 @@ function servesChat(provider: Provider): boolean {
  * six chat models through the `openai-responses` protocol: `muse-spark-1.1`,
  * `muse-spark-1.2`, `muse-spark-1.2-contributor`, `muse-spark-1.3`,
  * `muse-spark-1.3-contributor`, and `muse-wonder-1.0`. The two
- * `-contributor` ids also appear unchanged on `opencode-go` with identical
- * capabilities and catalog costs, while the other four appear on no other
+ * `-contributor` ids also appear on `opencode-go` with the same capabilities
+ * and catalog costs, while the other four appear on no other
  * served route, so withholding it removes model coverage as well as a serving
  * surface. `openai-responses` is one of the selectable custom model API
  * protocols, so a deployment that needs those models can add
  * `https://api.meta.ai/v1` as an `openai-responses` custom model API under a
  * different provider id.
+ * `xai` is xAI's first-party API at `https://api.x.ai/v1`, serving four Grok
+ * chat models through the `openai-responses` protocol: `grok-4.3`, `grok-4.5`,
+ * `grok-4.6`, and `grok-4.7`. Three of them also appear on `github-copilot`
+ * under the same ids — with a 128,000-token output cap there instead of the
+ * 500,000 this route records, and, for `grok-4.5`, a higher cache-read price —
+ * and `grok-4.7` appears on `opencode-go` with the same capabilities and
+ * catalog costs, so withholding it leaves `grok-4.3` without another served
+ * route. The route also adds `XAI_API_KEY` authentication and a SuperGrok or
+ * X Premium sign-in that no remaining route offers. `openai-responses` is one
+ * of the selectable custom model API protocols, so a deployment that needs the
+ * direct endpoint can add `https://api.x.ai/v1` as an `openai-responses` custom
+ * model API under a different provider id.
  * `mistral` is Mistral AI's own platform endpoint rather than a reseller, so
  * withholding it removes model coverage as well as a serving surface: three of
  * its 40 entries map to a model on a served route — the Z.AI GLM entries it
@@ -335,7 +347,8 @@ function servesChat(provider: Provider): boolean {
  * The Baseten, Cerebras, Together, Moonshot, Xiaomi, Qwen, Hugging Face,
  * OpenRouter, NVIDIA, Z.AI, and Ant Ling routes speak OpenAI-compatible chat
  * completions, the Mistral
- * endpoint answers those requests beside its own protocol, and the Vercel AI
+ * endpoint answers those requests beside its own protocol, the Meta and xAI
+ * endpoints speak OpenAI Responses, and the Vercel AI
  * Gateway and MiniMax endpoints speak Anthropic Messages, so a deployment that
  * needs one can add it as a custom model API. The Vertex route speaks
  * `google-vertex`, which no custom route can select, so the served `google`
@@ -371,6 +384,7 @@ const WITHHELD_PROVIDERS: ReadonlySet<string> = new Set([
   'radius',
   'together',
   'vercel-ai-gateway',
+  'xai',
   'xiaomi',
   'xiaomi-token-plan-sgp',
   'xiaomi-token-plan-ams',
