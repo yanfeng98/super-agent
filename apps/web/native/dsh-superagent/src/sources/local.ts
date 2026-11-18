@@ -48,7 +48,8 @@ export const archiveFile = (dir: string, request: string): string => join(dir, `
 export const webhookFor = (settings: Settings): string => {
   const part = settings.sources[SOURCE]
   if (!part?.enabled) return ''
-  return LocalConfigSchema.parse(part.config).webhook
+  const parsed = LocalConfigSchema.safeParse(part.config)
+  return parsed.success ? parsed.data.webhook : ''
 }
 export const requestId = (at: string): string => `local-${at.replace(/[-:]/g, '').replace(/\..*$/, '')}-${randomUUID().slice(0, 8)}`
 const REQUEST_LABELS: Record<string, Localized> = {
