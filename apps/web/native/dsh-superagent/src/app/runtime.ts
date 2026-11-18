@@ -13,8 +13,8 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type TicketReview, type Trigger }
-  from '../core/index.ts'
+import { Engine, key, reasonText, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket, type TicketReview,
+  type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -34,10 +34,11 @@ import { registerHttp, type HttpHost } from './http.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff } from './review.ts'
+import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordDiscard, recordMerge,
-  recordRename, reopenArchive, ticketArchive } from '../sources/local.ts'
+  recordRename, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -154,6 +155,8 @@ export class Runtime extends Service implements SourceHost {
             const request = store.triggers.get(ended.origin.triggerId)?.text ?? ''
             for (const message of pullEndNotices(ended, request, setup.deployment.repository)) outbox.send(message)
           }
+          // Tell a configured webhook that a local ticket needs a person or ended, even with the Web app closed.
+          if (event.type === 'ticket.attention' || event.type === 'ticket.ended') this.notifyWebhook(event)
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
           if (ended) void this.finishTicket(ended, ctx)
           if (event.type === 'ticket.reopened') {
@@ -220,6 +223,23 @@ export class Runtime extends Service implements SourceHost {
    * archive without rewriting the original request.
    * @throws UserError when the ticket is unknown or the title is blank.
    */
+  /**
+   * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
+   * failure is logged and the ticket is unaffected.
+   */
+  private notifyWebhook(event: Extract<DomainEvent, { type: 'ticket.attention' } | { type: 'ticket.ended' }>): void {
+    const ticket = this.store.tickets.get(event.data.ticketId)
+    if (!ticket || !ticket.channels.some(channel => channel.source === 'local')) return
+    const url = webhookFor(this.store.settings())
+    if (!url) return
+    const base = { at: event.at, ticket: { id: ticket.id, number: this.store.tickets.number(ticket.id) ?? 0, title: ticket.title } }
+    const payload = event.type === 'ticket.ended'
+      ? { event: 'ended' as const, ...base, outcome: event.data.outcome, reason: event.data.reason ?? event.data.outcome }
+      : { event: 'attention' as const, ...base, question: event.data.question }
+    void sendWebhook(url, payload, this.stopped.signal).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: webhook notification failed: %s', String(error))
+    })
+  }
   /**
    * Approves a held ticket, letting its pending Assignment launch, and records the approval in its local archive.
    * @throws UserError when the ticket is unknown, ended, not held, or has no pending Assignment.

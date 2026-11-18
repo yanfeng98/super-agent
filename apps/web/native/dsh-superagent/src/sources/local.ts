@@ -19,6 +19,7 @@ const absolute = (value: string): boolean => value === '' || /^(?:\/|[A-Za-z]:[\
 const LocalConfigSchema = z.object({
   archive: z.string().trim().refine(absolute, 'An absolute path, or empty for <stateDir>/tickets')
     .default(''),
+  webhook: z.string().trim().refine(value => value === '' || /^https?:\/\/\S+$/.test(value), 'An http(s) URL, or empty').default(''),
 }).strict()
 export type LocalConfig = z.infer<typeof LocalConfigSchema>
 /** One file sent with a panel request, as its name and base64 content. */
@@ -38,6 +39,12 @@ export interface LocalFollowupResult { trigger: string; thread: string }
 export const archiveDir = (deployment: { stateDir: string }, config: LocalConfig): string =>
   config.archive || join(deployment.stateDir, 'tickets')
 export const archiveFile = (dir: string, request: string): string => join(dir, `${request}.md`)
+/** The local Source's notification webhook, or empty when the Source is off or none is configured. */
+export const webhookFor = (settings: Settings): string => {
+  const part = settings.sources[SOURCE]
+  if (!part?.enabled) return ''
+  return LocalConfigSchema.parse(part.config).webhook
+}
 export const requestId = (at: string): string => `local-${at.replace(/[-:]/g, '').replace(/\..*$/, '')}-${randomUUID().slice(0, 8)}`
 const REQUEST_LABELS: Record<string, Localized> = {
   acknowledgement: { zh: '已接单', en: 'Accepted' },
