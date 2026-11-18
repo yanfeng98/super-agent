@@ -20,7 +20,7 @@ The tabs follow the workflow: **Overview**, **Source**, **Trigger**, **Eval**, *
 | Source | Source state, setup problems and non-zero counts. Filtered Triggers and dropped messages cover the same 24-hour window as Overview |
 | Trigger | Threads filtered by Subscribed, Evaluating, New Triggers in 24 h, or All Threads. Each Thread shows its Triggers newest first, Decisions and Subscriptions |
 | Eval | Decisions with their reason and matched rules |
-| Execution | Executor state, New ticket (title, optional project and tags, request), Pause processing, a tag filter, and Tickets filtered by Open, Pending, Working, Waiting for a Trigger or Ended. Tags appear on each Ticket's row and page. Ticket details show actions, authorization, waiting Inputs, Subscriptions, Assignments, the replies the Ticket sent to its Source, the review captured at the Ticket's end, and, for local tickets, a reply box |
+| Execution | Executor state, New ticket (title, optional project, tags and attachments, request), Pause processing, a tag filter, and Tickets filtered by Open, Pending, Working, Waiting for a Trigger or Ended. Tags appear on each Ticket's row and page. Ticket details show actions, authorization, waiting Inputs, Subscriptions, Assignments, the replies the Ticket sent to its Source, the review captured at the Ticket's end, and, for local tickets, a reply box |
 | Settings | Sources, Eval, Execution, Prompts and Deployment. Each group includes its save history |
 
 ### Reading individual records
