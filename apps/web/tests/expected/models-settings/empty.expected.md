@@ -22,7 +22,6 @@
       - option "github-copilot"
       - option "google"
       - option "kimi-coding"
-      - option "meta"
       - option "minimax-cn" [selected]
       - option "openai"
       - option "openai-codex"

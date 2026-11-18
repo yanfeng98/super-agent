@@ -98,6 +98,7 @@ describe('withheld catalog providers', () => {
     'google-vertex',
     'groq',
     'huggingface',
+    'meta',
     'minimax',
     'mistral',
     'moonshotai',

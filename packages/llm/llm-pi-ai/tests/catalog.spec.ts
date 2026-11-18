@@ -1272,6 +1272,7 @@ describe('configurable-provider directory', () => {
       'google-vertex',
       'groq',
       'huggingface',
+      'meta',
       'minimax',
       'mistral',
       'moonshotai',
