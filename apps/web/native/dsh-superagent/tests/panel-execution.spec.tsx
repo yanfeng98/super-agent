@@ -98,7 +98,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true },
+  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false },
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
   await mount()
@@ -137,7 +137,8 @@ it('links a question to its Channel, folds consecutive automated messages among 
   async () => {
   const ci = (id: string, at: string, failed: number) => ({ id, kind: 'trigger' as const, triggerId: `c${id}`, at, delivered: true,
     trigger: { id: `c${id}`, actor: { source: 'github', id: '' }, human: false,
-      preview: `CI of PR #42 at abc1234: 10 checks, ${failed} failed, 0 running.`, thread: 'github:42' } })
+      preview: `CI of PR #42 at abc1234: 10 checks, ${failed} failed, 0 running.`,
+      body: `CI of PR #42 at abc1234: 10 checks, ${failed} failed, 0 running.`, thread: 'github:42' } })
   const t1 = server.ticketDetails.t1!
   server.ticketDetails.t1 = { ...t1, stage: 'person', action: 'answer', attention: { id: 'q1', question: '需要确认按钮颜色' }, inputs: [ci('i3',
     '2026-09-22T00:06:00Z', 1), ci('i2', '2026-09-22T00:05:00Z', 0)] }
@@ -232,7 +233,8 @@ it('gives a Ticket a bot\'s message started its basis, marks a Thread it follows
   threads: [threadSummary(), { ...threadSummary({ key: 'github:7', title: '#7 相关 Issue' }), context: true }],
   inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'e2', at: '2026-09-22T00:03:00Z', delivered: true, trigger: { id: 'e2',
     actor: { source: 'feishu', id: MEMBER, name: { zh: 'Alice', en: 'Alice' } }, human: true, preview: '顺便加一个页面',
-    thread: 'feishu:oc_1:om_root', handback: { reason: 'Asks for a new page', at: '2026-09-22T00:05:00Z' } } }] }
+    body: '顺便加一个页面，入口放在设置里。', thread: 'feishu:oc_1:om_root',
+    handback: { reason: 'Asks for a new page', at: '2026-09-22T00:05:00Z' } } }] }
   at({ page: 'execution', id: 't1' })
   await mount()
   const facts = () => all('.dt-kv > div').map(row => [row.querySelector('dt')?.textContent, row.querySelector('dd')?.textContent])
@@ -251,7 +253,7 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   const fields = { id: 't3', title: '已合并的工单', state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false } }
+  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])
@@ -260,6 +262,8 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.merged'])
   expect(text()).toContain(zh['outcome.merged'])
   expect(text()).not.toContain('执行器结束')
+  // A merged ticket offers cleaning up its worktree instead of discarding the branch.
+  expect(text()).toContain(zh.cleanupWorktree)
   server.ticketDetails.t3 = { ...server.ticketDetails.t3, ended: { at: '2026-09-21T00:00:00Z', by: 'human', outcome: 'stopped',
     reason: '不需要了' } }
   await remount(en)

@@ -39,6 +39,8 @@ export interface Api {
   'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
   'POST tickets/:id/merge': { response: { merged: true; branch: string; target: string } }
   'POST tickets/:id/discard': { response: { discarded: true } }
+  'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
+  'POST tickets/:id/cleanup': { response: { cleaned: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
   'POST tickets/:id/approve': { response: { approved: true } }
   'POST local/requests': { body: { title: string; text: string; key?: string; project?: string; tags?: string[];

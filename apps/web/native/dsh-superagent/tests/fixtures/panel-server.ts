@@ -205,7 +205,9 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
   reason: [{ code: 'explicitRouted' }], at: '2026-09-22T00:00:00Z', strength: 'explicit', ticketId: undefined,
   triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ticketTitle: undefined })
 const ticketDetail = (): TicketPageView => ({
-  ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false }, review: undefined, merged: undefined, discarded: undefined, paused: false, decision: acceptDecision(),
+  ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
+    cleanup: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
+  decision: acceptDecision(),
   threads: [threadSummary()],
   mandate: { strength: 'explicit', policyVersion: 'abcdef1234567890', basis: { via: 'addressed', sender: 'Alice', addressed: 'mention' },
     actor: actor('feishu', MEMBER), scope: '修复登录页回归' },
@@ -219,7 +221,8 @@ const ticketDetail = (): TicketPageView => ({
     startedAt: '2026-09-22T00:01:00Z',
     report: { state: 'progress', summary: 'working', at: '2026-09-22T00:02:00Z' } }],
   inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'e2', at: '2026-09-22T00:03:00Z', delivered: false,
-    trigger: { id: 'e2', actor: actor('feishu', MEMBER), human: true, preview: '顺便改标题', thread: 'feishu:oc_1:om_root' } },
+    trigger: { id: 'e2', actor: actor('feishu', MEMBER), human: true, preview: '顺便改标题', body: '顺便改标题，并把按钮颜色换成品牌色。',
+      thread: 'feishu:oc_1:om_root' } },
   { id: 'i2', kind: 'policy-changed', at: '2026-09-22T00:04:00Z', delivered: true, from: 'aaaaaaaaaaaaaaaa', to: 'bbbbbbbbbbbbbbbb' }],
   replies: [{ id: 'r1', kind: 'reply', status: 'sent', text: '已修好，见 PR', at: '2026-09-22T00:05:00Z' }],
 })
@@ -357,6 +360,14 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/discard': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { discarded: true }
+  } },
+  'POST tickets/:id/rebase': { answer: ({ params }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { rebased: true, branch: 'agent/t', target: 'main' }
+  } },
+  'POST tickets/:id/cleanup': { answer: ({ params }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { cleaned: true }
   } },
   'POST tickets/:id/title': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')

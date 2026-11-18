@@ -7,8 +7,8 @@ import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
 import { Earlier, ThreadLine, automatedRuns } from './rows.tsx'
 import { actorName, errorText, localized, readableMarkers, reasonLabel, ticketNumber as ticketRef, valueLabel, when } from './text.ts'
-import { ActionLink, ConfirmButton, ExternalLink, Hint, KeyValues, LabelValue, LoadState, MarkdownLite, PageHead, Section, SessionButton,
-  StageMark, When } from './widgets.tsx'
+import { ActionLink, ClampText, ConfirmButton, ExternalLink, Hint, KeyValues, LabelValue, LoadState, MarkdownLite, PageHead, Section,
+  SessionButton, StageMark, When } from './widgets.tsx'
 
 type Input = TicketPageView['inputs'][number]
 function InputLine({ input, earlier = [] }: { input: Input; earlier?: { id: string; at: string; preview: string }[] }) {
@@ -24,6 +24,7 @@ function InputLine({ input, earlier = [] }: { input: Input; earlier?: { id: stri
       <div className="dt-row-meta">{input.kind === 'trigger' && <span>{valueLabel(t, 'input', input.kind)}</span>}<When
         at={input.at} /></div>
       {(input.kind === 'text' || input.kind === 'note') && input.text && <div className="dt-row-quote"><MarkdownLite text={input.text} /></div>}
+      {trigger?.body && <div className="dt-row-quote"><ClampText text={trigger.body} /></div>}
       {trigger?.handback && <Hint>{t('inputHandedBack', { reason: trigger.handback.reason })}</Hint>}
       <Earlier items={earlier} />
     </div>
@@ -251,15 +252,22 @@ export function TicketPage({ id }: { id: string }) {
       {diff?.error && <Hint>{diff.error}</Hint>}
       {diff && !diff.error && (diff.diff ? <pre className="dt-workspace-diff">{diff.diff}</pre> : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
-      {(data.actions.merge || data.actions.discard) && <div className="dt-row-actions">
+      {(data.actions.rebase || data.actions.merge || data.actions.discard) && <div className="dt-row-actions">
+        {data.actions.rebase && <ConfirmButton variant="outline" icon="refresh" label={t('ticketRebase')} title={t('rebaseTitle')}
+          message={t('rebaseConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/rebase', { id }))} />}
         {data.actions.merge && <ConfirmButton variant="outline" icon="decision" label={t('ticketMerge')} title={t('mergeTitle')}
           message={t('mergeConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/merge', { id }))} />}
         {data.actions.discard && <ConfirmButton variant="outline" icon="trash" label={t('ticketDiscard')} title={t('discardTitle')}
           message={t('discardConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/discard', { id }))} />}
       </div>}
-      {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}
-      {data.discarded && <Hint>{t('discardedHint')}</Hint>}
     </Section>}
+    {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}
+    {data.actions.cleanup && <div className="dt-row-actions">
+      <ConfirmButton variant="outline" icon="trash" label={t('cleanupWorktree')} title={t('cleanupTitle')}
+        message={t('cleanupConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/cleanup', { id }))} />
+    </div>}
+    {data.cleaned && <Hint>{t('cleanedHint')}</Hint>}
+    {data.discarded && <Hint>{t('discardedHint')}</Hint>}
     <MandateDetails ticket={data} actor={actor} />
     {undelivered.length > 0 && <Section title={t('undeliveredInputs')} count={undelivered.length}>
       <Hint>{data.deliveryError ? t('inputRetryHint') : data.paused ? t('inputPausedHint') : t('inputWaitingHint')}</Hint>
@@ -293,6 +301,7 @@ export function TicketPage({ id }: { id: string }) {
       <Details icon="hash" title={t('identifiers')}>
         <KeyValues rows={[[t('ticketId'), <span className="dt-mono">{data.id}</span>], [t('executionDirectory'), <span
           className="dt-mono">{data.directory ?? t('empty')}</span>],
+          ...data.archive ? [[t('archiveFile'), <span className="dt-mono">{data.archive}</span>] as [string, ReactNode]] : [],
           ...legacy && data.mandate.scope ? [[t('legacyAssignment'), <span
             className="dt-mono dt-clamp">{data.mandate.scope}</span>] as [string, ReactNode]] : []]} />
       </Details>
