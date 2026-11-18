@@ -218,6 +218,37 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
+   * Adds a person's note on a file and optional line of the ticket's changes.
+   * @returns The ticket with the note.
+   * @throws UserError when the ticket is unknown or the file or text is empty.
+   */
+  addNote(ticketId: string, input: { file: string; line?: number; text: string }): Ticket {
+    const ticket = this.require(ticketId)
+    const file = input.file.trim()
+    const text = input.text.trim()
+    if (!file || !text) throw new UserError('emptyNote')
+    const at = this.now()
+    const id = key('note', ticketId, at, String((ticket.notes ?? []).length))
+    const note = { id, file, text, at, ...input.line ? { line: input.line } : {} }
+    ticket.notes = [...(ticket.notes ?? []), note]
+    ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
+   * Removes a note from a ticket.
+   * @returns The ticket without the note.
+   * @throws UserError when the ticket or the note is unknown.
+   */
+  removeNote(ticketId: string, noteId: string): Ticket {
+    const ticket = this.require(ticketId)
+    if (!ticket.notes?.some(note => note.id === noteId)) throw new UserError('unknownNote')
+    ticket.notes = ticket.notes.filter(note => note.id !== noteId)
+    if (!ticket.notes.length) delete ticket.notes
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
    * Reopens an ended ticket under its unchanged Mandate with a fresh Assignment and a note telling its worker why.
    * @throws UserError when the ticket is unknown, still open, or the current Policy no longer holds its Mandate.
    */

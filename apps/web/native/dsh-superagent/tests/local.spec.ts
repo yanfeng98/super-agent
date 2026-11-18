@@ -417,6 +417,21 @@ describe('local tickets', () => {
     expect(() => h.engine.reopenTicket(request.id)).toThrow(/removed after its merge/)
   })
 
+  it('keeps review notes with a file and optional line, and removes them', () => {
+    const h = harness()
+    h.store.tickets.save({ id: 't1', title: 't1', decisionId: 'd1', channels: [], assignments: [], inputs: [], undelivered: [],
+      createdAt: '2026-11-18T00:00:00.000Z', updatedAt: '2026-11-18T00:00:00.000Z',
+      origin: { triggerId: 't1', triggerIds: ['t1'] },
+      mandate: { strength: 'explicit' as const, policyVersion: 'v', basis: { via: 'listed' as const },
+        actor: { source: 'local', id: OPERATOR }, scope: '' } })
+    const noted = h.engine.addNote('t1', { file: 'src/a.ts', line: 12, text: '改成可选' })
+    expect(noted.notes).toMatchObject([{ file: 'src/a.ts', line: 12, text: '改成可选' }])
+    expect(() => h.engine.addNote('t1', { file: ' ', text: 'x' })).toThrow(/file and text/)
+    const noteId = noted.notes![0]!.id
+    expect(h.engine.removeNote('t1', noteId).notes).toBeUndefined()
+    expect(() => h.engine.removeNote('t1', noteId)).toThrow(/Unknown note/)
+  })
+
   it('links two tickets on both pages, refuses a self link, and unlinks them', () => {
     const h = harness()
     const ticket = (id: string) => ({ id, title: id, decisionId: 'd1', channels: [], assignments: [], inputs: [], undelivered: [],

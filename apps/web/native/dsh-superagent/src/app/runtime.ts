@@ -14,7 +14,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
 import { Engine, key, reasonText, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket, type TicketCheck,
-  type TicketReview, type Trigger } from '../core/index.ts'
+  type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -336,6 +336,20 @@ export class Runtime extends Service implements SourceHost {
    * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
    */
   /**
+   * Adds a person's note on a file and line of a ticket's changes.
+   * @returns The ticket's notes after the addition.
+   */
+  addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[] {
+    return this.engine.addNote(id, input).notes ?? []
+  }
+  /**
+   * Removes a person's note from a ticket.
+   * @returns The ticket's notes after the removal.
+   */
+  removeNote(id: string, noteId: string): TicketNote[] {
+    return this.engine.removeNote(id, noteId).notes ?? []
+  }
+  /**
    * Links or unlinks another ticket, named by its id or `T-000N`, on both tickets' pages.
    * @returns The changed ticket's related tickets with their numbers and titles.
    * @throws when the reference names no ticket, or either ticket link operation is refused.
@@ -528,6 +542,7 @@ export class Runtime extends Service implements SourceHost {
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
       linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),
+      addNote: (id, input) => runtime.addNote(id, input), removeNote: (id, noteId) => runtime.removeNote(id, noteId),
       cleanupTicket: id => runtime.cleanupTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
       approveTicket: id => runtime.approveTicket(id) }
   }

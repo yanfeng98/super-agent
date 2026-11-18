@@ -133,6 +133,27 @@ it('links and unlinks related Tickets from a Ticket page', async () => {
     body: { ticket: 'T-0003', linked: true } })
 })
 
+it('adds a line-anchored review note and sends the notes to the executor as one follow-up', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
+    review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t1', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [],
+      files: [], dirty: [] },
+    notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at: '2026-11-18T00:00:00Z' }],
+    threads: [{ ...threadSummary(), key: 'local:r1', source: 'local', title: '本地线程' }] }
+  await mount()
+  expect(text()).toContain('src/a.ts:12')
+  await type(field<HTMLInputElement>(zh.noteFilePlaceholder), 'src/b.ts')
+  await type(field<HTMLInputElement>(zh.noteLinePlaceholder), '4')
+  await type(field<HTMLTextAreaElement>(zh.noteTextPlaceholder), '补个测试')
+  await click(zh.noteAdd)
+  expect(server.requests.find(request => request.path === 'tickets/t1/notes')).toMatchObject({ method: 'POST',
+    body: { file: 'src/b.ts', line: 4, text: '补个测试' } })
+  await click(zh.noteSend)
+  const followup = server.requests.filter(request => request.path === 'local/followups').at(-1)
+  expect(followup?.body).toMatchObject({ thread: 'local:r1' })
+  expect(String((followup?.body as { text?: string }).text)).toContain('src/a.ts:12: 改成可选')
+})
+
 it('shows the review captured when a ticket ended and lets a person reopen it', async () => {
   const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }

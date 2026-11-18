@@ -372,6 +372,13 @@ it('offers a check run on an ended ticket with a workspace when a check command 
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ check: false })
 })
 
+it('lists review notes with their file, line and text', () => {
+  const host = views()
+  live('t1')
+  store.tickets.save({ ...store.tickets.get('t1')!, notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at }] })
+  expect(ticketDetail(host, 't1')!.notes).toEqual([{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at }])
+})
+
 it('lists related tickets with their number and title', () => {
   const host = views()
   live('t1'); live('t2')

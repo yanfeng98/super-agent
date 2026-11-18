@@ -15,6 +15,8 @@ export const USER_ERRORS = {
   ticketDiscarded: ['refused', 'This ticket worktree was discarded; create a new ticket for more work'],
   ticketCleaned: ['refused', 'This ticket workspace was removed after its merge; create a new ticket for more work'],
   selfLink: ['refused', 'A ticket cannot be related to itself'],
+  emptyNote: ['refused', 'A note needs a file and text'],
+  unknownNote: ['missing', 'Unknown note'],
   assignmentEnded: ['refused', 'Assignment has ended; a newer assignment owns this ticket'],
   evalFinished: ['refused', 'Eval {eval} has finished or a later eval replaced it; decide the trigger\'s current eval'],
   notAdmissible: ['refused', 'Trigger is not admissible: {reason}'],

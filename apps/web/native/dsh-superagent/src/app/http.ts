@@ -11,7 +11,7 @@ import { PromptConflict, SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, b
 import { policyVersion } from '../policy.ts'
 import { SettingsConflict, type Settings } from './settings.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
-import { UserError, type EngineForPeople, type Ticket, type TicketCheck } from '../core/index.ts'
+import { UserError, type EngineForPeople, type Ticket, type TicketCheck, type TicketNote } from '../core/index.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import type { DshExecutor } from '../executor/dsh.ts'
 import type { Health } from '../sources/host.ts'
@@ -66,6 +66,10 @@ export interface HttpHost {
   checkTicket(id: string): Promise<TicketCheck>
   /** Links or unlinks another ticket, named by id or display number. */
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
+  /** Adds a review note anchored to a file and optional line. */
+  addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[]
+  /** Removes a review note. */
+  removeNote(id: string, noteId: string): TicketNote[]
   /** Removes a merged ticket's worktree and branch. */
   cleanupTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
@@ -271,6 +275,18 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/rebase': async ({ params }) => {
       const id = ticket(params.id)
       try { return { rebased: true as const, ...await runtime.rebaseTicket(id) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/notes': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const note = z.object({ file: z.string().trim().min(1).max(500), line: z.number().int().min(1).max(1_000_000).optional(),
+        text: z.string().trim().min(1).max(2_000) }).strict().parse(await body())
+      try { return { notes: runtime.addNote(id, note) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/notes/:noteId/remove': ({ params }) => {
+      const id = ticket(params.id)
+      try { return { notes: runtime.removeNote(id, params.noteId) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/related': async ({ params, body }) => {
