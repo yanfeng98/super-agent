@@ -96,7 +96,7 @@ export function mandateInstructions(mandate: Pick<Mandate, 'strength'>): string 
 }
 /** Builds a newly accepted ticket's Execution metadata: its worktree name, workspace directory, and assignment text. */
 export function ticketExecution(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>, settings: Settings,
-  stateDir: string): Execution {
+  stateDir: string, project?: { root?: string; prepare?: string }): Execution {
   const name = ticketWorktreeName(outcome.name ?? '', ticket.id)
   const source = ticket.origin.triggerId
   const note = outcome.note ? `\nRouting note (not the source request): ${outcome.note}` : ''
@@ -108,7 +108,8 @@ export function ticketExecution(ticket: Ticket, outcome: Extract<AssessmentOutco
   const assignment = ticket.mandate.strength === 'inferred' && ruleIds
     ? `Proactively accepted under ${ruleIds.join(', ')}. Scope: ${outcome.scope}.${precedence}${note}`
     : note.trim()
-  return { name, directory: join(executionRoot(settings, stateDir), name), assignment }
+  return { name, directory: join(project?.root || executionRoot(settings, stateDir), name), assignment,
+    ...project?.prepare ? { prepare: project.prepare } : {} }
 }
 /** Character limits for inline assignment and trigger text in worker messages; longer text is read via its resource. */
 const ASSIGNMENT_CHARS = 1500, TRIGGER_CHARS = 600
@@ -240,8 +241,11 @@ export class DshExecutor implements Executor {
    * and holds it for approval when the request asked for that.
    */
   prepare(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>): Ticket {
-    const hold = this.host.store.triggers.get(ticket.origin.triggerId)?.meta.hold === true
-    return { ...ticket, execution: ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir),
+    const meta = this.host.store.triggers.get(ticket.origin.triggerId)?.meta ?? {}
+    const hold = meta.hold === true
+    const project = { ...typeof meta.projectRoot === 'string' && meta.projectRoot ? { root: meta.projectRoot } : {},
+      ...typeof meta.projectPrepare === 'string' && meta.projectPrepare ? { prepare: meta.projectPrepare } : {} }
+    return { ...ticket, execution: ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, project),
       ...hold ? { hold: { at: now() } } : {} }
   }
   /**
@@ -253,7 +257,7 @@ export class DshExecutor implements Executor {
   private async prepareDirectory(ticket: Ticket): Promise<void> {
     const directory = ticket.execution?.directory ?? ''
     await mkdir(dirname(directory), { recursive: true })
-    const command = this.host.store.settings().executor.prepare.trim()
+    const command = (ticket.execution?.prepare ?? this.host.store.settings().executor.prepare).trim()
     const env = Object.fromEntries(this.host.environment(ticket).map(variable => [variable.key, variable.value]))
     // Enforce a timeout so a hung prepare command (such as on a credential prompt) fails the ticket instead of holding a worker slot indefinitely.
     const signal = AbortSignal.any([this.host.lifetime, AbortSignal.timeout(PREPARE_TIMEOUT_MS)])

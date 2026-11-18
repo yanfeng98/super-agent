@@ -8,6 +8,7 @@ import { Commands } from '../src/infra/commands.ts'
 import { HealthBoard } from '../src/infra/health.ts'
 import { SettingsSchema, settingsPolicy } from '../src/policy.ts'
 import { environmentOf } from '../src/app/execution-environment.ts'
+import { ticketExecution } from '../src/executor/dsh.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { appendFollowup, appendReply, archiveDir, archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, drainInbox,
@@ -226,10 +227,10 @@ describe('local tickets', () => {
   })
 
   it('defaults the archive to the state directory and rejects a relative path', () => {
-    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '', webhook: '' })).toBe('/srv/state/tickets')
-    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox', webhook: '' })).toBe('/srv/inbox')
+    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '', webhook: '', projects: [] })).toBe('/srv/state/tickets')
+    expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox', webhook: '', projects: [] })).toBe('/srv/inbox')
     expect(() => localKind.schema.parse({ archive: 'inbox' })).toThrow()
-    expect(localKind.schema.parse({})).toEqual({ archive: '', webhook: '' })
+    expect(localKind.schema.parse({})).toEqual({ archive: '', webhook: '', projects: [] })
   })
 
   it('exposes the project label as DSH_SUPERAGENT_PROJECT for the ticket workspace', async () => {
@@ -269,6 +270,24 @@ describe('local tickets', () => {
     expect(h.engine.approveTicket(ticket.id).hold).toBeUndefined()
     expect(h.executor.start).toHaveBeenCalledTimes(2)
     expect(() => h.engine.approveTicket(ticket.id)).toThrow(/does not wait/)
+  })
+
+  it('routes a project label to its configured execution root and prepare command', async () => {
+    const h = harness()
+    const base = h.store.settings()
+    h.store.saveSettings(SettingsSchema.parse({ ...base, sources: { ...base.sources,
+      local: { enabled: true, config: { projects: [{ name: 'api', root: '/srv/api', prepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' }] } } } }))
+    const created = await createLocalRequest(h.host, { title: '项目执行', text: '按项目准备。', project: 'api' })
+    expect(h.store.triggers.get(created.trigger)?.meta).toMatchObject({ project: 'api', projectRoot: '/srv/api',
+      projectPrepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' })
+    const candidate = h.candidates.at(-1)!
+    const decision = h.engine.decide(created.trigger, { kind: 'accept', title: '项目执行', scope: '准备', reason: 'requested',
+      acknowledgement: '开始。', evalId: candidate.evalId, name: 'login-fix' })
+    const ticket = h.store.tickets.get(decision.ticketId!)!
+    const execution = ticketExecution(ticket, { kind: 'accept', title: '项目执行', scope: '准备', reason: 'requested',
+      name: 'login-fix' } as never, h.store.settings(), dir, { root: '/srv/api', prepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' })
+    expect(execution.directory.startsWith('/srv/api/')).toBe(true)
+    expect(execution.prepare).toBe('git worktree add "$DSH_SUPERAGENT_DIR"')
   })
 
   it('turns a command-line request from the inbox into a ticket and records the result', async () => {

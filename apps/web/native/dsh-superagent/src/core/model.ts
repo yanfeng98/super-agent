@@ -345,6 +345,8 @@ export interface Execution {
   assignment: string
   /** Commit the workspace started from, captured at the first launch so a review lists the commits the ticket added. */
   base?: string
+  /** A per-project prepare command that replaces the global one for this ticket. */
+  prepare?: string
 }
 
 /** Whether a ticket is open: it has not ended. */
