@@ -206,7 +206,7 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
   triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ticketTitle: undefined })
 const ticketDetail = (): TicketPageView => ({
   ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
-    cleanup: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
+    cleanup: false, check: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
   decision: acceptDecision(),
   threads: [threadSummary()],
   mandate: { strength: 'explicit', policyVersion: 'abcdef1234567890', basis: { via: 'addressed', sender: 'Alice', addressed: 'mention' },
@@ -368,6 +368,10 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/cleanup': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { cleaned: true }
+  } },
+  'POST tickets/:id/check': { answer: ({ params }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { checks: { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-18T00:00:00Z', output: 'passed' } }
   } },
   'POST tickets/:id/title': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')

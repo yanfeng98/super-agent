@@ -85,16 +85,18 @@ export function ticketDetail(host: ViewHost, id: string) {
   const human = ticket.mandate.basis.via !== 'bot'
   const line = ticketLine(view, ticket)
   // Reopening needs the current Policy to still hold the ticket's Mandate, as the reopen command itself checks.
-  const reopen = !liveTicket(ticket) && !ticket.discarded
+  const reopen = !liveTicket(ticket) && !ticket.discarded && !ticket.cleaned
     && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
   // Ending a ticket's workspace state is offered once it ended, has a review, and was neither merged nor discarded.
   const finish = !liveTicket(ticket) && !!ticket.review?.branch && !ticket.merged && !ticket.discarded
   const rebase = finish && !!ticket.execution?.directory
+  const check = !liveTicket(ticket) && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   const local = ticket.channels.find(channel => channel.source === 'local')
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
-    rebase, cleanup },
+    rebase, cleanup, check },
     ...local?.address.file ? { archive: local.address.file } : {},
+    ...ticket.checks ? { checks: ticket.checks } : {},
     review: ticket.review,
     merged: ticket.merged, discarded: ticket.discarded, cleaned: ticket.cleaned,
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },

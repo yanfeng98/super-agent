@@ -204,6 +204,7 @@ export class Tickets extends EnginePart {
     const ticket = this.require(ticketId)
     if (liveTicket(ticket)) throw new UserError('ticketOpen')
     if (ticket.discarded) throw new UserError('ticketDiscarded')
+    if (ticket.cleaned) throw new UserError('ticketCleaned')
     if (!this.policy().revalidate(ticket.mandate)) throw new UserError('mandateRevoked')
     const at = this.now()
     delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review

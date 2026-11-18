@@ -411,5 +411,9 @@ describe('local tickets', () => {
     h.store.tickets.save({ ...h.store.tickets.get(request.id)!, ended: { at: '2026-11-18T03:00:00.000Z', by: 'human',
       outcome: 'stopped' }, discarded: { at: '2026-11-18T03:00:00.000Z' } })
     expect(() => h.engine.reopenTicket(request.id)).toThrow(/discarded/)
+    // A worktree cleaned up after its merge is gone too.
+    h.store.tickets.save({ ...h.store.tickets.get(request.id)!, discarded: undefined,
+      cleaned: { at: '2026-11-18T04:00:00.000Z' } })
+    expect(() => h.engine.reopenTicket(request.id)).toThrow(/removed after its merge/)
   })
 })

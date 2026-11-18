@@ -350,9 +350,26 @@ it('offers merge, discard and rebase only on an ended ticket with a review branc
   store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ merge: false, discard: false, rebase: false, cleanup: true })
   store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' }, cleaned: { at } })
-  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ cleanup: false })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ cleanup: false, reopen: false })
   store.tickets.save({ ...ended, discarded: { at } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: false, merge: false, discard: false, cleanup: false })
+})
+
+it('offers a check run on an ended ticket with a workspace when a check command is configured, and shows the result', () => {
+  const host = views()
+  live('t1')
+  const settings = store.settings()
+  store.saveSettings(SettingsSchema.parse({ ...settings, executor: { ...settings.executor, check: 'pnpm test' } }))
+  const ended = { ...store.tickets.get('t1')!, execution: { name: 't1', directory: '/w/t1', assignment: '' },
+    ended: { at, by: 'executor' as const, outcome: 'completed' as const } }
+  store.tickets.save(ended)
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ check: true })
+  expect(ticketDetail(host, 't1')!.checks).toBeUndefined()
+  store.tickets.save({ ...ended, checks: { command: 'pnpm test', ok: false, exitCode: 1, at, output: '1 failed' } })
+  expect(ticketDetail(host, 't1')!.checks).toMatchObject({ ok: false, exitCode: 1, output: '1 failed' })
+  // An open ticket has no workspace check yet.
+  store.tickets.save({ ...store.tickets.get('t1')!, ended: undefined, checks: undefined })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ check: false })
 })
 
 it('shows the full request text and the archive file on a local ticket\'s page', () => {

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import { key, latestReport, type OutboundMessage, type Ticket, type TicketReview, type Trigger } from '../core/index.ts'
+import { key, latestReport, type OutboundMessage, type Ticket, type TicketCheck, type TicketReview, type Trigger } from '../core/index.ts'
 import { family } from '../kv.ts'
 import type { Settings } from '../policy.ts'
 import { sourceContext, type SourceContext, type SourceHost } from './host.ts'
@@ -152,13 +152,14 @@ export async function archiveNeedsClose(ticket: Pick<Ticket, 'channels' | 'ended
   return existing !== undefined && !existing.includes(`<!-- dsh-superagent:closed:${ended.at} -->`)
 }
 /**
- * Appends a ticket's ending, its summary, and the review captured for it to its archive, once per end.
+ * Appends a ticket's ending, its summary, the review, and the check captured for it to its archive, once per end.
  * A missing archive file, or one without a local Channel, is left alone.
  * @param ticket - The ended ticket.
  * @param review - Git facts of its workspace, when it had any.
  * @param number - The ticket's stable display number, when the store knows it.
+ * @param check - The workspace check run at the end, when one is configured.
  */
-export async function closeArchive(ticket: Ticket, review?: TicketReview, number?: number): Promise<void> {
+export async function closeArchive(ticket: Ticket, review?: TicketReview, number?: number, check?: TicketCheck): Promise<void> {
   const file = ticketArchive(ticket)
   const ended = ticket.ended
   if (!file || !ended) return
@@ -170,7 +171,9 @@ export async function closeArchive(ticket: Ticket, review?: TicketReview, number
     await appendFile(file, ['', `## ${ended.at} · 关闭 / Closed`, '', marker, '- status: closed', `- outcome: ${ended.outcome}`,
       `- by: ${ended.by}`, ...(displayNumber(number) ? [`- ticket: ${displayNumber(number)}`] : []),
       ...(ended.reason ? [`- reason: ${oneLine(ended.reason)}`] : []),
-      ...(summary ? [`- summary: ${oneLine(summary)}`] : []), ...(review ? reviewLines(review) : []), ''].join('\n'))
+      ...(summary ? [`- summary: ${oneLine(summary)}`] : []), ...(review ? reviewLines(review) : []),
+      ...(check ? [`- check: ${check.ok ? 'passed' : 'failed'}${check.exitCode === null ? '' : ` (exit ${check.exitCode})`}`,
+        `- check_command: ${oneLine(check.command, 500)}`] : []), ''].join('\n'))
   })
 }
 /**

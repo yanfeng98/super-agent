@@ -41,6 +41,10 @@ An ended Ticket whose workspace is a linked git worktree offers **Merge**, **Reb
 
 After a merge, **Clean up worktree** removes the linked worktree and deletes the merged branch with git's safe deletion check, so the commits stay on the target branch and no stale worktrees accumulate. The Ticket records the merge, discard or cleanup time, and each appends a section to a local Ticket's archive.
 
+### Workspace check
+
+When `executor.check` is set, each ending runs it once with `sh -c` in the Ticket's directory, with the Execution environment variables, and records pass or fail, the exit code, and the end of its output (up to 4000 characters) on the Ticket. The page shows the result and offers **Run check** for another run, which is how a person confirms a repair. With a check configured, **Merge** refuses a branch whose latest check did not pass; a Ticket that ended before the command was configured has no result and can run the check from its page first. A timeout counts as a failure. The check never replaces the worker's report: the worker still says what it did, and the check says whether the result passes.
+
 ### Background work and worker slots
 
 When a turn ends with shell jobs or subagents still running, the Ticket keeps its worker slot and stays working. It is not reported as waiting, and the main Session receives no waiting report. A completed job or subagent wakes the Executor with its result in the same slot. Once a turn ends with no background work, the Executor reports waiting normally.
