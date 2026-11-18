@@ -231,6 +231,7 @@ describe('local tickets', () => {
     expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox', webhook: '', projects: [] })).toBe('/srv/inbox')
     expect(() => localKind.schema.parse({ archive: 'inbox' })).toThrow()
     expect(localKind.schema.parse({})).toEqual({ archive: '', webhook: '', projects: [] })
+    expect(localKind.fields.map(field => field.key)).toEqual(['archive', 'webhook', 'projects'])
   })
 
   it('exposes the project label as DSH_SUPERAGENT_PROJECT for the ticket workspace', async () => {
@@ -244,6 +245,16 @@ describe('local tickets', () => {
       ticket: { id: ticket.id, name: 'project-ticket', directory: join(dir, 'work', 'project-ticket') },
       trigger: h.store.triggers.get(created.trigger) })
     expect(Object.fromEntries(variables.map(variable => [variable.key, variable.value])).DSH_SUPERAGENT_PROJECT).toBe('api')
+  })
+
+  it('removes the archive and attachments when the intake throws', async () => {
+    const h = harness()
+    const context = h.host.context({ kind: 'local', health: [] })
+    const failing = { ...h.host, context: () => ({ ...context, receive: async () => { throw new Error('intake failed') } }) }
+    await expect(createLocalRequest(failing, { title: '失败', text: '不要留下。',
+      files: [{ name: 'log.txt', data: Buffer.from('hello').toString('base64') }] })).rejects.toThrow('intake failed')
+    expect(existsSync(join(dir, 'tickets'))).toBe(true)
+    expect(readdirSync(join(dir, 'tickets'))).toEqual([])
   })
 
   it('writes attachments beside the archive and lists their paths in the request', async () => {
@@ -267,7 +278,14 @@ describe('local tickets', () => {
       acknowledgement: '已接单。', evalId: candidate.evalId })
     const ticket = h.store.tickets.get(decision.ticketId!)!
     h.store.tickets.save({ ...ticket, hold: { at: new Date().toISOString() } })
-    expect(h.engine.approveTicket(ticket.id).hold).toBeUndefined()
+    // A revoked Mandate refuses approval; the hold stays until the Policy allows it again.
+    const allowed = h.store.settings()
+    h.store.saveSettings(SettingsSchema.parse({ policy: { sources: { local: { allowed: [] } } }, sources: { local: { enabled: true, config: {} } } }))
+    expect(() => h.engine.approveTicket(ticket.id)).toThrow(/no longer holds/)
+    h.store.saveSettings(allowed)
+    const approved = h.engine.approveTicket(ticket.id)
+    expect(approved.hold).toBeUndefined()
+    expect(approved.approved?.at).toBeTruthy()
     expect(h.executor.start).toHaveBeenCalledTimes(2)
     expect(() => h.engine.approveTicket(ticket.id)).toThrow(/does not wait/)
   })
@@ -389,5 +407,9 @@ describe('local tickets', () => {
     h.store.saveSettings(SettingsSchema.parse({ policy: { sources: { local: { allowed: [] } } },
       sources: { local: { enabled: true, config: {} } } }))
     expect(() => h.engine.reopenTicket(request.id)).toThrow(/no longer holds/)
+    // A discarded worktree is gone, so reopening it would launch against nothing.
+    h.store.tickets.save({ ...h.store.tickets.get(request.id)!, ended: { at: '2026-11-18T03:00:00.000Z', by: 'human',
+      outcome: 'stopped' }, discarded: { at: '2026-11-18T03:00:00.000Z' } })
+    expect(() => h.engine.reopenTicket(request.id)).toThrow(/discarded/)
   })
 })

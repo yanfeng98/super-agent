@@ -169,10 +169,12 @@ export class Tickets extends EnginePart {
     const ticket = this.require(ticketId)
     if (!liveTicket(ticket)) throw new UserError('ticketEnded')
     if (!ticket.hold) throw new UserError('notHeld')
+    if (!this.policy().revalidate(ticket.mandate)) throw new UserError('mandateRevoked')
     const assignment = latestAssignment(ticket)
-    if (!assignment || assignment.state !== 'pending') throw new UserError('notRetryable')
+    if (!assignment || assignment.state !== 'pending') throw new UserError('notPending')
     const at = this.now()
     delete ticket.hold
+    ticket.approved = { at }
     ticket.updatedAt = at
     this.repo.tickets.save(ticket)
     this.emit('ticket.approved', { ticketId: ticket.id })
@@ -187,8 +189,10 @@ export class Tickets extends EnginePart {
     const ticket = this.require(ticketId)
     const next = title.replace(/\s+/g, ' ').trim()
     if (!next) throw new UserError('emptyTitle')
+    const at = this.now()
     ticket.title = next
-    ticket.updatedAt = this.now()
+    ticket.renamed = { at, title: next }
+    ticket.updatedAt = at
     this.repo.tickets.save(ticket)
     return ticket
   }
@@ -199,6 +203,7 @@ export class Tickets extends EnginePart {
   reopen(ticketId: string): Ticket {
     const ticket = this.require(ticketId)
     if (liveTicket(ticket)) throw new UserError('ticketOpen')
+    if (ticket.discarded) throw new UserError('ticketDiscarded')
     if (!this.policy().revalidate(ticket.mandate)) throw new UserError('mandateRevoked')
     const at = this.now()
     delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review

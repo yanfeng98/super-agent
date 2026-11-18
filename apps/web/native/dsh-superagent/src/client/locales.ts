@@ -756,6 +756,8 @@ const TEXT = {
   'userError.ticketOpen': ['工单仍在进行中。', USER_ERRORS.ticketOpen[1]],
   'userError.emptyTitle': ['工单标题不能为空。', USER_ERRORS.emptyTitle[1]],
   'userError.notHeld': ['这个工单不等待批准。', USER_ERRORS.notHeld[1]],
+  'userError.notPending': ['这个工单没有等待启动的派工可批准。', USER_ERRORS.notPending[1]],
+  'userError.ticketDiscarded': ['这个工单的工作区已被丢弃；请新建工单继续。', USER_ERRORS.ticketDiscarded[1]],
   'userError.assignmentEnded': ['这个派工已结束，工单已由较新的派工接手。', USER_ERRORS.assignmentEnded[1]],
   'userError.evalFinished': ['评估 {eval} 已结束，或已被之后的评估取代；请对这个触发当前的评估做决定。', USER_ERRORS.evalFinished[1]],
   'userError.notAdmissible': ['这个触发未通过准入：{reason}', USER_ERRORS.notAdmissible[1]],

@@ -161,8 +161,8 @@ const LOCAL_BODY_BYTES = 256 * 1024
 const LOCAL_REQUEST_BYTES = 12 * 1024 * 1024
 const LOCAL_FILES_BYTES = 8 * 1024 * 1024
 const LocalAttachmentSchema = z.object({
-  name: z.string().trim().min(1).max(120).refine(name => !/[\\/]/.test(name) && name !== '.' && name !== '..',
-    'A file name without a path'),
+  name: z.string().trim().min(1).max(120).refine(name => !/[\\/\u0000-\u001f\u007f]/.test(name) && name !== '.' && name !== '..',
+    'A file name without a path or control characters'),
   data: z.string().min(1).regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Base64 content'),
 }).strict()
 const LocalRequestSchema = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),

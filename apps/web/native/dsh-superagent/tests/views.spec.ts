@@ -348,6 +348,8 @@ it('offers merge and discard only on an ended ticket with a review branch that i
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: true, merge: true, discard: true })
   store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ merge: false, discard: false })
+  store.tickets.save({ ...ended, discarded: { at } })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: false, merge: false, discard: false })
 })
 
 it('lists the tags on requests and filters Tickets by one', () => {

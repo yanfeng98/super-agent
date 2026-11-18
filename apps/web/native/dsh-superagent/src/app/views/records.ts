@@ -142,10 +142,13 @@ export function threadFacts(store: Store, thread: Thread) {
   return { key: thread.key, source: thread.ref.source, title: threadTitle(store, thread), ...url ? { url } : {}, facts: (thread.meta.facts ?? {}) as ThreadFacts }
 }
 export type ThreadFactsView = ReturnType<typeof threadFacts>
-export const ticketLine = (view: Snapshot, ticket: Ticket) => ({ ...ticketSummary(ticket, view.number(ticket.id)),
+export const ticketLine = (view: Snapshot, ticket: Ticket) => ({
+  ...ticketSummary(ticket, view.number(ticket.id)),
   // Tags are labels a person put on the request; they grant nothing and are not sent back to the worker.
-  tags: (Array.isArray(view.store.triggers.get(ticket.origin.triggerId)?.meta.tags)
-    ? (view.store.triggers.get(ticket.origin.triggerId)?.meta.tags as unknown[]) : []).filter((tag): tag is string => typeof tag === 'string'),
+  tags: (() => {
+    const value: unknown = view.store.triggers.get(ticket.origin.triggerId)?.meta.tags
+    return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
+  })(),
   threads: view.threadsOf(ticket.id).map(thread => threadFacts(view.store, thread)) })
 export function threadTitle(store: Pick<Store, 'read'>, thread: Thread): string {
   const label = attribute(thread.meta.label)
