@@ -43,6 +43,8 @@ After a merge, **Clean up worktree** removes the linked worktree and deletes the
 
 ### Workspace check
 
+A person reviewing the captured changes can leave notes anchored to a file and optional line. Notes are Ticket metadata, not Triggers; **Send notes to the Executor** posts them to the Ticket's local Thread as one follow-up, which resumes an ended Ticket under its Mandate like any other message.
+
 When `executor.check` is set, each ending runs it once with `sh -c` in the Ticket's directory, with the Execution environment variables, and records pass or fail, the exit code, and the end of its output (up to 4000 characters) on the Ticket. The page shows the result and offers **Run check** for another run, which is how a person confirms a repair. With a check configured, **Merge** refuses a branch whose latest check did not pass; a Ticket that ended before the command was configured has no result and can run the check from its page first. A timeout counts as a failure. The check never replaces the worker's report: the worker still says what it did, and the check says whether the result passes.
 
 ### Background work and worker slots

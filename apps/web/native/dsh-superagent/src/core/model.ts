@@ -309,6 +309,8 @@ export interface Ticket {
   checks?: TicketCheck
   /** Other tickets this one relates to, such as the work it builds on or depends on. */
   related?: string[]
+  /** A person's notes on files and lines of this ticket's changes, kept until they send them to the Executor. */
+  notes?: TicketNote[]
   /** Set when the request asked to wait for a person's approval before its first Assignment runs. */
   hold?: { at: string }
   /** When a person approved a held ticket. */
@@ -334,6 +336,14 @@ export interface TicketCheck {
   output: string
   /** Set when `output` keeps only the end of the command's output. */
   truncated?: boolean
+}
+/** A person's note on a file and optional line of a ticket's changes. */
+export interface TicketNote {
+  id: string
+  file: string
+  line?: number
+  text: string
+  at: string
 }
 /** One file git reports as changed or uncommitted, with its short status (`M`, `A`, `D`, `??`). */
 export interface ReviewFile { status: string; path: string }

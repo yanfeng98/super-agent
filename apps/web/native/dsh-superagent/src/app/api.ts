@@ -1,6 +1,6 @@
 /** Type-only management API contract between the web panel and host routes, imported by the panel without bundling host code. */
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
-import type { TicketCheck } from '../core/index.ts'
+import type { TicketCheck, TicketNote } from '../core/index.ts'
 import type { PromptConfig, Prompts } from './prompts.ts'
 import type { PromptsView, StateView, TicketPageView } from './http.ts'
 import type { HistoryView } from './settings-history.ts'
@@ -44,6 +44,8 @@ export interface Api {
   'POST tickets/:id/check': { response: { checks: TicketCheck } }
   'POST tickets/:id/related': { body: { ticket: string; linked: boolean };
     response: { related: { id: string; number?: number; title: string }[] } }
+  'POST tickets/:id/notes': { body: { file: string; line?: number; text: string }; response: { notes: TicketNote[] } }
+  'POST tickets/:id/notes/:noteId/remove': { response: { notes: TicketNote[] } }
   'POST tickets/:id/cleanup': { response: { cleaned: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
   'POST tickets/:id/approve': { response: { approved: true } }

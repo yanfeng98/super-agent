@@ -180,7 +180,9 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
       output: 'passed' } },
     cleanupTicket: async (id: string) => { calls.push(`cleanup:${id}`) },
     linkTicket: (id: string, reference: string, linked: boolean) => { calls.push(`link:${id}:${reference}:${linked}`)
-      return { related: [] } } })
+      return { related: [] } },
+    addNote: (id: string, input: { file: string; line?: number; text: string }) => { calls.push(`note:${id}:${input.file}`); return [] },
+    removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] } })
   expect(await call('POST', 'tickets/t1/merge')).toEqual({ status: 200, body: { merged: true, branch: 'agent/t', target: 'main' } })
   expect(await call('POST', 'tickets/t1/discard')).toEqual({ status: 200, body: { discarded: true } })
   expect(await call('POST', 'tickets/t1/rebase')).toEqual({ status: 200, body: { rebased: true, branch: 'agent/t', target: 'main' } })
@@ -188,7 +190,10 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     at: '', output: 'passed' } } })
   expect(await call('POST', 'tickets/t1/cleanup')).toEqual({ status: 200, body: { cleaned: true } })
   expect(await call('POST', 'tickets/t1/related', { ticket: 'T-0002', linked: true })).toEqual({ status: 200, body: { related: [] } })
-  expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1', 'link:t1:T-0002:true'])
+  expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, text: '改这里' })).toEqual({ status: 200, body: { notes: [] } })
+  expect(await call('POST', 'tickets/t1/notes/n1/remove')).toEqual({ status: 200, body: { notes: [] } })
+  expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1', 'link:t1:T-0002:true',
+    'note:t1:src/a.ts', 'unnote:t1:n1'])
   expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
   const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
     mergeTicket: async () => { throw new Error('The repository has uncommitted changes') } })

@@ -181,6 +181,20 @@ export class Engine {
    */
   approveTicket(ticketId: string): Ticket { return this.repo.atomic(() => this.tickets.approve(ticketId)) }
   /**
+   * Adds a person's note on a file and line of a ticket's changes.
+   * @returns The ticket with the note.
+   */
+  addNote(ticketId: string, input: { file: string; line?: number; text: string }): Ticket {
+    return this.repo.atomic(() => this.tickets.addNote(ticketId, input))
+  }
+  /**
+   * Removes a note from a ticket.
+   * @returns The ticket without the note.
+   */
+  removeNote(ticketId: string, noteId: string): Ticket {
+    return this.repo.atomic(() => this.tickets.removeNote(ticketId, noteId))
+  }
+  /**
    * Links or unlinks two tickets on each other's page.
    * @returns The ticket that was linked or unlinked.
    */
@@ -286,7 +300,7 @@ export type EngineForSources = Pick<Engine, 'receive' | 'bindThread' | 'threadCl
 export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivered' | 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'>
 /** What people ask of the Engine, through the panel or the main Session. */
 export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'approveTicket'
-  | 'linkTicket' | 'reevaluate' | 'unsubscribe' | 'dismiss'>
+  | 'linkTicket' | 'addNote' | 'removeNote' | 'reevaluate' | 'unsubscribe' | 'dismiss'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>
 /** What the Executor tells the Engine, and what its workers ask of it. */

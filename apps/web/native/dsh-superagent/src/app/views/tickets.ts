@@ -106,6 +106,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     rebase, cleanup, check },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
+    notes: ticket.notes ?? [],
     related: (ticket.related ?? []).flatMap(id => {
       const other = store.tickets.get(id)
       return other ? [{ id, number: view.number(other.id), title: other.title }] : []

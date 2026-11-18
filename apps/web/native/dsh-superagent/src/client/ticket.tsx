@@ -137,6 +137,10 @@ export function TicketPage({ id }: { id: string }) {
   const [checkBusy, setCheckBusy] = useState(false)
   const [relatedRef, setRelatedRef] = useState('')
   const [relatedBusy, setRelatedBusy] = useState(false)
+  const [noteFile, setNoteFile] = useState('')
+  const [noteLine, setNoteLine] = useState('')
+  const [noteText, setNoteText] = useState('')
+  const [notesBusy, setNotesBusy] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [renamingBusy, setRenamingBusy] = useState(false)
@@ -194,6 +198,33 @@ export function TicketPage({ id }: { id: string }) {
   const review = data.review
   // Only the Ticket's own local Thread takes a reply; a context-only Thread belongs to another Ticket.
   const localThread = data.threads.find(thread => thread.source === 'local' && !thread.context)
+  const notes = data.notes
+  const addNote = async (event: FormEvent) => {
+    event.preventDefault()
+    setNotesBusy(true)
+    try {
+      const line = Number(noteLine)
+      await call('POST tickets/:id/notes', { id, body: { file: noteFile.trim(), text: noteText.trim(),
+        ...noteLine.trim() && Number.isInteger(line) && line > 0 ? { line } : {} } })
+      setNoteFile(''); setNoteLine(''); setNoteText('')
+      await reload()
+    } catch (failure) { notify(errorText(failure)) }
+    finally { setNotesBusy(false) }
+  }
+  const removeNote = async (noteId: string) => {
+    setNotesBusy(true)
+    try { await after(call('POST tickets/:id/notes/:noteId/remove', { id, noteId })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setNotesBusy(false) }
+  }
+  const sendNotes = async () => {
+    if (!localThread) return
+    const text = `${t('noteMessage')}\n\n${notes.map(note => `- ${note.file}${note.line ? `:${note.line}` : ''}: ${note.text}`).join('\n')}`
+    setNotesBusy(true)
+    try { await after(call('POST local/followups', { body: { thread: localThread.key, text } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setNotesBusy(false) }
+  }
   return <>
     <PageHead title={data.title}>
       {opening?.url && <ActionLink href={opening.url}>{t('openThread', { source: valueLabel(t, 'source', opening.source) })}</ActionLink>}
@@ -273,6 +304,30 @@ export function TicketPage({ id }: { id: string }) {
       {diff?.error && <Hint>{diff.error}</Hint>}
       {diff && !diff.error && (diff.diff ? <pre className="dt-workspace-diff">{diff.diff}</pre> : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
+      <div className="dt-form">
+        {notes.length > 0 && <ul className="dt-list">{notes.map(note => <li className="dt-row" key={note.id}>
+          <div className="dt-row-main">
+            <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line ? `:${note.line}` : ''}</span><When at={note.at} /></div>
+            <div className="dt-row-quote">{note.text}</div>
+          </div>
+          <div className="dt-row-actions"><Button variant="ghost" size="sm" disabled={notesBusy}
+            onClick={() => removeNote(note.id)}>{t('remove')}</Button></div>
+        </li>)}</ul>}
+        <form className="dt-form" onSubmit={addNote}>
+          <div className="dt-row-meta">
+            <Input className="dt-mono" value={noteFile} placeholder={t('noteFilePlaceholder')} aria-label={t('noteFilePlaceholder')}
+              onChange={event => setNoteFile(event.target.value)} />
+            <Input className="dt-mono" type="number" min={1} value={noteLine} placeholder={t('noteLinePlaceholder')}
+              aria-label={t('noteLinePlaceholder')} onChange={event => setNoteLine(event.target.value)} />
+          </div>
+          <textarea className="dt-textarea" rows={2} maxLength={2000} value={noteText} placeholder={t('noteTextPlaceholder')}
+            aria-label={t('noteTextPlaceholder')} onChange={event => setNoteText(event.target.value)} />
+          <div className="dt-row-buttons">
+            <Button variant="outline" type="submit" disabled={notesBusy || !noteFile.trim() || !noteText.trim()}>{t('noteAdd')}</Button>
+            {localThread && notes.length > 0 && <Button variant="primary" disabled={notesBusy} onClick={sendNotes}>{t('noteSend')}</Button>}
+          </div>
+        </form>
+      </div>
       {(data.actions.rebase || data.actions.merge || data.actions.discard) && <div className="dt-row-actions">
         {data.actions.rebase && <ConfirmButton variant="outline" icon="refresh" label={t('ticketRebase')} title={t('rebaseTitle')}
           message={t('rebaseConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/rebase', { id }))} />}
