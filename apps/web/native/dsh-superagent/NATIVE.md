@@ -82,14 +82,21 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    launch (`src/executor/dsh.ts`); when the Ticket ends, Runtime captures the branch, the commits since that base, the changed
    files and any uncommitted work (`src/app/review.ts`) onto `ticket.review`, and the local archive appends a **Closed**
    section with the outcome, summary and those facts (`src/sources/local.ts`). `POST tickets/:id/reopen` and the panel's
-   **Reopen** action restore an ended Ticket under its still-valid Mandate (`src/core/tickets.ts`, `src/core/engine.ts`,
+   **Reopen** action restore an ended Ticket under its still-valid Mandate unless its branch was merged or its worktree was
+   discarded or cleaned up (`src/core/tickets.ts`, `src/core/engine.ts`,
    `src/app/http.ts`, `src/client/ticket.tsx`), and the archive records the reopening; the Changes section reads the committed diff through `GET tickets/:id/diff` (`src/app/review.ts`, `src/client/ticket.tsx`). The new-ticket form sends an
-   idempotency key, so a retry after a lost response returns the same Ticket; panel search matches a Ticket's latest result
-   and the text of its replies (`src/app/views/threads.ts`, `src/app/store.ts`). An ended Ticket whose workspace is a
-   linked worktree offers **Merge** (fast-forward the repository's checked-out branch only) and **Discard** (remove the
-   worktree and branch); `POST tickets/:id/merge` and `POST tickets/:id/discard` run through `workspaceRepo`,
-   `mergeWorkspace` and `discardWorkspace` (`src/app/review.ts`), record `ticket.merged` or `ticket.discarded`
-   (`src/app/runtime.ts`) and append the matching archive section (`src/sources/local.ts`). `review.spec.ts`,
+   idempotency key, so a retry after a lost response returns the same Ticket; panel search matches the request text, a
+   Ticket's latest result, its replies and its tags, and accepts `is:`, `tag:` and `author:` qualifiers
+   (`src/app/views/threads.ts`, `src/app/store.ts`). An ended Ticket whose workspace is a linked worktree offers
+   **Merge** (fast-forward the repository's checked-out branch only), **Rebase** (rewrite the Ticket branch onto a moved
+   target, move the recorded base and clear the check) and **Discard** (remove the worktree and branch), plus
+   **Clean up worktree** after a merge; `POST tickets/:id/merge`, `/rebase`, `/cleanup` and `/discard` run through
+   `workspaceRepo`, `mergeWorkspace`, `rebaseWorkspace` and `discardWorkspace` (`src/app/review.ts`), record the
+   corresponding Ticket fields (`src/app/runtime.ts`) and append matching archive sections (`src/sources/local.ts`).
+   `src/app/check.ts` runs `executor.check` at each ending and gates Merge on a passing run dated after that ending
+   (`POST tickets/:id/check`); reviewer notes (`Tickets.addNote`/`removeNote`, `POST tickets/:id/notes`,
+   `/notes/:noteId/remove`) can be sent to the Executor as one follow-up; related Tickets (`Tickets.link`,
+   `POST tickets/:id/related`) and the person-action history appear on the page. `review.spec.ts`, `check.spec.ts`,
    `local.spec.ts`, `views.spec.ts`, `http.spec.ts` and `panel-execution.spec.tsx` cover it.
 10. **Ticket numbers and command-line intake.** Every Ticket gets a stable `T-000N` number from its creation order
    (`src/app/store.ts`, shown by `src/app/views/records.ts`, `src/client/rows.tsx` and `src/client/ticket.tsx`, and written
@@ -103,7 +110,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    `POST local/requests` and are written to `<archive>/<request id>.files/` (`src/sources/local.ts`), with their paths in
    the request text and archive. **Edit title** renames a Ticket without rewriting its request
    (`Tickets.rename`, `POST tickets/:id/title`), updates the local Thread label and appends a Title section to the archive.
-   At startup, `Runtime.reconcileArchives` completes close, merge, discard and rename sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
+   At startup, `Runtime.reconcileArchives` completes close, rebase, merge, cleanup, discard and rename sections that a crash left unwritten. `scripts/dsh-superagent ticket --title … --text …` drops a JSON
    request into `<stateDir>/inbox`; the local Source's poller (`drainInbox` in `src/sources/local.ts`) turns it into a Ticket
    within two seconds, writes `inbox/done/<file>` and moves bad input to `inbox/rejected/`, with the file name as the
    idempotency key. `scripts/dsh-superagent backup` copies the database online and the ticket archives into `backups/<timestamp>/`.
