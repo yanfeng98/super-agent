@@ -2,6 +2,7 @@
 import { basename, dirname } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket, TicketReview } from '../core/index.ts'
+import { CliError } from '../infra/commands.ts'
 import { runAsWorker } from '../infra/environment.ts'
 
 const TIMEOUT_MS = 30_000
@@ -108,20 +109,54 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
   if (repo.dirty) throw new Error('The repository has uncommitted changes; commit or stash them before merging')
   if (repo.target === repo.branch) throw new Error('The repository already has the ticket branch checked out')
+  // A branch that lacks the repository's newer commits cannot fast-forward; name the fix instead of git's bare refusal.
+  const ahead = await runAsWorker(subprocess, ['git', 'merge-base', '--is-ancestor', repo.target, repo.branch], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+    .then(() => true).catch((error: unknown) => {
+      if (error instanceof CliError && error.exitCode === 1) return false
+      throw error
+    })
+  if (!ahead) throw new Error(`${repo.target} has commits that ${repo.branch} does not; rebase the ticket branch onto ${repo.target} and merge again`)
   await runAsWorker(subprocess, ['git', 'merge', '--ff-only', repo.branch], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
   return { branch: repo.branch, target: repo.target }
 }
 /**
+ * Rebases the ticket branch onto the repository's checked-out branch, so a merge can fast-forward after the repository moved.
+ * A conflicted rebase is aborted, leaving the workspace on its previous commits.
+ * @returns The branch rebased and the branch it moved onto.
+ * @throws when the workspace is not a linked worktree, the repository already has the ticket branch checked out, or the
+ * rebase cannot finish cleanly.
+ */
+export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<{ branch: string; target: string }> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo.linked) throw new Error('This ticket works in the repository itself; rebase its branch manually')
+  if (repo.target === repo.branch) throw new Error('The ticket branch is the repository branch')
+  try {
+    await runAsWorker(subprocess, ['git', 'rebase', repo.target], directory,
+      AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+  } catch (error) {
+    await runAsWorker(subprocess, ['git', 'rebase', '--abort'], directory,
+      AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).catch(() => {
+      // A rebase that never started has nothing to abort; the original failure is the report.
+    })
+    throw error
+  }
+  return { branch: repo.branch, target: repo.target }
+}
+/**
  * Removes the ticket's linked worktree and deletes its branch; the repository itself and other worktrees stay.
+ * @param options - `merged` deletes the branch with git's safe check, for a branch whose commits the target already has.
  * @throws when the workspace is not a linked worktree or either removal fails.
  */
-export async function discardWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<void> {
+export async function discardWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
+  options: { merged?: boolean } = {}): Promise<void> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; remove its changes yourself')
   await runAsWorker(subprocess, ['git', 'worktree', 'remove', '--force', directory], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
-  await runAsWorker(subprocess, ['git', 'branch', '-D', repo.branch], repo.root,
+  await runAsWorker(subprocess, ['git', 'branch', options.merged ? '-d' : '-D', repo.branch], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
 }

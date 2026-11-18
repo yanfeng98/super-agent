@@ -315,6 +315,8 @@ export interface Ticket {
   merged?: { at: string; branch: string; target: string }
   /** When a person discarded the ticket's worktree and branch. */
   discarded?: { at: string }
+  /** When a person removed the worktree and branch of a merged ticket, keeping its commits on the target branch. */
+  cleaned?: { at: string }
   /** The latest failed delivery of an Input to its worker, until a delivery succeeds. */
   delivery?: { error: string; at: string }
 }

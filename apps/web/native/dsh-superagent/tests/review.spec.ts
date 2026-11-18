@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -24,7 +24,8 @@ afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
 /** Minimal SubprocessRuntime backed by child_process.spawn, used by `runAsWorker`. */
 const subprocess = (): SubprocessRuntime => ({
   spawn: ({ argv, cwd }: { argv: readonly string[]; cwd: string }) => {
-    const child = spawn(argv[0]!, argv.slice(1), { cwd })
+    const child = spawn(argv[0]!, argv.slice(1), { cwd,
+      env: { ...process.env, GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: '1' } })
     const output = { stdout: '', stderr: '' }
     child.stdout.on('data', chunk => { output.stdout += String(chunk) })
     child.stderr.on('data', chunk => { output.stderr += String(chunk) })
@@ -102,6 +103,33 @@ describe('merge and discard', () => {
     expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
     writeFileSync(join(repo, 'a.txt'), 'dirty\n')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/uncommitted/)
+  })
+  it('names the rebase when the repository moved past the ticket branch, then rebases so the merge can fast-forward', async () => {
+    base()
+    const worktree = join(dir, 'worktree-rebase')
+    git('worktree', 'add', '-q', '-b', 'agent/r', worktree)
+    writeFileSync(join(worktree, 'b.txt'), 'ticket\n')
+    gitAt(worktree, 'add', 'b.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
+    // The repository takes a commit of its own, so the ticket branch is no longer a fast-forward.
+    writeFileSync(join(repo, 'a.txt'), 'main moved\n'); git('commit', '-qam', 'main work')
+    await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/rebase the ticket branch onto/)
+    expect(await rebaseWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/r', target: git('branch', '--show-current') })
+    expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/r', target: git('branch', '--show-current') })
+    expect(git('log', '--oneline', '-1')).toMatch(/ticket work/)
+    // The rebased history sits on top of the repository commit.
+    expect(git('log', '--oneline', '-2').split('\n').map(line => line.replace(/^[0-9a-f]+ /, '')))
+      .toEqual(['ticket work', 'main work'])
+  })
+  it('removes a merged worktree and branch with git\'s safe deletion check', async () => {
+    base()
+    const worktree = join(dir, 'worktree-clean')
+    git('worktree', 'add', '-q', '-b', 'agent/clean', worktree)
+    writeFileSync(join(worktree, 'b.txt'), 'merged\n')
+    gitAt(worktree, 'add', 'b.txt'); gitAt(worktree, 'commit', '-q', '-m', 'merged work')
+    await mergeWorkspace(subprocess(), worktree, signal)
+    await discardWorkspace(subprocess(), worktree, signal, { merged: true })
+    expect(existsSync(worktree)).toBe(false)
+    expect(() => git('show-ref', '--verify', '--quiet', 'refs/heads/agent/clean')).toThrow()
   })
   it('removes a linked worktree and its branch, and refuses the repository itself', async () => {
     base()

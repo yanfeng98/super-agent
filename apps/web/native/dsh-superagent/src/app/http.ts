@@ -60,6 +60,10 @@ export interface HttpHost {
   mergeTicket(id: string): Promise<{ branch: string; target: string }>
   /** Removes an ended ticket's linked worktree and branch. */
   discardTicket(id: string): Promise<void>
+  /** Rebases an ended ticket's branch onto the repository's checked-out branch. */
+  rebaseTicket(id: string): Promise<{ branch: string; target: string }>
+  /** Removes a merged ticket's worktree and branch. */
+  cleanupTicket(id: string): Promise<void>
   /** Renames a ticket without changing the recorded request text. */
   renameTicket(id: string, title: string): Ticket
   /** Approves a ticket held for a person's approval. */
@@ -258,6 +262,16 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/discard': async ({ params }) => {
       const id = ticket(params.id)
       try { await runtime.discardTicket(id); return { discarded: true as const } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/rebase': async ({ params }) => {
+      const id = ticket(params.id)
+      try { return { rebased: true as const, ...await runtime.rebaseTicket(id) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/cleanup': async ({ params }) => {
+      const id = ticket(params.id)
+      try { await runtime.cleanupTicket(id); return { cleaned: true as const } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST local/requests': async input => {

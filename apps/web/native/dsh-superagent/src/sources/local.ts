@@ -450,6 +450,15 @@ export async function recordDiscard(ticket: Pick<Ticket, 'channels'>, at: string
   await appendLifecycle(ticket, `<!-- dsh-superagent:discarded:${at} -->`, `${at} · 已丢弃 / Discarded`,
     ['- status: discarded', `- by: ${OPERATOR}`])
 }
+/**
+ * Appends the removal of a merged ticket's worktree and branch to its archive.
+ * @param ticket - The ticket whose workspace was cleaned up.
+ * @param at - When it was cleaned up.
+ */
+export async function recordCleanup(ticket: Pick<Ticket, 'channels'>, at: string): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:cleaned:${at} -->`, `${at} · 已清理 / Cleaned up`,
+    ['- status: cleaned', `- by: ${OPERATOR}`])
+}
 export const name = 'dsh-superagent-local'
 export const inject = ['orchestrator']
 export function apply(ctx: Context): void {

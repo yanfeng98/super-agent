@@ -6,7 +6,7 @@ import type { Store } from '../store.ts'
 import { channelLink, decisionView, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
   type ViewHost } from './records.ts'
 import { settingsPolicy } from '../../policy.ts'
-import { markdown, preview } from './text.ts'
+import { markdown, plain, preview, readable } from './text.ts'
 
 export type BasisFact =
   | { name: 'addressed'; value: 'mention' | 'direct' } | { name: 'followup' } | { name: 'admission'; value: AdmissionCell } | { name: 'observation' }
@@ -76,7 +76,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     const trigger = value.kind === 'trigger' ? store.triggers.get(value.triggerId) : undefined
     const handback = trigger && store.triggers.disposition(trigger.id)?.handbacks?.find(item => item.ticketId === id)
     const shown = trigger && { id: trigger.id, actor: view.actor(trigger.actor, trigger.human), human: trigger.human,
-      preview: preview(trigger.text), thread: threadKey(trigger.threads[0]!),
+      preview: preview(trigger.text), body: plain(readable(trigger.text), true), thread: threadKey(trigger.threads[0]!),
       ...handback ? { handback: { reason: handback.reason, at: handback.at } } : {} }
     const text = (value.kind === 'text' || value.kind === 'note') && value.text ? { text: markdown(value.text) } : {}
     return { ...value, ...text, delivered: !ticket.undelivered.includes(value.id), ...shown ? { trigger: shown } : {} }
@@ -89,9 +89,14 @@ export function ticketDetail(host: ViewHost, id: string) {
     && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
   // Ending a ticket's workspace state is offered once it ended, has a review, and was neither merged nor discarded.
   const finish = !liveTicket(ticket) && !!ticket.review?.branch && !ticket.merged && !ticket.discarded
-  return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish },
+  const rebase = finish && !!ticket.execution?.directory
+  const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
+  const local = ticket.channels.find(channel => channel.source === 'local')
+  return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
+    rebase, cleanup },
+    ...local?.address.file ? { archive: local.address.file } : {},
     review: ticket.review,
-    merged: ticket.merged, discarded: ticket.discarded,
+    merged: ticket.merged, discarded: ticket.discarded, cleaned: ticket.cleaned,
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },
     basis: basisFacts(ticket.mandate.basis, view.rule), paused: store.settings().paused,
     channels: ticket.channels.map(channel => channelLink(view, channel)),

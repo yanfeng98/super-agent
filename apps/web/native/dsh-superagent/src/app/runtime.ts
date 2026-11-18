@@ -33,12 +33,12 @@ import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, workspaceDiff } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, workspaceDiff } from './review.ts'
 import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
-import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordDiscard, recordMerge,
-  recordRename, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
+import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordCleanup, recordDiscard,
+  recordMerge, recordRename, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -334,6 +334,50 @@ export class Runtime extends Service implements SourceHost {
    * Removes an ended ticket's linked worktree and branch, then records the discard on the ticket and in its archive.
    * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
    */
+  /**
+   * Rebases an ended ticket's branch onto the repository's checked-out branch, so a later merge can fast-forward.
+   * @throws when the ticket is not ended, was merged or discarded, has no workspace, or the rebase cannot finish cleanly.
+   */
+  async rebaseTicket(id: string): Promise<{ branch: string; target: string }> {
+    const ticket = this.store.tickets.get(id)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (!ticket.ended) throw new Error('Only an ended ticket can be rebased')
+    if (ticket.merged) throw new Error('The ticket branch was already merged')
+    if (ticket.discarded) throw new Error('The ticket worktree was discarded')
+    const directory = ticket.execution?.directory
+    if (!directory) throw new Error('This ticket has no workspace')
+    const result = await rebaseWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+    const review = await captureReview(this.ctx.subprocess, ticket, this.stopped.signal)
+    if (review) this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      if (!current) return
+      current.review = review
+      this.store.tickets.save(current)
+    })
+    return result
+  }
+  /**
+   * Removes a merged ticket's worktree and deletes its branch, whose commits the target branch already has.
+   * @throws when the ticket is not merged, its workspace was already removed, or git cannot remove it.
+   */
+  async cleanupTicket(id: string): Promise<void> {
+    const ticket = this.store.tickets.get(id)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (!ticket.merged) throw new Error('Only a merged ticket can be cleaned up')
+    if (ticket.discarded || ticket.cleaned) throw new Error('The ticket workspace was already removed')
+    const directory = ticket.execution?.directory
+    if (!directory) throw new Error('This ticket has no workspace')
+    await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal, { merged: true })
+    const at = now()
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      if (!current) return
+      current.cleaned = { at }
+      this.store.tickets.save(current)
+    })
+    try { await recordCleanup(ticket, at) }
+    catch (error) { this.ctx.logger.warn('dsh-superagent: recording a workspace cleanup in the archive failed: %s', String(error)) }
+  }
   async discardTicket(id: string): Promise<void> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
@@ -417,7 +461,8 @@ export class Runtime extends Service implements SourceHost {
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: id => runtime.mergeTicket(id),
-      discardTicket: id => runtime.discardTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
+      discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id),
+      cleanupTicket: id => runtime.cleanupTicket(id), renameTicket: (id, title) => runtime.renameTicket(id, title),
       approveTicket: id => runtime.approveTicket(id) }
   }
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
