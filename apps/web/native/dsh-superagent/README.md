@@ -4,20 +4,20 @@
 >
 > We have adapted it for publication, so it is not identical to our internal version or the implementation described in *Exploring Super-agent Design: Towards a More Autonomous Agent System*. Some designs discussed in the article are directions for future development and are not implemented in this prototype.
 
-dsh-superagent is a proactive coding agent for one GitHub repository, packaged as a bundle for [DeepSeek Harness](https://www.deepseek.com/en/harness/). It listens to GitHub and, optionally, Feishu. When someone allowed asks the agent for work, it opens a work item, works on it in its own agent session and directory, and answers in the original conversation, for example with a pull request. A web panel shows what needs a person.
+dsh-superagent is a proactive coding agent for one workspace and one GitHub repository, packaged as a bundle for [DeepSeek Harness](https://www.deepseek.com/en/harness/). It takes requests from local tickets created in its panel, from GitHub, and optionally from Feishu. When someone allowed asks the agent for work, it opens a work item, works on it in its own agent session and directory, and answers in the original conversation, for example with a pull request. A web panel shows what needs a person.
 
 ## Built-in copy in this checkout
 
-This checkout ships dsh-superagent as a built-in Web capability. After `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** entry in the sidebar; no profile, `dsh plugin add`, or separate checkout is needed. Until a GitHub repository and agent account are configured, the panel shows what setup still needs and nothing runs. The panel's Management API follows the Web server's bind address and still requires the Web authentication cookie and the same-origin request header. [NATIVE.md](NATIVE.md) lists the local modifications and how to sync upstream.
+This checkout ships dsh-superagent as a built-in Web capability. After `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** entry in the sidebar; no profile, `dsh plugin add`, or separate checkout is needed. GitHub is optional: without a repository and an agent account, the local ticket Source still runs, and the panel shows which GitHub setup is missing. The panel's Management API follows the Web server's bind address and still requires the Web authentication cookie and the same-origin request header. [NATIVE.md](NATIVE.md) lists the local modifications and how to sync upstream.
 
 ### Quick start
 
-1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop).
-2. Sign in a dedicated agent GitHub account through a `gh` wrapper that uses only that account.
-3. In **Settings → Sources → GitHub**, set the repository and the wrapper; in **Settings → Eval**, add at least one allowed login; in **Settings → Execution**, set a prepare command that creates a worktree per Ticket.
-4. From an allowed account, comment `@<agent login> <request>` on an Issue or pull request.
+1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), and open **Superagent** in the sidebar.
+2. **Without GitHub:** use **Execution → New ticket**. The ticket accepts a title, request, optional project and tags, up to five attachments, and an optional **hold for approval**; its Markdown archive and every reply live under `<stateDir>/tickets/` by default. Set **Execution → Directory root** or a prepare command when the work needs files.
+3. **With GitHub:** sign in a dedicated agent account through a `gh` wrapper, set the repository and wrapper under **Settings → Sources → GitHub**, add at least one allowed login under **Settings → Eval**, and set a prepare command under **Settings → Execution**. Then comment `@<agent login> <request>` from an allowed account; Overview shows the Ticket within the polling interval.
+4. A Ticket can be inspected after it ends: review, diff, merge or discard its worktree, reopen it, and edit its title. A held Ticket waits for **Approve**; a configured webhook or desktop notification reports work that needs a person.
 
-The state directory defaults to `<DSH_HOME>/state/superagent`. [docs/006-deployment.md](docs/006-deployment.md#quick-start) covers accounts, settings, everyday use, Feishu and troubleshooting in full.
+The state directory defaults to `<DSH_HOME>/state/superagent`. [docs/006-deployment.md](docs/006-deployment.md#quick-start) covers accounts, settings, the command-line inbox, backups, everyday use, Feishu and troubleshooting in full.
 
 It is also a way of working with an agent: **take as little human attention as possible, and give as much value as possible.** An agent that can act for a whole team can also waste a whole team's attention, so it acts only when asked or when a rule the team wrote allows it, and speaks only when someone must act or can use a result. [docs/000-philosophy.md](docs/000-philosophy.md) explains the principle and what it asks of the operator.
 
