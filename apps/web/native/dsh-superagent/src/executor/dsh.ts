@@ -243,7 +243,9 @@ export class DshExecutor implements Executor {
   prepare(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>): Ticket {
     const meta = this.host.store.triggers.get(ticket.origin.triggerId)?.meta ?? {}
     const hold = meta.hold === true
-    const project = { ...typeof meta.projectRoot === 'string' && meta.projectRoot ? { root: meta.projectRoot } : {},
+    // Only an absolute root is accepted here; the local Source validates it, and another Source cannot escape it.
+    const absolute = (value: unknown): value is string => typeof value === 'string' && /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(value)
+    const project = { ...absolute(meta.projectRoot) ? { root: meta.projectRoot } : {},
       ...typeof meta.projectPrepare === 'string' && meta.projectPrepare ? { prepare: meta.projectPrepare } : {} }
     return { ...ticket, execution: ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, project),
       ...hold ? { hold: { at: now() } } : {} }

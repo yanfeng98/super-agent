@@ -129,6 +129,8 @@ it('creates a local ticket only when setup resolved, the Source is on, and the o
   expect(created.at(-1)).toMatchObject({ files: [{ name: 'a.txt', data: 'aGk=' }] })
   expect(await call('POST', 'local/requests', { title: 'x', text: 'y', files: [{ name: 'a/b.txt', data: 'aGk=' }] }))
     .toMatchObject({ status: 400 })
+  expect(await call('POST', 'local/requests', { title: 'x', text: 'y', files: [{ name: 'a\nb.txt', data: 'aGk=' }] }))
+    .toMatchObject({ status: 400 })
   expect(created).toHaveLength(2)
   expect(await call('POST', 'local/followups', { thread: 'local:r', text: '补充' })).toEqual({ status: 200,
     body: { trigger: 'f1', thread: 'local:r' } })

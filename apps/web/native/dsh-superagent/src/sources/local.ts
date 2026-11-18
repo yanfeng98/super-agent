@@ -115,7 +115,7 @@ async function writeAttachments(directory: string, request: string, files: Local
   const used = new Set<string>()
   const paths: string[] = []
   for (const [index, file] of files.entries()) {
-    let name = file.name.replace(/[\\/]/g, '_').replace(/^\.+/, '').slice(0, 80).trim() || `file-${index + 1}`
+    let name = file.name.replace(/[\\/\u0000-\u001f\u007f]/g, '_').replace(/^\.+/, '').slice(0, 80).trim() || `file-${index + 1}`
     if (used.has(name)) name = `${index + 1}-${name}`
     used.add(name)
     const path = join(target, name)
@@ -203,6 +203,13 @@ export const localKind: SourceKind<LocalConfig> = {
   fields: [
     { key: 'archive', type: 'text', label: { zh: '归档目录', en: 'Archive directory' },
       hint: { zh: '绝对路径；留空用状态目录下的 tickets。每个工单一个 Markdown 文件，请求、回复和结果都追加在里面。', en: 'An absolute path; empty uses tickets under the state directory. One Markdown file per ticket holds the request, replies and results.' } },
+    { key: 'webhook', type: 'text', label: { zh: '通知 Webhook', en: 'Notification webhook' },
+      hint: { zh: '工单结束或需要人回答时向这个 http(s) 地址 POST JSON；留空关闭。', en: 'POST JSON to this http(s) address when a ticket ends or needs a person; empty turns it off.' } },
+    { key: 'projects', type: 'rows', label: { zh: '项目', en: 'Projects' },
+      hint: { zh: '给请求里的项目名配置执行根目录和 prepare 命令；留空的项沿用 Execution 设置。', en: 'Give a project label its own execution root and prepare command; empty fields keep the Execution settings.' },
+      columns: [{ key: 'name', type: 'text', label: { zh: '项目名', en: 'Name' } },
+        { key: 'root', type: 'text', label: { zh: '根目录', en: 'Root' }, optional: true },
+        { key: 'prepare', type: 'text', label: { zh: 'prepare 命令', en: 'Prepare command' }, optional: true }] },
   ],
   // Intake is request-driven: nothing polls, so the kind reports no health entry.
   health: [],
@@ -301,8 +308,15 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
       ...projectMeta, ...input.tags?.length ? { tags: input.tags } : {}, ...input.hold ? { hold: true } : {},
       ...idempotency ? { idempotency } : {} },
   }
+  let received: Awaited<ReturnType<typeof ctx.receive>>
+  try { received = await ctx.receive(trigger) }
+  catch (error) {
+    // A failed intake leaves neither an archive nor attachments that no Ticket will read.
+    await rm(file, { force: true })
+    if (attachments.length) await rm(join(dirname(file), `${id}.files`), { recursive: true, force: true })
+    throw error
+  }
   // Describe the Thread after the intake created it; describing an absent Thread is a no-op.
-  const received = await ctx.receive(trigger)
   if (received !== 'filtered') ctx.threads.describe(thread, { label: title })
   if (received === 'filtered') {
     // No Ticket will read the file, so remove it rather than leave an archive no part of the panel shows.

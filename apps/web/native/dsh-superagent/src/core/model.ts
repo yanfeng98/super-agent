@@ -307,6 +307,10 @@ export interface Ticket {
   review?: TicketReview
   /** Set when the request asked to wait for a person's approval before its first Assignment runs. */
   hold?: { at: string }
+  /** When a person approved a held ticket. */
+  approved?: { at: string }
+  /** The latest title a person gave the ticket, so a crash can complete its archive section. */
+  renamed?: { at: string; title: string }
   /** When a person merged the ticket's branch into the repository, and where. */
   merged?: { at: string; branch: string; target: string }
   /** When a person discarded the ticket's worktree and branch. */

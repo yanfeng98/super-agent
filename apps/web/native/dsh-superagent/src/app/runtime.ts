@@ -155,14 +155,17 @@ export class Runtime extends Service implements SourceHost {
             const request = store.triggers.get(ended.origin.triggerId)?.text ?? ''
             for (const message of pullEndNotices(ended, request, setup.deployment.repository)) outbox.send(message)
           }
-          // Tell a configured webhook that a local ticket needs a person or ended, even with the Web app closed.
-          if (event.type === 'ticket.attention' || event.type === 'ticket.ended') this.notifyWebhook(event)
+          // Side effects outside the database wait for the transaction to commit, so a rolled-back question or
+          // ending sends no webhook and writes no archive section.
+          if (event.type === 'ticket.attention' || event.type === 'ticket.ended') this.store.afterCommit(() => { this.notifyWebhook(event) })
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
-          if (ended) void this.finishTicket(ended, ctx)
+          if (ended) this.store.afterCommit(() => { void this.finishTicket(ended, ctx) })
           if (event.type === 'ticket.reopened') {
             const reopened = store.tickets.get(event.data.ticketId)
-            if (reopened) void reopenArchive(reopened, event.at).catch((error: unknown) => {
-              ctx.logger.warn('dsh-superagent: recording a reopening in the archive failed: %s', String(error))
+            if (reopened) this.store.afterCommit(() => {
+              void reopenArchive(reopened, event.at).catch((error: unknown) => {
+                ctx.logger.warn('dsh-superagent: recording a reopening in the archive failed: %s', String(error))
+              })
             })
           }
         } })
@@ -246,7 +249,7 @@ export class Runtime extends Service implements SourceHost {
    */
   approveTicket(id: string): Ticket {
     const ticket = this.engine.approveTicket(id)
-    const at = now()
+    const at = ticket.approved?.at ?? now()
     void recordApproval(ticket, at).catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: recording an approval in the archive failed: %s', String(error))
     })
@@ -256,7 +259,7 @@ export class Runtime extends Service implements SourceHost {
     const ticket = this.engine.renameTicket(id, title)
     const ref = this.store.triggers.get(ticket.origin.triggerId)?.threads[0]
     if (ref?.source === 'local') this.store.threads.describe(`${ref.source}:${ref.id}`, { label: ticket.title })
-    const at = now()
+    const at = ticket.renamed?.at ?? now()
     void recordRename(ticket, at, ticket.title).catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: recording a rename in the archive failed: %s', String(error))
     })
@@ -270,19 +273,25 @@ export class Runtime extends Service implements SourceHost {
   async reconcileArchives(): Promise<number> {
     let repaired = 0
     for (const ticket of this.store.tickets.list()) {
-      if (!ticket.ended || !ticketArchive(ticket)) continue
+      if (!ticketArchive(ticket)) continue
       try {
+        if (ticket.approved) await recordApproval(ticket, ticket.approved.at)
+        if (ticket.renamed) await recordRename(ticket, ticket.renamed.at, ticket.renamed.title)
+        if (!ticket.ended) continue
         if (await archiveNeedsClose(ticket)) {
           let review = ticket.review
           if (!review) {
             review = await captureReview(this.ctx.subprocess, ticket, this.stopped.signal)
             if (review) this.store.atomic(() => {
               const current = this.store.tickets.get(ticket.id)
-              if (!current) return
+              if (!current?.ended || current.ended.at !== ticket.ended?.at) return
               current.review = review
               this.store.tickets.save(current)
             })
           }
+          // A follow-up may have resumed the ticket while the review was captured.
+          const current = this.store.tickets.get(ticket.id)
+          if (!current?.ended || current.ended.at !== ticket.ended?.at) continue
           await closeArchive(ticket, review, this.store.tickets.number(ticket.id))
           repaired++
         }
@@ -302,6 +311,7 @@ export class Runtime extends Service implements SourceHost {
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
+    if (ticket.merged) throw new Error('The ticket branch was already merged')
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
     const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
@@ -344,9 +354,16 @@ export class Runtime extends Service implements SourceHost {
    * review to its local archive. Runs after the ending transaction, so a capture failure leaves the ending intact.
    */
   private async finishTicket(ticket: Ticket, ctx: Context): Promise<void> {
+    // A follow-up may resume the ticket while the review is captured; its close then belongs to the next ending.
+    const stillEnded = (): boolean => {
+      const current = this.store.tickets.get(ticket.id)
+      return !!current?.ended && current.ended.at === ticket.ended?.at
+    }
+    if (!stillEnded()) return
     let review: TicketReview | undefined
     try { review = await captureReview(ctx.subprocess, ticket, this.stopped.signal) }
     catch (error) { ctx.logger.warn('dsh-superagent: capturing the workspace review failed: %s', String(error)) }
+    if (!stillEnded()) return
     if (review) this.store.atomic(() => {
       const current = this.store.tickets.get(ticket.id)
       if (!current) return

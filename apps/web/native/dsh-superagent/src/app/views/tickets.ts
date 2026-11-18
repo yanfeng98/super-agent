@@ -33,14 +33,14 @@ export function basisFacts(basis: MandateBasis, rule: Snapshot['rule']): { facts
   if (authority) facts.push({ name: 'legacyAuthority', value: authority })
   return { facts, legacy: authority !== undefined }
 }
-const tagsOf = (store: Store, ticket: Pick<Ticket, 'origin'>): string[] => {
+const tagsOf = (store: Pick<Store, 'triggers'>, ticket: Pick<Ticket, 'origin'>): string[] => {
   const value = store.triggers.get(ticket.origin.triggerId)?.meta.tags
   return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []
 }
 /** Every tag on any ticket's request, sorted, for the Execution filter. */
 export function ticketTags(store: Pick<Store, 'tickets' | 'triggers'>): string[] {
   const all = new Set<string>()
-  for (const ticket of store.tickets.list()) for (const tag of tagsOf(store as Store, ticket)) all.add(tag)
+  for (const ticket of store.tickets.list()) for (const tag of tagsOf(store, ticket)) all.add(tag)
   return [...all].sort((a, b) => a.localeCompare(b))
 }
 export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'], offset: number, limit: number, tag?: string) {
@@ -85,7 +85,8 @@ export function ticketDetail(host: ViewHost, id: string) {
   const human = ticket.mandate.basis.via !== 'bot'
   const line = ticketLine(view, ticket)
   // Reopening needs the current Policy to still hold the ticket's Mandate, as the reopen command itself checks.
-  const reopen = !liveTicket(ticket) && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
+  const reopen = !liveTicket(ticket) && !ticket.discarded
+    && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
   // Ending a ticket's workspace state is offered once it ended, has a review, and was neither merged nor discarded.
   const finish = !liveTicket(ticket) && !!ticket.review?.branch && !ticket.merged && !ticket.discarded
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish },
