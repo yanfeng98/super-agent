@@ -115,6 +115,11 @@ describe('merge and discard', () => {
     // One parent: the squash commit, not the ticket branch's commit.
     expect(git('rev-list', '--parents', '-n1', 'HEAD').split(' ')).toHaveLength(2)
     expect(readFileSync(join(repo, 'q.txt'), 'utf8')).toBe('squashed\n')
+    // The branch is not an ancestor after a squash, so the safe check refuses; the recorded squash merge allows force removal.
+    await expect(discardWorkspace(subprocess(), worktree, signal, { merged: true })).rejects.toThrow(/does not contain/)
+    await discardWorkspace(subprocess(), worktree, signal, { merged: true, squash: true })
+    expect(git('branch', '--list', 'agent/q')).toBe('')
+    expect(existsSync(worktree)).toBe(false)
   })
   it('makes a merge commit when asked, keeping both parents', async () => {
     base()

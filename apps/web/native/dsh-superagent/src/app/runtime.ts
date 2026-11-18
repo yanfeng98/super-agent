@@ -161,11 +161,15 @@ export class Runtime extends Service implements SourceHost {
           // ending sends no webhook and writes no archive section.
           if (event.type === 'ticket.attention' || event.type === 'ticket.ended') {
             const notified = store.tickets.get(event.data.ticketId)
-            if (notified) recordNotification(store, { at: event.at, kind: event.type === 'ticket.attention' ? 'attention' : 'ended',
-              ticketId: notified.id, title: notified.title,
-              text: event.type === 'ticket.attention' ? event.data.question
-                : [event.data.outcome, event.data.reason].filter(Boolean).join(': ') })
-            this.store.afterCommit(() => { this.notifyWebhook(event) })
+            const kind = event.type === 'ticket.attention' ? 'attention' as const : 'ended' as const
+            const text = event.type === 'ticket.attention' ? event.data.question
+              : [event.data.outcome, event.data.reason].filter(Boolean).join(': ')
+            this.store.afterCommit(() => {
+              // An inbox write must not roll back the Ticket change it reports, so it fails alone.
+              try { if (notified) recordNotification(store, { at: event.at, kind, ticketId: notified.id, title: notified.title, text }) }
+              catch (error) { ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
+              this.notifyWebhook(event)
+            })
           }
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
           if (ended) this.store.afterCommit(() => {
@@ -474,12 +478,17 @@ export class Runtime extends Service implements SourceHost {
     const command = this.store.settings().executor.check.trim()
     if (!command) throw new Error('No workspace check command is configured')
     const env = Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value]))
+    const endedAt = ticket.ended.at
+    const base = ticket.execution?.base
     const checks = await workspaceCheck(this.ctx.subprocess, directory, command, this.stopped.signal, env)
-    this.store.atomic(() => {
+    const saved = this.store.atomic(() => {
       const current = this.store.tickets.get(id)
-      if (!current) return
+      if (!current?.ended || current.ended.at !== endedAt || current.merged || current.discarded || current.cleaned
+        || current.execution?.base !== base) return false
       this.recordCheck(current, checks)
+      return true
     })
+    if (!saved) throw new Error('The ticket changed while its check ran; run the check again')
     return checks
   }
   /** Records a check run as the ticket's latest and appends it to the capped history. */
@@ -522,7 +531,8 @@ export class Runtime extends Service implements SourceHost {
     return { branch: result.branch, target: result.target }
   }
   /**
-   * Removes a merged ticket's worktree and deletes its branch, whose commits the target branch already has.
+   * Removes a merged ticket's worktree and deletes its branch; a squash merge's branch is force-deleted because its
+   * commits are represented by the squash commit rather than being ancestors of the target.
    * @throws when the ticket is not merged, its workspace was already removed, or git cannot remove it.
    */
   async cleanupTicket(id: string): Promise<void> {
@@ -532,7 +542,8 @@ export class Runtime extends Service implements SourceHost {
     if (ticket.discarded || ticket.cleaned) throw new Error('The ticket workspace was already removed')
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
-    await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal, { merged: true })
+    await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal,
+      { merged: true, squash: ticket.merged.strategy === 'squash' })
     const at = now()
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
@@ -575,6 +586,7 @@ export class Runtime extends Service implements SourceHost {
     const stillEnded = (): boolean => {
       const current = this.store.tickets.get(ticket.id)
       return !!current?.ended && current.ended.at === ticket.ended?.at
+        && current.execution?.base === ticket.execution?.base
     }
     if (!stillEnded()) return
     let review: TicketReview | undefined
@@ -583,7 +595,8 @@ export class Runtime extends Service implements SourceHost {
     if (!stillEnded()) return
     if (review) this.store.atomic(() => {
       const current = this.store.tickets.get(ticket.id)
-      if (!current) return
+      if (!current?.ended || current.ended.at !== ticket.ended?.at || current.merged || current.discarded
+        || current.cleaned || current.execution?.base !== ticket.execution?.base) return
       current.review = review
       this.store.tickets.save(current)
     })
@@ -599,7 +612,8 @@ export class Runtime extends Service implements SourceHost {
         const run = checks
         this.store.atomic(() => {
           const current = this.store.tickets.get(ticket.id)
-          if (!current?.ended || current.ended.at !== ticket.ended?.at) return
+          if (!current?.ended || current.ended.at !== ticket.ended?.at || current.merged || current.discarded
+            || current.cleaned || current.execution?.base !== ticket.execution?.base) return
           this.recordCheck(current, run)
         })
       }

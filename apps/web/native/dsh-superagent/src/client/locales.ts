@@ -115,7 +115,7 @@ const TEXT = {
   reopenConfirm: ['重新打开「{title}」会恢复它的原授权，并开始新的派工。', 'Reopening "{title}" restores its original Mandate and starts a fresh Assignment.'],
   ticketMerge: ['合并', 'Merge'],
   mergeTitle: ['合并工单分支', 'Merge ticket branch'],
-  mergeConfirm: ['把「{title}」的分支快进合并到仓库当前分支？仓库有未提交改动或无法快进时会拒绝。', 'Fast-forward "{title}"\'s branch into the repository\'s checked-out branch? It is refused when the repository has uncommitted changes or cannot fast-forward.'],
+  mergeConfirm: ['按所选方式把「{title}」的分支合并到仓库当前分支？未提交改动、未解决评审、失败的检查或落后的分支会被拒绝。', 'Merge "{title}"\'s branch into the repository\'s checked-out branch with the chosen strategy? Uncommitted changes, open reviews, failed checks or a branch that fell behind are refused.'],
   mergeStrategy: ['合并方式', 'Merge strategy'],
   'merge.ff': ['快进', 'Fast-forward'],
   'merge.squash': ['压缩为一个提交', 'Squash'],

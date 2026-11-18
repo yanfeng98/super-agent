@@ -100,9 +100,11 @@ export async function workspaceRepo(subprocess: SubprocessRuntime, directory: st
   return { root, branch, head, target, dirty, linked: root !== directory }
 }
 /**
- * Fast-forwards the repository's checked-out branch to the ticket branch, so no merge commit or conflict state is created.
- * @throws when the workspace is not a linked worktree, the repository is dirty, the branch is checked out there, or the
- * repository cannot fast-forward.
+ * Merges the ticket branch into the repository's checked-out branch by `strategy`: a fast-forward, one squashed commit, or a
+ * merge commit. The ticket branch must contain the repository's commit, so the merge cannot conflict.
+ * @param strategy - The merge form to use; `ff` refuses when the repository moved.
+ * @throws when the workspace is not a linked worktree, the repository is dirty, the branch is checked out there, the ticket
+ * branch does not contain the repository's commit, or git cannot complete the merge.
  * @returns The branch merged and the branch it moved.
  */
 export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
@@ -125,12 +127,18 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   if (strategy === 'ff') {
     await run(['merge', '--ff-only', repo.branch])
   } else if (strategy === 'merge') {
-    await run(['merge', '--no-ff', '--no-edit', repo.branch])
-  } else {
-    await run(['merge', '--squash', repo.branch])
-    try { await run(['commit', '-m', `Squash merge ${repo.branch}`]) }
+    try { await run(['merge', '--no-ff', '--no-edit', repo.branch]) }
     catch (error) {
-      // Leave no staged squash or conflict state behind when the commit cannot be made.
+      // A merge commit that cannot be made (such as a missing identity) must not leave the repository mid-merge.
+      await run(['merge', '--abort']).catch(() => undefined)
+      throw error
+    }
+  } else {
+    try {
+      await run(['merge', '--squash', repo.branch])
+      await run(['commit', '-m', `Squash merge ${repo.branch}`])
+    } catch (error) {
+      // Leave no staged squash or conflict state behind when the squash cannot be completed.
       await run(['reset', '--hard', 'HEAD']).catch(() => undefined)
       throw error
     }
@@ -166,15 +174,16 @@ export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: 
 }
 /**
  * Removes the ticket's linked worktree and deletes its branch; the repository itself and other worktrees stay.
- * @param options - `merged` deletes the branch with git's safe check, for a branch whose commits the target already has.
+ * @param options - `merged` deletes the branch with git's safe check, for a branch whose commits the target already has;
+ * `squash` skips that check and forces deletion, for a recorded squash merge whose commit is not an ancestor.
  * @throws when the workspace is not a linked worktree or either removal fails.
  */
 export async function discardWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  options: { merged?: boolean } = {}): Promise<void> {
+  options: { merged?: boolean; squash?: boolean } = {}): Promise<void> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; remove its changes yourself')
-  if (options.merged) {
+  if (options.merged && !options.squash) {
     // Refuse before removing the worktree when the target does not contain the branch, so new commits cannot be lost.
     const contained = await runAsWorker(subprocess, ['git', 'merge-base', '--is-ancestor', repo.branch, repo.target], repo.root,
       AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(() => true).catch((error: unknown) => {
@@ -185,6 +194,7 @@ export async function discardWorkspace(subprocess: SubprocessRuntime, directory:
   }
   await runAsWorker(subprocess, ['git', 'worktree', 'remove', '--force', directory], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
-  await runAsWorker(subprocess, ['git', 'branch', options.merged ? '-d' : '-D', repo.branch], repo.root,
+  // A squash merge records a new commit, so the branch is not an ancestor of the target; git's safe -d cannot apply.
+  await runAsWorker(subprocess, ['git', 'branch', options.merged && !options.squash ? '-d' : '-D', repo.branch], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
 }
