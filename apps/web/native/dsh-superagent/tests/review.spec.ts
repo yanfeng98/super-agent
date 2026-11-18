@@ -97,8 +97,10 @@ describe('merge and discard', () => {
     const head = gitAt(worktree, 'rev-parse', 'HEAD')
     expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
     expect(git('rev-parse', 'HEAD')).toBe(head)
-    // The main working tree must be clean; an uncommitted file blocks the merge.
+    // The main working tree must be clean of tracked changes; an untracked file alone does not block the merge.
     writeFileSync(join(repo, 'dirty.txt'), 'x\n')
+    expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
+    writeFileSync(join(repo, 'a.txt'), 'dirty\n')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/uncommitted/)
   })
   it('removes a linked worktree and its branch, and refuses the repository itself', async () => {

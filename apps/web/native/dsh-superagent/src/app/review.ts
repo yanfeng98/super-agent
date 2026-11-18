@@ -92,7 +92,8 @@ export async function workspaceRepo(subprocess: SubprocessRuntime, directory: st
   const root = basename(common) === '.git' ? dirname(common) : common
   const target = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
   if (!target || target === 'HEAD') return undefined
-  const dirty = (await git(root, ['status', '--porcelain']).catch(() => '')).length > 0
+  // Untracked files, such as a ticket archive kept in the checkout, do not block a fast-forward; tracked changes do.
+  const dirty = (await git(root, ['status', '--porcelain', '--untracked-files=no']).catch(() => '')).length > 0
   return { root, branch, head, target, dirty, linked: root !== directory }
 }
 /**

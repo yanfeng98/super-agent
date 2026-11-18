@@ -37,7 +37,7 @@ A held Ticket launches no worker until **Approve** clears `ticket.hold`; the app
 
 A crash between an ending and its archive write can leave the Markdown behind; after the next startup, each ended local Ticket whose archive lacks its close section gets it (with the review), and recorded merges, discards and renames are completed, so the archive catches up without repeating work.
 
-An ended Ticket whose workspace is a linked git worktree offers **Merge** and **Discard**. Merge fast-forwards the branch checked out in the main working tree to the Ticket's branch and refuses when that tree is dirty, when the Ticket branch is checked out there, or when the move would not fast-forward, so it never writes a merge commit or leaves a conflict state. Discard removes the linked worktree and deletes its branch, including uncommitted work; the repository and its other worktrees stay. Both actions record their time on the Ticket and append a section to a local Ticket's archive.
+An ended Ticket whose workspace is a linked git worktree offers **Merge** and **Discard**. Merge fast-forwards the branch checked out in the main working tree to the Ticket's branch and refuses when that tree has tracked changes, when the Ticket branch is checked out there, or when the move would not fast-forward, so it never writes a merge commit or leaves a conflict state. Discard removes the linked worktree and deletes its branch, including uncommitted work; the repository and its other worktrees stay. Both actions record their time on the Ticket and append a section to a local Ticket's archive.
 
 ### Background work and worker slots
 
