@@ -206,7 +206,7 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
   triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ticketTitle: undefined })
 const ticketDetail = (): TicketPageView => ({
   ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
-    cleanup: false, check: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
+    cleanup: false, check: false, reviewDecision: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
   history: [], related: [], notes: [],
   request: { text: '修复登录页回归', at: '2026-09-22T00:00:00Z' }, decision: acceptDecision(),
   threads: [threadSummary()],
@@ -298,11 +298,11 @@ const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET state': { answer: stateView },
   'GET overview': { answer: overviewView },
-  'GET search': { query: ['q'], answer: async ({ query }) => {
+  'GET search': { query: ['q', 'offset'], answer: async ({ query }) => {
     const q = query.q ?? ''
     await server.searching?.(q)
     return { tickets: [], threads: server.search.threads, items: server.search.items.filter(item => item.preview.includes(q)),
-      more: false }
+      more: false, next_offset: null }
   } },
   'GET sources': { answer: sourceStatuses },
   'GET settings': { answer: settingsView },
@@ -379,6 +379,28 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/notes/:noteId/remove': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { notes: [] }
+  } },
+  'POST tickets/:id/notes/:noteId/resolve': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const resolved = (body as { resolved: boolean }).resolved
+    detail.notes = (detail.notes ?? []).map(note => note.id === params.noteId
+      ? { ...note, resolved: resolved ? { at: '2026-11-18T00:00:00Z' } : undefined } : note)
+    return { notes: detail.notes }
+  } },
+  'POST tickets/:id/review': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const input = body as { decision: 'approved' | 'changes-requested'; note?: string }
+    detail.reviewed = { at: '2026-11-18T00:00:00Z', decision: input.decision, ...(input.note ? { note: input.note } : {}) }
+    return { reviewed: true, decision: input.decision, at: detail.reviewed.at }
+  } },
+  'POST tickets/:id/tags': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const tags = (body as { tags: string[] }).tags
+    detail.tags = tags
+    return { tags }
   } },
   'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')

@@ -3,7 +3,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { TICKET_FILTERS, type TicketFilter } from '../app/api.ts'
 import { LIMITS } from '../limits.ts'
 import { usePoll, type SettingsView, type SourceView, type StateView } from './api.ts'
-import { Button, DisclosureRow, Icon, InfoTip, Input, Modal, Pill } from './controls.tsx'
+import { Button, DisclosureRow, Icon, InfoTip, Input, Modal, Pill, Switch } from './controls.tsx'
 import { SaveBar } from './draft.tsx'
 import { usePanel } from './provider.tsx'
 import { enableNotifications, notificationsEnabled, notificationsSupported } from './notify.ts'
@@ -95,6 +95,7 @@ export function ExecutionStatus({ filter: current, state, reload }: {
     query: { state: current, limit, ...tag ? { tag } : {} } }), [current, limit, tag])
   const { data: tagData } = usePoll(() => call('GET tags'), [])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkTags, setBulkTags] = useState('')
   const { paused, load: { maxWorkers } } = state
   // Pausing uses its own block revision so toggling pause does not invalidate an open Execution settings draft.
   const pause = async () => { await call('POST executor/pause', { body: { paused: !paused } }); await reload() }
@@ -111,9 +112,10 @@ export function ExecutionStatus({ filter: current, state, reload }: {
   const chosen = data?.items.filter(item => selected.has(item.id)) ?? []
   const stopSelected = chosen.filter(item => item.state === 'open').map(item => item.id)
   const cleanupSelected = chosen.filter(item => item.actions.cleanup).map(item => item.id)
-  const runBulk = async (verb: 'stop' | 'cleanup', ids: string[]) => {
+  const runBulk = async (verb: 'stop' | 'cleanup' | 'tags', ids: string[], labels: string[] = []) => {
     const request: (id: string) => Promise<unknown> = verb === 'stop' ? (id: string) => call('POST tickets/:id/stop', { id })
-      : (id: string) => call('POST tickets/:id/cleanup', { id })
+      : verb === 'cleanup' ? (id: string) => call('POST tickets/:id/cleanup', { id })
+        : (id: string) => call('POST tickets/:id/tags', { id, body: { tags: labels } })
     const results = await Promise.allSettled(ids.map(request))
     const failed = results.filter(result => result.status === 'rejected').length
     notify(failed ? t('bulkFailed', { failed, total: ids.length }) : t('bulkDone', { count: ids.length }))
@@ -163,6 +165,11 @@ export function ExecutionStatus({ filter: current, state, reload }: {
         {cleanupSelected.length > 0 && <ConfirmButton variant="outline" icon="trash" label={t('bulkCleanup', { count: cleanupSelected.length })}
           title={t('bulkCleanup')} message={t('bulkCleanupConfirm', { count: cleanupSelected.length })}
           onConfirm={() => runBulk('cleanup', cleanupSelected)} />}
+        <Input value={bulkTags} maxLength={200} aria-label={t('bulkTags', { count: chosen.length })} placeholder={t('bulkTagsPlaceholder')}
+          onChange={event => setBulkTags(event.target.value)} />
+        <Button variant="outline" disabled={!bulkTags.split(',').some(tag => tag.trim())}
+          onClick={() => runBulk('tags', chosen.map(item => item.id), [...new Set(bulkTags.split(',').map(tag => tag.trim()).filter(Boolean))])}>
+          {t('bulkTags', { count: chosen.length })}</Button>
       </div>}
       {data.items.length ? <ul className="dt-list">{data.items.map(ticket => ticket.stage === 'person'
         ? <TicketLine key={ticket.id} ticket={ticket} question onChanged={reloadTickets}
@@ -242,6 +249,10 @@ export function ExecutionSettings() {
             <textarea className="dt-textarea dt-mono" rows={2} maxLength={LIMITS.prepareCommand} spellCheck={false}
               placeholder={t('checkCommandEmpty')} value={value.check}
               onChange={event => edit({ check: event.target.value })} />
+          </Field>
+          <Field label={t('requireReview')} hint={t('requireReviewHint')}>
+            <Switch checked={value.requireReview} onChange={requireReview => edit({ requireReview })}
+              label={t('requireReview')} />
           </Field>
           <EnvironmentVariables groups={environment.variables} sources={sources} onPick={insert} />
           <Field label={t('blockedCommands')} hint={t('blockedCommandsHint')}>

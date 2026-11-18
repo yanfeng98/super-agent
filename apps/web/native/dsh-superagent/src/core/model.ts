@@ -277,6 +277,12 @@ export interface Attention { id: string; question: string; triggerId?: string }
 export interface Ticket {
   id: string
   title: string
+  /**
+   * Labels a person put on the request, such as a component or priority; they grant nothing, are not sent to the worker,
+   * and are editable from the panel. Absent on tickets created before labels were editable, whose labels stay on their
+   * originating Trigger's `meta.tags`.
+   */
+  tags?: string[]
   decisionId: string
   mandate: Mandate
   /** The Channels of the messages it was accepted from, which its replies go to. */
@@ -307,6 +313,8 @@ export interface Ticket {
   review?: TicketReview
   /** Outcome of the configured workspace check, run in the worktree when the ticket ended. */
   checks?: TicketCheck
+  /** Earlier runs of the check, oldest first and capped, so a person sees how a failure was repaired. */
+  checkHistory?: TicketCheck[]
   /** Other tickets this one relates to, such as the work it builds on or depends on. */
   related?: string[]
   /** A person's notes on files and lines of this ticket's changes, kept until they send them to the Executor. */
@@ -317,6 +325,10 @@ export interface Ticket {
   approved?: { at: string }
   /** The latest title a person gave the ticket, so a crash can complete its archive section. */
   renamed?: { at: string; title: string }
+  /** When a person last replaced the ticket's labels, so a crash can complete its archive section. */
+  tagged?: { at: string }
+  /** A person's review of the ending's changes: approving them, or asking for changes; cleared when work resumes or the branch is rebased. */
+  reviewed?: { at: string; decision: 'approved' | 'changes-requested'; note?: string }
   /** When a person rebased the ticket's branch, and the target commit it now starts from. */
   rebased?: { at: string; branch: string; target: string; base: string }
   /** When a person merged the ticket's branch into the repository, and where. */
@@ -346,6 +358,8 @@ export interface TicketNote {
   line?: number
   text: string
   at: string
+  /** When a person marked the note resolved; an open note keeps its ticket from merging. */
+  resolved?: { at: string }
 }
 /** One file git reports as changed or uncommitted, with its short status (`M`, `A`, `D`, `??`). */
 export interface ReviewFile { status: string; path: string }

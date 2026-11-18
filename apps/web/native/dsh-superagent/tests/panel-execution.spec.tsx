@@ -49,6 +49,18 @@ it('filters Tickets by a tag', async () => {
   expect(server.requests.some(request => request.path.includes('tag=') && decodeURIComponent(request.path).includes('tag=前端'))).toBe(true)
 })
 
+it('edits the labels on a Ticket from its page', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!, tags: ['前端'] }
+  await mount()
+  expect(text()).toContain('前端')
+  await click(zh.tagsEdit)
+  await type(field<HTMLInputElement>(zh.tagsEdit), '前端, p1')
+  await click(zh.tagsSave)
+  expect(server.requests.find(request => request.path === 'tickets/t1/tags')).toMatchObject({ method: 'POST',
+    body: { tags: ['前端', 'p1'] } })
+})
+
 it('approves a held ticket from its page', async () => {
   at({ page: 'execution', id: 't1' })
   server.ticketDetails.t1 = { ...server.ticketDetails.t1!, stage: 'person', action: 'approval',
@@ -91,6 +103,20 @@ it('stops or cleans up the selected Tickets from the Execution list in one actio
   await click(cleanup!)
   await click(zh.confirm)
   expect(server.requests.some(request => request.method === 'POST' && request.path === 'tickets/t3/cleanup')).toBe(true)
+})
+
+it('sets labels on the selected Tickets from the Execution list', async () => {
+  server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单' })]
+  await mount()
+  await click(zh['tab.execution'])
+  for (const box of all('input[type="checkbox"]')) await click(box)
+  const label = zh.bulkTags.replace('{count}', '2')
+  await type(field<HTMLInputElement>(label), '前端, p1')
+  await click(label)
+  expect(server.requests.filter(request => request.path.endsWith('/tags')).map(request => request.body))
+    .toEqual([{ tags: ['前端', 'p1'] }, { tags: ['前端', 'p1'] }])
+  expect(server.requests.filter(request => request.path.endsWith('/tags')).map(request => request.path))
+    .toEqual(['tickets/t1/tags', 'tickets/t2/tags'])
 })
 
 it('shows a Ticket with its stage, its Mandate details with the Trigger and Decision behind it, its Threads, and the rest behind disclosures', async () => {
@@ -161,13 +187,17 @@ it('adds a line-anchored review note and sends the notes to the executor as one 
   const followup = server.requests.filter(request => request.path === 'local/followups').at(-1)
   expect(followup?.body).toMatchObject({ thread: 'local:r1' })
   expect(String((followup?.body as { text?: string }).text)).toContain('src/a.ts:12: 改成可选')
+  await click(zh.noteResolve)
+  expect(server.requests.find(request => request.path === 'tickets/t1/notes/n1/resolve')).toMatchObject({ method: 'POST',
+    body: { resolved: true } })
 })
 
 it('shows the review captured when a ticket ended and lets a person reopen it', async () => {
   const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true },
+  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true,
+      reviewDecision: true },
     checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
     history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题' },
       { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main' },
@@ -196,6 +226,9 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
     body: { title: '新的标题' } })
   await click(zh.reviewViewDiff)
   expect(text()).toContain('新文案')
+  await click(zh.reviewApprove)
+  expect(server.requests.find(request => request.path === 'tickets/t5/review')).toMatchObject({ method: 'POST',
+    body: { decision: 'approved' } })
   await click(zh.ticketMerge)
   await click(zh.confirm)
   expect(server.requests.some(request => request.path === 'tickets/t5/merge' && request.method === 'POST')).toBe(true)
@@ -333,7 +366,8 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   const fields = { id: 't3', title: '已合并的工单', state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true, check: false } }
+  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true, check: false,
+      reviewDecision: false } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])

@@ -140,9 +140,13 @@ export function TicketPage({ id }: { id: string }) {
   const [noteLine, setNoteLine] = useState('')
   const [noteText, setNoteText] = useState('')
   const [notesBusy, setNotesBusy] = useState(false)
+  const [reviewBusy, setReviewBusy] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [renamingBusy, setRenamingBusy] = useState(false)
+  const [editingTags, setEditingTags] = useState(false)
+  const [tagsDraft, setTagsDraft] = useState('')
+  const [tagsBusy, setTagsBusy] = useState(false)
   const after = async (request: Promise<unknown>) => { await request; await reload() }
   const relate = async (reference: string, linked: boolean) => {
     setRelatedBusy(true)
@@ -161,6 +165,16 @@ export function TicketPage({ id }: { id: string }) {
     try { await after(call('POST tickets/:id/check', { id })) }
     catch (failure) { notify(errorText(failure)) }
     finally { setCheckBusy(false) }
+  }
+  const saveTags = async (event: FormEvent) => {
+    event.preventDefault()
+    setTagsBusy(true)
+    try {
+      const tags = [...new Set(tagsDraft.split(',').map(tag => tag.trim()).filter(Boolean))]
+      await after(call('POST tickets/:id/tags', { id, body: { tags } }))
+      setEditingTags(false)
+    } catch (failure) { notify(errorText(failure)) }
+    finally { setTagsBusy(false) }
   }
   const rename = async (event: FormEvent) => {
     event.preventDefault()
@@ -216,9 +230,21 @@ export function TicketPage({ id }: { id: string }) {
     catch (failure) { notify(errorText(failure)) }
     finally { setNotesBusy(false) }
   }
+  const reviewChanges = async (decision: 'approved' | 'changes-requested') => {
+    setReviewBusy(true)
+    try { await after(call('POST tickets/:id/review', { id, body: { decision } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setReviewBusy(false) }
+  }
+  const resolveNote = async (noteId: string, resolved: boolean) => {
+    setNotesBusy(true)
+    try { await after(call('POST tickets/:id/notes/:noteId/resolve', { id, noteId, body: { resolved } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setNotesBusy(false) }
+  }
   const sendNotes = async () => {
     if (!localThread) return
-    const text = `${t('noteMessage')}\n\n${notes.map(note => `- ${note.file}${note.line ? `:${note.line}` : ''}: ${note.text}`).join('\n')}`
+    const text = `${t('noteMessage')}\n\n${notes.filter(note => !note.resolved).map(note => `- ${note.file}${note.line ? `:${note.line}` : ''}: ${note.text}`).join('\n')}`
     setNotesBusy(true)
     try { await after(call('POST local/followups', { body: { thread: localThread.key, text } })) }
     catch (failure) { notify(errorText(failure)) }
@@ -244,10 +270,19 @@ export function TicketPage({ id }: { id: string }) {
       <StageMark state={status.dot} icon={status.icon} label={status.label} />
       {data.number ? <LabelValue label={t('ticketNumberLabel')} value={ticketRef(data.number)} /> : null}
       {data.tags.map(tag => <Tag key={tag} tone="quiet">{tag}</Tag>)}
+      <Button variant="ghost" size="sm" onClick={() => { setTagsDraft(data.tags.join(', ')); setEditingTags(true) }}>{t('tagsEdit')}</Button>
       <LabelValue label={t('ticketMandateLabel')} value={valueLabel(t, 'strength', data.mandate.strength)} />
       <LabelValue label={t('ticketActorLabel')} value={`${valueLabel(t, 'source', data.mandate.actor.source)} · ${actor}`} />
       <LabelValue label={t('ticketUpdatedLabel')} value={when(data.updatedAt, t('lang'))} />
     </div>
+    {editingTags && <form className="dt-form" onSubmit={saveTags}>
+      <div className="dt-row-meta">
+        <Input value={tagsDraft} maxLength={200} aria-label={t('tagsEdit')} placeholder={t('newTicketTagsPlaceholder')}
+          onChange={event => setTagsDraft(event.target.value)} />
+        <Button variant="outline" type="submit" disabled={tagsBusy}>{t('tagsSave')}</Button>
+        <Button variant="ghost" type="button" onClick={() => setEditingTags(false)}>{t('cancel')}</Button>
+      </div>
+    </form>}
     {ended && <Hint>{ended}</Hint>}
     {data.attention && <div className="dt-banner"><span className="dt-banner-label">{t('attentionPrefix')}</span><MarkdownLite
       text={data.attention.question} />
@@ -307,14 +342,29 @@ export function TicketPage({ id }: { id: string }) {
       {diff?.error && <Hint>{diff.error}</Hint>}
       {diff && !diff.error && (diff.diff ? <pre className="dt-workspace-diff">{diff.diff}</pre> : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
+      {data.actions.reviewDecision && <div className="dt-row-actions">
+        <Button variant={data.reviewed?.decision === 'approved' ? 'primary' : 'outline'} disabled={reviewBusy}
+          onClick={() => reviewChanges('approved')}>{t('reviewApprove')}</Button>
+        <Button variant={data.reviewed?.decision === 'changes-requested' ? 'primary' : 'outline'} disabled={reviewBusy}
+          onClick={() => reviewChanges('changes-requested')}>{t('reviewRequestChanges')}</Button>
+        {data.reviewed && <Tag tone={data.reviewed.decision === 'approved' ? 'success' : 'warning'}>
+          {t(`review.${data.reviewed.decision}`)}</Tag>}
+      </div>}
+      {data.reviewed?.note && <Hint>{data.reviewed.note}</Hint>}
       <div className="dt-form">
+        {notes.some(note => !note.resolved) && <Hint>{t('notesUnresolved', { count: notes.filter(note => !note.resolved).length })}</Hint>}
         {notes.length > 0 && <ul className="dt-list">{notes.map(note => <li className="dt-row" key={note.id}>
           <div className="dt-row-main">
-            <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line ? `:${note.line}` : ''}</span><When at={note.at} /></div>
+            <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line ? `:${note.line}` : ''}</span><When at={note.at} />
+              {note.resolved && <Tag tone="success">{t('noteResolvedTag')}</Tag>}</div>
             <div className="dt-row-quote">{note.text}</div>
           </div>
-          <div className="dt-row-actions"><Button variant="ghost" size="sm" disabled={notesBusy}
-            onClick={() => removeNote(note.id)}>{t('remove')}</Button></div>
+          <div className="dt-row-actions">
+            <Button variant="ghost" size="sm" disabled={notesBusy}
+              onClick={() => resolveNote(note.id, !note.resolved)}>{note.resolved ? t('noteReopen') : t('noteResolve')}</Button>
+            <Button variant="ghost" size="sm" disabled={notesBusy}
+              onClick={() => removeNote(note.id)}>{t('remove')}</Button>
+          </div>
         </li>)}</ul>}
         <form className="dt-form" onSubmit={addNote}>
           <div className="dt-row-meta">
@@ -327,7 +377,8 @@ export function TicketPage({ id }: { id: string }) {
             aria-label={t('noteTextPlaceholder')} onChange={event => setNoteText(event.target.value)} />
           <div className="dt-row-buttons">
             <Button variant="outline" type="submit" disabled={notesBusy || !noteFile.trim() || !noteText.trim()}>{t('noteAdd')}</Button>
-            {localThread && notes.length > 0 && <Button variant="primary" disabled={notesBusy} onClick={sendNotes}>{t('noteSend')}</Button>}
+            {localThread && notes.some(note => !note.resolved)
+              && <Button variant="primary" disabled={notesBusy} onClick={sendNotes}>{t('noteSend')}</Button>}
           </div>
         </form>
       </div>
@@ -350,6 +401,15 @@ export function TicketPage({ id }: { id: string }) {
         {data.checks.output && <pre className="dt-workspace-diff">{data.checks.output}</pre>}
         {data.checks.truncated && <Hint>{t('checksTruncated')}</Hint>}
       </> : <Hint>{t('checksNotRun')}</Hint>}
+      {data.checkHistory && data.checkHistory.length > 1 && <Details icon="queue"
+        title={`${t('checksHistory')} · ${data.checkHistory.length}`}>
+        <ul className="dt-list">{data.checkHistory.slice().reverse().map((run, index) => <li className="dt-row" key={`${run.at}:${index}`}>
+          <div className="dt-row-main">
+            <div className="dt-row-meta"><Dot state={run.ok ? 'done' : 'error'} label={run.ok ? t('checksPassed') : t('checksFailedUnknown')} />
+              <When at={run.at} /><span className="dt-mono">{run.command}</span></div>
+          </div>
+        </li>)}</ul>
+      </Details>}
       {data.actions.check && <div className="dt-row-actions">
         <Button variant="outline" size="sm" disabled={checkBusy} onClick={runCheck}>{t('checksRun')}</Button>
       </div>}
@@ -366,6 +426,9 @@ export function TicketPage({ id }: { id: string }) {
         <div className="dt-row-main">
           <div className="dt-row-title">{t(`history.${item.code}`)}</div>
           <div className="dt-row-meta"><When at={item.at} />{item.title && <span>{item.title}</span>}
+            {item.tags && <span>{item.tags.join(', ') || t('empty')}</span>}
+            {item.decision && <span>{t(`review.${item.decision}`)}</span>}
+            {item.note && <span>{item.note}</span>}
             {item.branch && <span className="dt-mono">{item.branch} → {item.target}</span>}</div>
         </div>
       </li>)}</ul>

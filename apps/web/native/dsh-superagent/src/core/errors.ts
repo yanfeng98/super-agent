@@ -10,6 +10,8 @@ export const USER_ERRORS = {
   ticketEnded: ['refused', 'Ticket has ended'],
   ticketOpen: ['refused', 'Ticket is already open'],
   emptyTitle: ['refused', 'A ticket title cannot be empty'],
+  invalidTags: ['refused', 'A ticket can have at most 8 labels, each 1 to 24 characters'],
+  reviewNeedsEnded: ['refused', 'A review needs an ended ticket'],
   notHeld: ['refused', 'This ticket does not wait for approval'],
   notPending: ['refused', 'This ticket has no pending Assignment to approve'],
   ticketDiscarded: ['refused', 'This ticket worktree was discarded; create a new ticket for more work'],

@@ -176,6 +176,12 @@ export class Engine {
    */
   renameTicket(ticketId: string, title: string): Ticket { return this.repo.atomic(() => this.tickets.rename(ticketId, title)) }
   /**
+   * A person replaces a ticket's labels.
+   * @returns The ticket with its labels.
+   * @throws UserError when the ticket is unknown, or the labels are too many or too long.
+   */
+  setTags(ticketId: string, tags: string[]): Ticket { return this.repo.atomic(() => this.tickets.setTags(ticketId, tags)) }
+  /**
    * A person approves a held ticket, letting its pending Assignment launch.
    * @throws UserError when the ticket is unknown, ended, not held, or has no pending Assignment.
    */
@@ -193,6 +199,22 @@ export class Engine {
    */
   removeNote(ticketId: string, noteId: string): Ticket {
     return this.repo.atomic(() => this.tickets.removeNote(ticketId, noteId))
+  }
+  /**
+   * Records a person's review of an ended ticket's changes.
+   * @returns The ticket with the review.
+   * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
+   */
+  reviewTicket(ticketId: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
+    return this.repo.atomic(() => this.tickets.review(ticketId, decision, note))
+  }
+  /**
+   * Marks a review note resolved, or open again.
+   * @returns The ticket with the note's new state.
+   * @throws UserError when the ticket or the note is unknown.
+   */
+  resolveNote(ticketId: string, noteId: string, resolved: boolean): Ticket {
+    return this.repo.atomic(() => this.tickets.resolveNote(ticketId, noteId, resolved))
   }
   /**
    * Links or unlinks two tickets on each other's page.
@@ -299,8 +321,8 @@ export type EngineForSources = Pick<Engine, 'receive' | 'bindThread' | 'threadCl
 /** What the main Session asks of the Engine. */
 export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivered' | 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'>
 /** What people ask of the Engine, through the panel or the main Session. */
-export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'approveTicket'
-  | 'linkTicket' | 'addNote' | 'removeNote' | 'reevaluate' | 'unsubscribe' | 'dismiss'>
+export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'setTags' | 'approveTicket'
+  | 'linkTicket' | 'addNote' | 'removeNote' | 'resolveNote' | 'reviewTicket' | 'reevaluate' | 'unsubscribe' | 'dismiss'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>
 /** What the Executor tells the Engine, and what its workers ask of it. */
