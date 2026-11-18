@@ -106,6 +106,14 @@ function reviewLines(review: TicketReview): string[] {
     ...review.dirty.slice(0, 20).map(item => `  - ${item.status} ${item.path}`),
   ]
 }
+/** Whether an ended local ticket's archive still lacks the close section for its ending, so a restart can complete it. */
+export async function archiveNeedsClose(ticket: Pick<Ticket, 'channels' | 'ended'>): Promise<boolean> {
+  const file = ticketArchive(ticket)
+  const ended = ticket.ended
+  if (!file || !ended) return false
+  const existing = await readFile(file, 'utf8').catch(() => undefined)
+  return existing !== undefined && !existing.includes(`<!-- dsh-superagent:closed:${ended.at} -->`)
+}
 /**
  * Appends a ticket's ending, its summary, and the review captured for it to its archive, once per end.
  * A missing archive file, or one without a local Channel, is left alone.
@@ -342,6 +350,16 @@ async function appendLifecycle(ticket: Pick<Ticket, 'channels'>, marker: string,
     if (existing === undefined || existing.includes(marker)) return
     await appendFile(file, ['', `## ${heading}`, '', marker, ...lines, ''].join('\n'))
   })
+}
+/**
+ * Appends a ticket's new title to its archive, so the file records the rename instead of rewriting the request.
+ * @param ticket - The renamed ticket.
+ * @param at - When it was renamed.
+ * @param title - The new title.
+ */
+export async function recordRename(ticket: Pick<Ticket, 'channels'>, at: string, title: string): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:renamed:${at} -->`, `${at} · 标题 / Title`,
+    ['- status: renamed', `- title: ${JSON.stringify(title)}`, `- by: ${OPERATOR}`])
 }
 /**
  * Appends the merge of a ticket's branch into the repository to its archive.

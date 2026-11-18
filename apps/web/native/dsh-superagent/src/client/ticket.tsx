@@ -1,7 +1,7 @@
 /** Ticket detail page: stage and actions, Mandate details, undelivered/delivered Inputs, subscribed Threads, and Assignments. */
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, usePoll, type TicketPageView } from './api.ts'
-import { Button, DisclosureRow, Dot, Icon, Tag, type IconName } from './controls.tsx'
+import { Button, DisclosureRow, Dot, Icon, Input, Modal, Tag, type IconName } from './controls.tsx'
 import { decisionMark, reportDot, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
@@ -133,7 +133,20 @@ export function TicketPage({ id }: { id: string }) {
   const { data, error, reload } = usePoll(() => call('GET tickets/:id', { id }), [id])
   const [diff, setDiff] = useState<{ diff: string; truncated: boolean; error?: string }>()
   const [diffBusy, setDiffBusy] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [renamingBusy, setRenamingBusy] = useState(false)
   const after = async (request: Promise<unknown>) => { await request; await reload() }
+  const rename = async (event: FormEvent) => {
+    event.preventDefault()
+    setRenamingBusy(true)
+    try {
+      await call('POST tickets/:id/title', { id, body: { title: titleDraft.trim() } })
+      setRenaming(false)
+      await reload()
+    } catch (failure) { notify(errorText(failure)) }
+    finally { setRenamingBusy(false) }
+  }
   const loadDiff = async () => {
     setDiffBusy(true)
     try { setDiff(await call('GET tickets/:id/diff', { id })) }
@@ -165,6 +178,8 @@ export function TicketPage({ id }: { id: string }) {
       {data.actions.retry && <ConfirmButton variant="outline" icon="refresh" label={t('retry')} title={t('retryTitle')}
         message={t('retryConfirm', { title: data.title })}
         onConfirm={() => after(call('POST tickets/:id/retry', { id }))} />}
+      <Button variant="outline" icon={<Icon name="settings" />} onClick={() => { setTitleDraft(data.title); setRenaming(true) }}>
+        {t('renameTicket')}</Button>
       {data.actions.reopen && <ConfirmButton variant="outline" icon="refresh" label={t('reopen')} title={t('reopenTitle')}
         message={t('reopenConfirm', { title: data.title })}
         onConfirm={() => after(call('POST tickets/:id/reopen', { id }))} />}
@@ -280,6 +295,15 @@ export function TicketPage({ id }: { id: string }) {
             className="dt-mono dt-clamp">{data.mandate.scope}</span>] as [string, ReactNode]] : []]} />
       </Details>
     </div>
+    {renaming && <Modal open onClose={() => setRenaming(false)} title={t('renameTicketTitle')} closeLabel={t('close')}
+      description={t('renameTicketHint')} footer={<><Button variant="outline" onClick={() => setRenaming(false)}>{t('cancel')}</Button>
+        <Button variant="primary" type="submit" form="dt-rename-ticket" disabled={!titleDraft.trim() || renamingBusy}>{t('save')}</Button></>}>
+      <form id="dt-rename-ticket" className="dt-form" onSubmit={rename}>
+        <label className="dt-field"><span className="dt-field-head">{t('newTicketTitle')}</span>
+          <Input value={titleDraft} maxLength={120} required aria-label={t('newTicketTitle')}
+            onChange={event => setTitleDraft(event.target.value)} /></label>
+      </form>
+    </Modal>}
     {data.actions.stop && <div className="dt-danger-zone">
       <span className="dt-hint">{t('stopHint')}</span>
       <ConfirmButton variant="outline" label={t('stop')} title={t('stopConfirmTitle')} message={t('stopConfirm', { title: data.title })}

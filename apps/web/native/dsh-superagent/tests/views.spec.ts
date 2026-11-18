@@ -9,7 +9,7 @@ import { feishuKind } from '../src/sources/feishu.ts'
 import { localKind } from '../src/sources/local.ts'
 import { githubKind } from '../src/sources/github.ts'
 import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
-import { basisFacts, ticketDetail } from '../src/app/views/tickets.ts'
+import { basisFacts, ticketDetail, ticketList, ticketTags } from '../src/app/views/tickets.ts'
 import { search, threadDetail } from '../src/app/views/threads.ts'
 import { droppedReplies, sourcesStatus } from '../src/app/views/sources.ts'
 import { overview } from '../src/app/views/overview.ts'
@@ -348,6 +348,19 @@ it('offers merge and discard only on an ended ticket with a review branch that i
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: true, merge: true, discard: true })
   store.tickets.save({ ...ended, merged: { at, branch: 'agent/t1', target: 'main' } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ merge: false, discard: false })
+})
+
+it('lists the tags on requests and filters Tickets by one', () => {
+  const host = views()
+  live('t1'); live('t2')
+  store.tickets.save({ ...store.tickets.get('t2')!, origin: { triggerId: 'e1', triggerIds: ['e1'] } })
+  store.triggers.save({ id: 'e0', source: 'local', threads: [{ source: 'local', id: 'req' }], actor: { source: 'local', id: 'operator' },
+    human: true, at, text: '带标签', meta: { tags: ['前端', 'p1'] } })
+  store.triggers.save({ id: 'e1', source: 'local', threads: [{ source: 'local', id: 'req2' }], actor: { source: 'local', id: 'operator' },
+    human: true, at, text: '另一个', meta: {} })
+  expect(ticketTags(store)).toEqual(['p1', '前端'])
+  expect(ticketList(host, 'open', 0, 20, '前端').items.map(item => item.id)).toEqual(['t1'])
+  expect(ticketList(host, 'open', 0, 20).items.map(item => item.id).sort()).toEqual(['t1', 't2'])
 })
 
 it('finds a ticket by a reply in its archive as well as by its title', () => {

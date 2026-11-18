@@ -40,6 +40,14 @@ it('lists Tickets under Execution by who they wait on, with the Executor state a
   expect(server.settings).toMatchObject({ paused: true, executor: { maxWorkers: 4 } })
 })
 
+it('filters Tickets by a tag', async () => {
+  server.tickets.open = [ticketSummary({ id: 't1', tags: ['前端'] }), ticketSummary({ id: 't2', title: '另一个工单', tags: [] })]
+  await mount()
+  await click(zh['tab.execution'])
+  await type(field<HTMLSelectElement>(zh.tagFilter), '前端')
+  expect(server.requests.some(request => request.path.includes('tag=') && decodeURIComponent(request.path).includes('tag=前端'))).toBe(true)
+})
+
 it('stops an open Ticket from its page after confirmation', async () => {
   await mount()
   await click('修复回归')
@@ -90,6 +98,11 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('agent/t5')
   expect(text()).toContain('修复窄屏')
   expect(text()).toContain('src/a.ts')
+  await click(zh.renameTicket)
+  await type(field<HTMLInputElement>(zh.newTicketTitle), '新的标题')
+  await click(zh.save)
+  expect(server.requests.find(request => request.path === 'tickets/t5/title')).toMatchObject({ method: 'POST',
+    body: { title: '新的标题' } })
   await click(zh.reviewViewDiff)
   expect(text()).toContain('新文案')
   await click(zh.ticketMerge)
