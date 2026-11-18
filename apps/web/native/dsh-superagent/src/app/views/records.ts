@@ -36,6 +36,8 @@ export function ownersOf(store: Pick<Store, 'tickets' | 'threads' | 'triggers'>)
 /** One request's reads, each read once: the Threads each Ticket subscribes to, the rules by id, and the senders' names. */
 export interface Snapshot extends ViewHost {
   threadsOf(ticketId: string): Thread[]
+  /** The ticket's stable display number, 1-based in creation order. */
+  number(ticketId: string): number
   /** Current rule name, falling back to `id` once a rule has been removed. */
   rule(id: string): { id: string; name: string }
   /** Resolves sender display name from policy allowlists/bot lists, falling back to the Source kind's unnamed label or raw id. */
@@ -64,7 +66,9 @@ export function snapshot(host: ViewHost): Snapshot {
     const unnamed = sources.kind(source)?.policy?.unnamed
     return { source, id, name: unnamed ? human === false ? unnamed.bot : unnamed.person : named(id) }
   }
-  return { ...host, threadsOf, rule: id => ({ id, name: rules.get(id) ?? id }), actor, owners: ownersOf(store) }
+  let numbering: Map<string, number> | undefined
+  const number = (ticketId: string) => { numbering ??= store.tickets.numbering(); return numbering.get(ticketId) ?? 0 }
+  return { ...host, threadsOf, number, rule: id => ({ id, name: rules.get(id) ?? id }), actor, owners: ownersOf(store) }
 }
 
 /**
@@ -115,11 +119,11 @@ function ticketNote(ticket: Ticket, stage: TicketStage): { text: string; error: 
   if ((stage.action !== 'blocked' && stage.action !== 'failed') || !summary) return undefined
   return { text: preview(summary.split('\n')[0]!), error: stage.action === 'failed' }
 }
-export function ticketSummary(ticket: Ticket) {
+export function ticketSummary(ticket: Ticket, number?: number) {
   const stage = ticketStage(ticket)
   const note = ticketNote(ticket, stage)
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
-  return { id: ticket.id, title: ticket.title, state, ...stage, ...note ? { note } : {},
+  return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, state, ...stage, ...note ? { note } : {},
     actions: { retry: canRetry(ticket), stop: liveTicket(ticket) }, strength: ticket.mandate.strength, ended: ticket.ended,
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },
       assignments: ticket.assignments.length, inputs: ticket.inputs.length, undelivered: ticket.undelivered.length,
@@ -138,7 +142,7 @@ export function threadFacts(store: Store, thread: Thread) {
   return { key: thread.key, source: thread.ref.source, title: threadTitle(store, thread), ...url ? { url } : {}, facts: (thread.meta.facts ?? {}) as ThreadFacts }
 }
 export type ThreadFactsView = ReturnType<typeof threadFacts>
-export const ticketLine = (view: Snapshot, ticket: Ticket) => ({ ...ticketSummary(ticket),
+export const ticketLine = (view: Snapshot, ticket: Ticket) => ({ ...ticketSummary(ticket, view.number(ticket.id)),
   threads: view.threadsOf(ticket.id).map(thread => threadFacts(view.store, thread)) })
 export function threadTitle(store: Pick<Store, 'read'>, thread: Thread): string {
   const label = attribute(thread.meta.label)

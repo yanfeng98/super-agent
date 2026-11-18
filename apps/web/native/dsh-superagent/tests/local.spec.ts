@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,9 @@ import { HealthBoard } from '../src/infra/health.ts'
 import { SettingsSchema, settingsPolicy } from '../src/policy.ts'
 import { sourceContextOf, type SourceContextDeps } from '../src/app/source-context.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
-import { archiveDir, createLocalFollowup, createLocalRequest, localKind, OPERATOR, seedPolicy } from '../src/sources/local.ts'
+import { appendFollowup, appendReply, archiveDir, closeArchive, createLocalFollowup, createLocalRequest, drainInbox, localKind, OPERATOR,
+  reopenArchive, seedPolicy }
+  from '../src/sources/local.ts'
 import { testDeployment } from './fixtures/deployment.ts'
 
 let dir: string
@@ -148,6 +150,18 @@ describe('local tickets', () => {
     await expect(createLocalFollowup(h.host, { thread: 'feishu:oc_1', text: 'x' })).rejects.toThrow(/unknown/)
   })
 
+  it('serializes writes to one archive so concurrent retries append once', async () => {
+    const h = harness()
+    const created = await createLocalRequest(h.host, { title: '并发', text: '写一次。' })
+    const entry = { id: 'r-concurrent', at: '2026-11-18T00:00:00.000Z', kind: 'reply', text: '只写一次' }
+    await Promise.all(Array.from({ length: 5 }, () => appendReply(created.file, entry)))
+    expect(readFileSync(created.file, 'utf8').match(/dsh-superagent:r-concurrent/g)).toHaveLength(1)
+    await Promise.all([1, 2].map(index => appendFollowup(created.file, { at: `2026-11-18T00:00:0${index}.000Z`, text: `追加${index}` })))
+    const file = readFileSync(created.file, 'utf8')
+    expect(file).toContain('追加1')
+    expect(file).toContain('追加2')
+  })
+
   it('appends a message once even when its delivery is retried', async () => {
     const h = harness()
     const created = await createLocalRequest(h.host, { title: '幂等', text: '只发一次。' })
@@ -200,5 +214,95 @@ describe('local tickets', () => {
     expect(archiveDir({ stateDir: '/srv/state' }, { archive: '/srv/inbox' })).toBe('/srv/inbox')
     expect(() => localKind.schema.parse({ archive: 'inbox' })).toThrow()
     expect(localKind.schema.parse({})).toEqual({ archive: '' })
+  })
+
+  it('turns a command-line request from the inbox into a ticket and records the result', async () => {
+    const h = harness()
+    const inbox = join(dir, 'inbox')
+    mkdirSync(inbox)
+    writeFileSync(join(inbox, 'cli-0001.json'), JSON.stringify({ title: '来自脚本', text: '跑一下回归。' }))
+    writeFileSync(join(inbox, 'bad.json'), JSON.stringify({ title: '' }))
+    expect(await drainInbox(h.host)).toBe(1)
+    expect(existsSync(join(inbox, 'cli-0001.json'))).toBe(false)
+    expect(existsSync(join(inbox, 'bad.json'))).toBe(false)
+    expect(existsSync(join(inbox, 'rejected', 'bad.json'))).toBe(true)
+    const done = JSON.parse(readFileSync(join(inbox, 'done', 'cli-0001.json'), 'utf8')) as { trigger: string; request: string; file: string }
+    expect(done.request).toMatch(/^local-/)
+    expect(h.store.triggers.get(done.trigger)).toMatchObject({ source: 'local', human: true, text: '来自脚本\n\n跑一下回归。' })
+    // A second file with the first file's key returns its ticket instead of creating another.
+    writeFileSync(join(inbox, 'cli-2.json'), JSON.stringify({ title: '重试', text: '同一张。', key: 'cli-0001' }))
+    expect(await drainInbox(h.host)).toBe(1)
+    expect(JSON.parse(readFileSync(join(inbox, 'done', 'cli-2.json'), 'utf8'))).toMatchObject({ request: done.request })
+    expect(readdirSync(join(dir, 'tickets')).filter(name => name.endsWith('.md'))).toHaveLength(1)
+  })
+
+  it('returns the ticket it already made when a creation is retried with the same key, and one per different key', async () => {
+    const h = harness()
+    const first = await createLocalRequest(h.host, { title: '幂等建单', text: '只建一张。', key: 'panel-key-0001' })
+    const retried = await createLocalRequest(h.host, { title: '幂等建单', text: '只建一张。', key: 'panel-key-0001' })
+    // Two simultaneous submissions share the in-flight creation rather than racing to write two archives.
+    const [a, b] = await Promise.all([
+      createLocalRequest(h.host, { title: '并发建单', text: '也只要一张。', key: 'panel-key-0002' }),
+      createLocalRequest(h.host, { title: '并发建单', text: '也只要一张。', key: 'panel-key-0002' }),
+    ])
+    const other = await createLocalRequest(h.host, { title: '另一张', text: '不同的键。', key: 'panel-key-0003' })
+    expect(retried).toEqual(first)
+    expect(a).toEqual(b)
+    expect(a.request).not.toBe(first.request)
+    expect(other.request).not.toBe(first.request)
+    expect(readdirSync(join(dir, 'tickets')).filter(name => name.endsWith('.md'))).toHaveLength(3)
+  })
+
+  it('records an ending, its review, and a reopening in the archive, once each', async () => {
+    const h = harness()
+    const created = await createLocalRequest(h.host, { title: '记录结束', text: '把改动记录下来。' })
+    const candidate = h.candidates.at(-1)!
+    const decision = h.engine.decide(created.trigger, { kind: 'accept', title: '记录结束', scope: '归档',
+      reason: 'requested', acknowledgement: '开始。', evalId: candidate.evalId })
+    const ticket = h.store.tickets.get(decision.ticketId!)!
+    h.engine.assignmentStarted(ticket.id, ticket.assignments[0]!.id)
+    h.engine.report(ticket.id, { state: 'ready', summary: '窄屏按钮已经改好' })
+    const ended = h.store.tickets.get(ticket.id)!
+    const review = { capturedAt: '2026-11-18T03:00:00.000Z', branch: 'agent/login-fix', base: 'a'.repeat(40), head: 'b'.repeat(40),
+      commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏按钮' }], files: [{ status: 'M', path: 'src/login.css' }], dirty: [], stat: '1 file changed' }
+    await closeArchive(ended, review, 7)
+    await closeArchive(ended, review, 7)
+    const file = readFileSync(created.file, 'utf8')
+    expect(file).toContain('关闭 / Closed')
+    expect(file.match(/<!-- dsh-superagent:closed:/g)).toHaveLength(1)
+    expect(file).toContain('status: closed')
+    expect(file).toContain('outcome: completed')
+    expect(file).toContain('summary: 窄屏按钮已经改好')
+    expect(file).toContain('ticket: T-0007')
+    expect(file).toContain('branch: agent/login-fix')
+    expect(file).toContain('修复窄屏按钮')
+    expect(file).toContain('src/login.css')
+    await reopenArchive(ended, '2026-11-18T04:00:00.000Z')
+    await reopenArchive(ended, '2026-11-18T04:00:00.000Z')
+    const reopenedFile = readFileSync(created.file, 'utf8')
+    expect(reopenedFile.match(/重新打开 \/ Reopened/g)).toHaveLength(1)
+    expect(reopenedFile).toContain('status: open')
+  })
+
+  it('reopens an ended ticket under its Mandate, and refuses while it is open or the Policy no longer holds it', () => {
+    const h = harness()
+    const request = { id: 'local-t1', title: '重开', decisionId: 'd1', channels: [], assignments: [{ id: 'a1', state: 'ended' as const,
+      createdAt: '2026-11-18T00:00:00.000Z' }], inputs: [], undelivered: [], createdAt: '2026-11-18T00:00:00.000Z',
+      updatedAt: '2026-11-18T00:00:00.000Z', origin: { triggerId: 'local-t1', triggerIds: ['local-t1'] },
+      ended: { at: '2026-11-18T01:00:00.000Z', by: 'human' as const, outcome: 'stopped' as const },
+      mandate: { strength: 'explicit' as const, policyVersion: 'v', basis: { via: 'listed' as const },
+        actor: { source: 'local', id: OPERATOR }, scope: '' } }
+    h.store.tickets.save(request)
+    const reopened = h.engine.reopenTicket(request.id)
+    expect(reopened.ended).toBeUndefined()
+    expect(reopened.assignments).toHaveLength(2)
+    expect(reopened.inputs.at(-1)).toMatchObject({ kind: 'text' })
+    expect(reopened.undelivered).toHaveLength(1)
+    expect(() => h.engine.reopenTicket(request.id)).toThrow('already open')
+    h.store.tickets.save({ ...h.store.tickets.get(request.id)!, ended: { at: '2026-11-18T02:00:00.000Z', by: 'human',
+      outcome: 'stopped' } })
+    h.store.saveSettings(SettingsSchema.parse({ policy: { sources: { local: { allowed: [] } } },
+      sources: { local: { enabled: true, config: {} } } }))
+    expect(() => h.engine.reopenTicket(request.id)).toThrow(/no longer holds/)
   })
 })

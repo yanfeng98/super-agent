@@ -13,7 +13,8 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
+import { Engine, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type TicketReview, type Trigger }
+  from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -32,9 +33,10 @@ import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
+import { captureReview, workspaceDiff } from './review.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
-import { createLocalFollowup, createLocalRequest } from '../sources/local.ts'
+import { closeArchive, createLocalFollowup, createLocalRequest, reopenArchive } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -151,6 +153,14 @@ export class Runtime extends Service implements SourceHost {
             const request = store.triggers.get(ended.origin.triggerId)?.text ?? ''
             for (const message of pullEndNotices(ended, request, setup.deployment.repository)) outbox.send(message)
           }
+          // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
+          if (ended) void this.finishTicket(ended, ctx)
+          if (event.type === 'ticket.reopened') {
+            const reopened = store.tickets.get(event.data.ticketId)
+            if (reopened) void reopenArchive(reopened, event.at).catch((error: unknown) => {
+              ctx.logger.warn('dsh-superagent: recording a reopening in the archive failed: %s', String(error))
+            })
+          }
         } })
       // Update the `evals` health entry on every pass if an evaluation failed as unavailable within the last hour.
       const evals = board.claim('evals', { state: 'ready', detail: 'No unavailable Eval in the last hour' })
@@ -191,6 +201,36 @@ export class Runtime extends Service implements SourceHost {
     const { setup: { deployment }, sources } = this
     return ticketEnvironment({ deployment, sources, settings: this.store.settings(), ticket, ...trigger ? { trigger } : {} })
   }
+  /**
+   * Reads a ticket workspace's committed diff since its recorded base, on demand from the panel.
+   * @returns The diff, whether it was truncated, and why git could not provide it, if it could not.
+   */
+  async ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }> {
+    const ticket = this.store.tickets.get(id)
+    const directory = ticket?.execution?.directory
+    const base = ticket?.execution?.base
+    if (!directory) return { diff: '', truncated: false, error: 'This ticket has no workspace' }
+    if (!base) return { diff: '', truncated: false, error: 'No base commit was recorded for this ticket' }
+    try { return await workspaceDiff(this.ctx.subprocess, directory, base, this.stopped.signal) }
+    catch (error) { return { diff: '', truncated: false, error: String(error) } }
+  }
+  /**
+   * Captures an ended ticket's workspace facts into `ticket.review` for the panel, and appends the ending, summary, and
+   * review to its local archive. Runs after the ending transaction, so a capture failure leaves the ending intact.
+   */
+  private async finishTicket(ticket: Ticket, ctx: Context): Promise<void> {
+    let review: TicketReview | undefined
+    try { review = await captureReview(ctx.subprocess, ticket, this.stopped.signal) }
+    catch (error) { ctx.logger.warn('dsh-superagent: capturing the workspace review failed: %s', String(error)) }
+    if (review) this.store.atomic(() => {
+      const current = this.store.tickets.get(ticket.id)
+      if (!current) return
+      current.review = review
+      this.store.tickets.save(current)
+    })
+    try { await closeArchive(ticket, review, this.store.tickets.number(ticket.id)) }
+    catch (error) { ctx.logger.warn('dsh-superagent: recording the ending in the archive failed: %s', String(error)) }
+  }
   checkSetup(): void { this.setup.check() }
   receive(trigger: Trigger): ReceiveResult { return this.passes.receive(trigger) }
   idle(): Promise<void> { return this.passes.idle() }
@@ -225,7 +265,8 @@ export class Runtime extends Service implements SourceHost {
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
-      localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input) }
+      localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
+      ticketDiff: id => runtime.ticketDiff(id) }
   }
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }

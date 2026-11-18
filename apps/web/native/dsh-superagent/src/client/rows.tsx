@@ -4,7 +4,7 @@ import type { DecisionRow, ThreadFacts, ThreadRow, TicketRow } from './api.ts'
 import { Icon, Tag } from './controls.tsx'
 import { decisionMark, threadMark, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
-import { actorName, localized, readableMarkers, reasonLabel, valueLabel } from './text.ts'
+import { actorName, localized, readableMarkers, reasonLabel, ticketNumber, valueLabel } from './text.ts'
 import { ActionLink, ConfirmButton, LabelValue, SessionButton, StageMark, When } from './widgets.tsx'
 
 export function TicketLine({ ticket, question, onChanged, context }: {
@@ -18,8 +18,8 @@ export function TicketLine({ ticket, question, onChanged, context }: {
   return <li className="dt-row dt-link dt-ticket" data-state={question ? status.dot : undefined}>
     <div className="dt-ticket-stage"><StageMark state={status.dot} icon={status.icon} label={status.label} /></div>
     <div className="dt-ticket-body">
-      <div className="dt-row-title"><button type="button" className="dt-open" onClick={() => navigate({ page: 'execution',
-        id: ticket.id })}>{ticket.title}</button></div>
+      <div className="dt-row-title">{ticket.number ? <span className="dt-ticket-number">{ticketNumber(ticket.number)}</span> : null}
+        <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: ticket.id })}>{ticket.title}</button></div>
       <div className="dt-row-meta dt-ticket-meta">
         {ticket.threads.map(thread => <ThreadChip key={thread.key} thread={thread} />)}
         {context && <ContextTag />}

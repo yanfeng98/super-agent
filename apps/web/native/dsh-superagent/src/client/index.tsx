@@ -14,6 +14,7 @@ import { openKnownSession, SessionNavigationError } from '../navigation.ts'
 import { App } from './app.tsx'
 import { PluginConfig, usePageForm } from './deployment.tsx'
 import { en, zh } from './locales.ts'
+import { notificationsEnabled, startNotifications, stopNotifications } from './notify.ts'
 import type { T } from './text.ts'
 
 type ClientContext = Context & { sessions: ISessions }
@@ -49,6 +50,8 @@ export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
 /** Registers the panel, sidebar icon, and Plugin Manager config view; `configForms` is optional (without it, machine settings are read-only). */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-superagent: dictionaries')
+  // The watcher runs while the Web app is open, so a ticket that starts waiting on a person is announced even on another tab.
+  ctx.effect(() => { if (notificationsEnabled()) startNotifications(); return stopNotifications }, 'dsh-superagent: desktop notifications')
   const t = ctx.locale.bind(NS)
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, locale: NS, inject: () => ({}) },
     (props: { t: T }) => <Mounted ctx={ctx} t={props.t} />))

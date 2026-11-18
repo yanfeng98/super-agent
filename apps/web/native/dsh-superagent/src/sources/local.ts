@@ -1,10 +1,11 @@
 /** Local ticket Source: requests created from the management panel, archived as Markdown, with the agent's replies appended to the same file. */
-import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import { key, type OutboundMessage, type Trigger } from '../core/index.ts'
+import { key, latestReport, type OutboundMessage, type Ticket, type TicketReview, type Trigger } from '../core/index.ts'
+import { family } from '../kv.ts'
 import type { Settings } from '../policy.ts'
 import { sourceContext, type SourceContext, type SourceHost } from './host.ts'
 import type { Localized, SourceKind } from './kind.ts'
@@ -20,8 +21,13 @@ const LocalConfigSchema = z.object({
     .default(''),
 }).strict()
 export type LocalConfig = z.infer<typeof LocalConfigSchema>
-export type LocalRequest = { title: string; text: string }
+/** A panel request; `key` is the client's idempotency key, so a retry after a lost response returns the first result. */
+export type LocalRequest = { title: string; text: string; key?: string }
 export interface LocalRequestResult { request: string; thread: string; trigger: string; file: string }
+/** Stored result per client idempotency key, so retrying a creation returns the ticket it already made. */
+const REQUEST_RESULTS = family<LocalRequestResult, [key: string]>('local-request:')
+/** In-flight creations by idempotency key, so two simultaneous submissions make one archive file and one Trigger. */
+const pendingRequests = new Map<string, Promise<LocalRequestResult>>()
 export type LocalFollowup = { thread: string; text: string }
 export interface LocalFollowupResult { trigger: string; thread: string }
 
@@ -46,6 +52,16 @@ export async function writeRequest(file: string, request: { id: string; title: s
   const title = request.title.replace(/\s+/g, ' ').trim()
   await writeFile(file, `---\nid: ${request.id}\ntitle: ${JSON.stringify(title)}\nsource: ${SOURCE}\ncreated: ${request.at}\n---\n\n# ${title}\n\n${request.text.trim()}\n`, { flag: 'wx' })
 }
+/** One writer at a time per archive file, so a read-check-append pair cannot interleave with another write to it. */
+const archiveTails = new Map<string, Promise<unknown>>()
+async function serialized<T>(file: string, work: () => Promise<T>): Promise<T> {
+  const previous = archiveTails.get(file) ?? Promise.resolve()
+  const started = previous.then(work, work)
+  const tail = started.then(() => undefined, () => undefined)
+  archiveTails.set(file, tail)
+  try { return await started }
+  finally { if (archiveTails.get(file) === tail) archiveTails.delete(file) }
+}
 /** Idempotency marker of one outbound message, so a delivery retried after a crash does not append its text twice. */
 const replyMarker = (id: string): string => `<!-- dsh-superagent:${id} -->`
 /**
@@ -55,13 +71,74 @@ const replyMarker = (id: string): string => `<!-- dsh-superagent:${id} -->`
 export async function appendReply(file: string, entry: { id: string; at: string; kind: string; text: string }): Promise<void> {
   const label = REQUEST_LABELS[entry.kind] ?? { zh: entry.kind, en: entry.kind }
   const marker = replyMarker(entry.id)
-  const existing = await readFile(file, 'utf8').catch(() => '')
-  if (existing.includes(marker)) return
-  await appendFile(file, `\n## ${entry.at} · ${label.zh} / ${label.en}\n\n${marker}\n${entry.text.trim()}\n`)
+  await serialized(file, async () => {
+    const existing = await readFile(file, 'utf8').catch(() => '')
+    if (existing.includes(marker)) return
+    await appendFile(file, `\n## ${entry.at} · ${label.zh} / ${label.en}\n\n${marker}\n${entry.text.trim()}\n`)
+  })
 }
 /** Appends a person's follow-up to the ticket's Markdown file, in the same conversation as the replies. */
 export async function appendFollowup(file: string, entry: { at: string; text: string }): Promise<void> {
-  await appendFile(file, `\n## ${entry.at} · 追加 / Follow-up\n\n${entry.text.trim()}\n`)
+  await serialized(file, () => appendFile(file, `\n## ${entry.at} · 追加 / Follow-up\n\n${entry.text.trim()}\n`))
+}
+/** The archive file of a ticket accepted from a local request, taken from its Channel address. */
+export const ticketArchive = (ticket: Pick<Ticket, 'channels'>): string | undefined =>
+  ticket.channels.flatMap(channel => channel.source === SOURCE ? [channel.address.file] : []).find((file): file is string => !!file)
+const oneLine = (text: string, limit = 2000): string => text.replace(/\s+/g, ' ').trim().slice(0, limit)
+/** A ticket's display number as the panel and the archive write it, such as `T-0001`. */
+export const displayNumber = (number: number | undefined): string | undefined => number ? `T-${String(number).padStart(4, '0')}` : undefined
+/** Git facts of one ended ticket as archive lines; omitted fields do not appear. */
+function reviewLines(review: TicketReview): string[] {
+  return [
+    ...(review.error ? [`- review_error: ${oneLine(review.error)}`] : []),
+    ...(review.branch ? [`- branch: ${review.branch}`] : []),
+    ...(review.base ? [`- base: ${review.base}`] : []),
+    ...(review.head ? [`- head: ${review.head}`] : []),
+    ...(review.stat ? [`- diffstat: ${oneLine(review.stat)}`] : []),
+    `- commits: ${review.commits.length}`,
+    ...review.commits.slice(0, 10).map(commit => `  - ${commit.sha} ${oneLine(commit.subject, 200)}`),
+    `- changed_files: ${review.files.length}`,
+    ...review.files.slice(0, 20).map(item => `  - ${item.status} ${item.path}`),
+    `- uncommitted: ${review.dirty.length}`,
+    ...review.dirty.slice(0, 20).map(item => `  - ${item.status} ${item.path}`),
+  ]
+}
+/**
+ * Appends a ticket's ending, its summary, and the review captured for it to its archive, once per end.
+ * A missing archive file, or one without a local Channel, is left alone.
+ * @param ticket - The ended ticket.
+ * @param review - Git facts of its workspace, when it had any.
+ * @param number - The ticket's stable display number, when the store knows it.
+ */
+export async function closeArchive(ticket: Ticket, review?: TicketReview, number?: number): Promise<void> {
+  const file = ticketArchive(ticket)
+  const ended = ticket.ended
+  if (!file || !ended) return
+  const marker = `<!-- dsh-superagent:closed:${ended.at} -->`
+  await serialized(file, async () => {
+    const existing = await readFile(file, 'utf8').catch(() => undefined)
+    if (existing === undefined || existing.includes(marker)) return
+    const summary = latestReport(ticket)?.summary ?? ''
+    await appendFile(file, ['', `## ${ended.at} · 关闭 / Closed`, '', marker, '- status: closed', `- outcome: ${ended.outcome}`,
+      `- by: ${ended.by}`, ...(displayNumber(number) ? [`- ticket: ${displayNumber(number)}`] : []),
+      ...(ended.reason ? [`- reason: ${oneLine(ended.reason)}`] : []),
+      ...(summary ? [`- summary: ${oneLine(summary)}`] : []), ...(review ? reviewLines(review) : []), ''].join('\n'))
+  })
+}
+/**
+ * Appends a reopening to a ticket's archive, once per `at`, so the file states its status rather than ending at the close.
+ * @param ticket - The reopened ticket.
+ * @param at - The reopening time, which also marks the section.
+ */
+export async function reopenArchive(ticket: Pick<Ticket, 'channels'>, at: string): Promise<void> {
+  const file = ticketArchive(ticket)
+  if (!file) return
+  const marker = `<!-- dsh-superagent:reopened:${at} -->`
+  await serialized(file, async () => {
+    const existing = await readFile(file, 'utf8').catch(() => undefined)
+    if (existing === undefined || existing.includes(marker)) return
+    await appendFile(file, ['', `## ${at} · 重新打开 / Reopened`, '', marker, '- status: open', `- by: ${OPERATOR}`, ''].join('\n'))
+  })
 }
 /** Channel adapter: the archive file is the destination, so a sent message is already recorded. */
 export async function sendLocal(_host: Pick<SourceContext, 'commands'>, message: OutboundMessage): Promise<'sent' | 'gone'> {
@@ -129,13 +206,27 @@ export async function seedPolicy(host: { store: { settings(): Settings; blockRev
 }
 
 /**
- * Writes a panel request to its archive file and ingests the Trigger that starts its Ticket.
+ * Writes a panel request to its archive file and ingests the Trigger that starts its Ticket. A request with an idempotency
+ * key returns the result an earlier one stored, so a retry after a lost response does not create a second ticket.
  * @throws when the Source is off, the archive cannot be written, or the Source's scope filters the Trigger.
  */
 export async function createLocalRequest(host: SourceHost, input: LocalRequest): Promise<LocalRequestResult> {
+  const idempotency = input.key
+  if (!idempotency) return createLocalRequestOnce(host, input)
+  const running = pendingRequests.get(idempotency)
+  if (running) return running
+  const started = createLocalRequestOnce(host, input, idempotency).finally(() => pendingRequests.delete(idempotency))
+  pendingRequests.set(idempotency, started)
+  return started
+}
+async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, idempotency?: string): Promise<LocalRequestResult> {
   const ctx = sourceContext(host, localKind)
   const config = ctx.config<LocalConfig>(SOURCE)
   if (!config) throw new Error('The local Source is off; turn it on in Settings → Sources')
+  if (idempotency) {
+    const stored = ctx.state.get(REQUEST_RESULTS(idempotency))
+    if (stored) return stored
+  }
   const at = new Date().toISOString()
   const id = requestId(at)
   const thread = `${SOURCE}:${id}`
@@ -149,7 +240,7 @@ export async function createLocalRequest(host: SourceHost, input: LocalRequest):
     // The person's title leads the request text, so the Session that accepts it can keep that wording.
     text: `${title}\n\n${input.text}`,
     channel: { source: SOURCE, thread, address: { request: id, file } },
-    meta: { requestId: id, messageId: id, title },
+    meta: { requestId: id, messageId: id, title, ...idempotency ? { idempotency } : {} },
   }
   // Describe the Thread after the intake created it; describing an absent Thread is a no-op.
   const received = await ctx.receive(trigger)
@@ -159,7 +250,9 @@ export async function createLocalRequest(host: SourceHost, input: LocalRequest):
     await rm(file, { force: true })
     throw new Error('The local Source filtered the request; check the Source and the Policy')
   }
-  return { request: id, thread, trigger: trigger.id, file }
+  const result = { request: id, thread, trigger: trigger.id, file }
+  if (idempotency) ctx.state.set(REQUEST_RESULTS(idempotency), result)
+  return result
 }
 
 /**
@@ -192,8 +285,57 @@ export async function createLocalFollowup(host: SourceHost, input: LocalFollowup
   return { trigger: trigger.id, thread: input.thread }
 }
 
+/** Directory a command-line client drops ticket requests into, under the state directory. */
+export const inboxDir = (deployment: { stateDir: string }): string => join(deployment.stateDir, 'inbox')
+const INBOX_REQUEST = z.object({ title: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(20_000),
+  key: z.string().trim().min(8).max(200).optional() }).strict()
+/**
+ * Ingests the JSON requests a command-line client drops into `<stateDir>/inbox`, writing each result to
+ * `done/<file>` and moving invalid or refused files to `rejected/`. A request without a key uses its file name, so a
+ * retried file returns the ticket the first attempt made.
+ * @returns The number of requests created or recognized.
+ */
+export async function drainInbox(host: SourceHost): Promise<number> {
+  const ctx = sourceContext(host, localKind)
+  if (!ctx.config<LocalConfig>(SOURCE)) return 0
+  const directory = inboxDir(ctx.deployment)
+  const files = await readdir(directory).catch(() => undefined)
+  if (!files) return 0
+  let handled = 0
+  for (const file of files.filter(name => name.endsWith('.json')).sort()) {
+    const path = join(directory, file)
+    const content = await readFile(path, 'utf8').catch(() => undefined)
+    if (content === undefined) continue
+    let request: LocalRequest
+    try { request = INBOX_REQUEST.parse(JSON.parse(content)) }
+    catch (error) {
+      await mkdir(join(directory, 'rejected'), { recursive: true })
+      await rename(path, join(directory, 'rejected', file))
+      continue
+    }
+    try {
+      const result = await createLocalRequest(host, { ...request, key: request.key ?? file.replace(/\.json$/, '') })
+      await mkdir(join(directory, 'done'), { recursive: true })
+      await writeFile(join(directory, 'done', file), JSON.stringify(result))
+      await rm(path, { force: true })
+      handled++
+    } catch (error) {
+      await mkdir(join(directory, 'rejected'), { recursive: true })
+      await writeFile(join(directory, 'rejected', `${file}.error`), String(error))
+      await rm(path, { force: true })
+    }
+  }
+  return handled
+}
 export const name = 'dsh-superagent-local'
 export const inject = ['orchestrator']
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.orchestrator.sources.register(localKind), 'local: source kind')
+  // A command-line client drops JSON files into the inbox; the running service turns them into tickets.
+  ctx.effect(() => {
+    const drain = (): void => { void drainInbox(ctx.orchestrator).catch(() => { /* The next tick retries; a refusal is kept in rejected/. */ }) }
+    const timer = setInterval(drain, 2000)
+    drain()
+    return () => clearInterval(timer)
+  }, 'local: command-line inbox')
 }

@@ -1,5 +1,5 @@
 /** Thread list, timeline detail, cross-entity search, and decision list views. */
-import { threadKey, type Thread, type Ticket, type Trigger } from '../../core/index.ts'
+import { latestReport, threadKey, type Thread, type Ticket, type Trigger } from '../../core/index.ts'
 import type { ThreadFilter } from '../api.ts'
 import type { TextCache } from '../cache.ts'
 import { awaitingEval, channelLink, dayAgo, decisionView, newestFirst, page, snapshot, threadSummary, threadTitle, ticketLine,
@@ -69,11 +69,15 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   const threads = named.threads.flatMap(key => { const thread = store.threads.get(key); return thread ? [threadSummary(view, thread)]
     : [] })
   const lower = value.toLowerCase()
-  // Match tickets by threads they own (e.g., bound PRs) or subscribe to, as well as by title.
+  // Match tickets by threads they own (e.g., bound PRs) or subscribe to, by title, by their latest result, and by a reply
+  // whose text the archive also holds, so searching a phrase an agent wrote finds the ticket.
   const reaches = (ticket: Ticket) => [...(ticket.follows ?? []).map(follow => follow.thread),
     ...view.threadsOf(ticket.id).map(thread => thread.key)]
+  const replied = new Set(store.receipts.ticketsMatching(value))
   const matches = (ticket: Ticket) => reaches(ticket).some(key => named.threads.includes(key)) || ticket.title.toLowerCase().includes(lower)
-  const tickets = store.tickets.list().filter(matches).sort(newestFirst).slice(0, 10).map(ticketSummary)
+    || (latestReport(ticket)?.summary ?? '').toLowerCase().includes(lower) || replied.has(ticket.id)
+  const tickets = store.tickets.list().filter(matches).sort(newestFirst).slice(0, 10)
+    .map(ticket => ticketSummary(ticket, view.number(ticket.id)))
   // Omit automated triggers from threads already included in `threads`.
   const shownThreads = new Set(threads.map(thread => thread.key))
   const item = (trigger: Trigger) => {

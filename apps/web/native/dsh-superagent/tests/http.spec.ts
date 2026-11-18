@@ -117,9 +117,12 @@ it('creates a local ticket only when setup resolved, the Source is on, and the o
     localRequest: async (input: LocalRequest) => { created.push(input); return { request: 'r', thread: 'local:r', trigger: 'local:r', file: '/tmp/r.md' } },
     localFollowup: async (input: { thread: string; text: string }) => ({ trigger: 'f1', thread: input.thread }),
   })
-  expect(await call('POST', 'local/requests', { title: '修复登录页', text: '窄屏溢出' })).toEqual({ status: 200,
+  expect(await call('POST', 'local/requests', { title: '修复登录页', text: '窄屏溢出', key: 'request-key-0001' })).toEqual({ status: 200,
     body: { request: 'r', thread: 'local:r', trigger: 'local:r', file: '/tmp/r.md' } })
-  expect(created).toEqual([{ title: '修复登录页', text: '窄屏溢出' }])
+  expect(created).toEqual([{ title: '修复登录页', text: '窄屏溢出', key: 'request-key-0001' }])
+  // A key shorter than 8 characters is refused before the Source writes anything.
+  expect(await call('POST', 'local/requests', { title: 'x', text: 'y', key: 'short' })).toMatchObject({ status: 400 })
+  expect(created).toHaveLength(1)
   expect(await call('POST', 'local/followups', { thread: 'local:r', text: '补充' })).toEqual({ status: 200,
     body: { trigger: 'f1', thread: 'local:r' } })
   expect(await call('POST', 'local/followups', { thread: '', text: 'x' })).toMatchObject({ status: 400 })
@@ -139,4 +142,21 @@ it('creates a local ticket only when setup resolved, the Source is on, and the o
     sources: { instance: () => ({ enabled: true, config: {} }) }, settings: { save: async () => ({}) } })
   expect(await nobody('POST', 'local/requests', { title: 'x', text: 'y' })).toEqual({ status: 400,
     body: { error: 'The local Source allows nobody; add the operator under Policy → On each Source' } })
+})
+
+it('reopens an ended ticket through the panel, and only a known ticket', async () => {
+  const reopened: string[] = []
+  const ended = { id: 't1', ended: { at: '2026-11-18T00:00:00Z', by: 'human', outcome: 'stopped' } }
+  const call = serve({ store: { tickets: { get: (id: string) => id === 't1' ? ended : undefined } },
+    engine: { reopenTicket: (id: string) => { reopened.push(id); return ended } } })
+  expect(await call('POST', 'tickets/t1/reopen')).toEqual({ status: 200, body: { reopened: true } })
+  expect(reopened).toEqual(['t1'])
+  expect(await call('POST', 'tickets/t9/reopen')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
+})
+
+it('serves a ticket workspace diff on demand, and refuses an unknown ticket', async () => {
+  const call = serve({ store: { tickets: { get: (id: string) => id === 't1' ? { id } : undefined } },
+    ticketDiff: async (id: string) => ({ diff: `diff for ${id}`, truncated: false }) })
+  expect(await call('GET', 'tickets/t1/diff')).toEqual({ status: 200, body: { diff: 'diff for t1', truncated: false } })
+  expect(await call('GET', 'tickets/t2/diff')).toMatchObject({ status: 404 })
 })

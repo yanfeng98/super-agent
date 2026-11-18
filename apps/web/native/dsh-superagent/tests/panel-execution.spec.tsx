@@ -75,6 +75,28 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
   expect(tab(zh['tab.trigger']).getAttribute('aria-selected')).toBe('true')
 })
 
+it('shows the review captured when a ticket ended and lets a person reopen it', async () => {
+  const fields = { id: 't5', title: '记录结束', number: 7, state: 'ended' as const, actions: { retry: false, stop: false },
+    ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
+  server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
+  server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true },
+    review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
+      commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
+  await mount()
+  await click(zh['tab.execution'])
+  await click(zh['ticket.ended'])
+  await click('记录结束')
+  expect(text()).toContain('T-0007')
+  expect(text()).toContain('agent/t5')
+  expect(text()).toContain('修复窄屏')
+  expect(text()).toContain('src/a.ts')
+  await click(zh.reviewViewDiff)
+  expect(text()).toContain('新文案')
+  await click(zh.reopen)
+  await click(zh.confirm)
+  expect(server.requests.some(request => request.path === 'tickets/t5/reopen' && request.method === 'POST')).toBe(true)
+})
+
 it('reports a missing Ticket instead of rendering an empty page', async () => {
   at({ page: 'execution', id: 'missing' })
   await mount()
@@ -199,7 +221,7 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   const fields = { id: 't3', title: '已合并的工单', state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
-  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended' }
+  server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])
@@ -232,8 +254,10 @@ it('creates a local ticket from Execution and opens its Thread', async () => {
   await type(field<HTMLInputElement>(zh.newTicketTitle), '修复登录页')
   await type(field<HTMLTextAreaElement>(zh.newTicketText), '窄屏下登录按钮溢出，请修好。')
   await click(zh.createTicket)
-  expect(server.requests.find(request => request.path === 'local/requests')).toMatchObject({ method: 'POST',
-    body: { title: '修复登录页', text: '窄屏下登录按钮溢出，请修好。' } })
+  const sent = server.requests.find(request => request.path === 'local/requests')!
+  expect(sent).toMatchObject({ method: 'POST', body: { title: '修复登录页', text: '窄屏下登录按钮溢出，请修好。' } })
+  // One idempotency key accompanies the draft, so retrying after a lost response cannot create a second ticket.
+  expect((sent.body as { key?: string }).key).toMatch(/^[\da-f-]{8,}$/)
   expect(JSON.parse(sessionStorage.getItem('dsh-superagent/route')!)).toMatchObject({ route: { page: 'trigger', id: 'local:local-1' } })
 })
 

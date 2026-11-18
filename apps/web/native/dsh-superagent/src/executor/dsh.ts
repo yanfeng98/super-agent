@@ -9,6 +9,7 @@ import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Execu
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
 import { runAsWorker, verifyDirectory } from '../infra/environment.ts'
+import { workspaceHead } from '../app/review.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
@@ -421,6 +422,22 @@ export class DshExecutor implements Executor {
     })
   }
   private relay({ id, text }: { id: string; text: string }): void { this.host.sessions.relay(id, text) }
+  /**
+   * Records the commit the workspace started from before its first Assignment runs, so a later review lists the commits the
+   * ticket added. A workspace that is not a git repository keeps no base.
+   */
+  private async captureBase(ticket: Ticket): Promise<void> {
+    const directory = ticket.execution?.directory
+    if (!directory || ticket.execution?.base) return
+    const head = await workspaceHead(this.host.context.subprocess, directory, this.host.lifetime)
+    if (!head) return
+    this.host.store.atomic(() => {
+      const current = this.host.store.tickets.get(ticket.id)
+      if (!current?.execution || current.execution.base) return
+      current.execution.base = head
+      this.host.store.tickets.save(current)
+    })
+  }
   private async launch(ticket: Ticket, assignment: Assignment): Promise<void> {
     const current = () => {
       if (this.host.closing()) throw new Error('dsh-superagent is stopping')
@@ -436,6 +453,8 @@ export class DshExecutor implements Executor {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }
+    if (!current()) return
+    await this.captureBase(ticket)
     if (!current()) return
     const sessionId = workerSessionId(ticket.id)
     const agent = await this.host.sessions.ensure(sessionId, workspace, ticket.title, 'worker')

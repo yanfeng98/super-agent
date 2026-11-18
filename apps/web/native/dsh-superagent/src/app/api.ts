@@ -34,7 +34,10 @@ export interface Api {
   'GET tickets/:id': { response: TicketPageView }
   'POST tickets/:id/retry': { response: { retried: true } }
   'POST tickets/:id/stop': { response: { stopped: true } }
-  'POST local/requests': { body: { title: string; text: string }; response: { request: string; thread: string; trigger: string; file: string } }
+  'POST tickets/:id/reopen': { response: { reopened: true } }
+  'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
+  'POST local/requests': { body: { title: string; text: string; key?: string };
+    response: { request: string; thread: string; trigger: string; file: string } }
   'POST local/followups': { body: { thread: string; text: string }; response: { trigger: string; thread: string } }
   'POST executor/pause': { body: { paused: boolean }; response: { paused: boolean } }
   'PUT settings/:block': { body: { value: unknown; revision: number }; response: { revision: number; restarting: boolean } }

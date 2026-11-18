@@ -380,3 +380,6 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-admission-slot { display: inline-flex; flex: none; width: 16px; }
 .dt-info-warn { color: var(--dsw-alias-state-warn-primary); }
 .dt-field-segmented { max-width: 240px; }
+
+.dt-workspace-diff { margin: 8px 0 0; padding: 12px; max-height: 360px; overflow: auto; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-l2); font: 12px/18px var(--dsw-alias-font-mono); white-space: pre; }
+.dt-ticket-number { margin-right: 8px; padding: 0 5px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 4px; font: 11px/18px var(--dsw-alias-font-mono); color: var(--dsw-alias-label-caption); }
