@@ -32,8 +32,9 @@ the Web sidebar opens its panel.
   `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop).
 
 Without a GitHub repository and agent account the runtime still starts: the GitHub Source reports that it is unconfigured
-and polls nothing, while the local Source accepts tickets from **Execution → New ticket**. Configure the repository and the
-agent CLI in the panel (or with the Management API of `docs/006-deployment.md`) to use the GitHub Source too.
+and polls nothing, while the local Source accepts tickets from **Execution → New ticket** or from the main Session in the
+DSH chat. Configure the repository and the agent CLI in the panel (or with the Management API of `docs/006-deployment.md`)
+to use the GitHub Source too.
 
 The state directory defaults to `<DSH_HOME>/state/superagent` (with `DSH_HOME` defaulting to `~/.dsh`), so the built-in
 copy starts without machine configuration. Set `stateDir` in the profile's `cordis.patch.yml` to relocate it.
@@ -128,6 +129,15 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 11. **Built-in documentation.** `docs/006-deployment.md` opens with a **Built-in copy** section (no profile, default state
    directory, API follows the bind), and `README.md` and `SETUP.md` point at the built-in path instead of the standalone
    install. The rest of the upstream documents describe the standalone deployment and still apply.
+
+12. **Main Session requests and answers.** The main Session can record a person's explicit request from its own
+    conversation as a local ticket request (`orchestrator_request` in `src/app/tools/main.ts`) and send their answer to a
+    local ticket's Thread (`orchestrator_answer`). Both reuse the local Source's `createLocalRequest`/`createLocalFollowup`
+    through `Runtime.localRequest` (`src/app/runtime.ts`), which seeds the local Policy part with the operator on first use
+    and refuses a disabled Source or an empty list; the answer tool only accepts a ticket with a local Channel and marks
+    its Trigger `mainSession`, so the main Session is not notified of its own follow-up (`src/sources/local.ts`,
+    `src/app/notices.ts`). `prompts/orchestrator.md` limits both to the person's own messages. `tests/chat-tools.spec.ts`
+    covers creating, answering, resuming, and the refusals.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

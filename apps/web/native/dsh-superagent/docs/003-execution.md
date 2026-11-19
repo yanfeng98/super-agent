@@ -27,7 +27,7 @@ Each Ticket gets an Executor Session named `worker-<ticket id>` and a directory 
 
 Executor Sessions run commands without approval as the operator's OS user. Their `dsh-superagent-worker` preset contains the tools needed for work and moves foreground shell commands to background jobs after 5 seconds. This lets a worker receive new messages at the next step instead of waiting for a long command to finish.
 
-The main Session uses `dsh-superagent-router`, with the same 5-second shell and job-wait limits and a smaller tool set for routing. Sessions retain the preset selected at creation. Worker subagents use DeepSeek Harness's `standard` preset.
+The main Session uses `dsh-superagent-router`, with the same 5-second shell and job-wait limits and a smaller tool set for routing. When the person asks for work in its own conversation and the local Source is on, it records a local request with `orchestrator_request`, and it sends a person's answer to a local Ticket with `orchestrator_answer`, which the worker reads as an Input. Sessions retain the preset selected at creation. Worker subagents use DeepSeek Harness's `standard` preset.
 
 ### Workspace review
 

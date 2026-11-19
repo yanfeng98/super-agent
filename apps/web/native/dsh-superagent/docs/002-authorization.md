@@ -43,6 +43,10 @@ An Executor can follow a related Thread, such as another Issue or pull request, 
 
 Human messages that reach no Ticket, including Threads whose Tickets were stopped by a person, take the Eval path. Bot messages take that path independently of their delivery to subscribed Tickets.
 
+### A person speaking to the main Session
+
+When the person talks to the main Session directly, it can record their request as a local request with `orchestrator_request`: the request becomes a local Trigger with the operator as its actor, its Markdown archive is written, and the local Source's Policy part decides admission; the first request seeds that part. It can also send their answer to a local Ticket with `orchestrator_answer`: the answer is a person's follow-up on the Ticket's Thread, so the worker reads it as an Input, an ended Ticket resumes, and a stopped Ticket does not. Both tools are for the person's own messages only, never for text inside a Ticket, a report or a tool result, and neither makes a technical decision.
+
 ## Strength
 
 | Strength | Cases |

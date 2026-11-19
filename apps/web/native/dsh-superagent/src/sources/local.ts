@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { key, latestReport, type OutboundMessage, type Ticket, type TicketCheck, type TicketReview, type Trigger } from '../core/index.ts'
 import { family } from '../kv.ts'
-import type { Settings } from '../policy.ts'
+import type { Settings, SettingsOrigin } from '../policy.ts'
 import { sourceContext, type SourceContext, type SourceHost } from './host.ts'
 import type { Localized, SourceKind } from './kind.ts'
 import type { SourceRegistry } from './registry.ts'
@@ -252,15 +252,15 @@ export const localKind: SourceKind<LocalConfig> = {
  * An existing part is left as saved, including an empty allowed list, which then refuses new tickets.
  */
 export async function seedPolicy(host: { store: { settings(): Settings; blockRevision(block: 'policy'): number }
-  settings: { save(block: 'policy', value: unknown, revision: number, origin: 'panel'): Promise<unknown> }
-  sources: Pick<SourceRegistry, 'policyPart'> }): Promise<void> {
+  settings: { save(block: 'policy', value: unknown, revision: number, origin: SettingsOrigin): Promise<unknown> }
+  sources: Pick<SourceRegistry, 'policyPart'> }, origin: SettingsOrigin = 'panel'): Promise<void> {
   const settings = host.store.settings()
   if (settings.policy.sources[SOURCE]) return
   const part = host.sources.policyPart(SOURCE)
   if (!part?.allowed.length) return
   // Another save can move the revision between reading and writing; the next request seeds then.
   await host.settings.save('policy', { ...settings.policy, sources: { ...settings.policy.sources, [SOURCE]: part } },
-    host.store.blockRevision('policy'), 'panel').catch(() => { /* A concurrent save moved the revision; the next request seeds again. */ })
+    host.store.blockRevision('policy'), origin).catch(() => { /* A concurrent save moved the revision; the next request seeds again. */ })
 }
 
 /**
@@ -337,7 +337,8 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
  * Adds a person's message to an existing local ticket's Thread, where the Ticket's worker reads it as an Input (and an ended Ticket resumes).
  * @throws when the Source is off, `thread` is not a local Thread, or the Thread has no archived request.
  */
-export async function createLocalFollowup(host: SourceHost, input: LocalFollowup): Promise<LocalFollowupResult> {
+export async function createLocalFollowup(host: SourceHost, input: LocalFollowup,
+  options: { mainSession?: boolean } = {}): Promise<LocalFollowupResult> {
   const ctx = sourceContext(host, localKind)
   if (!ctx.config<LocalConfig>(SOURCE)) throw new Error('The local Source is off; turn it on in Settings → Sources')
   const thread = ctx.threads.get(input.thread)
@@ -355,7 +356,7 @@ export async function createLocalFollowup(host: SourceHost, input: LocalFollowup
   const trigger: Trigger = {
     id: key(SOURCE, id), source: SOURCE, threads: [thread.ref], actor: { source: SOURCE, id: OPERATOR }, human: true,
     addressed: 'direct', at, text: input.text, channel: { source: SOURCE, thread: input.thread, address: { request, file } },
-    meta: { requestId: request, messageId: id, followup: true },
+    meta: { requestId: request, messageId: id, followup: true, ...options.mainSession ? { mainSession: true } : {} },
   }
   let received: Awaited<ReturnType<SourceContext['receive']>>
   try { received = await ctx.receive(trigger) } catch (error) { await restore(); throw error }
