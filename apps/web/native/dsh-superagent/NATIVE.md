@@ -193,6 +193,15 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `push` notification. The desktop watcher now also announces the merge events in the inbox it cannot see in a ticket's
     state. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/notify.spec.ts` and
     `tests/panel-execution.spec.tsx` cover them.
+19. **Whole-merge revert, a checked push target and fewer repeated checks.** `mergeWorkspace` records the target commit it
+    moved from (`TicketMerge.base`), and `revertWorkspace` reverts `base..head` for a fast-forward merge, since undoing only
+    the last commit left the rest of the branch's work on the target; `pushWorkspace` refuses to push when the repository is
+    on another branch than the merge moved. `mergeOnce` skips the check on the merged target when a fast-forward merge left
+    exactly the tree the gate's check covered, reports tracked changes a target check left behind, and an automatic attempt
+    reuses a failure recorded within ten minutes for the same ending. `rebaseTicket` fingerprints the ticket's own patch
+    with `patchFingerprint` before and after, so a rebase that moved the same changes onto a newer commit keeps the
+    approval and names the new commit; `Tickets.review` keeps the history's rounds as copies for that. `tests/review.spec.ts`
+    and `tests/merge.spec.ts` cover them.
 18. **Per-file review diff, a review worklist, a named reviewer and the queue on the page.** `GET tickets/<id>/diff` now
     returns `files`, one entry per `diff --git` block (`parseDiff` in `src/app/review.ts`: paths, status, added/removed
     counts, the patch), and the Ticket page lists them, opens one file at a time and keeps a browser-local **Viewed** mark
