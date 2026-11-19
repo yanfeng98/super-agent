@@ -700,6 +700,8 @@ export class Runtime extends Service implements SourceHost {
     if (!ticket) throw new Error('Unknown ticket')
     const merged = ticket.merged
     if (!merged) throw new Error('Only a merged ticket can be reverted')
+    // A record from before a revert cleared `merged` still holds both; its merge is already undone.
+    if (ticket.reverted && ticket.reverted.at > merged.at) throw new Error('The merge of this ticket was already reverted')
     const commit = merged.head
     if (!commit) throw new Error('The merge recorded no commit to revert; undo it with git in the repository')
     const directory = merged.root ?? ticket.execution?.directory
@@ -944,7 +946,7 @@ export class Runtime extends Service implements SourceHost {
     }
   }
   /**
-   * Adds a person's note on a file and line of a ticket's changes.
+   * Adds a person's note on a file and an optional line or range of a ticket's changes.
    * @returns The ticket's notes after the addition.
    */
   addNote(id: string, input: { file: string; line?: number; endLine?: number; text: string }): TicketNote[] {

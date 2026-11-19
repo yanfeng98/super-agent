@@ -199,7 +199,7 @@ export class Engine {
    */
   approveTicket(ticketId: string): Ticket { return this.repo.atomic(() => this.tickets.approve(ticketId)) }
   /**
-   * Adds a person's note on a file and line of a ticket's changes.
+   * Adds a person's note on a file and an optional line or range of a ticket's changes.
    * @returns The ticket with the note.
    */
   addNote(ticketId: string, input: { file: string; line?: number; endLine?: number; text: string }): Ticket {

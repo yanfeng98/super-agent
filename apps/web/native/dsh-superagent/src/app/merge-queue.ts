@@ -27,8 +27,9 @@ export function enqueueMerges(store: Store, entries: readonly QueuedMerge[]): Qu
     const queue = queuedMerges(store)
     for (const entry of entries) {
       const at = queue.findIndex(item => item.ticketId === entry.ticketId)
+      // Replacing the entry rather than merging into it is what clears a recorded failure.
       if (at < 0) queue.push(entry)
-      else queue[at] = { ...queue[at]!, ...entry }
+      else queue[at] = entry
     }
     store.set(KV.runtime.mergeQueue, queue)
     return queue

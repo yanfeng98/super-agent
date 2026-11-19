@@ -7,7 +7,7 @@ import type { HttpHost } from '../src/app/http.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import type { LocalRequest } from '../src/sources/local.ts'
 import { SetupError } from '../src/setup.ts'
-import type { Ticket } from '../src/core/index.ts'
+import { UserError, type Ticket } from '../src/core/index.ts'
 
 type Handler = (req: unknown, res: unknown) => Promise<void>
 type Headers = Record<string, string | undefined>
@@ -184,7 +184,8 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
       return { related: [] } },
     blockTicket: (id: string, reference: string, blocked: boolean) => { calls.push(`block:${id}:${reference}:${blocked}`)
       return { ticket_id: id, blocked_by: [] } },
-    addNote: (id: string, input: { file: string; line?: number; text: string }) => { calls.push(`note:${id}:${input.file}`); return [] },
+    addNote: (id: string, input: { file: string; line?: number; endLine?: number; text: string }) => {
+      calls.push(`note:${id}:${input.file}:${input.endLine ?? ''}`); return [] },
     removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] },
     resolveNote: (id: string, noteId: string, resolved: boolean) => { calls.push(`resolve:${id}:${noteId}:${resolved}`); return [] },
     replyToNote: (id: string, noteId: string, text: string) => { calls.push(`reply:${id}:${noteId}:${text}`); return [] },
@@ -201,7 +202,8 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
   expect(await call('POST', 'tickets/t1/cleanup')).toEqual({ status: 200, body: { cleaned: true } })
   expect(await call('POST', 'tickets/t1/related', { ticket: 'T-0002', linked: true })).toEqual({ status: 200, body: { related: [] } })
   expect(await call('POST', 'tickets/t1/blockers', { ticket: 'T-0002', blocked: true })).toEqual({ status: 200, body: { ticket_id: 't1', blocked_by: [] } })
-  expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, text: '改这里' })).toEqual({ status: 200, body: { notes: [] } })
+  expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, endLine: 9, text: '改这里' })).toEqual({ status: 200,
+    body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/remove')).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/resolve', { resolved: true })).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/replies', { text: '已处理' })).toEqual({ status: 200, body: { notes: [] } })
@@ -211,7 +213,7 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
   expect(await call('POST', 'tickets/t1/request', { text: '新的正文' })).toEqual({ status: 200,
     body: { request: { text: '新的正文', at: '2026-11-18T00:00:00Z' } } })
   expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1', 'link:t1:T-0002:true',
-    'block:t1:T-0002:true', 'note:t1:src/a.ts', 'unnote:t1:n1', 'resolve:t1:n1:true', 'reply:t1:n1:已处理', 'tags:t1:前端,p1',
+    'block:t1:T-0002:true', 'note:t1:src/a.ts:9', 'unnote:t1:n1', 'resolve:t1:n1:true', 'reply:t1:n1:已处理', 'tags:t1:前端,p1',
     'review:t1:approved', 'request:t1:新的正文'])
   expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
   const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
@@ -256,4 +258,11 @@ it('lists notifications and marks one or all read', async () => {
   expect(await call('POST', 'notifications/n1/read')).toEqual({ status: 200, body: { read: true } })
   expect(await call('POST', 'notifications/n9/read')).toMatchObject({ status: 404 })
   expect(await call('POST', 'notifications/read-all')).toEqual({ status: 200, body: { read: 1 } })
+})
+
+it('keeps a refused note range a structured error the panel can localize', async () => {
+  const call = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
+    addNote: () => { throw new UserError('invalidNoteRange') } })
+  expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', endLine: 9, text: '缺起点' })).toMatchObject({ status: 400,
+    body: { code: 'invalidNoteRange' } })
 })

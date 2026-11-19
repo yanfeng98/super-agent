@@ -353,6 +353,13 @@ it('offers merge, discard and rebase only on an ended ticket with a review branc
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ cleanup: false, reopen: false })
   store.tickets.save({ ...ended, discarded: { at } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ reopen: false, merge: false, discard: false, cleanup: false })
+  // Undoing a merge is offered while it stands, and not for one a revert already undid.
+  const merged = { ...ended, merged: { at, branch: 'agent/t1', target: 'main', root: '/repo' } }
+  store.tickets.save(merged)
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ revert: true })
+  store.tickets.save({ ...merged, reverted: { at: '2999-01-01T00:00:00.000Z', commit: 'c'.repeat(40), target: 'main',
+    merge: 'b'.repeat(40) } })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ revert: false })
 })
 
 it('offers a check run on an ended ticket with a workspace when a check command is configured, and shows the result', () => {

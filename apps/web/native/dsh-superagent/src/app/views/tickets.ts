@@ -99,8 +99,10 @@ export function ticketDetail(host: ViewHost, id: string) {
   const check = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
     && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
+  // A merge a revert already undid (a record from before the revert cleared `merged`) is not undone twice.
+  const undone = !!ticket.merged && !!ticket.reverted && ticket.reverted.at > ticket.merged.at
   // Undoing a merge needs the repository the merge recorded, which survives the removal of its worktree.
-  const revert = !!ticket.merged && !!(ticket.merged.root ?? ticket.execution?.directory)
+  const revert = !!ticket.merged && !undone && !!(ticket.merged.root ?? ticket.execution?.directory)
   // A revert of a merge that a later merge replaced is history, not the ticket's current state.
   const reverted = ticket.reverted && ticket.reverted.at > (ticket.merged?.at ?? '') ? ticket.reverted : undefined
   // A push that failed can be retried where the merge ran, from the panel.
