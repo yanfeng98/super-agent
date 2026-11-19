@@ -24,7 +24,8 @@ import type { SetupProblem } from '../setup.ts'
 import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
 import { notifications as listNotifications, readAllNotifications, readNotification, recordNotification } from './notifications.ts'
-import { dequeueMerges, enqueueMerges, mergePosition, queuedMerges, shiftQueuedMerge, type QueuedMerge } from './merge-queue.ts'
+import { dequeueMerges, enqueueMerges, mergeQueuePaused, mergeQueueView, queuedMerges, setMergeQueuePaused, shiftQueuedMerge,
+  type MergeQueueView, type QueuedMerge } from './merge-queue.ts'
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
 import { Store } from './store.ts'
@@ -36,7 +37,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type DiffFile, type MergeStrategy } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
@@ -258,14 +259,14 @@ export class Runtime extends Service implements SourceHost {
    * Reads a ticket workspace's committed diff since its recorded base, on demand from the panel.
    * @returns The diff, whether it was truncated, and why git could not provide it, if it could not.
    */
-  async ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }> {
+  async ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }> {
     const ticket = this.store.tickets.get(id)
     const directory = ticket?.execution?.directory
     const base = ticket?.execution?.base
-    if (!directory) return { diff: '', truncated: false, error: 'This ticket has no workspace' }
-    if (!base) return { diff: '', truncated: false, error: 'No base commit was recorded for this ticket' }
+    if (!directory) return { diff: '', truncated: false, files: [], error: 'This ticket has no workspace' }
+    if (!base) return { diff: '', truncated: false, files: [], error: 'No base commit was recorded for this ticket' }
     try { return await workspaceDiff(this.ctx.subprocess, directory, base, this.stopped.signal) }
-    catch (error) { return { diff: '', truncated: false, error: String(error) } }
+    catch (error) { return { diff: '', truncated: false, files: [], error: String(error) } }
   }
   /**
    * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
@@ -615,8 +616,12 @@ export class Runtime extends Service implements SourceHost {
           this.store.tickets.save(latest)
         })
         if (!targetCheck.ok) {
+          // A red target branch is no place to merge the next Ticket from a queue.
+          const queued = queuedMerges(this.store).length > 0
+          if (queued) setMergeQueuePaused(this.store, true)
           this.ticketNotice(decided, 'check', `The configured check failed on ${result.target} after merging `
-            + `${this.ticketLabel(decided)} (exit ${targetCheck.exitCode ?? 'unknown'}); the merge can be undone`)
+            + `${this.ticketLabel(decided)} (exit ${targetCheck.exitCode ?? 'unknown'}); the merge can be undone`
+            + (queued ? ', and the merge queue is paused' : ''))
         }
       }
     }
@@ -730,7 +735,7 @@ export class Runtime extends Service implements SourceHost {
    */
   async runMergeQueue(): Promise<void> {
     if (this.queueMerging) return this.queueMerging
-    if (this.paused() || this.closing() || !this.setup.configured()) return
+    if (this.paused() || this.closing() || !this.setup.configured() || mergeQueuePaused(this.store)) return
     if (!queuedMerges(this.store).length) return
     const task = this.drainMergeQueue()
       .catch((error: unknown) => { this.ctx.logger.warn('dsh-superagent: a queued merge failed: %s', String(error)) })
@@ -741,7 +746,7 @@ export class Runtime extends Service implements SourceHost {
   /** Merges the whole queue in order, one Ticket at a time, until it is empty or the deployment stops taking work. */
   private async drainMergeQueue(): Promise<void> {
     for (;;) {
-      if (this.paused() || this.closing()) return
+      if (this.paused() || this.closing() || mergeQueuePaused(this.store)) return
       const entry = queuedMerges(this.store)[0]
       if (!entry) return
       await this.drainQueuedMerge(entry)
@@ -776,6 +781,13 @@ export class Runtime extends Service implements SourceHost {
         `Did not merge ${label} from the merge queue: ${message}${left ? `; ${left} left` : ''}`))
     }
   }
+  /** The merge queue as the panel shows it. */
+  mergeQueue(): MergeQueueView { return mergeQueueView(this.store) }
+  /**
+   * Holds or releases the merge queue, which keeps its order while paused.
+   * @returns The state afterwards.
+   */
+  pauseMergeQueue(paused: boolean): boolean { return setMergeQueuePaused(this.store, paused) }
   /**
    * Pushes the branch a merge moved to its upstream again, for a merge whose push failed.
    * @returns The Ticket pushed.
@@ -904,7 +916,7 @@ export class Runtime extends Service implements SourceHost {
    * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
    */
   reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel'): Ticket {
-    const ticket = this.engine.reviewTicket(id, decision, note, origin)
+    const ticket = this.engine.reviewTicket(id, decision, note, origin, OPERATOR)
     if (ticket.reviewed) void recordReview(ticket, ticket.reviewed).catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: recording a review in the archive failed: %s', String(error))
     })
@@ -1207,7 +1219,8 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
       revertTicket: id => runtime.revertTicket(id), pushTicket: id => runtime.pushTicket(id),
-      dequeueMerges: ids => runtime.dequeueMerges(ids),
+      dequeueMerges: ids => runtime.dequeueMerges(ids), mergeQueue: () => runtime.mergeQueue(),
+      pauseMergeQueue: paused => runtime.pauseMergeQueue(paused),
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),

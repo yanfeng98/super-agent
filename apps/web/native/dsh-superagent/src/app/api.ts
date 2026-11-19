@@ -1,6 +1,8 @@
 /** Type-only management API contract between the web panel and host routes, imported by the panel without bundling host code. */
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { TicketCheck, TicketNote } from '../core/index.ts'
+import type { DiffFile } from './review.ts'
+import type { MergeQueueView } from './merge-queue.ts'
 import type { Notification } from './notifications.ts'
 import type { PromptConfig, Prompts } from './prompts.ts'
 import type { PromptsView, StateView, TicketPageView } from './http.ts'
@@ -11,7 +13,7 @@ import type { SourceStatusView } from './views/sources.ts'
 import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } from './views/threads.ts'
 import type { TicketListView } from './views/tickets.ts'
 
-export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
+export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'review', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
 export type TicketFilter = typeof TICKET_FILTERS[number]
 export type ThreadFilter = typeof THREAD_FILTERS[number]
@@ -41,12 +43,14 @@ export interface Api {
   'POST tickets/:id/retry': { response: { retried: true } }
   'POST tickets/:id/stop': { response: { stopped: true } }
   'POST tickets/:id/reopen': { response: { reopened: true } }
-  'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
+  'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; files: DiffFile[]; error?: string } }
   'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' };
     response: { merged: true; branch: string; target: string; rebased?: true; recaptured?: true } }
   'POST tickets/:id/revert': { response: { branch: string; target: string; commit: string } }
   'POST tickets/:id/push': { response: { ticket_id: string; pushed: true } }
   'POST tickets/:id/dequeue': { response: { removed: number; queue: { ticket_id: string; position: number }[] } }
+  'GET merge-queue': { response: MergeQueueView }
+  'POST merge-queue/pause': { body: { paused: boolean }; response: { paused: boolean } }
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }

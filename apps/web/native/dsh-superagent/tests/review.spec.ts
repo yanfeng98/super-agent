@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -82,6 +82,26 @@ describe('captureReview', () => {
   })
 })
 
+describe('parseDiff', () => {
+  it('splits a diff per file with its status, counts, paths and patch', () => {
+    const diff = ['diff --git a/src/a.ts b/src/a.ts', 'index 1..2 100644', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,3 @@',
+      '-old', '+new', '+more', 'diff --git a/img.png b/img.png', 'new file mode 100644', 'index 0..3', '--- /dev/null',
+      '+++ b/img.png', '@@ -0,0 +1 @@', '+binary', 'diff --git a/old.ts b/renamed.ts', 'similarity index 90%',
+      'rename from old.ts', 'rename to renamed.ts', 'diff --git a/gone.ts b/gone.ts', 'deleted file mode 100644',
+      'index 4..0', '--- a/gone.ts', '+++ /dev/null', '@@ -1 +0,0 @@', '-bye'].join('\n')
+    expect(parseDiff(diff)).toEqual([
+      expect.objectContaining({ path: 'src/a.ts', status: 'modified', additions: 2, deletions: 1,
+        patch: expect.stringContaining('-old') }),
+      expect.objectContaining({ path: 'img.png', status: 'added', additions: 1, deletions: 0 }),
+      expect.objectContaining({ path: 'renamed.ts', oldPath: 'old.ts', status: 'renamed', additions: 0, deletions: 0 }),
+      expect.objectContaining({ path: 'gone.ts', status: 'deleted', additions: 0, deletions: 1 }),
+    ])
+    // An empty diff has no files, and a header git could not split still names its file.
+    expect(parseDiff('')).toEqual([])
+    expect(parseDiff('diff --git a/x.bin b/x.bin\nBinary files a/x.bin and b/x.bin differ')).toEqual([
+      expect.objectContaining({ path: 'x.bin', status: 'modified', additions: 0, deletions: 0 })])
+  })
+})
 describe('merge and discard', () => {
   const base = (): string => {
     git('init', '-q')

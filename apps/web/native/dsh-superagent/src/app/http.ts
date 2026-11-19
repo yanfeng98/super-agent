@@ -4,6 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { z } from 'zod'
 import type { Notification } from './notifications.ts'
+import type { DiffFile } from './review.ts'
+import type { MergeQueueView } from './merge-queue.ts'
 import { THREAD_FILTERS, TICKET_FILTERS, type Api, type ApiResponse, type RouteParams } from './api.ts'
 import { sourceSkills } from './context.ts'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
@@ -56,7 +58,7 @@ export interface HttpHost {
   readonly feishuProblem?: SetupProblem | undefined
   configured(): boolean
   /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
-  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }>
+  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }>
   /** Merges an ended ticket's branch into the repository and records the merge. */
   mergeTicket(id: string, strategy?: 'ff' | 'squash' | 'merge'): Promise<{ branch: string; target: string }>
   /** Removes an ended ticket's linked worktree and branch. */
@@ -73,6 +75,10 @@ export interface HttpHost {
   pushTicket(id: string): Promise<{ ticket_id: string; pushed: true }>
   /** Takes a ticket out of the merge queue. */
   dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
+  /** The merge queue as the panel shows it. */
+  mergeQueue(): MergeQueueView
+  /** Holds or releases the merge queue. */
+  pauseMergeQueue(paused: boolean): boolean
   /** Clears a ticket's standing merge request, which the main Session records. */
   cancelAutoMerge(id: string): Ticket
   /** Records or clears that a ticket waits for another ticket's merge. */
@@ -339,6 +345,11 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/dequeue': ({ params }) => {
       const id = ticket(params.id)
       return runtime.dequeueMerges([id])
+    },
+    'GET merge-queue': () => runtime.mergeQueue(),
+    'POST merge-queue/pause': async ({ body }) => {
+      const { paused } = z.object({ paused: z.boolean() }).strict().parse(await body())
+      return { paused: runtime.pauseMergeQueue(paused) }
     },
     'POST tickets/:id/discard': async ({ params }) => {
       const id = ticket(params.id)

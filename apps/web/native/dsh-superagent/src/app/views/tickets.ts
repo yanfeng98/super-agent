@@ -45,11 +45,15 @@ export function ticketTags(store: Pick<Store, 'tickets' | 'triggers'>): string[]
   for (const ticket of store.tickets.list()) for (const tag of tagsOf(store, ticket)) all.add(tag)
   return [...all].sort((a, b) => a.localeCompare(b))
 }
-export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'], offset: number, limit: number, tag?: string) {
+export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'] | 'review', offset: number, limit: number, tag?: string) {
   const view = snapshot(host)
   const { store } = view
-  const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket) : ticketStage(ticket).stage === stage
-  const tickets = (stage === 'ended' ? store.tickets.list() : store.tickets.open()).filter(shown)
+  // The review worklist is the ended Tickets a person still has to decide on: not merged, and not approved.
+  const pending = (ticket: Ticket): boolean => !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
+    && ticket.reviewed?.decision !== 'approved'
+  const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket)
+    : stage === 'review' ? pending(ticket) : ticketStage(ticket).stage === stage
+  const tickets = (stage === 'ended' || stage === 'review' ? store.tickets.list() : store.tickets.open()).filter(shown)
     .filter(ticket => !tag || tagsOf(store, ticket).includes(tag)).sort(newestFirst)
   const result = page(tickets, offset, limit)
   return { ...result, items: result.items.map(ticket => ticketRow(view, ticket)) }
@@ -105,14 +109,15 @@ export function ticketDetail(host: ViewHost, id: string) {
   // The decisions a person made on the Ticket, in the order they happened, with the interface each came from.
   const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'reverted' | 'cleaned' | 'discarded'; at: string;
     title?: string; tags?: string[]; decision?: 'approved' | 'changes-requested'; note?: string; branch?: string; target?: string;
-    via?: ActionOrigin; head?: string; push?: { ok: boolean; error?: string } }[] = []
+    via?: ActionOrigin; by?: string; head?: string; push?: { ok: boolean; error?: string } }[] = []
   if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
   if (ticket.renamed) history.push({ code: 'renamed', at: ticket.renamed.at, title: ticket.renamed.title })
   if (ticket.tagged) history.push({ code: 'tagged', at: ticket.tagged.at, tags: ticket.tags ?? [] })
   // Every review is shown, including rounds a resume or a rebase cleared from the current decision.
   for (const review of ticket.reviews ?? (ticket.reviewed ? [ticket.reviewed] : [])) {
     history.push({ code: 'reviewed', at: review.at, decision: review.decision, ...(review.note ? { note: review.note } : {}),
-      ...(review.head ? { head: review.head } : {}), ...(review.via ? { via: review.via } : {}) })
+      ...(review.head ? { head: review.head } : {}), ...(review.via ? { via: review.via } : {}),
+      ...(review.by ? { by: review.by } : {}) })
   }
   if (ticket.rebased) history.push({ code: 'rebased', at: ticket.rebased.at, branch: ticket.rebased.branch,
     target: ticket.rebased.target, ...(ticket.rebased.via ? { via: ticket.rebased.via } : {}) })

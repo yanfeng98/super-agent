@@ -219,8 +219,9 @@ export class Engine {
    * @returns The ticket with the review.
    * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
    */
-  reviewTicket(ticketId: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel'): Ticket {
-    return this.repo.atomic(() => this.tickets.review(ticketId, decision, note, origin))
+  reviewTicket(ticketId: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel',
+    by?: string): Ticket {
+    return this.repo.atomic(() => this.tickets.review(ticketId, decision, note, origin, by))
   }
   /**
    * Records a person's standing request to merge the ticket once its gates pass, which the host carries out.

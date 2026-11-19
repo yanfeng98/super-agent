@@ -518,3 +518,30 @@ it('retries a push that failed on the branch the merge moved, and records the an
   const { ticket: open } = await h.acceptedTicket(feishu('2', '@bot 还没合'))
   await expect(h.runtime.pushTicket(open.id)).rejects.toThrow(/Only a merged ticket/)
 })
+
+it('pauses the queue when the check on the merged target fails, leaving the rest waiting', async () => {
+  const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  ended(first.id)
+  ended(second.id)
+  configureCheck('pnpm test')
+  // The first Ticket's gate passes; the check on the merged target fails.
+  vi.mocked(workspaceCheck)
+    .mockResolvedValueOnce({ command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:05:00.000Z', output: 'passed' })
+    .mockResolvedValueOnce({ command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-19T00:06:00.000Z', output: 'broke main' })
+  h.runtime.queueMerges([first.id, second.id], {})
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(first.id)?.targetCheck).toMatchObject({ ok: false })
+  // A red target branch holds the queue; the next Ticket waits rather than merging into it.
+  expect(h.runtime.mergeQueue()).toMatchObject({ paused: true, items: [{ ticket_id: second.id, title: expect.any(String), position: 1 }] })
+  expect(h.runtime.store.tickets.get(second.id)?.merged).toBeUndefined()
+  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'check',
+    text: expect.stringContaining('merge queue is paused') }))
+  // Resuming continues with the Ticket that waited.
+  vi.mocked(workspaceCheck).mockResolvedValue({ command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:07:00.000Z',
+    output: 'passed' })
+  h.runtime.pauseMergeQueue(false)
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(second.id)?.merged).toBeDefined()
+  expect(h.runtime.mergeQueue()).toMatchObject({ paused: false, items: [] })
+})

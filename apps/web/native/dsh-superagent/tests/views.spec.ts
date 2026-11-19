@@ -389,6 +389,27 @@ it('lists the person actions on a ticket in time order', () => {
     { code: 'cleaned', at: '2026-09-24T00:00:00Z' }])
 })
 
+it('lists the ended Tickets a person still has to review, and drops the approved ones', () => {
+  const host = views()
+  const ended = (id: string, patch: (ticket: NonNullable<ReturnType<typeof store.tickets.get>>) => void) => {
+    live(id)
+    const ticket = store.tickets.get(id)!
+    ticket.ended = { at, by: 'executor', outcome: 'completed' }
+    patch(ticket)
+    store.tickets.save(ticket)
+  }
+  ended('open-review', () => { /* no approval yet */ })
+  ended('approved', ticket => { ticket.reviewed = { at, decision: 'approved', via: 'panel' } })
+  ended('merged', ticket => { ticket.merged = { at, branch: 'agent/m', target: 'main', head: 'abc' } })
+  live('working')
+  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id)).toEqual(['open-review'])
+  // An approved Ticket comes back to the list only after a new commit clears the decision.
+  const ticket = store.tickets.get('approved')!
+  delete ticket.reviewed
+  store.tickets.save(ticket)
+  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id).sort()).toEqual(['approved', 'open-review'])
+})
+
 it('lists review notes with their file, line and text, and marks one the changes moved past', () => {
   const host = views()
   live('t1')

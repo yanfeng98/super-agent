@@ -1704,11 +1704,11 @@ describe('review decisions', () => {
       ticket.reviewed = { at: '2026-11-18T00:00:00.000Z', decision: 'approved' }
       h.repo.tickets.save(ticket)
     })
-    h.engine.reviewTicket(ticketId, 'changes-requested', '请补测试', 'chat')
+    h.engine.reviewTicket(ticketId, 'changes-requested', '请补测试', 'chat', 'alice')
     h.engine.reviewTicket(ticketId, 'approved')
     const reviewed = h.repo.tickets.get(ticketId)!
     expect(reviewed.reviews?.map(round => round.decision)).toEqual(['approved', 'changes-requested', 'approved'])
-    expect(reviewed.reviews?.[1]).toMatchObject({ head: 'abc123', via: 'chat' })
+    expect(reviewed.reviews?.[1]).toMatchObject({ head: 'abc123', via: 'chat', by: 'alice' })
     expect(reviewed.reviewed).toMatchObject({ decision: 'approved', via: 'panel' })
     expect(h.engine.addNote(ticketId, { file: 'src/a.ts', text: '这里补一个用例' }).notes?.[0]).toMatchObject({ commit: 'abc123' })
     // Reopening clears the decision that gates merging, while the record of what a person decided stays.

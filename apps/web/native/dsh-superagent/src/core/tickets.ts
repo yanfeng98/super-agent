@@ -358,10 +358,12 @@ export class Tickets extends EnginePart {
    * Records a person's review of an ended ticket's changes: the latest decision gates merging, while the review stays in the
    * ticket's history once a resume or a rebase clears that gate.
    * @param origin - The interface that made the review.
+   * @param by - The reviewer's name, as the deployment names the person.
    * @returns The ticket with the review.
    * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
    */
-  review(ticketId: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel'): Ticket {
+  review(ticketId: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel',
+    by?: string): Ticket {
     const ticket = this.require(ticketId)
     if (!ticket.ended) throw new UserError('reviewNeedsEnded')
     if (ticket.merged) throw new UserError('ticketMerged')
@@ -369,7 +371,7 @@ export class Tickets extends EnginePart {
     if (ticket.cleaned) throw new UserError('ticketCleaned')
     const text = note?.trim()
     const round: TicketReviewRound = { at: this.now(), decision, ...text ? { note: text.slice(0, 2000) } : {},
-      ...ticket.review?.head ? { head: ticket.review.head } : {}, via: origin }
+      ...ticket.review?.head ? { head: ticket.review.head } : {}, via: origin, ...by ? { by } : {} }
     // A ticket that recorded a review before this history existed keeps that round when the next one arrives.
     const earlier = ticket.reviews ?? (ticket.reviewed ? [ticket.reviewed] : [])
     ticket.reviewed = round

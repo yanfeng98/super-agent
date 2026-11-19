@@ -6,6 +6,17 @@ import { CliError } from '../infra/commands.ts'
 import { runAsWorker } from '../infra/environment.ts'
 
 const TIMEOUT_MS = 30_000
+/** One file of a diff, as the panel lists it: its paths, what happened to it, and its hunks. */
+export interface DiffFile {
+  path: string
+  /** The path before a rename. */
+  oldPath?: string
+  status: 'added' | 'deleted' | 'renamed' | 'modified'
+  additions: number
+  deletions: number
+  /** The file's part of the diff, headers and hunks included, so the panel can show it verbatim. */
+  patch: string
+}
 /** Longest diff the panel receives; a larger change set is truncated with a marker. */
 const DIFF_LIMIT = 200_000
 /** Cap each list so a large change set stays readable and bounded in the ticket record. */
@@ -36,10 +47,47 @@ export async function workingBase(subprocess: SubprocessRuntime, ticket: Ticket,
  * @returns The diff, truncated when it exceeds the panel limit.
  * @throws when git fails, such as in a workspace that is not a repository.
  */
-export async function workspaceDiff(subprocess: SubprocessRuntime, directory: string, base: string, signal: AbortSignal): Promise<{ diff: string; truncated: boolean }> {
+export async function workspaceDiff(subprocess: SubprocessRuntime, directory: string, base: string, signal: AbortSignal):
+  Promise<{ diff: string; truncated: boolean; files: DiffFile[] }> {
   const output = await runAsWorker(subprocess, ['git', 'diff', '--no-color', '--unified=3', `${base}..HEAD`], directory,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
-  return output.length > DIFF_LIMIT ? { diff: output.slice(0, DIFF_LIMIT), truncated: true } : { diff: output, truncated: false }
+  const truncated = output.length > DIFF_LIMIT
+  const diff = truncated ? output.slice(0, DIFF_LIMIT) : output
+  return { diff, truncated, files: parseDiff(diff) }
+}
+/**
+ * Splits a unified diff into one entry per file, which the panel lists and expands one at a time.
+ * @param diff - The output of `git diff`, such as the committed diff of a Ticket's branch.
+ * @returns One entry per `diff --git` header, in the order git printed them.
+ */
+export function parseDiff(diff: string): DiffFile[] {
+  const files: DiffFile[] = []
+  for (const block of diff.split(/^diff --git /m).slice(1)) {
+    const lines = `diff --git ${block}`.split('\n')
+    // A trailing newline ends the file rather than starting a line.
+    if (lines.at(-1) === '') lines.pop()
+    const header = lines.filter(line => !line.startsWith('@@') && !line.startsWith('+') && !line.startsWith('-'))
+    const plus = /^\+\+\+ b\/(.+)$/m.exec(block)?.[1]
+    const minus = /^--- a\/(.+)$/m.exec(block)?.[1]
+    const from = /^rename from (.+)$/m.exec(block)?.[1]
+    const to = /^rename to (.+)$/m.exec(block)?.[1]
+    // A binary or mode-only file has no `+++` line, so the header's own paths are the fallback.
+    const pair = /^diff --git a\/(.+) b\/(.+)$/.exec(lines[0] ?? '')
+    const status = header.some(line => line.startsWith('new file mode')) ? 'added'
+      : header.some(line => line.startsWith('deleted file mode')) ? 'deleted'
+        : from ? 'renamed' : 'modified'
+    const path = plus ?? to ?? minus ?? from ?? pair?.[2] ?? ''
+    const oldPath = from && from !== path ? from : undefined
+    let additions = 0, deletions = 0, hunks = false
+    for (const line of lines) {
+      if (line.startsWith('@@')) { hunks = true; continue }
+      if (!hunks) continue
+      if (line.startsWith('+')) additions++
+      else if (line.startsWith('-')) deletions++
+    }
+    files.push({ path, ...oldPath ? { oldPath } : {}, status, additions, deletions, patch: lines.join('\n') })
+  }
+  return files
 }
 /**
  * Collects a ticket workspace's branch, head, commits since the recorded base, changed files, and uncommitted files.

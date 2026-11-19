@@ -94,6 +94,7 @@ export interface PanelServer {
   threadPages: (key: string, query: { before?: string; around?: string }) => ThreadPageView | undefined
   person: TicketRow[]; search: Pick<ApiResponse<'GET search'>, 'items' | 'threads'>; history: HistoryView
   notifications: ApiResponse<'GET notifications'>
+  mergeQueue: ApiResponse<'GET merge-queue'>
   requests: { path: string; method: string; body?: unknown }[]
   /** Requests with undeclared query params or invalid body presence; asserted empty after each test. */
   misuse: string[]
@@ -256,6 +257,7 @@ function initial(): PanelServer {
   return {
     health: {}, down: false, pending: 0, opened: [], requests: [], misuse: [], queued: new Set(), dropped: [], failing: [],
     notifications: { items: [], unread: 0 },
+    mergeQueue: { paused: false, items: [] },
     setup: { machine: MACHINE, problem: null, feishuProblem: null,
       accounts: { repository: 'acme/widgets', agent: 'agent-bot', feishu: { appId: 'cli_bot', brand: 'feishu', botId: 'ou_bot',
         name: 'Widgets Bot' } } },
@@ -369,7 +371,9 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   } },
   'GET tickets/:id/diff': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
-    return { diff: 'diff --git a/src/a.ts b/src/a.ts\n-旧文案\n+新文案', truncated: false }
+    return { diff: 'diff --git a/src/a.ts b/src/a.ts\n-old\n+new\n', truncated: false,
+      files: [{ path: 'src/a.ts', status: 'modified' as const, additions: 1, deletions: 1,
+        patch: 'diff --git a/src/a.ts b/src/a.ts\n-old\n+new' }] }
   } },
   'POST tickets/:id/merge': { query: ['strategy'], answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
@@ -438,6 +442,11 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/automerge': { body: true, answer: () => ({ auto_merge: false }) },
   'POST tickets/:id/push': { answer: ({ params }) => ({ ticket_id: params.id, pushed: true }) },
   'POST tickets/:id/dequeue': { answer: () => ({ removed: 1, queue: [] }) },
+  'GET merge-queue': { answer: () => server.mergeQueue },
+  'POST merge-queue/pause': { body: true, answer: ({ body }) => {
+    server.mergeQueue = { ...server.mergeQueue, paused: (body as { paused: boolean }).paused }
+    return { paused: server.mergeQueue.paused }
+  } },
   'POST tickets/:id/revert': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { branch: 'agent/t1', target: 'main', commit: 'a'.repeat(40) }

@@ -79,6 +79,38 @@ function NewTicket({ open, onClose }: { open: boolean; onClose: () => void }) {
     </form>
   </Modal>
 }
+/** The host's merge queue: what waits for its turn, in order, and the pause that holds it. */
+function MergeQueue() {
+  const { t, call, navigate } = usePanel()
+  const { data, error, reload } = usePoll(() => call('GET merge-queue'), [])
+  // Nothing to hold or show until a person queues a merge.
+  if (error || !data || (!data.items.length && !data.paused)) return null
+  const pause = async (): Promise<void> => {
+    await call('POST merge-queue/pause', { body: { paused: !data.paused } })
+    await reload()
+  }
+  const leave = async (id: string): Promise<void> => {
+    await call('POST tickets/:id/dequeue', { id })
+    await reload()
+  }
+  return <Section title={t('mergeQueueTitle')} hint={t('mergeQueueHint')} count={data.items.length}>
+    <div className="dt-row-meta dt-status-line">
+      <span className="dt-hint">{data.paused ? t('mergeQueuePaused') : t('mergeQueueRunning')}</span>
+      <Button variant="outline" size="sm" onClick={pause}>{t(data.paused ? 'mergeQueueResume' : 'mergeQueuePause')}</Button>
+    </div>
+    {data.items.length > 0 && <ul className="dt-list">{data.items.map(item => <li className="dt-row" key={item.ticket_id}>
+      <div className="dt-row-main">
+        <div className="dt-row-title"><button type="button" className="dt-open" onClick={() => navigate({ page: 'execution',
+          id: item.ticket_id })}>{item.number ? `T-${String(item.number).padStart(4, '0')} ` : ''}{item.title}</button></div>
+        <div className="dt-row-meta"><span>#{item.position}</span>{item.strategy && <span className="dt-mono">{item.strategy}</span>}
+          {data.paused && <span>{t('mergeQueueWaiting')}</span>}</div>
+      </div>
+      <div className="dt-row-actions">
+        <Button variant="ghost" size="sm" onClick={() => leave(item.ticket_id)}>{t('queueCancel')}</Button>
+      </div>
+    </li>)}</ul>}
+  </Section>
+}
 export function ExecutionStatus({ filter: current, state, reload }: {
   filter: TicketFilter; state: StateView; reload: () => Promise<void>
 }) {
@@ -125,6 +157,7 @@ export function ExecutionStatus({ filter: current, state, reload }: {
   }
   return <>
     <StatusHead hint={t('executionStatusIntro')} settings="execution" />
+    <MergeQueue />
     <div className="dt-row-meta dt-status-line">
       <span className="dt-status-text" data-state={status.tone}>{status.label}</span>
       {!state.setup.problem && <>
@@ -153,6 +186,7 @@ export function ExecutionStatus({ filter: current, state, reload }: {
           true) }}>{t(`ticketFilter.${value}`)}</Pill>)}
     </div>
     {current === 'idle' && <Hint>{t('idleHint')}</Hint>}
+    {current === 'review' && <Hint>{t('reviewFilterHint')}</Hint>}
     <LoadState error={error} loading={!data} />
     {data && <>
       {chosen.length > 0 && <div className="dt-row-meta dt-status-line">
