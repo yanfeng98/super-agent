@@ -280,7 +280,7 @@ export function ExecutionSettings() {
               onChange={event => edit({ prepare: event.target.value })} />
           </Field>
           <Field label={t('checkCommand')} hint={t('checkCommandHint')}>
-            <textarea className="dt-textarea dt-mono" rows={2} maxLength={LIMITS.prepareCommand} spellCheck={false}
+            <textarea className="dt-textarea dt-mono" rows={3} maxLength={LIMITS.prepareCommand} spellCheck={false}
               placeholder={t('checkCommandEmpty')} value={value.check}
               onChange={event => edit({ check: event.target.value })} />
           </Field>

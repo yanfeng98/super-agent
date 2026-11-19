@@ -369,7 +369,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { reopened: true }
   } },
-  'GET tickets/:id/diff': { answer: ({ params }) => {
+  'GET tickets/:id/diff': { query: ['since'], answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { diff: 'diff --git a/src/a.ts b/src/a.ts\n-old\n+new\n', truncated: false,
       files: [{ path: 'src/a.ts', status: 'modified' as const, additions: 1, deletions: 1,

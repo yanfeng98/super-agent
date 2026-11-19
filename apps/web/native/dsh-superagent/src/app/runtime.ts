@@ -14,7 +14,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
 import { Engine, key, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
-  type TicketCheck, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
+  type TicketCheck, type TicketCheckRun, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -36,7 +36,7 @@ import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
-import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
+import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
@@ -261,14 +261,22 @@ export class Runtime extends Service implements SourceHost {
    * Reads a ticket workspace's committed diff since its recorded base, on demand from the panel.
    * @returns The diff, whether it was truncated, and why git could not provide it, if it could not.
    */
-  async ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }> {
+  /**
+   * The committed diff of a ticket's changes.
+   * @param id - The ticket, by id or display number.
+   * @param since - A commit to diff from instead of the ticket's base, such as the one a review covered, so the panel
+   * shows only what changed after that review.
+   * @returns The diff, whether it was truncated, one entry per file, and why it could not be read.
+   */
+  async ticketDiff(id: string, since?: string):
+    Promise<{ diff: string; truncated: boolean; files: DiffFile[]; base?: string; error?: string }> {
     const ticket = this.store.tickets.get(id)
     const directory = ticket?.execution?.directory
-    const base = ticket?.execution?.base
+    const base = since ?? ticket?.execution?.base
     if (!directory) return { diff: '', truncated: false, files: [], error: 'This ticket has no workspace' }
     if (!base) return { diff: '', truncated: false, files: [], error: 'No base commit was recorded for this ticket' }
-    try { return await workspaceDiff(this.ctx.subprocess, directory, base, this.stopped.signal) }
-    catch (error) { return { diff: '', truncated: false, files: [], error: String(error) } }
+    try { return { ...await workspaceDiff(this.ctx.subprocess, directory, base, this.stopped.signal), base } }
+    catch (error) { return { diff: '', truncated: false, files: [], base, error: String(error) } }
   }
   /**
    * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
@@ -464,7 +472,20 @@ export class Runtime extends Service implements SourceHost {
     if (this.merging.has(ticketId)) throw new Error('A merge of this ticket is already running')
     this.merging.add(ticketId)
     try { return await this.serialized(() => this.mergeOnce(ticketId, strategy, options, origin)) }
-    finally { this.merging.delete(ticketId) }
+    catch (error) {
+      // The report reaches whoever asked; the Ticket keeps it too, for the panel that is the record.
+      this.recordMergeError(ticketId, error instanceof Error ? error.message : String(error), origin)
+      throw error
+    } finally { this.merging.delete(ticketId) }
+  }
+  /** Records why the latest merge attempt did not land, which the ticket page shows until a merge succeeds. */
+  private recordMergeError(ticketId: string, error: string, origin: ActionOrigin): void {
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(ticketId)
+      if (!current) return
+      current.mergeError = { at: now(), error: error.slice(0, 2000), via: origin }
+      this.store.tickets.save(current)
+    })
   }
   /** Runs one repository operation after the others, so two merges or reverts never move one checkout together. */
   private serialized<T>(run: () => Promise<T>): Promise<T> {
@@ -550,7 +571,7 @@ export class Runtime extends Service implements SourceHost {
       if (!saved) throw new Error('The ticket changed while its review was captured; merge it again')
       recaptured = true
     }
-    const blocked = mergeBlockedByCheck(this.store.settings().executor.check,
+    const blocked = mergeBlockedByCheck(parseChecks(this.store.settings().executor.check).map(check => check.command).join(' && '),
       this.store.tickets.get(id)?.checks, current.ended.at)
     if (blocked) {
       // An automatic attempt that already saw this ending's check fail waits for the code to change instead of running the
@@ -576,6 +597,7 @@ export class Runtime extends Service implements SourceHost {
       const latest = this.store.tickets.get(id)
       if (!latest) return
       latest.merged = { at, ...result, via: origin, ...strategy === 'ff' ? {} : { strategy } }
+      delete latest.mergeError
       this.store.tickets.save(latest)
     })
     try { await recordMerge(current, { at, ...result, via: origin, ...strategy === 'ff' ? {} : { strategy } }) }
@@ -612,14 +634,17 @@ export class Runtime extends Service implements SourceHost {
     // The merge moved the target branch, so the configured check now says whether the merged tree passes; a failure is the
     // person's to see, and the merge can be undone.
     let targetCheck: TicketCheck | undefined
-    const command = this.store.settings().executor.check.trim()
+    const configured = parseChecks(this.store.settings().executor.check)
     // A fast-forward merge leaves the target with exactly the tree the Ticket branch was checked on, so the gate's check
     // already answered for it; running the same command again would only cost the same minutes twice.
     const sameTree = strategy === 'ff' && !!result.head && result.head === this.store.tickets.get(id)?.review?.head
-    if (command && result.root && !sameTree) {
+    if (configured.length && result.root && !sameTree) {
+      let targetRuns: TicketCheckRun[] | undefined
       try {
-        targetCheck = await workspaceCheck(this.ctx.subprocess, result.root, command, this.stopped.signal,
+        const runs = await workspaceChecks(this.ctx.subprocess, result.root, configured, this.stopped.signal,
           Object.fromEntries(this.ticketEnvironment(decided).map(variable => [variable.key, variable.value])))
+        targetCheck = runs.aggregate
+        targetRuns = runs.runs
       } catch (error) { this.ctx.logger.warn('dsh-superagent: checking the merged target failed: %s', String(error)) }
       if (targetCheck) {
         const run = targetCheck
@@ -640,9 +665,10 @@ export class Runtime extends Service implements SourceHost {
           // A red target branch is no place to merge the next Ticket from a queue.
           const queued = queuedMerges(this.store).length > 0
           if (queued) setMergeQueuePaused(this.store, true)
-          this.ticketNotice(decided, 'check', `The configured check failed on ${result.target} after merging `
-            + `${this.ticketLabel(decided)} (exit ${targetCheck.exitCode ?? 'unknown'}); the merge can be undone`
-            + (queued ? ', and the merge queue is paused' : ''))
+          const failing = targetRuns?.filter(run => !run.ok).map(run => run.name).join(', ')
+          this.ticketNotice(decided, 'check', `The configured check${failing ? ` ${failing}` : ''} failed on `
+            + `${result.target} after merging ${this.ticketLabel(decided)} (exit ${targetCheck.exitCode ?? 'unknown'}); `
+            + 'the merge can be undone' + (queued ? ', and the merge queue is paused' : ''))
         }
       }
     }
@@ -1012,26 +1038,27 @@ export class Runtime extends Service implements SourceHost {
     if (ticket.discarded || ticket.cleaned) throw new Error('The ticket workspace was removed')
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
-    const command = this.store.settings().executor.check.trim()
-    if (!command) throw new Error('No workspace check command is configured')
+    const configured = parseChecks(this.store.settings().executor.check)
+    if (!configured.length) throw new Error('No workspace check command is configured')
     const env = Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value]))
     const endedAt = ticket.ended.at
     const base = ticket.execution?.base
-    const checks = await workspaceCheck(this.ctx.subprocess, directory, command, this.stopped.signal, env)
+    const { aggregate, runs } = await workspaceChecks(this.ctx.subprocess, directory, configured, this.stopped.signal, env)
     const saved = this.store.atomic(() => {
       const current = this.store.tickets.get(id)
       if (!current?.ended || current.ended.at !== endedAt || current.merged || current.discarded || current.cleaned
         || current.execution?.base !== base) return false
-      this.recordCheck(current, checks)
+      this.recordCheck(current, aggregate, runs)
       return true
     })
     if (!saved) throw new Error('The ticket changed while its check ran; run the check again')
-    return checks
+    return aggregate
   }
   /** Records a check run as the ticket's latest and appends it to the capped history. */
-  private recordCheck(ticket: Ticket, check: TicketCheck): void {
+  private recordCheck(ticket: Ticket, check: TicketCheck, runs?: TicketCheckRun[]): void {
     ticket.checks = check
     ticket.checkHistory = [...(ticket.checkHistory ?? []), check].slice(-10)
+    if (runs) ticket.checkRuns = runs
     this.store.tickets.save(ticket)
   }
   /**
@@ -1183,21 +1210,24 @@ export class Runtime extends Service implements SourceHost {
       current.review = review
       this.store.tickets.save(current)
     })
-    // The configured check runs once per ending, so a merge can require its result instead of trusting the agent's report.
-    const command = this.store.settings().executor.check.trim()
+    // The configured checks run once per ending, so a merge can require their result instead of trusting the agent's report.
+    const configured = parseChecks(this.store.settings().executor.check)
     let checks: TicketCheck | undefined
-    if (command && ticket.execution?.directory) {
+    let checkRuns: TicketCheckRun[] | undefined
+    if (configured.length && ticket.execution?.directory) {
       try {
-        checks = await workspaceCheck(ctx.subprocess, ticket.execution.directory, command, this.stopped.signal,
+        const runs = await workspaceChecks(ctx.subprocess, ticket.execution.directory, configured, this.stopped.signal,
           Object.fromEntries(this.ticketEnvironment(ticket).map(variable => [variable.key, variable.value])))
+        checks = runs.aggregate
+        checkRuns = runs.runs
       } catch (error) { ctx.logger.warn('dsh-superagent: running the workspace check failed: %s', String(error)) }
       if (checks && stillEnded()) {
-        const run = checks
+        const run = checks, detail = checkRuns
         this.store.atomic(() => {
           const current = this.store.tickets.get(ticket.id)
           if (!current?.ended || current.ended.at !== ticket.ended?.at || current.merged || current.discarded
             || current.cleaned || current.execution?.base !== ticket.execution?.base) return
-          this.recordCheck(current, run)
+          this.recordCheck(current, run, detail)
         })
       }
     }
@@ -1207,8 +1237,9 @@ export class Runtime extends Service implements SourceHost {
     // A check that failed at the ending is the person's to see too, since it keeps the merge from passing.
     const ended = this.store.tickets.get(ticket.id)
     if (ended?.ended?.outcome === 'completed' && checks && !checks.ok) {
-      this.ticketNotice(ended, 'check', `The configured check failed at the ending of ${this.ticketLabel(ended)} `
-        + `(exit ${checks.exitCode ?? 'unknown'}); the merge waits for a passing run`)
+      const failing = checkRuns?.filter(run => !run.ok).map(run => run.name).join(', ')
+      this.ticketNotice(ended, 'check', `The configured check${failing ? ` ${failing}` : ''} failed at the ending of `
+        + `${this.ticketLabel(ended)} (exit ${checks.exitCode ?? 'unknown'}); the merge waits for a passing run`)
     }
     // A deployment that requires an approval gates the merge on a person, who hears of it without opening the panel.
     if (ended?.ended?.outcome === 'completed' && this.store.settings().executor.requireReview

@@ -58,7 +58,7 @@ export interface HttpHost {
   readonly feishuProblem?: SetupProblem | undefined
   configured(): boolean
   /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
-  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }>
+  ticketDiff(id: string, since?: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; base?: string; error?: string }>
   /** Merges an ended ticket's branch into the repository and records the merge. */
   mergeTicket(id: string, strategy?: 'ff' | 'squash' | 'merge'): Promise<{ branch: string; target: string }>
   /** Removes an ended ticket's linked worktree and branch. */
@@ -297,7 +297,11 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST tickets/:id/reopen': ({ params }) => { const id = ticket(params.id); runtime.engine.reopenTicket(id); return { reopened: true } },
     'POST tickets/:id/approve': ({ params }) => { const id = ticket(params.id); runtime.approveTicket(id); return { approved: true } },
-    'GET tickets/:id/diff': async ({ params }) => { const id = ticket(params.id); return runtime.ticketDiff(id) },
+    'GET tickets/:id/diff': async ({ params, query }) => {
+      const id = ticket(params.id)
+      const since = z.string().regex(/^[0-9a-f]{7,40}$/i, 'A commit id').optional().parse(query.since)
+      return runtime.ticketDiff(id, since)
+    },
     'POST tickets/:id/merge': async ({ params, query }) => {
       const id = ticket(params.id)
       const strategy = z.enum(['ff', 'squash', 'merge']).default('ff').parse(query.strategy)

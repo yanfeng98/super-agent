@@ -12,7 +12,8 @@ import { ActionLink, ClampText, ConfirmButton, ExternalLink, Hint, KeyValues, La
   SessionButton, StageMark, When } from './widgets.tsx'
 
 /** Where this browser keeps the files a person marked reviewed, per Ticket and commit. */
-const viewedKey = (id: string, head: string | undefined): string => `dsh-superagent/viewed/${id}/${head ?? 'none'}`
+const viewedKey = (id: string, head: string | undefined, since: string | undefined): string =>
+  `dsh-superagent/viewed/${id}/${head ?? 'none'}/${since ?? 'all'}`
 function readViewed(key: string): Set<string> {
   try { const raw = localStorage.getItem(key); return new Set(raw ? JSON.parse(raw) as string[] : []) }
   catch (error) { /* A browser that blocks storage keeps the marks for this page only. */ return new Set() }
@@ -188,12 +189,13 @@ export function TicketPage({ id }: { id: string }) {
   const after = async (request: Promise<unknown>) => { await request; await reload() }
   // The reviewed marks are the browser's own, so they follow the commit being reviewed.
   const reviewHead = data?.review?.head
-  useEffect(() => { setViewedFiles(readViewed(viewedKey(id, reviewHead))) }, [id, reviewHead])
+  const [diffSince, setDiffSince] = useState<string>()
+  useEffect(() => { setViewedFiles(readViewed(viewedKey(id, reviewHead, diffSince))) }, [id, reviewHead, diffSince])
   const toggleViewed = (path: string): void => setViewedFiles(current => {
     const next = new Set(current)
     if (next.has(path)) next.delete(path)
     else next.add(path)
-    writeViewed(viewedKey(id, reviewHead), next)
+    writeViewed(viewedKey(id, reviewHead, diffSince), next)
     return next
   })
   const relate = async (reference: string, linked: boolean) => {
@@ -246,12 +248,16 @@ export function TicketPage({ id }: { id: string }) {
     } catch (failure) { notify(errorText(failure)) }
     finally { setRenamingBusy(false) }
   }
-  const loadDiff = async () => {
+  const loadDiff = async (since?: string) => {
     setDiffBusy(true)
-    try { setDiff(await call('GET tickets/:id/diff', { id })) }
+    setDiffSince(since)
+    try { setDiff(await call('GET tickets/:id/diff', { id, ...since ? { query: { since } } : {} })) }
     catch (failure) { notify(errorText(failure)) }
     finally { setDiffBusy(false) }
   }
+  // What changed after the commit a review covered, which is what re-reviewing an updated branch needs.
+  const reviewedHead = data?.reviewed?.head
+  const showDelta = !!reviewedHead && reviewedHead !== data?.review?.head
   if (!data) return <><PageHead
     title={t('term.ticket')} />{error instanceof ApiError && error.missing ? <Hint>{t('ticketNotFound')}</Hint> : <LoadState
       error={error} loading />}</>
@@ -429,8 +435,11 @@ export function TicketPage({ id }: { id: string }) {
         <ul className="dt-plain-list dt-mono">{review.dirty.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
       </>}
       <div className="dt-row-actions">
-        <Button variant="outline" size="sm" onClick={loadDiff} disabled={diffBusy}>{t('reviewViewDiff')}</Button>
+        <Button variant="outline" size="sm" onClick={() => loadDiff()} disabled={diffBusy}>{t('reviewViewDiff')}</Button>
+        {showDelta && <Button variant="outline" size="sm" onClick={() => loadDiff(reviewedHead)} disabled={diffBusy}>
+          {t('reviewDiffSince', { commit: reviewedHead!.slice(0, 8) })}</Button>}
       </div>
+      {diffSince && diff && !diff.error && <Hint>{t('reviewDiffSinceHint', { commit: diffSince.slice(0, 8) })}</Hint>}
       {diff?.error && <Hint>{diff.error}</Hint>}
       {diff && !diff.error && (diff.files.length
         ? <>
@@ -521,6 +530,10 @@ export function TicketPage({ id }: { id: string }) {
           : data.checks.exitCode === null ? t('checksFailedUnknown') : t('checksFailed', { code: data.checks.exitCode })}</span>],
           [t('checkCommand'), <span className="dt-mono">{data.checks.command}</span>],
           [t('checksAt'), when(data.checks.at, t('lang'))]]} />
+        {data.checkRuns && data.checkRuns.length > 1 && <ul className="dt-plain-list">{data.checkRuns.map((run, index) =>
+          <li key={`${run.name}:${index}`}>
+          <Dot state={run.ok ? 'done' : 'error'} label={run.ok ? t('checksPassed') : t('checksFailedUnknown')} />
+          <span className="dt-mono">{run.name}</span></li>)}</ul>}
         {data.checks.output && <pre className="dt-workspace-diff">{data.checks.output}</pre>}
         {data.checks.truncated && <Hint>{t('checksTruncated')}</Hint>}
       </> : <Hint>{t('checksNotRun')}</Hint>}
@@ -537,6 +550,7 @@ export function TicketPage({ id }: { id: string }) {
         <Button variant="outline" size="sm" disabled={checkBusy} onClick={runCheck}>{t('checksRun')}</Button>
       </div>}
     </Section>}
+    {data.mergeError && <Hint>{t('mergeErrorHint', { error: data.mergeError.error })}</Hint>}
     {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}
     {data.merged?.head && <Hint>{t('mergedCommit', { commit: data.merged.head.slice(0, 8) })}</Hint>}
     {data.merged?.push && <Hint>{data.merged.push.ok ? t('pushOk') : t('pushFailed', { error: data.merged.push.error ?? '' })}</Hint>}
