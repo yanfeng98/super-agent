@@ -36,6 +36,7 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'ticket/<id>/assignments', holds: 'its assignments, newest first, with the start of each report', executor: true },
   { name: 'ticket/<id>/inputs', holds: 'its inputs, newest first', executor: true },
   { name: 'ticket/<id>/result', holds: 'its latest report', executor: true },
+  { name: 'ticket/<id>/diff', holds: 'the committed diff of its changes since its base, which the panel reads for View diff' },
   { name: 'ticket/<id>/report/<id>', holds: 'the report of one of its assignments', executor: true },
   { name: 'ticket/<id>/transcript', holds: 'its Executor Session\'s messages, newest first', executor: true },
   { name: 'ticket/<id>/message/<n>', holds: 'one message of that transcript', executor: true },
@@ -70,6 +71,8 @@ export interface ResourceHost {
   mayRead(sessionId: string, revision: number): boolean
   feishuPageSize(): number
   sourceLink(trigger: Trigger, signal?: AbortSignal): Promise<{ source_url?: string; source_url_read?: string }>
+  /** The committed diff of one Ticket's changes, or why it cannot be read. */
+  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }>
 }
 export interface MainResourceHost extends ResourceHost {
   readonly sessions: Pick<Sessions, 'status' | 'modelRetry'>
@@ -292,7 +295,11 @@ const ROUTES: readonly Route[] = [
     } else if (part !== undefined) throw new Error('Unknown context resource')
     else if (section === 'assignment') body = ticket.execution?.assignment ?? ''
     else if (section === 'result') body = latestReport(ticket)?.summary ?? ''
-    else if (section === 'transcript') {
+    else if (section === 'diff') {
+      main(read)
+      const found = await host.ticketDiff(id)
+      body = found.error ?? (found.diff || 'No committed change')
+    } else if (section === 'transcript') {
       body = (await transcript(host, id)).flatMap((event, index) => {
         const entry = transcriptEntry(event)
         const said = entry?.message.content.map(block => block.type === 'text' ? block.text : `[${block.type}]`).join(' ') ?? ''
