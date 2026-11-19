@@ -35,7 +35,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
 import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
@@ -199,6 +199,7 @@ export class Runtime extends Service implements SourceHost {
         localRequest: input => this.localRequest(input),
         localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
         mergeTicket: (id, strategy, options) => runtime.mergeTicket(id, strategy, options),
+        blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -360,14 +361,15 @@ export class Runtime extends Service implements SourceHost {
    * Merges an ended ticket's branch into the repository's checked-out branch, fast-forwarding, squashing, or making a merge
    * commit, then records the merge on the ticket and in its local archive. A branch the repository moved past is rebased
    * first, and a configured check that has not passed since the ending runs again, so a person who asked to merge needs no
-   * other step. With `cleanup`, the merged worktree and branch are removed afterwards. A branch that gained commits after
-   * its review was captured is captured again, with the check run on the new tree, unless approvals are required.
+   * other step. With `cleanup`, the merged worktree and branch are removed afterwards; with `push`, the merged branch goes to
+   * the upstream its repository names. A branch that gained commits after its review was captured is captured again, with the
+   * check run on the new tree, unless approvals are required.
    * @throws when the ticket is unknown or open, has no workspace, was discarded, a review requested changes, an approval is
-   * required and missing, an open review note remains, the configured check fails, a rebase conflicts, or git cannot
-   * fast-forward.
+   * required and missing, an open review note remains, the configured check fails, a rebase conflicts and the worker cannot
+   * take it, or git cannot fast-forward.
    */
-  async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean } = {}):
-    Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true }> {
+  async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean; push?: boolean } = {}):
+    Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
@@ -463,6 +465,14 @@ export class Runtime extends Service implements SourceHost {
     })
     try { await recordMerge(current, { at, ...result, ...strategy === 'ff' ? {} : { strategy } }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a merge in the archive failed: %s', String(error)) }
+    // The push is the person's request too, but the remote's answer is not this runtime's: a rejected or missing upstream
+    // leaves the merge recorded and says why, so one report carries both facts.
+    let pushed: true | undefined
+    let pushError: string | undefined
+    if (options.push) {
+      try { await pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal); pushed = true }
+      catch (error) { pushError = error instanceof Error ? error.message : String(error) }
+    }
     let cleaned: true | undefined
     if (options.cleanup) {
       try {
@@ -473,7 +483,8 @@ export class Runtime extends Service implements SourceHost {
         throw new Error(`Merged ${result.branch} into ${result.target}, but removing its worktree failed: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
-    return { ...result, ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {} }
+    return { ...result, ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {},
+      ...pushed ? { pushed } : {}, ...pushError ? { pushError } : {} }
   }
   /**
    * Adds a person's note on a file and line of a ticket's changes.
@@ -611,8 +622,10 @@ export class Runtime extends Service implements SourceHost {
   /**
    * Rebases an ended ticket's branch onto the repository's checked-out branch, so a later merge can fast-forward.
    * The recorded base moves to the target's commit, so the review and diff exclude upstream commits, and a prior check is
-   * cleared because the branch now runs on a different tree.
-   * @throws when the ticket is not ended, was merged or discarded, has no workspace, or the rebase cannot finish cleanly.
+   * cleared because the branch now runs on a different tree. A rebase that conflicts resumes the ticket with the conflict,
+   * which its worker resolves in its own worktree.
+   * @throws when the ticket is not ended, was merged or discarded, has no workspace, the rebase cannot finish cleanly, or
+   * the conflict could not be handed to the worker.
    */
   async rebaseTicket(id: string): Promise<{ branch: string; target: string }> {
     const ticket = this.store.tickets.get(id)
@@ -623,6 +636,10 @@ export class Runtime extends Service implements SourceHost {
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
     const result = await rebaseWorkspace(this.ctx.subprocess, directory, this.stopped.signal, ticket.execution?.target)
+      .catch((error: unknown) => {
+        if (error instanceof RebaseConflictError) throw this.handBackConflict(error, ticket)
+        throw error
+      })
     const rebased = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base: result.base } : undefined }
     const review = await captureReview(this.ctx.subprocess, rebased, this.stopped.signal)
     const at = now()
@@ -640,6 +657,20 @@ export class Runtime extends Service implements SourceHost {
     try { await recordRebase(ticket, { at, ...result }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a rebase in the archive failed: %s', String(error)) }
     return { branch: result.branch, target: result.target }
+  }
+  /**
+   * Hands a rebase conflict to the ticket's worker, which resolves it in its own worktree, so the person who asked to merge
+   * need not send the work back themselves. A ticket that cannot resume, such as a stopped or paused one, keeps the plain
+   * conflict report.
+   */
+  private handBackConflict(error: RebaseConflictError, ticket: Ticket): Error {
+    const files = error.files.join(', ')
+    const note = `The merge into ${error.target} conflicts in ${files}; the ticket branch keeps its commits. In your worktree, `
+      + `run "git rebase ${error.target}", resolve ${error.files.length === 1 ? 'that file' : 'those files'}, and continue with `
+      + '"git add" and "git rebase --continue"; report ready again once the branch is rebased.'
+    if (!this.engine.resumeWithNote(ticket.id, note)) return error
+    return new Error(`Rebasing onto ${error.target} conflicts in ${files}; the worker was told and is resolving it. `
+      + 'Ask to merge again once it reports ready.')
   }
   /**
    * Removes a merged ticket's worktree and deletes its branch; a squash merge's branch is force-deleted because its

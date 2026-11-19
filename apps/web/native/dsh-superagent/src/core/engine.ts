@@ -171,6 +171,12 @@ export class Engine {
    */
   reopenTicket(ticketId: string): Ticket { return this.repo.atomic(() => this.tickets.reopen(ticketId)) }
   /**
+   * Resumes an ended ticket with a note the host wrote for work a person's request exposed, such as a conflict their merge
+   * met; the worker resolves it in its own worktree.
+   * @returns whether the ticket resumed.
+   */
+  resumeWithNote(ticketId: string, note: string): boolean { return this.repo.atomic(() => this.tickets.resumeWithNote(ticketId, note)) }
+  /**
    * A person renames a ticket; the recorded messages keep their text.
    * @throws UserError when the ticket is unknown or the title is blank.
    */

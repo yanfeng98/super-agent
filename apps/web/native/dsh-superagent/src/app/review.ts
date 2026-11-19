@@ -80,6 +80,16 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
 
 /** How a merge moves the target branch: fast-forward only, a squashed commit, or a merge commit. */
 export type MergeStrategy = 'ff' | 'squash' | 'merge'
+/**
+ * A rebase that stopped on conflicts, which the workspace then abandoned, leaving the branch on its commits.
+ * `files` are the paths git left unmerged, which a worker resolves in its own worktree.
+ */
+export class RebaseConflictError extends Error {
+  constructor(readonly target: string, readonly files: readonly string[]) {
+    super(`Rebasing onto ${target} conflicts in ${files.join(', ')}; the Ticket branch keeps its commits`)
+    this.name = 'RebaseConflictError'
+  }
+}
 /** Where a ticket workspace sits in git, and the repository branch a merge would move. */
 export interface WorkspaceRepo {
   /** Main repository root, shared by its worktrees. */
@@ -180,6 +190,19 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   }
   return { branch: repo.branch, target: repo.target }
 }
+/** Longest a push may take; a remote that stalls ends the wait with a failure rather than blocking the merge. */
+const PUSH_TIMEOUT_MS = 120_000
+/**
+ * Pushes the repository's checked-out branch, which a merge just moved, to the remote branch its upstream names. The remote,
+ * branch and credentials are the repository's own, so a deployment needs no push setting.
+ * @throws when the workspace is not a git repository on a branch, has no upstream, or git cannot push.
+ */
+export async function pushWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<void> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  await runAsWorker(subprocess, ['git', 'push'], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(PUSH_TIMEOUT_MS)]))
+}
 /**
  * Rebases the ticket branch onto the repository's checked-out branch, so a merge can fast-forward after the repository moved.
  * A conflicted rebase is aborted, leaving the workspace on its previous commits.
@@ -208,7 +231,7 @@ export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: 
       AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).catch(() => {
       // A rebase that never started has nothing to abort; the original failure is the report.
     })
-    if (unmerged.length) throw new Error(`Rebasing onto ${repo.target} conflicts in ${unmerged.join(', ')}; the Ticket branch keeps its commits`)
+    if (unmerged.length) throw new RebaseConflictError(repo.target, unmerged)
     throw error
   }
   const base = (await runAsWorker(subprocess, ['git', 'rev-parse', repo.target], repo.root,

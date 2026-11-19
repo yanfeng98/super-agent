@@ -384,6 +384,29 @@ export class Tickets extends EnginePart {
     return this.require(ticketId)
   }
   /**
+   * Resumes an ended ticket under its unchanged Mandate with `note` as the Input its worker reads first, for work the host
+   * found while carrying out a person's request, such as a conflict their merge met. The person's request is the request for
+   * that work; unlike `wake`, no person's message is needed, and unlike `reopen`, the note says what happened.
+   * @returns whether the ticket resumed; `false` for a stopped, merged, discarded or cleaned ticket, a paused Policy, or one
+   * whose Mandate the Policy no longer holds.
+   */
+  resumeWithNote(ticketId: string, note: string): boolean {
+    const ticket = this.repo.tickets.get(ticketId)
+    if (!ticket || liveTicket(ticket) || ticket.ended?.by === 'human') return false
+    if (ticket.merged || ticket.discarded || ticket.cleaned) return false
+    const policy = this.policy()
+    if (policy.paused || !policy.revalidate(ticket.mandate)) return false
+    const at = this.now()
+    delete ticket.ended; delete ticket.attention; delete ticket.delivery; delete ticket.review; delete ticket.checks
+    delete ticket.reviewed
+    const assignment = this.newAssignment(ticket)
+    const input: TicketInput = { id: key('input', ticket.id, 'resume', at), kind: 'text', text: note, at }
+    ticket.inputs.push(input); ticket.undelivered.push(input.id); ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    this.options.executor.start(ticket, assignment)
+    return true
+  }
+  /**
    * Ends the stalled assignment of a retryable open ticket (`failed`, `blocked`, or failed input delivery) and starts a new one.
    * @throws UserError when the ticket is unknown or not retryable.
    */

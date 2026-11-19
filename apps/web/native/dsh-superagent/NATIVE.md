@@ -149,6 +149,15 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     diff as the panel through `ticket/<id>/diff`. `tests/merge.spec.ts`, `tests/review.spec.ts`, `tests/tools.spec.ts` and
     `tests/http.spec.ts` cover them.
 
+14. **Conflict handback, chat dependencies and optional push.** A rebase that conflicts now raises `RebaseConflictError`
+    (`src/app/review.ts`) instead of a bare `Error`, and `Runtime.rebaseTicket` resumes the Ticket with the conflicting files
+    through `Tickets.resumeWithNote`/`Engine.resumeWithNote`, so its worker resolves the conflict in its own worktree without
+    the person sending the work back; a stopped, merged or cleaned Ticket, a paused Policy, or one whose Mandate no longer
+    holds keeps the plain report. `orchestrator_ticket_dependency` records `blockedBy` from the DSH chat, the same dependency
+    `POST tickets/:id/blockers` edits. `orchestrator_ticket_merge` takes `push`, which runs `pushWorkspace` after the merge is
+    recorded and reports `pushed` or `pushError` rather than undoing the merge. `tests/merge.spec.ts` and
+    `tests/chat-tools.spec.ts` cover them.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.

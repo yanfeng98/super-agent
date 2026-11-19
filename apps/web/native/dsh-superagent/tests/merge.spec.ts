@@ -1,12 +1,12 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
-    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn() }
+    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn() }
 })
 
 let h: Host
@@ -19,6 +19,7 @@ beforeEach(async () => {
     { capturedAt: '2026-11-19T00:03:00.000Z', head: 'new', commits: [], files: [], dirty: [] })
   vi.mocked(rebaseWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main', base: 'base' })
   vi.mocked(discardWorkspace).mockReset().mockResolvedValue(undefined)
+  vi.mocked(pushWorkspace).mockReset().mockResolvedValue(undefined)
 })
 afterEach(async () => { await h.stop() })
 
@@ -65,14 +66,51 @@ it('reports a failed check and does not merge the rebased branch', async () => {
   expect(h.runtime.store.tickets.get(ticket.id)?.merged).toBeUndefined()
 })
 
-it('reports a conflicting rebase and leaves the branch unmerged', async () => {
+it('hands a conflicting rebase to the worker instead of leaving the person a second step', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)
   vi.mocked(targetContained).mockResolvedValue(false)
-  vi.spyOn(h.runtime, 'rebaseTicket').mockRejectedValue(
-    new Error('Rebasing onto main conflicts in a.txt; the Ticket branch keeps its commits'))
-  await expect(h.runtime.mergeTicket(ticket.id)).rejects.toThrow(/conflicts in a\.txt/)
+  vi.mocked(rebaseWorkspace).mockRejectedValue(new RebaseConflictError('main', ['a.txt', 'b.txt']))
+  await expect(h.runtime.mergeTicket(ticket.id))
+    .rejects.toThrow(/conflicts in a\.txt, b\.txt; the worker was told and is resolving it/)
+  // The ticket takes the conflict back under its Mandate, so its worker resumes without a message from the person.
+  const resumed = h.runtime.store.tickets.get(ticket.id)!
+  expect(resumed.ended).toBeUndefined()
+  expect(resumed.reviewed).toBeUndefined()
+  expect(resumed.review).toBeUndefined()
+  expect(resumed.inputs).toContainEqual(expect.objectContaining({ kind: 'text', text: expect.stringContaining('git rebase main') }))
+  expect(resumed.inputs).toContainEqual(expect.objectContaining({ kind: 'text', text: expect.stringContaining('a.txt, b.txt') }))
   expect(mergeWorkspace).not.toHaveBeenCalled()
+  expect(pushWorkspace).not.toHaveBeenCalled()
+})
+
+it('keeps the plain conflict report for a stopped ticket, which takes no new work', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-11-19T00:00:00.000Z', by: 'human', outcome: 'stopped' }
+    h.runtime.store.tickets.save(current)
+  })
+  vi.mocked(targetContained).mockResolvedValue(false)
+  vi.mocked(rebaseWorkspace).mockRejectedValue(new RebaseConflictError('main', ['a.txt']))
+  await expect(h.runtime.mergeTicket(ticket.id))
+    .rejects.toThrow(/^Rebasing onto main conflicts in a\.txt; the Ticket branch keeps its commits$/)
+  expect(h.runtime.store.tickets.get(ticket.id)?.ended?.by).toBe('human')
+})
+
+it('pushes the merged branch when the person asked for a push, and reports a push it cannot make', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  expect(await h.runtime.mergeTicket(ticket.id, 'ff', { push: true }))
+    .toEqual({ branch: 'agent/t', target: 'main', pushed: true })
+  expect(pushWorkspace).toHaveBeenCalled()
+  const { ticket: other } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  ended(other.id)
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  // The merge stands; the push's refusal is what the report adds.
+  expect(await h.runtime.mergeTicket(other.id, 'ff', { push: true }))
+    .toMatchObject({ branch: 'agent/t', target: 'main', pushError: 'fatal: no upstream branch' })
+  expect(h.runtime.store.tickets.get(other.id)?.merged).toBeDefined()
 })
 
 it('refuses to rebase for a merge when the deployment requires an approval', async () => {
