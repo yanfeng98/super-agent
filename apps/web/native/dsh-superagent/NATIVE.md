@@ -202,6 +202,14 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     with `patchFingerprint` before and after, so a rebase that moved the same changes onto a newer commit keeps the
     approval and names the new commit; `Tickets.review` keeps the history's rounds as copies for that. `tests/review.spec.ts`
     and `tests/merge.spec.ts` cover them.
+20. **Changed-since-review diffs, named checks and kept merge failures.** `GET tickets/<id>/diff?since=<commit>` returns
+    the diff from a reviewed commit (`Runtime.ticketDiff(id, since)`), which the ticket page offers as **Changed since the
+    review**; the browser keeps its viewed marks per diff. `executor.check` holds one command per line, each optionally
+    `name: command`; `parseChecks` reads them and `workspaceChecks` runs each in order, recording `Ticket.checkRuns` beside
+    the combined `Ticket.checks` that the merge gate reads, so a failure names its check on the page and in the
+    notification. A merge attempt that failed keeps `Ticket.mergeError` until a merge succeeds, and the page shows it, so a
+    chat that has scrolled away is no longer the only record. `tests/check.spec.ts`, `tests/merge.spec.ts` and
+    `tests/panel-execution.spec.tsx` cover them.
 18. **Per-file review diff, a review worklist, a named reviewer and the queue on the page.** `GET tickets/<id>/diff` now
     returns `files`, one entry per `diff --git` block (`parseDiff` in `src/app/review.ts`: paths, status, added/removed
     counts, the patch), and the Ticket page lists them, opens one file at a time and keeps a browser-local **Viewed** mark
