@@ -182,6 +182,17 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/runtime.spec.ts` and `tests/panel-execution.spec.tsx` cover
     them. The router prompt now says the main Session merges or undoes a merge only on the person's explicit ask, within
     its 1,400-character budget.
+17. **Durable merge queue, merged-target check, push retry and wider desktop notices.** `src/app/merge-queue.ts` holds the
+    Tickets a person asked to merge one after another in a KV record, so the queue survives a restart; a pass drains it
+    (`Runtime.runMergeQueue`), merges each Ticket with the usual gates as an `auto` merge, and keeps merges, reverts and
+    pushes one at a time in a repository (`Runtime.serialized`), reports that one result to the
+    main Session, and takes the entry off even when it failed, while `orchestrator_merge_queue` adds or cancels entries and
+    the ticket page shows a place and a way out. After a merge, `mergeOnce` runs the configured check on the target branch,
+    records `Ticket.targetCheck`, and announces a failure as a `check` notification with the way to undo the merge. A push
+    that failed is retried from the ticket page (`POST tickets/<id>/push`), which records the remote's answer and leaves a
+    `push` notification. The desktop watcher now also announces the merge events in the inbox it cannot see in a ticket's
+    state. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/notify.spec.ts` and
+    `tests/panel-execution.spec.tsx` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
