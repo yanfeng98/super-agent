@@ -496,9 +496,10 @@ export async function recordRevert(ticket: Pick<Ticket, 'channels'>, reverted: {
  * @param ticket - The ticket whose merged branch was pushed.
  * @param push - When it was pushed, whether the remote accepted it, and why not.
  */
-export async function recordPush(ticket: Pick<Ticket, 'channels'>, push: { at: string; ok: boolean; error?: string }): Promise<void> {
+export async function recordPush(ticket: Pick<Ticket, 'channels'>, push: { at: string; ok: boolean; error?: string;
+  via?: ActionOrigin }): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:pushed:${push.at} -->`, `${push.at} · 推送 / Push`,
-    ['- status: ' + (push.ok ? 'pushed' : 'push-failed'), `- by: ${OPERATOR}`,
+    ['- status: ' + (push.ok ? 'pushed' : 'push-failed'), `- by: ${OPERATOR}`, ...(push.via ? [`- via: ${push.via}`] : []),
       ...(push.error ? [`- error: ${oneLine(push.error)}`] : [])])
 }
 /**

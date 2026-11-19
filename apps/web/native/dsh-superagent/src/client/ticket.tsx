@@ -495,6 +495,15 @@ export function TicketPage({ id }: { id: string }) {
     {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}
     {data.merged?.head && <Hint>{t('mergedCommit', { commit: data.merged.head.slice(0, 8) })}</Hint>}
     {data.merged?.push && <Hint>{data.merged.push.ok ? t('pushOk') : t('pushFailed', { error: data.merged.push.error ?? '' })}</Hint>}
+    {data.actions.push && <div className="dt-row-actions">
+      <Button variant="outline" size="sm" onClick={() => after(call('POST tickets/:id/push', { id }))}>{t('pushRetry')}</Button>
+    </div>}
+    {data.queuePosition !== undefined && <div className="dt-form">
+      <Hint>{t('queuePosition', { position: data.queuePosition })}</Hint>
+      <div className="dt-row-buttons">
+        <Button variant="outline" size="sm" onClick={() => after(call('POST tickets/:id/dequeue', { id }))}>{t('queueCancel')}</Button>
+      </div>
+    </div>}
     {data.autoMerge && <div className="dt-form">
       <Hint>{t('autoMergeHint', { attempts: data.autoMerge.attempts })}</Hint>
       {data.autoMerge.last?.error && <Hint>{t('autoMergeLast', { error: data.autoMerge.last.error })}</Hint>}
@@ -510,6 +519,14 @@ export function TicketPage({ id }: { id: string }) {
       {data.actions.cleanup && <ConfirmButton variant="outline" icon="trash" label={t('cleanupWorktree')} title={t('cleanupTitle')}
         message={t('cleanupConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/cleanup', { id }))} />}
     </div>}
+    {data.targetCheck && <Section title={t('targetCheckTitle')} hint={t('targetCheckHint')}>
+      <KeyValues rows={[[t('statusTitle'), <span className="dt-inline-link"><Dot state={data.targetCheck.ok ? 'done' : 'error'}
+        label={data.targetCheck.ok ? t('checksPassed') : t('checksFailedUnknown')} />{data.targetCheck.ok ? t('checksPassed')
+        : data.targetCheck.exitCode === null ? t('checksFailedUnknown') : t('checksFailed', { code: data.targetCheck.exitCode })}</span>],
+        [t('checkCommand'), <span className="dt-mono">{data.targetCheck.command}</span>],
+        [t('checksAt'), when(data.targetCheck.at, t('lang'))]]} />
+      {data.targetCheck.output && <pre className="dt-workspace-diff">{data.targetCheck.output}</pre>}
+    </Section>}
     {data.cleaned && <Hint>{t('cleanedHint')}</Hint>}
     {data.discarded && <Hint>{t('discardedHint')}</Hint>}
     {data.history.length > 0 && <Section title={t('historyTitle')} hint={t('historyHint')}>

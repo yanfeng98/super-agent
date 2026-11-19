@@ -1,8 +1,14 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
+import { workspaceCheck } from '../src/app/check.ts'
+import { queuedMerges } from '../src/app/merge-queue.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
+vi.mock('../src/app/check.ts', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/app/check.ts')>()
+  return { ...actual, workspaceCheck: vi.fn() }
+})
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
@@ -21,6 +27,8 @@ beforeEach(async () => {
   vi.mocked(discardWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(pushWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(revertWorkspace).mockReset().mockResolvedValue({ target: 'main', head: 'undo-sha' })
+  vi.mocked(workspaceCheck).mockReset().mockResolvedValue(
+    { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:02:00.000Z', output: 'passed' })
 })
 afterEach(async () => { await h.stop() })
 /** Notices injected into the main Session, parsed from the message text. */
@@ -48,7 +56,7 @@ it('rebases a branch the repository moved past, runs the configured check, and m
   const rebase = vi.spyOn(h.runtime, 'rebaseTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
   const check = vi.spyOn(h.runtime, 'checkTicket').mockResolvedValue(
     { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:01:00.000Z', output: 'passed' })
-  expect(await h.runtime.mergeTicket(ticket.id)).toEqual({ branch: 'agent/t', target: 'main', rebased: true })
+  expect(await h.runtime.mergeTicket(ticket.id)).toMatchObject({ branch: 'agent/t', target: 'main', rebased: true })
   expect(rebase).toHaveBeenCalledWith(ticket.id, 'panel')
   expect(check).toHaveBeenCalledWith(ticket.id)
   const order = (mock: { mock: { invocationCallOrder: number[] } }) => mock.mock.invocationCallOrder[0]!
@@ -180,7 +188,7 @@ it('captures the review again when the branch gained commits after its ending, a
   vi.mocked(workspaceHead).mockResolvedValue('new')
   const check = vi.spyOn(h.runtime, 'checkTicket').mockResolvedValue(
     { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:04:00.000Z', output: 'passed' })
-  expect(await h.runtime.mergeTicket(ticket.id)).toEqual({ branch: 'agent/t', target: 'main', recaptured: true })
+  expect(await h.runtime.mergeTicket(ticket.id)).toMatchObject({ branch: 'agent/t', target: 'main', recaptured: true })
   expect(captureReview).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: ticket.id }), expect.anything())
   // The check ran on the tree the old review described, so the merge runs it again.
   expect(check).toHaveBeenCalledWith(ticket.id)
@@ -273,7 +281,7 @@ it('records which interface merged, the commit it left, and the remote answer to
   await expect(h.runtime.mergeTicket(ticket.id, 'ff', { push: true })).resolves.toMatchObject({ pushError: 'fatal: no upstream branch' })
   // The panel is the default interface, and the failed push is part of the record instead of only of the report.
   expect(h.runtime.store.tickets.get(ticket.id)?.merged).toMatchObject({ via: 'panel', head: 'merged-sha', root: '/repo',
-    push: { ok: false, error: 'fatal: no upstream branch' } })
+    push: { ok: false, error: 'fatal: no upstream branch', via: 'panel' } })
   // The panel keeps the outcome even when the person has left the chat that asked.
   expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'merged', ticketId: ticket.id,
     text: expect.stringContaining('the push failed: fatal: no upstream branch') }))
@@ -404,4 +412,109 @@ it('announces a followed pull request\'s failing CI once, and again when the res
   h.runtime.store.threads.describe('github:42', { facts: { ci: { value: '3 checks failing', problem: true } } })
   await scan()
   expect(failing()).toBe(3)
+})
+
+it('checks the merged branch on the target after merging, and reports a failure', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  configureCheck('pnpm test')
+  // The gate's run passes; the run on the merged target is the one that fails.
+  vi.mocked(workspaceCheck)
+    .mockResolvedValueOnce({ command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:05:00.000Z', output: 'passed' })
+    .mockResolvedValueOnce({ command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-19T00:06:00.000Z', output: '1 test failed' })
+  const result = await h.runtime.mergeTicket(ticket.id)
+  expect(result).toMatchObject({ targetCheck: { ok: false, exitCode: 1 } })
+  expect(h.runtime.store.tickets.get(ticket.id)?.targetCheck).toMatchObject({ ok: false, output: '1 test failed' })
+  // The merge stands; the failing merged tree is what a person hears about, along with the way to undo it.
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toBeDefined()
+  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'check', ticketId: ticket.id,
+    text: expect.stringMatching(/failed on main after merging.*can be undone/) }))
+})
+
+it('merges queued tickets one after another, one queue entry at a time', async () => {
+  const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  ended(first.id)
+  ended(second.id)
+  expect(h.runtime.queueMerges(['T-0001', 'T-0002'], {})).toEqual({ queued: [{ ticket_id: 'T-0001', position: 1 },
+    { ticket_id: 'T-0002', position: 2 }], queue: [{ ticket_id: 'T-0001', position: 1 }, { ticket_id: 'T-0002', position: 2 }] })
+  expect(queuedMerges(h.runtime.store)).toHaveLength(2)
+  // One drain works through the whole queue in order.
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(first.id)?.merged).toBeDefined()
+  expect(h.runtime.store.tickets.get(second.id)?.merged).toBeDefined()
+  expect(queuedMerges(h.runtime.store)).toHaveLength(0)
+  // A queued merge is the person's request the host carried out.
+  expect(h.runtime.store.tickets.get(first.id)?.merged?.via).toBe('auto')
+  await vi.waitFor(() => expect(notices().filter(item => 'merge_queue' in item)
+    .map(item => (item.merge_queue as { ticket_id: string }).ticket_id)).toEqual([first.id, second.id]))
+})
+
+it('reports a queued merge that cannot land, and still merges the ones after it', async () => {
+  const { ticket: blocked } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  const { ticket: later } = await h.acceptedTicket(feishu('3', '@bot 之后做'))
+  ended(blocked.id)
+  ended(later.id)
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  h.runtime.queueMerges([blocked.id, later.id], {})
+  await h.runtime.runMergeQueue()
+  // The blocked Ticket leaves the queue with its reason, and the next one merges.
+  expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeUndefined()
+  expect(h.runtime.store.tickets.get(later.id)?.merged).toBeDefined()
+  expect(queuedMerges(h.runtime.store)).toHaveLength(0)
+  await vi.waitFor(() => expect(notices().some(item => 'merge_queue' in item
+    && String((item.merge_queue as { error?: string }).error ?? '').match(/Blocked by/))).toBe(true))
+})
+
+it('takes a ticket out of the merge queue, and skips one that moved on meanwhile', async () => {
+  const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  ended(first.id)
+  ended(second.id)
+  h.runtime.queueMerges([first.id, second.id], {})
+  expect(h.runtime.dequeueMerges(['T-0001'])).toMatchObject({ removed: 1, queue: [{ position: 1 }] })
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(first.id)?.merged).toBeUndefined()
+  expect(h.runtime.store.tickets.get(second.id)?.merged).toBeDefined()
+  // A Ticket merged by someone else while it waited is skipped rather than merged twice.
+  const { ticket: third } = await h.acceptedTicket(feishu('3', '@bot 再修一个'))
+  ended(third.id)
+  h.runtime.queueMerges([third.id], {})
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(third.id)!
+    current.merged = { at: '2026-11-19T00:06:00.000Z', branch: 'agent/t3', target: 'main' }
+    h.runtime.store.tickets.save(current)
+  })
+  await h.runtime.runMergeQueue()
+  expect(queuedMerges(h.runtime.store)).toHaveLength(0)
+  await vi.waitFor(() => expect(notices().some(item => 'merge_queue' in item
+    && 'skipped' in (item.merge_queue as Record<string, unknown>))).toBe(true))
+})
+
+it('refuses to queue a ticket that is not an ended one it could merge', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  expect(() => h.runtime.queueMerges([ticket.id], {})).toThrow(/cannot be queued/)
+  ended(ticket.id)
+  h.runtime.queueMerges([ticket.id], {})
+  expect(() => h.runtime.queueMerges(['T-9999'], {})).toThrow(/Unknown ticket/)
+})
+
+it('retries a push that failed on the branch the merge moved, and records the answer', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  await h.runtime.mergeTicket(ticket.id, 'ff', { push: true })
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: false, via: 'panel',
+    error: 'fatal: no upstream branch' })
+  expect(await h.runtime.pushTicket('T-0001')).toEqual({ ticket_id: ticket.id, pushed: true })
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: true, via: 'panel' })
+  expect(h.runtime.notifications().items.filter(item => item.kind === 'push')).toHaveLength(1)
+  // A failure of the retry is recorded and reported too, and a Ticket that never merged cannot be pushed.
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  await expect(h.runtime.pushTicket(ticket.id)).rejects.toThrow(/no upstream branch/)
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: false })
+  expect(h.runtime.notifications().items.filter(item => item.kind === 'push')).toHaveLength(2)
+  const { ticket: open } = await h.acceptedTicket(feishu('2', '@bot 还没合'))
+  await expect(h.runtime.pushTicket(open.id)).rejects.toThrow(/Only a merged ticket/)
 })

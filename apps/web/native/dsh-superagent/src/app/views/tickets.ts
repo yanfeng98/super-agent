@@ -5,6 +5,7 @@ import { workerSessionId } from '../../executor/dsh.ts'
 import type { Store } from '../store.ts'
 import { channelLink, decisionView, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
   type ViewHost } from './records.ts'
+import { mergePosition } from '../merge-queue.ts'
 import { settingsPolicy } from '../../policy.ts'
 import { markdown, plain, preview, readable } from './text.ts'
 
@@ -96,6 +97,10 @@ export function ticketDetail(host: ViewHost, id: string) {
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   // Undoing a merge needs the repository the merge recorded, which survives the removal of its worktree.
   const revert = !!ticket.merged && !ticket.reverted && !!(ticket.merged.root ?? ticket.execution?.directory)
+  // A push that failed can be retried where the merge ran, from the panel.
+  const push = !!ticket.merged && ticket.merged.push?.ok === false && !!(ticket.merged.root ?? ticket.execution?.directory)
+  // A queued Ticket shows its place and can leave the queue from its page.
+  const queuePosition = mergePosition(store, ticket.id)
   const reviewDecision = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
   // The decisions a person made on the Ticket, in the order they happened, with the interface each came from.
   const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'reverted' | 'cleaned' | 'discarded'; at: string;
@@ -126,7 +131,7 @@ export function ticketDetail(host: ViewHost, id: string) {
   const checks = ticket.checks && (!ticket.ended || ticket.checks.at >= ticket.ended.at) ? ticket.checks : undefined
   const local = ticket.channels.find(channel => channel.source === 'local')
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
-    rebase, cleanup, check, reviewDecision, revert },
+    rebase, cleanup, check, reviewDecision, revert, push, dequeue: queuePosition !== undefined },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
     // A note keeps the commit it was written on, so the panel can say when the changes it described have moved.
@@ -147,6 +152,8 @@ export function ticketDetail(host: ViewHost, id: string) {
     ...ticket.checkHistory?.length ? { checkHistory: ticket.checkHistory } : {},
     review: ticket.review,
     merged: ticket.merged, reverted: ticket.reverted, discarded: ticket.discarded, cleaned: ticket.cleaned,
+    ...queuePosition !== undefined ? { queuePosition } : {},
+    ...ticket.targetCheck ? { targetCheck: ticket.targetCheck } : {},
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },
     basis: basisFacts(ticket.mandate.basis, view.rule), paused: store.settings().paused,
     channels: ticket.channels.map(channel => channelLink(view, channel)),

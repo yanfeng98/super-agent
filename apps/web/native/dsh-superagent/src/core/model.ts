@@ -318,6 +318,8 @@ export interface Ticket {
   review?: TicketReview
   /** Outcome of the configured workspace check, run in the worktree when the ticket ended. */
   checks?: TicketCheck
+  /** Outcome of the configured check run on the target branch after the ticket's merge landed. */
+  targetCheck?: TicketCheck
   /** Earlier runs of the check, oldest first and capped, so a person sees how a failure was repaired. */
   checkHistory?: TicketCheck[]
   /** Other tickets this one relates to, such as the work it builds on or depends on. */
@@ -373,7 +375,7 @@ export interface TicketMerge {
   /** The commit the target branch holds after the merge. */
   head?: string
   /** The push that followed the merge, when one was asked for; a failed push leaves the merge recorded. */
-  push?: { at: string; ok: boolean; error?: string }
+  push?: { at: string; ok: boolean; error?: string; via?: ActionOrigin }
   /** The repository the merge moved, so a revert needs no worktree that cleanup may have removed. */
   root?: string
 }

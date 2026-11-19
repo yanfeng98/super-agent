@@ -24,6 +24,7 @@ import type { SetupProblem } from '../setup.ts'
 import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
 import { notifications as listNotifications, readAllNotifications, readNotification, recordNotification } from './notifications.ts'
+import { dequeueMerges, enqueueMerges, mergePosition, queuedMerges, shiftQueuedMerge, type QueuedMerge } from './merge-queue.ts'
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
 import { Store } from './store.ts'
@@ -100,10 +101,14 @@ export class Runtime extends Service implements SourceHost {
   private readonly merging = new Set<string>()
   /** Tickets whose revert is running, so a second request cannot revert the same merge twice. */
   private readonly reverting = new Set<string>()
+  /** Operations that move a repository run one at a time, so two merges never share the git index of one checkout. */
+  private repoLock: Promise<unknown> = Promise.resolve()
   /** The auto-merge attempt in flight, so passes do not start a second one over the same repository. */
   private autoMerging?: Promise<void>
   /** When passes last looked for failing CI, so the scan runs on a slower schedule than the passes themselves. */
   private ciCheckedAt = 0
+  /** The merge-queue item in flight, so passes do not start a second one over the same repository. */
+  private queueMerging?: Promise<void>
   constructor(ctx: Context, readonly machine: Machine, restart: () => void) {
     super(ctx, 'orchestrator')
     const runtime = this
@@ -204,7 +209,8 @@ export class Runtime extends Service implements SourceHost {
       const evaluateDue = () => { engine.evaluateDue(); evals.set(evalsHealth(store)) }
       const passes = this.passes = new Passes({ engine: { receive: trigger => engine.receive(trigger), evaluateDue }, effects,
         health: this.runtimeHealth, lifetime: this.lifetime, configured: () => setup.configured(), closing: () => this.closing(),
-        automerge: () => { void this.runAutoMerge() }, watch: () => { this.ciNotices() } })
+        automerge: () => { void this.runAutoMerge() }, mergeQueue: () => { void this.runMergeQueue() },
+        watch: () => { this.ciNotices() } })
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
@@ -215,6 +221,8 @@ export class Runtime extends Service implements SourceHost {
         autoMergeTicket: (id, options) => runtime.autoMergeTicket(id, options),
         cancelAutoMerge: id => runtime.cancelAutoMerge(id),
         revertTicket: id => runtime.revertTicket(id),
+        queueMerges: (ids, options) => runtime.queueMerges(ids, options),
+        dequeueMerges: ids => runtime.dequeueMerges(ids),
         blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
@@ -290,7 +298,7 @@ export class Runtime extends Service implements SourceHost {
    * @param kind - The event a person should see, by the same name in both interfaces.
    * @param text - One sentence stating what happened.
    */
-  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'ci' | 'automerge', text: string): void {
+  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'ci' | 'automerge' | 'check' | 'push', text: string): void {
     const at = now()
     try { recordNotification(this.store, { at, kind, ticketId: ticket.id, title: ticket.title, text }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
@@ -445,18 +453,26 @@ export class Runtime extends Service implements SourceHost {
    */
   async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean; push?: boolean } = {},
     origin: ActionOrigin = 'panel'):
-    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }> {
+    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true;
+      pushError?: string; targetCheck?: TicketCheck }> {
     // The person and the main Session may name a ticket by its display number, such as T-0001.
     const ticketId = this.ticketReference(id) ?? id
     // One merge at a time for a ticket, so a person's request and a standing one cannot run git on its worktree at once.
     if (this.merging.has(ticketId)) throw new Error('A merge of this ticket is already running')
     this.merging.add(ticketId)
-    try { return await this.mergeOnce(ticketId, strategy, options, origin) }
+    try { return await this.serialized(() => this.mergeOnce(ticketId, strategy, options, origin)) }
     finally { this.merging.delete(ticketId) }
+  }
+  /** Runs one repository operation after the others, so two merges or reverts never move one checkout together. */
+  private serialized<T>(run: () => Promise<T>): Promise<T> {
+    const task = this.repoLock.then(run, run)
+    this.repoLock = task.then(() => undefined, () => undefined)
+    return task
   }
   /** Merges with the per-ticket guard already held; `mergeTicket` is the public entry point. */
   private async mergeOnce(id: string, strategy: MergeStrategy, options: { cleanup?: boolean; push?: boolean }, origin: ActionOrigin):
-    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }> {
+    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true;
+      pushError?: string; targetCheck?: TicketCheck }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
@@ -558,14 +574,14 @@ export class Runtime extends Service implements SourceHost {
     let pushError: string | undefined
     if (options.push) {
       const pushedAt = now()
-      let outcome: { at: string; ok: boolean; error?: string }
+      let outcome: { at: string; ok: boolean; error?: string; via: ActionOrigin }
       try {
         await pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
         pushed = true
-        outcome = { at: pushedAt, ok: true }
+        outcome = { at: pushedAt, ok: true, via: origin }
       } catch (error) {
         pushError = error instanceof Error ? error.message : String(error)
-        outcome = { at: pushedAt, ok: false, error: pushError }
+        outcome = { at: pushedAt, ok: false, error: pushError, via: origin }
       }
       // The merge stands either way, so the remote's answer is recorded where the panel and the archive both keep it.
       this.store.atomic(() => {
@@ -581,6 +597,29 @@ export class Runtime extends Service implements SourceHost {
     const decided = this.store.tickets.get(id) ?? current
     this.ticketNotice(decided, 'merged', `Merged ${this.ticketLabel(decided)} into ${result.target}`
       + `${result.head ? ` at ${result.head}` : ''}${pushError ? `; the push failed: ${pushError}` : pushed ? ', pushed to the upstream' : ''}`)
+    // The merge moved the target branch, so the configured check now says whether the merged tree passes; a failure is the
+    // person's to see, and the merge can be undone.
+    let targetCheck: TicketCheck | undefined
+    const command = this.store.settings().executor.check.trim()
+    if (command && result.root) {
+      try {
+        targetCheck = await workspaceCheck(this.ctx.subprocess, result.root, command, this.stopped.signal,
+          Object.fromEntries(this.ticketEnvironment(decided).map(variable => [variable.key, variable.value])))
+      } catch (error) { this.ctx.logger.warn('dsh-superagent: checking the merged target failed: %s', String(error)) }
+      if (targetCheck) {
+        const run = targetCheck
+        this.store.atomic(() => {
+          const latest = this.store.tickets.get(id)
+          if (!latest?.merged) return
+          latest.targetCheck = run
+          this.store.tickets.save(latest)
+        })
+        if (!targetCheck.ok) {
+          this.ticketNotice(decided, 'check', `The configured check failed on ${result.target} after merging `
+            + `${this.ticketLabel(decided)} (exit ${targetCheck.exitCode ?? 'unknown'}); the merge can be undone`)
+        }
+      }
+    }
     let cleaned: true | undefined
     if (options.cleanup) {
       try {
@@ -593,7 +632,7 @@ export class Runtime extends Service implements SourceHost {
     }
     return { branch: result.branch, target: result.target, ...result.head ? { head: result.head } : {},
       ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {},
-      ...pushed ? { pushed } : {}, ...pushError ? { pushError } : {} }
+      ...pushed ? { pushed } : {}, ...pushError ? { pushError } : {}, ...targetCheck ? { targetCheck } : {} }
   }
   /**
    * Undoes a merged ticket's merge with a reverting commit on the branch it landed, recorded on the ticket and in its archive.
@@ -617,7 +656,7 @@ export class Runtime extends Service implements SourceHost {
     if (this.reverting.has(ticketId)) throw new Error('A revert of this ticket is already running')
     this.reverting.add(ticketId)
     try {
-      const result = await revertWorkspace(this.ctx.subprocess, directory, this.stopped.signal, commit, merged.target)
+      const result = await this.serialized(() => revertWorkspace(this.ctx.subprocess, directory, this.stopped.signal, commit, merged.target))
         .catch((error: unknown) => {
           if (!(error instanceof RevertConflictError)) throw error
           throw new Error(`Reverting the merge of ${merged.branch} into ${merged.target} conflicts in ${error.files.join(', ')}; `
@@ -652,6 +691,130 @@ export class Runtime extends Service implements SourceHost {
    * @returns The ticket without the request.
    */
   cancelAutoMerge(id: string): Ticket { return this.engine.cancelAutoMerge(id) }
+  /**
+   * Queues Tickets to merge one after another, which a pass drains, so a batch the person asked for survives a restart and
+   * reports each Ticket on its own.
+   * @returns The Tickets queued with their places, and the queue afterwards.
+   * @throws when a Ticket is unknown, or not an ended one that was neither merged, discarded, nor cleaned.
+   */
+  queueMerges(ids: readonly string[], options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }):
+    { queued: { ticket_id: string; position: number }[]; queue: { ticket_id: string; position: number }[] } {
+    const entries: QueuedMerge[] = []
+    const at = now()
+    for (const id of ids) {
+      const ticketId = this.ticketReference(id) ?? id
+      const ticket = this.store.tickets.get(ticketId)
+      if (!ticket) throw new Error(`Unknown ticket: ${id}`)
+      if (!ticket.ended || ticket.merged || ticket.discarded || ticket.cleaned) {
+        throw new Error(`${id} cannot be queued: only an ended Ticket that is not merged, discarded or cleaned merges`)
+      }
+      entries.push({ ticketId, at, ...options })
+    }
+    const queue = enqueueMerges(this.store, entries)
+    const line = (ticketId: string): { ticket_id: string; position: number } => ({
+      ticket_id: this.ticketLabel({ id: ticketId }), position: queue.findIndex(item => item.ticketId === ticketId) + 1 })
+    return { queued: entries.map(entry => line(entry.ticketId)), queue: queue.map(item => line(item.ticketId)) }
+  }
+  /**
+   * Takes Tickets out of the merge queue, which a pass drains; one already merging finishes.
+   * @returns How many entries were removed, and the queue afterwards.
+   */
+  dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] } {
+    const ticketIds = ids.map(id => this.ticketReference(id) ?? id)
+    const { removed, queue } = dequeueMerges(this.store, ticketIds)
+    return { removed, queue: queue.map((item, index) => ({ ticket_id: this.ticketLabel({ id: item.ticketId }), position: index + 1 })) }
+  }
+  /**
+   * Merges the next queued Ticket and reports how it went to the main Session. A pass calls this without waiting, so a slow
+   * check or merge cannot hold up the pass.
+   */
+  async runMergeQueue(): Promise<void> {
+    if (this.queueMerging) return this.queueMerging
+    if (this.paused() || this.closing() || !this.setup.configured()) return
+    if (!queuedMerges(this.store).length) return
+    const task = this.drainMergeQueue()
+      .catch((error: unknown) => { this.ctx.logger.warn('dsh-superagent: a queued merge failed: %s', String(error)) })
+      .finally(() => { this.queueMerging = undefined; this.passes.request() })
+    this.queueMerging = task
+    return task
+  }
+  /** Merges the whole queue in order, one Ticket at a time, until it is empty or the deployment stops taking work. */
+  private async drainMergeQueue(): Promise<void> {
+    for (;;) {
+      if (this.paused() || this.closing()) return
+      const entry = queuedMerges(this.store)[0]
+      if (!entry) return
+      await this.drainQueuedMerge(entry)
+    }
+  }
+  /** Merges one queued Ticket, reports that one result, and takes it off the queue either way. */
+  private async drainQueuedMerge(entry: QueuedMerge): Promise<void> {
+    const ticket = this.store.tickets.get(entry.ticketId)
+    const label = ticket ? this.ticketLabel(ticket) : entry.ticketId
+    // How many wait after this one, counted once it left the queue.
+    const rest = (): number => queuedMerges(this.store).length
+    // A person may have taken it out, or the Ticket may have moved on, since the pass read the queue.
+    if (!queuedMerges(this.store).some(item => item.ticketId === entry.ticketId)) return
+    if (!ticket?.ended || ticket.merged || ticket.discarded || ticket.cleaned) {
+      shiftQueuedMerge(this.store, entry.ticketId)
+      this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, skipped: 'not an ended Ticket that can merge' } },
+        `Skipped ${label} in the merge queue: it is no longer an ended Ticket that can merge`))
+      return
+    }
+    try {
+      const result = await this.mergeTicket(entry.ticketId, entry.strategy ?? 'ff',
+        { ...entry.cleanup === undefined ? {} : { cleanup: entry.cleanup }, ...entry.push === undefined ? {} : { push: entry.push } }, 'auto')
+      shiftQueuedMerge(this.store, entry.ticketId)
+      const left = rest()
+      this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, ...result, remaining: left } },
+        `Merged ${label} from the merge queue${left ? `; ${left} left` : ''}`))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      shiftQueuedMerge(this.store, entry.ticketId)
+      const left = rest()
+      this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, error: message, remaining: left } },
+        `Did not merge ${label} from the merge queue: ${message}${left ? `; ${left} left` : ''}`))
+    }
+  }
+  /**
+   * Pushes the branch a merge moved to its upstream again, for a merge whose push failed.
+   * @returns The Ticket pushed.
+   * @throws when the Ticket was not merged, the merge recorded no repository, or git cannot push; the failure is recorded.
+   */
+  async pushTicket(id: string, origin: ActionOrigin = 'panel'): Promise<{ ticket_id: string; pushed: true }> {
+    const ticketId = this.ticketReference(id) ?? id
+    const ticket = this.store.tickets.get(ticketId)
+    const merged = ticket?.merged
+    if (!ticket || !merged) throw new Error('Only a merged ticket can be pushed')
+    const directory = merged.root ?? ticket.execution?.directory
+    if (!directory) throw new Error('The merged repository is unknown; push it with git in the repository')
+    const at = now()
+    const label = this.ticketLabel(ticket)
+    try {
+      await this.serialized(() => pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal))
+      this.savePush(ticketId, { at, ok: true, via: origin })
+      try { await recordPush(ticket, { at, ok: true, via: origin }) }
+      catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
+      this.ticketNotice(ticket, 'push', `Pushed ${label} to the upstream its repository names`)
+      return { ticket_id: ticketId, pushed: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.savePush(ticketId, { at, ok: false, error: message, via: origin })
+      try { await recordPush(ticket, { at, ok: false, error: message, via: origin }) }
+      catch (failure) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(failure)) }
+      this.ticketNotice(ticket, 'push', `Pushing ${label} failed again: ${message}`)
+      throw error
+    }
+  }
+  /** Records the remote's answer on the ticket's merge, which a later retry replaces. */
+  private savePush(ticketId: string, outcome: { at: string; ok: boolean; error?: string; via?: ActionOrigin }): void {
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(ticketId)
+      if (!current?.merged) return
+      current.merged.push = outcome
+      this.store.tickets.save(current)
+    })
+  }
   /**
    * Runs one due standing merge request and waits for it. A pass calls this without waiting, so the check or merge it runs
    * cannot hold up the pass, while a test or a restart can run one directly.
@@ -997,8 +1160,13 @@ export class Runtime extends Service implements SourceHost {
     if (!stillEnded()) return
     try { await closeArchive(ticket, review, this.store.tickets.number(ticket.id), checks) }
     catch (error) { ctx.logger.warn('dsh-superagent: recording the ending in the archive failed: %s', String(error)) }
-    // A deployment that requires an approval gates the merge on a person, who hears of it without opening the panel.
+    // A check that failed at the ending is the person's to see too, since it keeps the merge from passing.
     const ended = this.store.tickets.get(ticket.id)
+    if (ended?.ended?.outcome === 'completed' && checks && !checks.ok) {
+      this.ticketNotice(ended, 'check', `The configured check failed at the ending of ${this.ticketLabel(ended)} `
+        + `(exit ${checks.exitCode ?? 'unknown'}); the merge waits for a passing run`)
+    }
+    // A deployment that requires an approval gates the merge on a person, who hears of it without opening the panel.
     if (ended?.ended?.outcome === 'completed' && this.store.settings().executor.requireReview
       && ended.reviewed?.decision !== 'approved') {
       this.ticketNotice(ended, 'review', `${this.ticketLabel(ended)} needs an approval of its changes before it can merge`)
@@ -1038,7 +1206,8 @@ export class Runtime extends Service implements SourceHost {
     const runtime = this
     const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
-      revertTicket: id => runtime.revertTicket(id),
+      revertTicket: id => runtime.revertTicket(id), pushTicket: id => runtime.pushTicket(id),
+      dequeueMerges: ids => runtime.dequeueMerges(ids),
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
