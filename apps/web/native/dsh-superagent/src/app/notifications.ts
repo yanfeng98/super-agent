@@ -8,7 +8,7 @@ export interface Notification {
   id: string
   at: string
   /** A question (`attention`), an ending (`ended`), or a merge outcome a person may need to see. */
-  kind: 'attention' | 'ended' | 'merged' | 'reverted' | 'review' | 'ci' | 'automerge'
+  kind: 'attention' | 'ended' | 'merged' | 'reverted' | 'review' | 'ci' | 'automerge' | 'check' | 'push'
   ticketId: string
   title: string
   /** The question, the ending outcome and reason, or the merge event in one sentence. */

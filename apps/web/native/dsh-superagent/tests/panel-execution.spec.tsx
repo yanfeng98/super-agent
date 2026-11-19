@@ -246,7 +246,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
     ended: { at: '2026-11-18T00:00:00Z', by: 'human' as const, outcome: 'stopped' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
   server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true,
-      reviewDecision: true, revert: false },
+      reviewDecision: true, revert: false, push: false, dequeue: false },
     checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
     history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题', via: 'chat' },
       { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main', via: 'panel' },
@@ -423,8 +423,11 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
     ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
   server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true, check: false,
-      reviewDecision: false, revert: true },
-    merged: { at: '2026-09-21T00:00:00Z', branch: 'agent/t3', target: 'main', via: 'chat', head: 'e'.repeat(40) } }
+      reviewDecision: false, revert: true, push: true, dequeue: true },
+    merged: { at: '2026-09-21T00:00:00Z', branch: 'agent/t3', target: 'main', via: 'chat', head: 'e'.repeat(40),
+      push: { at: '2026-09-21T00:00:00Z', ok: false, error: 'no upstream' } },
+    queuePosition: 2,
+    targetCheck: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-09-21T00:00:00Z', output: 'merged tree failed' } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])
@@ -440,6 +443,17 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   await click(zh.confirm)
   expect(server.requests.find(request => request.path === 'tickets/t3/revert')).toBeDefined()
   expect(server.requests.find(request => request.path === 'tickets/t3/revert')).toMatchObject({ method: 'POST' })
+  // A failed push offers a retry, a queued Ticket shows its place and can leave the queue, and the check on the merged
+  // target keeps its result and output.
+  expect(text()).toContain(zh.pushRetry)
+  expect(text()).toContain('已排入合并队列，第 2 位。')
+  expect(text()).toContain(zh.queueCancel)
+  expect(text()).toContain(zh.targetCheckTitle)
+  expect(text()).toContain('merged tree failed')
+  await click(zh.pushRetry)
+  expect(server.requests.find(request => request.path === 'tickets/t3/push')).toMatchObject({ method: 'POST' })
+  await click(zh.queueCancel)
+  expect(server.requests.find(request => request.path === 'tickets/t3/dequeue')).toMatchObject({ method: 'POST' })
   server.ticketDetails.t3 = { ...server.ticketDetails.t3, ended: { at: '2026-09-21T00:00:00Z', by: 'human', outcome: 'stopped',
     reason: '不需要了' } }
   await remount(en)

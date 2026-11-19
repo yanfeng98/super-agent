@@ -12,6 +12,8 @@ export interface PassesHost {
   closing(): boolean
   /** Runs one standing merge request that is due, when the deployment has one; the pass does not wait for it. */
   automerge?: () => void
+  /** Takes the next Ticket from the merge queue, when one waits; the pass does not wait for it. */
+  mergeQueue?: () => void
   /** Looks for facts a person should hear about, such as a followed pull request's failing CI. */
   watch?: () => void
 }
@@ -71,6 +73,7 @@ export class Passes {
     this.host.engine.evaluateDue()
     // A standing merge request runs beside the pass rather than in it, since its check or merge may take minutes.
     this.host.automerge?.()
+    this.host.mergeQueue?.()
     this.host.watch?.()
   }
 }

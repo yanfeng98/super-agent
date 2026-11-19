@@ -69,6 +69,10 @@ export interface HttpHost {
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
   /** Undoes a merged ticket's merge with a reverting commit on the branch it landed. */
   revertTicket(id: string): Promise<{ branch: string; target: string; commit: string }>
+  /** Pushes the branch a merge moved again, for a push that failed. */
+  pushTicket(id: string): Promise<{ ticket_id: string; pushed: true }>
+  /** Takes a ticket out of the merge queue. */
+  dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
   /** Clears a ticket's standing merge request, which the main Session records. */
   cancelAutoMerge(id: string): Ticket
   /** Records or clears that a ticket waits for another ticket's merge. */
@@ -326,6 +330,15 @@ function routes(runtime: HttpHost): Routes {
       const id = ticket(params.id)
       try { return await runtime.revertTicket(id) }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/push': async ({ params }) => {
+      const id = ticket(params.id)
+      try { return await runtime.pushTicket(id) }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/dequeue': ({ params }) => {
+      const id = ticket(params.id)
+      return runtime.dequeueMerges([id])
     },
     'POST tickets/:id/discard': async ({ params }) => {
       const id = ticket(params.id)

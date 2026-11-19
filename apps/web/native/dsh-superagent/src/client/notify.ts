@@ -31,13 +31,37 @@ export function notificationFor(previous: string | undefined, ticket: Watched): 
   const stage = dict[`stage.${ticket.action ?? 'review'}` as keyof Dictionary]
   return { title: dict.notifyAttention, body: stage ? `${ticket.title} · ${stage}` : ticket.title }
 }
+/** The kinds the inbox records that the ticket poller cannot see, because the Ticket itself does not move. */
+const MERGE_EVENTS = new Set(['merged', 'reverted', 'ci', 'automerge', 'check', 'push'])
+/** One panel notification as the desktop watcher reads it. */
+export interface InboxItem { id: string; kind: string; title: string; text: string }
+/**
+ * Decides whether an inbox notification deserves a desktop announcement: a merge outcome, a failing check or CI, or a
+ * standing merge the host gave up on. A question or an ending is announced from the ticket's own state instead.
+ * @param item - The notification the panel recorded.
+ * @returns The localized title and body, or undefined for a kind the ticket poller already covers.
+ */
+export function eventNotificationFor(item: InboxItem): { title: string; body: string } | undefined {
+  if (!MERGE_EVENTS.has(item.kind)) return undefined
+  const dict = dictionary()
+  const title = dict[`notification.${item.kind}` as keyof Dictionary]
+  if (typeof title !== 'string') return undefined
+  return { title, body: `${item.title} · ${item.text}` }
+}
 let timer: ReturnType<typeof setInterval> | undefined
 let polling = false
 const seen = new Map<string, string>()
+const announced = new Set<string>()
 async function load(state: 'open' | 'ended'): Promise<Watched[]> {
   const response = await fetch(`/orchestrator/api/tickets?state=${state}&limit=50`, { headers: { 'x-orchestrator-request': '1' } })
   if (!response.ok) return []
   const body = await response.json() as { items?: Watched[] }
+  return body.items ?? []
+}
+async function loadInbox(): Promise<InboxItem[]> {
+  const response = await fetch('/orchestrator/api/notifications?limit=20', { headers: { 'x-orchestrator-request': '1' } })
+  if (!response.ok) return []
+  const body = await response.json() as { items?: InboxItem[] }
   return body.items ?? []
 }
 async function poll(first: boolean): Promise<void> {
@@ -55,6 +79,16 @@ async function poll(first: boolean): Promise<void> {
       try { new Notification(notice.title, { body: notice.body, tag: `dsh-superagent:${ticket.id}` }) }
       catch (error) { /* The browser can refuse while hidden or after permission changed; the next poll tries again. */ }
     }
+    // The inbox carries what the ticket poller cannot see: a merge, a revert, failing CI, a failed check, a push.
+    for (const item of await loadInbox()) {
+      if (announced.has(item.id)) continue
+      announced.add(item.id)
+      if (first) continue
+      const notice = eventNotificationFor(item)
+      if (!notice) continue
+      try { new Notification(notice.title, { body: notice.body, tag: `dsh-superagent:${item.id}` }) }
+      catch (error) { /* The browser can refuse while hidden or after permission changed; the next poll tries again. */ }
+    }
   } catch (error) { /* An unreachable host is reported by the panel; polling resumes on the next tick. */ }
   finally { polling = false }
 }
@@ -69,6 +103,7 @@ export function stopNotifications(): void {
   if (timer !== undefined) clearInterval(timer)
   timer = undefined
   seen.clear()
+  announced.clear()
 }
 /**
  * Asks the browser for permission and turns the watcher on.

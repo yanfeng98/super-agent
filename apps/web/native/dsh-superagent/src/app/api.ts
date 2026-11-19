@@ -45,6 +45,8 @@ export interface Api {
   'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' };
     response: { merged: true; branch: string; target: string; rebased?: true; recaptured?: true } }
   'POST tickets/:id/revert': { response: { branch: string; target: string; commit: string } }
+  'POST tickets/:id/push': { response: { ticket_id: string; pushed: true } }
+  'POST tickets/:id/dequeue': { response: { removed: number; queue: { ticket_id: string; position: number }[] } }
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }

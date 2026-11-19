@@ -61,23 +61,25 @@ it('merges an ended ticket through the main Session with the panel gates', async
     .rejects.toThrow('Review approval is required before merging')
 })
 
-it('merges several tickets in one call, answering each one on its own', async () => {
+it('queues several tickets from one instruction, and cancels them', async () => {
   const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
-  const merge = vi.spyOn(h.runtime, 'mergeTicket')
-    .mockResolvedValueOnce({ branch: 'agent/a', target: 'main' })
-    .mockRejectedValueOnce(new Error('Blocked by t9; merge it first'))
-  const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge',
-    { ticket_ids: [first.id, second.id], cleanup: true }) as unknown as { results: Record<string, unknown>[] }
-  // Each item runs in the order given, with the same options, and a failure leaves the rest to run.
-  expect(merge).toHaveBeenNthCalledWith(1, first.id, 'ff', { cleanup: true }, 'chat')
-  expect(merge).toHaveBeenNthCalledWith(2, second.id, 'ff', { cleanup: true }, 'chat')
-  expect(result.results).toEqual([{ ticket_id: first.id, branch: 'agent/a', target: 'main' },
-    { ticket_id: second.id, error: 'Blocked by t9; merge it first' }])
-  // Naming neither, or both, is refused before any merge runs.
-  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { strategy: 'ff' })).rejects.toThrow(/ticket_id/)
-  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge',
-    { ticket_id: first.id, ticket_ids: [second.id] })).rejects.toThrow(/exactly one/)
+  const lines = [{ ticket_id: 'T-0001', position: 1 }, { ticket_id: 'T-0002', position: 2 }]
+  const queue = vi.spyOn(h.runtime, 'queueMerges').mockReturnValue({ queued: lines, queue: lines })
+  const queued = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
+    { ticket_ids: [first.id, second.id], cleanup: true }) as unknown as { cancelled: boolean; queued: { position: number }[] }
+  expect(queue).toHaveBeenCalledWith([first.id, second.id], { cleanup: true })
+  expect(queued).toMatchObject({ cancelled: false, queued: [{ position: 1 }, { position: 2 }] })
+  // The same tool takes Tickets out of the queue.
+  const dequeue = vi.spyOn(h.runtime, 'dequeueMerges').mockReturnValue({ removed: 2, queue: [] })
+  const cancelled = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
+    { ticket_ids: ['T-0001'], cancel: true }) as unknown as { cancelled: boolean; removed: number }
+  expect(dequeue).toHaveBeenCalledWith(['T-0001'])
+  expect(cancelled).toMatchObject({ cancelled: true, removed: 2 })
+  // One Ticket still merges through the merge tool itself, and that tool no longer takes a list.
+  const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/a', target: 'main' })
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: first.id })
+  expect(merge).toHaveBeenCalledWith(first.id, 'ff', {}, 'chat')
 })
 
 it('undoes a merged ticket from the main Session', async () => {

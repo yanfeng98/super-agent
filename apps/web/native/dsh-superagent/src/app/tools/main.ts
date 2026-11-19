@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { z } from 'zod'
 import { UserError, followupOwners, key, reasonText, type Decision, type DecisionKind, type EngineForMainSession, type EngineForPeople,
-  type Ticket } from '../../core/index.ts'
+  type Ticket, type TicketCheck } from '../../core/index.ts'
 import { IM_WORDS, NOTE_WORDS, wordCount } from '../../infra/text.ts'
 import { AssessmentSchema, EvalReadSchema, WorktreeNameSchema, type MasterAssessor } from '../assessment.ts'
 import { ticketCard } from '../cards.ts'
@@ -34,7 +34,13 @@ export interface MainToolsHost {
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
   mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean; push?: boolean }):
-    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }>
+    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true;
+      pushError?: string; targetCheck?: TicketCheck }>
+  /** Queues Tickets to merge one after another, which the host drains. */
+  queueMerges(ids: readonly string[], options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }):
+    { queued: { ticket_id: string; position: number }[]; queue: { ticket_id: string; position: number }[] }
+  /** Takes Tickets out of the merge queue. */
+  dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
   /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
   /** Undoes a merged Ticket's merge with a reverting commit on the branch it landed. */
@@ -234,29 +240,36 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_merge',
-      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, and removes the worktree or pushes upstream when asked. Several Tickets merge one after another in the order given, each answered on its own so one that fails leaves the others.',
+      description: 'Merge one ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, runs that check on the merged branch, and removes the worktree or pushes upstream when asked. Several Tickets go through orchestrator_merge_queue.',
       schema: z.object({
-        ticket_id: z.string().min(1).optional().describe('The ended Ticket to merge, by id or display number such as T-0007.'),
-        ticket_ids: z.array(z.string().min(1)).min(1).max(10).optional()
-          .describe('Several ended Tickets to merge in this order, for "merge T-0003 and T-0005"; each is answered on its own and a failure, such as a conflict handed to that worker, leaves the rest to run.'),
+        ticket_id: z.string().min(1).describe('The ended Ticket to merge, by id or display number such as T-0007.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
         cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging, as the ticket page does.'),
         push: z.boolean().optional().describe('Push the merged branch to the upstream its repository names, when the person asked to push too.'),
-      }).strict().refine(value => !!value.ticket_id !== !!value.ticket_ids, { message: 'Name exactly one of ticket_id or ticket_ids' }),
+      }).strict(),
+      execute: async args => {
+        const result = await host.mergeTicket(args.ticket_id, args.strategy,
+          { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }), ...(args.push === undefined ? {} : { push: args.push }) })
+        const ticket = host.store.tickets.get(args.ticket_id)
+        return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_merge_queue',
+      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker. Cancel queued Tickets with cancel.',
+      schema: z.object({
+        ticket_ids: z.array(z.string().min(1)).min(1).max(20).describe('The ended Tickets to queue, in merge order, by id or number.'),
+        strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
+        cleanup: z.boolean().optional().describe('Remove each worktree and branch after merging, as the ticket page does.'),
+        push: z.boolean().optional().describe('Push each merged branch to the upstream its repository names, when the person asked to push too.'),
+        cancel: z.boolean().default(false).describe('Take these Tickets out of the queue instead of adding them.'),
+      }).strict(),
       execute: async args => {
         const options = { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }),
           ...(args.push === undefined ? {} : { push: args.push }) }
-        if (args.ticket_ids) {
-          const results: { ticket_id: string; branch?: string; target?: string; head?: string; error?: string }[] = []
-          for (const id of args.ticket_ids) {
-            try { results.push({ ticket_id: id, ...await host.mergeTicket(id, args.strategy, options) }) }
-            catch (error) { results.push({ ticket_id: id, error: error instanceof Error ? error.message : String(error) }) }
-          }
-          return { results }
-        }
-        const result = await host.mergeTicket(args.ticket_id!, args.strategy, options)
-        const ticket = host.store.tickets.get(args.ticket_id!)
-        return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+        return args.cancel
+          ? { cancelled: true as const, ...host.dequeueMerges(args.ticket_ids) }
+          : { cancelled: false as const, ...host.queueMerges(args.ticket_ids, options) }
       },
     }),
     tool({
