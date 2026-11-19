@@ -294,15 +294,16 @@ export class Tickets extends EnginePart {
    * @returns The ticket with the note.
    * @throws UserError when the ticket is unknown or the file or text is empty.
    */
-  addNote(ticketId: string, input: { file: string; line?: number; text: string }): Ticket {
+  addNote(ticketId: string, input: { file: string; line?: number; endLine?: number; text: string }): Ticket {
     const ticket = this.require(ticketId)
     const file = input.file.trim()
     const text = input.text.trim()
     if (!file || !text) throw new UserError('emptyNote')
+    if (input.endLine !== undefined && (input.line === undefined || input.endLine < input.line)) throw new UserError('invalidNoteRange')
     const at = this.now()
     const id = key('note', ticketId, at, String((ticket.notes ?? []).length))
     const note = { id, file, text, at, ...ticket.review?.head ? { commit: ticket.review.head } : {},
-      ...input.line ? { line: input.line } : {} }
+      ...input.line ? { line: input.line } : {}, ...input.endLine ? { endLine: input.endLine } : {} }
     ticket.notes = [...(ticket.notes ?? []), note]
     ticket.updatedAt = at
     this.repo.tickets.save(ticket)

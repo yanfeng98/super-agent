@@ -56,7 +56,8 @@ it('lists Tickets under Execution by who they wait on, with the Executor state a
 })
 
 it('shows the merge queue with its pause and takes a Ticket out of it', async () => {
-  server.mergeQueue = { paused: true, items: [{ ticket_id: 't1', number: 1, title: '修复回归', position: 1 },
+  server.mergeQueue = { paused: true, items: [{ ticket_id: 't1', number: 1, title: '修复回归', position: 1,
+    error: { at: '2026-11-18T00:00:00Z', message: 'Blocked by T-0009; merge it first' } },
     { ticket_id: 't2', number: 2, title: '另一个工单', position: 2, strategy: 'squash' }] }
   await mount()
   await click(zh['tab.execution'])
@@ -65,6 +66,11 @@ it('shows the merge queue with its pause and takes a Ticket out of it', async ()
   expect(text()).toContain(zh.mergeQueuePaused)
   expect(text()).toContain('T-0001 修复回归')
   expect(text()).toContain('squash')
+  // A failed entry says why and is retried on its own.
+  expect(text()).toContain('上次未合并：Blocked by T-0009; merge it first')
+  await click(zh.queueRetry)
+  expect(server.requests.find(request => request.path === 'merge-queue/retry')).toMatchObject({ method: 'POST',
+    body: { ticket_ids: ['t1'] } })
   // The queue resumes as one action, and an entry leaves it on its own.
   await click(zh.mergeQueueResume)
   expect(server.requests.find(request => request.path === 'merge-queue/pause')).toMatchObject({ method: 'POST', body: { paused: false } })
@@ -222,23 +228,25 @@ it('adds a line-anchored review note and sends the notes to the executor as one 
   server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t1', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [],
       files: [], dirty: [] },
-    notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at: '2026-11-18T00:00:00Z', outdated: true,
-      commit: 'c'.repeat(40) }],
+    notes: [{ id: 'n1', file: 'src/a.ts', line: 12, endLine: 20, text: '改成可选', at: '2026-11-18T00:00:00Z',
+      outdated: true, commit: 'c'.repeat(40) }],
     threads: [{ ...threadSummary(), key: 'local:r1', source: 'local', title: '本地线程' }] }
   await mount()
-  expect(text()).toContain('src/a.ts:12')
+  expect(text()).toContain('src/a.ts:12-20')
   // A note written on an older commit is marked, so an approval of the current changes is not mistaken for it.
   expect(text()).toContain(zh.noteOutdated)
   await type(field<HTMLInputElement>(zh.noteFilePlaceholder), 'src/b.ts')
   await type(field<HTMLInputElement>(zh.noteLinePlaceholder), '4')
+  await type(field<HTMLInputElement>(zh.noteEndLinePlaceholder), '9')
   await type(field<HTMLTextAreaElement>(zh.noteTextPlaceholder), '补个测试')
   await click(zh.noteAdd)
+  // A note covers a range when it names an end line.
   expect(server.requests.find(request => request.path === 'tickets/t1/notes')).toMatchObject({ method: 'POST',
-    body: { file: 'src/b.ts', line: 4, text: '补个测试' } })
+    body: { file: 'src/b.ts', line: 4, endLine: 9, text: '补个测试' } })
   await click(zh.noteSend)
   const followup = server.requests.filter(request => request.path === 'local/followups').at(-1)
   expect(followup?.body).toMatchObject({ thread: 'local:r1' })
-  expect(String((followup?.body as { text?: string }).text)).toContain('src/a.ts:12: 改成可选')
+  expect(String((followup?.body as { text?: string }).text)).toContain('src/a.ts:12-20: 改成可选')
   await click(zh.noteReply)
   await type(field<HTMLInputElement>(zh.noteReply), '已经处理')
   await click(zh.noteReplySend)

@@ -100,7 +100,9 @@ export function ticketDetail(host: ViewHost, id: string) {
     && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   // Undoing a merge needs the repository the merge recorded, which survives the removal of its worktree.
-  const revert = !!ticket.merged && !ticket.reverted && !!(ticket.merged.root ?? ticket.execution?.directory)
+  const revert = !!ticket.merged && !!(ticket.merged.root ?? ticket.execution?.directory)
+  // A revert of a merge that a later merge replaced is history, not the ticket's current state.
+  const reverted = ticket.reverted && ticket.reverted.at > (ticket.merged?.at ?? '') ? ticket.reverted : undefined
   // A push that failed can be retried where the merge ran, from the panel.
   const push = !!ticket.merged && ticket.merged.push?.ok === false && !!(ticket.merged.root ?? ticket.execution?.directory)
   // A queued Ticket shows its place and can leave the queue from its page.
@@ -109,7 +111,7 @@ export function ticketDetail(host: ViewHost, id: string) {
   // The decisions a person made on the Ticket, in the order they happened, with the interface each came from.
   const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'reverted' | 'cleaned' | 'discarded'; at: string;
     title?: string; tags?: string[]; decision?: 'approved' | 'changes-requested'; note?: string; branch?: string; target?: string;
-    via?: ActionOrigin; by?: string; head?: string; push?: { ok: boolean; error?: string } }[] = []
+    via?: ActionOrigin; by?: string; head?: string; merge?: string; push?: { ok: boolean; error?: string } }[] = []
   if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
   if (ticket.renamed) history.push({ code: 'renamed', at: ticket.renamed.at, title: ticket.renamed.title })
   if (ticket.tagged) history.push({ code: 'tagged', at: ticket.tagged.at, tags: ticket.tags ?? [] })
@@ -125,7 +127,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     ...(ticket.merged.head ? { head: ticket.merged.head } : {}), ...(ticket.merged.via ? { via: ticket.merged.via } : {}),
     ...(ticket.merged.push ? { push: { ok: ticket.merged.push.ok, ...(ticket.merged.push.error ? { error: ticket.merged.push.error } : {}) } } : {}) })
   if (ticket.reverted) history.push({ code: 'reverted', at: ticket.reverted.at, head: ticket.reverted.commit,
-    ...(ticket.reverted.via ? { via: ticket.reverted.via } : {}) })
+    merge: ticket.reverted.merge, ...(ticket.reverted.via ? { via: ticket.reverted.via } : {}) })
   if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at, ...(ticket.cleaned.via ? { via: ticket.cleaned.via } : {}) })
   if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
   history.sort((a, b) => a.at.localeCompare(b.at))
@@ -157,7 +159,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     ...ticket.checkHistory?.length ? { checkHistory: ticket.checkHistory } : {},
     ...ticket.checkRuns?.length ? { checkRuns: ticket.checkRuns } : {},
     review: ticket.review,
-    merged: ticket.merged, reverted: ticket.reverted, discarded: ticket.discarded, cleaned: ticket.cleaned,
+    merged: ticket.merged, reverted, discarded: ticket.discarded, cleaned: ticket.cleaned,
     ...queuePosition !== undefined ? { queuePosition } : {},
     ...ticket.targetCheck ? { targetCheck: ticket.targetCheck } : {},
     ...ticket.mergeError ? { mergeError: ticket.mergeError } : {},

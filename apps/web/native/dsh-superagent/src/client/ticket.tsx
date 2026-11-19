@@ -170,6 +170,7 @@ export function TicketPage({ id }: { id: string }) {
   const [blockerBusy, setBlockerBusy] = useState(false)
   const [noteFile, setNoteFile] = useState('')
   const [noteLine, setNoteLine] = useState('')
+  const [noteEndLine, setNoteEndLine] = useState('')
   const [noteText, setNoteText] = useState('')
   const [notesBusy, setNotesBusy] = useState(false)
   const [reviewBusy, setReviewBusy] = useState(false)
@@ -283,9 +284,11 @@ export function TicketPage({ id }: { id: string }) {
     setNotesBusy(true)
     try {
       const line = Number(noteLine)
+      const endLine = Number(noteEndLine)
       await call('POST tickets/:id/notes', { id, body: { file: noteFile.trim(), text: noteText.trim(),
-        ...noteLine.trim() && Number.isInteger(line) && line > 0 ? { line } : {} } })
-      setNoteFile(''); setNoteLine(''); setNoteText('')
+        ...noteLine.trim() && Number.isInteger(line) && line > 0 ? { line } : {},
+        ...noteEndLine.trim() && Number.isInteger(endLine) && endLine > 0 ? { endLine } : {} } })
+      setNoteFile(''); setNoteLine(''); setNoteEndLine(''); setNoteText('')
       await reload()
     } catch (failure) { notify(errorText(failure)) }
     finally { setNotesBusy(false) }
@@ -328,7 +331,8 @@ export function TicketPage({ id }: { id: string }) {
   }
   const sendNotes = async () => {
     if (!localThread) return
-    const text = `${t('noteMessage')}\n\n${notes.filter(note => !note.resolved).map(note => `- ${note.file}${note.line ? `:${note.line}` : ''}: ${note.text}`).join('\n')}`
+    const range = (note: typeof notes[number]) => note.line ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''
+    const text = `${t('noteMessage')}\n\n${notes.filter(note => !note.resolved).map(note => `- ${note.file}${range(note)}: ${note.text}`).join('\n')}`
     setNotesBusy(true)
     try { await after(call('POST local/followups', { body: { thread: localThread.key, text } })) }
     catch (failure) { notify(errorText(failure)) }
@@ -462,7 +466,8 @@ export function TicketPage({ id }: { id: string }) {
         {notes.some(note => !note.resolved) && <Hint>{t('notesUnresolved', { count: notes.filter(note => !note.resolved).length })}</Hint>}
         {notes.length > 0 && <ul className="dt-list">{notes.map(note => <li className="dt-row" key={note.id}>
           <div className="dt-row-main">
-            <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line ? `:${note.line}` : ''}</span><When at={note.at} />
+            <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line
+              ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''}</span><When at={note.at} />
               {note.outdated && <Tag tone="warning">{t('noteOutdated')}</Tag>}
               {note.resolved && <Tag tone="success">{t('noteResolvedTag')}</Tag>}</div>
             <div className="dt-row-quote">{note.text}</div>
@@ -494,6 +499,8 @@ export function TicketPage({ id }: { id: string }) {
               onChange={event => setNoteFile(event.target.value)} />
             <Input className="dt-mono" type="number" min={1} value={noteLine} placeholder={t('noteLinePlaceholder')}
               aria-label={t('noteLinePlaceholder')} onChange={event => setNoteLine(event.target.value)} />
+            <Input className="dt-mono" type="number" min={1} value={noteEndLine} placeholder={t('noteEndLinePlaceholder')}
+              aria-label={t('noteEndLinePlaceholder')} onChange={event => setNoteEndLine(event.target.value)} />
           </div>
           <textarea className="dt-textarea" rows={2} maxLength={2000} value={noteText} placeholder={t('noteTextPlaceholder')}
             aria-label={t('noteTextPlaceholder')} onChange={event => setNoteText(event.target.value)} />
@@ -598,7 +605,8 @@ export function TicketPage({ id }: { id: string }) {
             {item.by && <span>{t('reviewedBy', { name: item.by })}</span>}
             {item.note && <span>{item.note}</span>}
             {item.branch && <span className="dt-mono">{item.branch} → {item.target}</span>}
-            {item.head && <span className="dt-mono">{item.head.slice(0, 8)}</span>}
+            {item.head && <span className="dt-mono">{item.merge ? `${item.merge.slice(0, 8)} → ${item.head.slice(0, 8)}`
+              : item.head.slice(0, 8)}</span>}
             {item.push && <span>{item.push.ok ? t('pushOk') : t('pushFailed', { error: item.push.error ?? '' })}</span>}
             {item.via && <span>{t(`via.${item.via}`)}</span>}</div>
         </div>

@@ -93,6 +93,10 @@ function MergeQueue() {
     await call('POST tickets/:id/dequeue', { id })
     await reload()
   }
+  const retry = async (id: string): Promise<void> => {
+    await call('POST merge-queue/retry', { body: { ticket_ids: [id] } })
+    await reload()
+  }
   return <Section title={t('mergeQueueTitle')} hint={t('mergeQueueHint')} count={data.items.length}>
     <div className="dt-row-meta dt-status-line">
       <span className="dt-hint">{data.paused ? t('mergeQueuePaused') : t('mergeQueueRunning')}</span>
@@ -103,9 +107,11 @@ function MergeQueue() {
         <div className="dt-row-title"><button type="button" className="dt-open" onClick={() => navigate({ page: 'execution',
           id: item.ticket_id })}>{item.number ? `T-${String(item.number).padStart(4, '0')} ` : ''}{item.title}</button></div>
         <div className="dt-row-meta"><span>#{item.position}</span>{item.strategy && <span className="dt-mono">{item.strategy}</span>}
-          {data.paused && <span>{t('mergeQueueWaiting')}</span>}</div>
+          {data.paused && !item.error && <span>{t('mergeQueueWaiting')}</span>}
+          {item.error && <span>{t('queueFailed', { error: item.error.message })}</span>}</div>
       </div>
       <div className="dt-row-actions">
+        {item.error && <Button variant="outline" size="sm" onClick={() => retry(item.ticket_id)}>{t('queueRetry')}</Button>}
         <Button variant="ghost" size="sm" onClick={() => leave(item.ticket_id)}>{t('queueCancel')}</Button>
       </div>
     </li>)}</ul>}

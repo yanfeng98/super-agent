@@ -1672,6 +1672,11 @@ describe('review notes', () => {
     expect(resolved.resolved?.at).toBeDefined()
     expect(h.engine.resolveNote(ticketId, noteId, false).notes![0]!.resolved).toBeUndefined()
     expect(() => h.engine.resolveNote(ticketId, 'missing', true)).toThrow(UserError)
+    // A note may cover a range of lines, which must run forwards from its start.
+    const ranged = h.engine.addNote(ticketId, { file: 'src/a.ts', line: 4, endLine: 9, text: '这段' })
+    expect(ranged.notes?.at(-1)).toMatchObject({ line: 4, endLine: 9 })
+    expect(() => h.engine.addNote(ticketId, { file: 'src/a.ts', endLine: 9, text: '缺起点' })).toThrow(new UserError('invalidNoteRange'))
+    expect(() => h.engine.addNote(ticketId, { file: 'src/a.ts', line: 9, endLine: 4, text: '倒着' })).toThrow(new UserError('invalidNoteRange'))
     const replied = h.engine.replyToNote(ticketId, noteId, '  已处理  ')
     expect(replied.notes![0]!.replies).toEqual([expect.objectContaining({ text: '已处理' })])
     expect(() => h.engine.replyToNote(ticketId, noteId, '  ')).toThrow(UserError)
