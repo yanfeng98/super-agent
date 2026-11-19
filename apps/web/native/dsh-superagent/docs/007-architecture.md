@@ -320,7 +320,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
 | `src/app/notices.ts` | The main Session's notices and relays: `eventNotice`, `reportRelay`, `resultRelay` and `followupRelay` |
 | `src/app/notifications.ts` | Panel notifications recorded from Ticket attention and ending events, and from merges, reverts, required reviews, failing CI and checks, and pushes, newest first, with read and read-all |
-| `src/app/merge-queue.ts` | The merge queue a person asks for: the Tickets waiting for their turn in order, enqueuing, cancelling, taking the first, and a Ticket's place |
+| `src/app/merge-queue.ts` | The merge queue a person asks for: the Tickets waiting for their turn in order, enqueuing, cancelling, retrying a failed entry, taking the next one that has not failed, and a Ticket's place |
 | `src/app/store.ts` | The Store, and `Receipt`, a message of the outbox |
 | `src/app/store-read.ts` | `storeReads`: the Store's read queries for the views, the tools and the Sources' polls, which never write |
 | `src/app/migration.ts` | The schema 11 migration: one step from schema 10 that writes every stored record in its current shape |

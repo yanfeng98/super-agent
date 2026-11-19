@@ -253,6 +253,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 | `GET tags` | Every tag on a request, sorted, for the Execution filter |
 | `GET merge-queue` | The merge queue the panel shows: `paused`, and the waiting entries with `ticket_id`, `number`, `title`, `position` and `strategy` |
 | `POST merge-queue/pause` with `{"paused": true}` | Holds or releases the queue, which keeps its order: `paused` |
+| `POST merge-queue/retry` with `{"ticket_ids": ["T-0003"]}` | Clears the recorded failure of queued Tickets so the next pass tries them again: `retried` and the `queue` |
 | `GET notifications` | The newest panel notifications with `unread`; `POST notifications/<id>/read` marks one read, and `POST notifications/read-all` marks every one read |
 | `POST tickets/<id>/reopen`, `POST tickets/<id>/approve` | Reopens an ended Ticket under its Mandate unless its branch was merged or its worktree was discarded or cleaned up, or approves a held Ticket: `reopened: true` / `approved: true` |
 | `POST tickets/<id>/title` with `{"title": …}` | Renames a Ticket without changing its request: `title` |
@@ -269,7 +270,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 | `POST tickets/<id>/related` with `{"ticket": "T-0003", "linked": true}` | Links or unlinks another Ticket, named by id or number, on both pages: `related`, each with `id`, `number` and `title` |
 | `POST tickets/<id>/automerge` with `{"cancel": true}` | Clears the standing merge request the main Session recorded with `orchestrator_ticket_automerge`, which merges once the gates pass: `auto_merge: false` |
 | `POST tickets/<id>/blockers` with `{"ticket": "T-0003", "blocked": true}` | Records or clears that the Ticket merges only after another Ticket's branch has merged, the other named by id or number: `ticket_id` and `blocked_by`, each with `id`, `number`, `title` and `merged`; refused for the Ticket itself or a dependency that would close a cycle |
-| `POST tickets/<id>/notes` with `{"file", "line", "text"}`; `POST tickets/<id>/notes/<noteId>/remove`; `POST tickets/<id>/notes/<noteId>/resolve` with `{"resolved": true}` or `false`; `POST tickets/<id>/notes/<noteId>/replies` with `{"text": …}` | Adds, removes, resolves, or replies to a review note anchored to a file and optional line: `notes` |
+| `POST tickets/<id>/notes` with `{"file", "line", "endLine", "text"}`; `POST tickets/<id>/notes/<noteId>/remove`; `POST tickets/<id>/notes/<noteId>/resolve` with `{"resolved": true}` or `false`; `POST tickets/<id>/notes/<noteId>/replies` with `{"text": …}` | Adds, removes, resolves, or replies to a review note anchored to a file, an optional line and an optional range end: `notes` |
 | `GET tickets/<id>/diff?since=<commit>` | The committed diff since the Ticket's base, or since `since` when a review covered an earlier commit: `diff`, `truncated`, one `files` entry per file (paths, status, added/removed counts and the patch), and `error` when git cannot read it |
 | `POST executor/pause` with `{"paused": true}` or `false` | Pauses or resumes processing: `paused` |
 | `POST setup/check` | Runs setup again by restarting dsh-superagent: `restarting: true`. Refused when setup has nothing to fix |
