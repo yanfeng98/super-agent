@@ -198,6 +198,7 @@ export class Runtime extends Service implements SourceHost {
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources,
         localRequest: input => this.localRequest(input),
         localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
+        mergeTicket: (id, strategy) => runtime.mergeTicket(id, strategy),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -386,7 +387,7 @@ export class Runtime extends Service implements SourceHost {
     if (!directory) throw new Error('This ticket has no workspace')
     const blocked = mergeBlockedByCheck(this.store.settings().executor.check, ticket.checks, ticket.ended.at)
     if (blocked) throw new Error(blocked)
-    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal, strategy)
+    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal, strategy, ticket.execution?.target)
     const at = now()
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
@@ -530,7 +531,7 @@ export class Runtime extends Service implements SourceHost {
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
-    const result = await rebaseWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+    const result = await rebaseWorkspace(this.ctx.subprocess, directory, this.stopped.signal, ticket.execution?.target)
     const rebased = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base: result.base } : undefined }
     const review = await captureReview(this.ctx.subprocess, rebased, this.stopped.signal)
     const at = now()

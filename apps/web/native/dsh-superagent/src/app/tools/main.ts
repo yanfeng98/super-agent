@@ -12,6 +12,7 @@ import { readResource, type MainResourceHost, type ResourceHost } from '../resou
 import type { Sessions } from '../sessions.ts'
 import type { Settings } from '../settings.ts'
 import type { Store } from '../store.ts'
+import type { MergeStrategy } from '../review.ts'
 import type { LocalFollowup, LocalFollowupResult, LocalRequest, LocalRequestResult } from '../../sources/local.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
 
@@ -31,6 +32,8 @@ export interface MainToolsHost {
   localRequest(input: LocalRequest): Promise<LocalRequestResult>
   /** Sends a person's answer to a local ticket's Thread, where its worker reads it as an Input. */
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
+  /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
+  mergeTicket(id: string, strategy?: MergeStrategy): Promise<{ branch: string; target: string }>
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
@@ -217,6 +220,19 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         if (!channel) throw new UserError('notLocalTicket')
         const sent = await host.localFollowup({ thread: channel.thread, text: args.text }, { mainSession: true })
         return { ...sent, ticket: ticketCard(host.store.tickets.get(ticket.id) ?? ticket) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_merge',
+      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; local only, no push.',
+      schema: z.object({
+        ticket_id: z.string().min(1).describe('The ended Ticket to merge.'),
+        strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
+      }).strict(),
+      execute: async args => {
+        const result = await host.mergeTicket(args.ticket_id, args.strategy)
+        const ticket = host.store.tickets.get(args.ticket_id)
+        return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },
     }),
     tool({

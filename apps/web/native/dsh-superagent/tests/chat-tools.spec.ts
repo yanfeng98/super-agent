@@ -1,6 +1,6 @@
 /** Requests and answers the main Session records from its own conversation as local tickets. */
 import { existsSync, readFileSync } from 'node:fs'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { UserError } from '../src/core/index.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
@@ -37,6 +37,21 @@ it('records a request from the main Session as a local ticket and carries the pe
   expect(readFileSync(created.file, 'utf8')).toContain('用单列布局。')
   expect(h.runtime.store.tickets.get(ticketId)?.inputs).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'trigger' })]))
   expect(h.relays(h.runtime.masterId).filter(item => item.kind === 'follow_up')).toEqual([])
+})
+
+it('merges an ended ticket through the main Session with the panel gates', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
+  const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge',
+    { ticket_id: ticket.id, strategy: 'squash' }) as unknown as { branch: string; target: string; ticket: { ticket_id: string } }
+  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash')
+  expect(result).toMatchObject({ branch: 'agent/t', target: 'main', ticket: { ticket_id: ticket.id } })
+  // The schema defaults to a fast-forward, and a gate error reaches the model unchanged.
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id })
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff')
+  merge.mockRejectedValueOnce(new Error('Review approval is required before merging'))
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id }))
+    .rejects.toThrow('Review approval is required before merging')
 })
 
 it('refuses to answer a ticket another Source created', async () => {

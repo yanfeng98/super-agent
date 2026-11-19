@@ -164,6 +164,18 @@ describe('merge and discard', () => {
     expect(existsSync(worktree)).toBe(false)
     expect(() => git('show-ref', '--verify', '--quiet', 'refs/heads/agent/clean')).toThrow()
   })
+  it('refuses to merge or rebase when the repository is on another branch than the recorded target', async () => {
+    base()
+    const worktree = join(dir, 'worktree-target')
+    git('worktree', 'add', '-q', '-b', 'agent/t', worktree)
+    writeFileSync(join(worktree, 'x.txt'), 'x\n')
+    gitAt(worktree, 'add', 'x.txt'); gitAt(worktree, 'commit', '-q', '-m', 'work')
+    await expect(mergeWorkspace(subprocess(), worktree, signal, 'ff', 'other')).rejects.toThrow(/not the Ticket's target/)
+    await expect(rebaseWorkspace(subprocess(), worktree, signal, 'other')).rejects.toThrow(/not the Ticket's target/)
+    // The recorded target still merges.
+    expect(await mergeWorkspace(subprocess(), worktree, signal, 'ff', git('branch', '--show-current')))
+      .toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
+  })
   it('refuses a merged cleanup when the target does not contain the branch, keeping its worktree', async () => {
     base()
     const worktree = join(dir, 'worktree-unmerged-clean')

@@ -103,15 +103,20 @@ export async function workspaceRepo(subprocess: SubprocessRuntime, directory: st
  * Merges the ticket branch into the repository's checked-out branch by `strategy`: a fast-forward, one squashed commit, or a
  * merge commit. The ticket branch must contain the repository's commit, so the merge cannot conflict.
  * @param strategy - The merge form to use; `ff` refuses when the repository moved.
- * @throws when the workspace is not a linked worktree, the repository is dirty, the branch is checked out there, the ticket
- * branch does not contain the repository's commit, or git cannot complete the merge.
+ * @param expectedTarget - The branch recorded when the Ticket started; the merge refuses when the repository is on another.
+ * @throws when the workspace is not a linked worktree, the repository is dirty, on another branch than `expectedTarget`,
+ * the ticket branch is checked out there, the ticket branch does not contain the repository's commit, or git cannot complete
+ * the merge.
  * @returns The branch merged and the branch it moved.
  */
 export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  strategy: MergeStrategy = 'ff'): Promise<{ branch: string; target: string }> {
+  strategy: MergeStrategy = 'ff', expectedTarget?: string): Promise<{ branch: string; target: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
+  if (expectedTarget && repo.target !== expectedTarget) {
+    throw new Error(`The repository is on ${repo.target}, not the Ticket's target ${expectedTarget}; check it out and merge again`)
+  }
   if (repo.dirty) throw new Error('The repository has uncommitted changes; commit or stash them before merging')
   if (repo.target === repo.branch) throw new Error('The repository already has the ticket branch checked out')
   // A branch that lacks the repository's newer commits cannot fast-forward; name the fix instead of git's bare refusal.
@@ -148,15 +153,19 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
 /**
  * Rebases the ticket branch onto the repository's checked-out branch, so a merge can fast-forward after the repository moved.
  * A conflicted rebase is aborted, leaving the workspace on its previous commits.
+ * @param expectedTarget - The branch recorded when the Ticket started; the rebase refuses when the repository is on another.
  * @returns The branch rebased, the branch it moved onto, and the target's commit that is now the workspace's base.
- * @throws when the workspace is not a linked worktree, the repository already has the ticket branch checked out, or the
- * rebase cannot finish cleanly.
+ * @throws when the workspace is not a linked worktree, the repository is on another branch than `expectedTarget`, already
+ * has the ticket branch checked out, or the rebase cannot finish cleanly.
  */
-export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<{ branch: string;
-  target: string; base: string }> {
+export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
+  expectedTarget?: string): Promise<{ branch: string; target: string; base: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; rebase its branch manually')
+  if (expectedTarget && repo.target !== expectedTarget) {
+    throw new Error(`The repository is on ${repo.target}, not the Ticket's target ${expectedTarget}; check it out and rebase again`)
+  }
   if (repo.target === repo.branch) throw new Error('The ticket branch is the repository branch')
   try {
     await runAsWorker(subprocess, ['git', 'rebase', repo.target], directory,
