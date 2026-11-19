@@ -1,11 +1,12 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, mergeWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
-  return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn() }
+  return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
+    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn() }
 })
 
 let h: Host
@@ -16,6 +17,8 @@ beforeEach(async () => {
   vi.mocked(workspaceHead).mockReset().mockResolvedValue(undefined)
   vi.mocked(captureReview).mockReset().mockResolvedValue(
     { capturedAt: '2026-11-19T00:03:00.000Z', head: 'new', commits: [], files: [], dirty: [] })
+  vi.mocked(rebaseWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main', base: 'base' })
+  vi.mocked(discardWorkspace).mockReset().mockResolvedValue(undefined)
 })
 afterEach(async () => { await h.stop() })
 
@@ -169,6 +172,17 @@ it('names a discarded blocker as a dependency to remove rather than merge', asyn
     h.runtime.store.tickets.save(current)
   })
   await expect(h.runtime.mergeTicket(blocked.id)).rejects.toThrow(/discarded Ticket never merges/)
+})
+
+it('rebases and discards a blocked ticket, which only the merge waits on', async () => {
+  const { ticket: blocker } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
+  const { ticket: blocked } = await h.acceptedTicket(feishu('2', '@bot 再做后续'))
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  ended(blocked.id)
+  expect(await h.runtime.rebaseTicket(blocked.id)).toEqual({ branch: 'agent/t', target: 'main' })
+  expect(rebaseWorkspace).toHaveBeenCalled()
+  expect(await h.runtime.discardTicket(blocked.id)).toBeUndefined()
+  expect(discardWorkspace).toHaveBeenCalled()
 })
 
 it('refuses a ticket that waits for itself', async () => {
