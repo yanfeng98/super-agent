@@ -67,6 +67,8 @@ export interface HttpHost {
   checkTicket(id: string): Promise<TicketCheck>
   /** Links or unlinks another ticket, named by id or display number. */
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
+  /** Undoes a merged ticket's merge with a reverting commit on the branch it landed. */
+  revertTicket(id: string): Promise<{ branch: string; target: string; commit: string }>
   /** Clears a ticket's standing merge request, which the main Session records. */
   cancelAutoMerge(id: string): Ticket
   /** Records or clears that a ticket waits for another ticket's merge. */
@@ -318,6 +320,11 @@ function routes(runtime: HttpHost): Routes {
       const id = ticket(params.id)
       const { tags } = z.object({ tags: z.array(z.string().trim().min(1).max(24)).max(8) }).strict().parse(await body())
       try { return { tags: runtime.setTags(id, tags).tags ?? [] } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/revert': async ({ params }) => {
+      const id = ticket(params.id)
+      try { return await runtime.revertTicket(id) }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/discard': async ({ params }) => {

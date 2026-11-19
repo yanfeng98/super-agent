@@ -44,6 +44,7 @@ export interface Api {
   'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; error?: string } }
   'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' };
     response: { merged: true; branch: string; target: string; rebased?: true; recaptured?: true } }
+  'POST tickets/:id/revert': { response: { branch: string; target: string; commit: string } }
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }

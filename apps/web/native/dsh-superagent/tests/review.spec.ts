@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -120,6 +120,51 @@ describe('merge and discard', () => {
     await discardWorkspace(subprocess(), worktree, signal, { merged: true, squash: true })
     expect(git('branch', '--list', 'agent/q')).toBe('')
     expect(existsSync(worktree)).toBe(false)
+  })
+  it('reverts the merge it recorded, on the fast-forward commit and on a merge commit', async () => {
+    base()
+    const worktree = join(dir, 'worktree-revert')
+    git('worktree', 'add', '-q', '-b', 'agent/rv', worktree)
+    writeFileSync(join(worktree, 'rv.txt'), 'rv\n')
+    gitAt(worktree, 'add', 'rv.txt'); gitAt(worktree, 'commit', '-q', '-m', 'revert me')
+    const merged = await mergeWorkspace(subprocess(), worktree, signal)
+    expect(existsSync(join(repo, 'rv.txt'))).toBe(true)
+    // The record names the repository the merge moved, so a revert needs no worktree.
+    const undone = await revertWorkspace(subprocess(), merged.root, signal, merged.head!, merged.target)
+    expect(undone).toMatchObject({ target: git('branch', '--show-current') })
+    expect(undone.head).toBe(git('rev-parse', 'HEAD'))
+    expect(existsSync(join(repo, 'rv.txt'))).toBe(false)
+    // A merge commit is undone against its first parent, which keeps the repository's own commits.
+    const other = join(dir, 'worktree-revert-merge')
+    git('worktree', 'add', '-q', '-b', 'agent/rm', other)
+    writeFileSync(join(other, 'rm.txt'), 'rm\n')
+    gitAt(other, 'add', 'rm.txt'); gitAt(other, 'commit', '-q', '-m', 'merge me')
+    const commit = await mergeWorkspace(subprocess(), other, signal, 'merge')
+    expect(git('rev-list', '--parents', '-n1', commit.head!).split(' ')).toHaveLength(3)
+    await revertWorkspace(subprocess(), commit.root, signal, commit.head!, commit.target)
+    expect(existsSync(join(repo, 'rm.txt'))).toBe(false)
+  })
+  it('leaves the branch where it was when the revert conflicts, and refuses one git cannot start', async () => {
+    base()
+    const worktree = join(dir, 'worktree-revert-conflict')
+    git('worktree', 'add', '-q', '-b', 'agent/rc', worktree)
+    writeFileSync(join(worktree, 'a.txt'), 'ticket\n')
+    gitAt(worktree, 'add', 'a.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket change')
+    const merged = await mergeWorkspace(subprocess(), worktree, signal)
+    // A later change to the file the merge moved makes the reverting commit conflict.
+    writeFileSync(join(repo, 'a.txt'), 'moved on\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'move past the merge')
+    const head = git('rev-parse', 'HEAD')
+    await expect(revertWorkspace(subprocess(), merged.root, signal, merged.head!, merged.target))
+      .rejects.toBeInstanceOf(RevertConflictError)
+    // The abort leaves the branch on its commit, with nothing half-applied.
+    expect(git('rev-parse', 'HEAD')).toBe(head)
+    expect(git('status', '--porcelain')).toBe('')
+    // A dirty repository and an unknown commit are named refusals, not half-finished reverts.
+    writeFileSync(join(repo, 'a.txt'), 'dirty\n')
+    await expect(revertWorkspace(subprocess(), merged.root, signal, merged.head!, merged.target)).rejects.toThrow(/uncommitted/)
+    await expect(revertWorkspace(subprocess(), merged.root, signal, 'f'.repeat(40), merged.target)).rejects.toThrow(/is not in/)
+    await expect(revertWorkspace(subprocess(), merged.root, signal, merged.head!, 'other')).rejects.toThrow(/not the branch that merge moved/)
   })
   it('makes a merge commit when asked, keeping both parents', async () => {
     base()

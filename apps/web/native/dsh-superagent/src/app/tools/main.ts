@@ -37,6 +37,8 @@ export interface MainToolsHost {
     Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }>
   /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
+  /** Undoes a merged Ticket's merge with a reverting commit on the branch it landed. */
+  revertTicket(id: string): Promise<{ ticket_id: string; branch: string; target: string; commit: string }>
   /** Clears a person's standing merge request. */
   cancelAutoMerge(id: string): Ticket
   /** Records or clears that one Ticket's branch must merge before another's. */
@@ -232,17 +234,40 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_merge',
-      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, and removes the worktree or pushes upstream when asked.',
+      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, and removes the worktree or pushes upstream when asked. Several Tickets merge one after another in the order given, each answered on its own so one that fails leaves the others.',
       schema: z.object({
-        ticket_id: z.string().min(1).describe('The ended Ticket to merge.'),
+        ticket_id: z.string().min(1).optional().describe('The ended Ticket to merge, by id or display number such as T-0007.'),
+        ticket_ids: z.array(z.string().min(1)).min(1).max(10).optional()
+          .describe('Several ended Tickets to merge in this order, for "merge T-0003 and T-0005"; each is answered on its own and a failure, such as a conflict handed to that worker, leaves the rest to run.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
         cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging, as the ticket page does.'),
         push: z.boolean().optional().describe('Push the merged branch to the upstream its repository names, when the person asked to push too.'),
+      }).strict().refine(value => !!value.ticket_id !== !!value.ticket_ids, { message: 'Name exactly one of ticket_id or ticket_ids' }),
+      execute: async args => {
+        const options = { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }),
+          ...(args.push === undefined ? {} : { push: args.push }) }
+        if (args.ticket_ids) {
+          const results: { ticket_id: string; branch?: string; target?: string; head?: string; error?: string }[] = []
+          for (const id of args.ticket_ids) {
+            try { results.push({ ticket_id: id, ...await host.mergeTicket(id, args.strategy, options) }) }
+            catch (error) { results.push({ ticket_id: id, error: error instanceof Error ? error.message : String(error) }) }
+          }
+          return { results }
+        }
+        const result = await host.mergeTicket(args.ticket_id!, args.strategy, options)
+        const ticket = host.store.tickets.get(args.ticket_id!)
+        return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_revert',
+      description: 'Undo a merged Ticket\'s merge with a reverting commit on the branch it landed, on the person\'s explicit request such as "回退 T-0007"; the record names the commit and the merge it undoes. A conflicting revert leaves the repository untouched, and the person resolves it with git.',
+      schema: z.object({
+        ticket_id: z.string().min(1).describe('The merged Ticket to undo, by id or display number such as T-0007.'),
       }).strict(),
       execute: async args => {
-        const result = await host.mergeTicket(args.ticket_id, args.strategy,
-          { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }), ...(args.push === undefined ? {} : { push: args.push }) })
-        const ticket = host.store.tickets.get(args.ticket_id)
+        const result = await host.revertTicket(args.ticket_id)
+        const ticket = host.store.tickets.get(result.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },
     }),

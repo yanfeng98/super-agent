@@ -503,9 +503,12 @@ export function TicketPage({ id }: { id: string }) {
           {t('autoMergeCancel')}</Button>
       </div>
     </div>}
-    {data.actions.cleanup && <div className="dt-row-actions">
-      <ConfirmButton variant="outline" icon="trash" label={t('cleanupWorktree')} title={t('cleanupTitle')}
-        message={t('cleanupConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/cleanup', { id }))} />
+    {data.reverted && <Hint>{t('revertedHint')}</Hint>}
+    {(data.actions.cleanup || data.actions.revert) && <div className="dt-row-actions">
+      {data.actions.revert && <ConfirmButton variant="outline" icon="refresh" label={t('ticketRevert')} title={t('revertTitle')}
+        message={t('revertConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/revert', { id }))} />}
+      {data.actions.cleanup && <ConfirmButton variant="outline" icon="trash" label={t('cleanupWorktree')} title={t('cleanupTitle')}
+        message={t('cleanupConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/cleanup', { id }))} />}
     </div>}
     {data.cleaned && <Hint>{t('cleanedHint')}</Hint>}
     {data.discarded && <Hint>{t('discardedHint')}</Hint>}

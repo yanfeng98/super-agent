@@ -342,6 +342,10 @@ export interface Ticket {
   rebased?: { at: string; branch: string; target: string; base: string; via?: ActionOrigin }
   /** When the ticket's branch was merged into the repository, where, how, which commit it left, and the interface that asked. */
   merged?: TicketMerge
+  /** When a person undid that merge with a reverting commit, and the merge it undoes. */
+  reverted?: TicketRevert
+  /** The last failing CI a followed pull request reported, so the same failure is announced once. */
+  ciNotice?: { thread: string; value: string }
   /** When a person discarded the ticket's worktree and branch. */
   discarded?: { at: string }
   /** When a person removed the worktree and branch of a merged ticket, keeping its commits on the target branch. */
@@ -370,6 +374,18 @@ export interface TicketMerge {
   head?: string
   /** The push that followed the merge, when one was asked for; a failed push leaves the merge recorded. */
   push?: { at: string; ok: boolean; error?: string }
+  /** The repository the merge moved, so a revert needs no worktree that cleanup may have removed. */
+  root?: string
+}
+/** The commit that undid a merge, on which branch, and the merge commit it undoes. */
+export interface TicketRevert {
+  at: string
+  /** The reverting commit the branch holds afterwards. */
+  commit: string
+  target: string
+  /** The merge commit that was reverted. */
+  merge: string
+  via?: ActionOrigin
 }
 /** One review of a ticket's ending changes: the decision, its note, the commit it covered, and the interface that made it. */
 export interface TicketReviewRound {

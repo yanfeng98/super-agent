@@ -4,6 +4,8 @@ export interface WebhookTicket { id: string; number: number; title: string }
 export type WebhookPayload =
   | { event: 'attention'; at: string; ticket: WebhookTicket; question: string }
   | { event: 'ended'; at: string; ticket: WebhookTicket; outcome: string; reason: string }
+  /** A merge, revert, review request, failing CI or given-up standing merge, stated in one sentence. */
+  | { event: 'merged' | 'reverted' | 'review' | 'ci' | 'automerge'; at: string; ticket: WebhookTicket; text: string }
 /**
  * POSTs a notification as JSON, with a short timeout.
  * @throws when the webhook answers outside 2xx or the request fails.

@@ -1,25 +1,26 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
-    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn() }
+    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn() }
 })
 
 let h: Host
 beforeEach(async () => {
   h = await startRuntime()
   vi.mocked(targetContained).mockReset().mockResolvedValue(true)
-  vi.mocked(mergeWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main' })
+  vi.mocked(mergeWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main', root: '/repo' })
   vi.mocked(workspaceHead).mockReset().mockResolvedValue(undefined)
   vi.mocked(captureReview).mockReset().mockResolvedValue(
     { capturedAt: '2026-11-19T00:03:00.000Z', head: 'new', commits: [], files: [], dirty: [] })
   vi.mocked(rebaseWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main', base: 'base' })
   vi.mocked(discardWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(pushWorkspace).mockReset().mockResolvedValue(undefined)
+  vi.mocked(revertWorkspace).mockReset().mockResolvedValue({ target: 'main', head: 'undo-sha' })
 })
 afterEach(async () => { await h.stop() })
 /** Notices injected into the main Session, parsed from the message text. */
@@ -265,14 +266,17 @@ it('merges a branch the repository already contains without rebasing or checking
 })
 
 it('records which interface merged, the commit it left, and the remote answer to a push', async () => {
-  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha' })
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)
   vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
   await expect(h.runtime.mergeTicket(ticket.id, 'ff', { push: true })).resolves.toMatchObject({ pushError: 'fatal: no upstream branch' })
   // The panel is the default interface, and the failed push is part of the record instead of only of the report.
-  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toMatchObject({ via: 'panel', head: 'merged-sha',
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toMatchObject({ via: 'panel', head: 'merged-sha', root: '/repo',
     push: { ok: false, error: 'fatal: no upstream branch' } })
+  // The panel keeps the outcome even when the person has left the chat that asked.
+  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'merged', ticketId: ticket.id,
+    text: expect.stringContaining('the push failed: fatal: no upstream branch') }))
 })
 
 it('records that the main Session asked for the merge, which may name the ticket by number', async () => {
@@ -323,6 +327,7 @@ it('gives up on a standing merge request after its attempts run out', async () =
   await h.runtime.runAutoMerge()
   expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge).toBeUndefined()
   await vi.waitFor(() => expect(notices().some(item => 'auto_merge_gave_up' in item)).toBe(true))
+  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'automerge', ticketId: ticket.id }))
 })
 
 it('cancels a standing merge request, and a person stopping the ticket clears it', async () => {
@@ -337,4 +342,66 @@ it('cancels a standing merge request, and a person stopping the ticket clears it
   h.runtime.engine.stopTicket(ticket.id)
   expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge).toBeUndefined()
   expect(h.runtime.engine.dueAutoMerge()).toEqual([])
+})
+
+it('undoes a recorded merge on the branch it moved, and records the reverting commit', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
+  await h.runtime.mergeTicket('T-0001')
+  const merged = h.runtime.store.tickets.get(ticket.id)!.merged!
+  expect(merged.root).toBe('/repo')
+  expect(await h.runtime.revertTicket('T-0001')).toEqual({ ticket_id: ticket.id, branch: 'agent/t', target: 'main', commit: 'undo-sha' })
+  expect(revertWorkspace).toHaveBeenCalledWith(expect.anything(), '/repo', expect.anything(), merged.head, 'main')
+  expect(h.runtime.store.tickets.get(ticket.id)?.reverted).toMatchObject({ commit: 'undo-sha', target: 'main',
+    merge: merged.head, via: 'panel' })
+  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'reverted', ticketId: ticket.id }))
+  // A merge is undone once; the record says which commit did it.
+  await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/already reverted/)
+})
+
+it('reports a conflicting revert without changing the branch, and refuses a ticket without a merge', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
+  await h.runtime.mergeTicket(ticket.id)
+  vi.mocked(revertWorkspace).mockRejectedValueOnce(new RevertConflictError('a.txt', ['a.txt']))
+  await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/conflicts in a\.txt/)
+  expect(h.runtime.store.tickets.get(ticket.id)?.reverted).toBeUndefined()
+  const { ticket: open } = await h.acceptedTicket(feishu('2', '@bot 还没合'))
+  await expect(h.runtime.revertTicket(open.id)).rejects.toThrow(/Only a merged ticket/)
+})
+
+it('announces a followed pull request\'s failing CI once, and again when the result changes', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  h.runtime.store.atomic(() => {
+    h.runtime.store.threads.save({ key: 'github:42', ref: { source: 'github', id: '42' }, createdAt: '2026-11-19T00:00:00.000Z',
+      subscriptions: [ticket.id], correlated: [], pending: [],
+      meta: { facts: { ci: { value: { zh: '2 项检查失败', en: '2 checks failing' }, problem: true } } } })
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.follows = [{ thread: 'github:42', own: true }]
+    h.runtime.store.tickets.save(current)
+  })
+  // A scan per pass is throttled; each step here clears the throttle to exercise the dedupe itself.
+  const scan = async (): Promise<void> => {
+    (h.runtime as unknown as { ciCheckedAt: number }).ciCheckedAt = 0
+    await h.runtime.pump()
+  }
+  await scan()
+  const failing = (): number => h.runtime.notifications().items.filter(item => item.kind === 'ci').length
+  expect(failing()).toBe(1)
+  expect(h.runtime.notifications().items.find(item => item.kind === 'ci')?.text).toContain('2 checks failing')
+  await scan()
+  expect(failing()).toBe(1)
+  // A changed CI result is news again.
+  h.runtime.store.threads.describe('github:42', { facts: { ci: { value: '3 checks failing', problem: true } } })
+  await scan()
+  expect(failing()).toBe(2)
+  // A pass that clears the problem is remembered as recovered, so the same failure later is news again.
+  h.runtime.store.threads.describe('github:42', { facts: { ci: { value: 'passed' } } })
+  await scan()
+  h.runtime.store.threads.describe('github:42', { facts: { ci: { value: '3 checks failing', problem: true } } })
+  await scan()
+  expect(failing()).toBe(3)
 })

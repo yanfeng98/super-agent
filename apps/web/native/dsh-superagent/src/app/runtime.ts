@@ -35,12 +35,12 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
-import { sendWebhook } from './webhook.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
+import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
-  recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
+  recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordRevert, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
   type LocalRequest, type LocalRequestResult } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
@@ -60,6 +60,8 @@ declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceH
 const now = (): string => new Date().toISOString()
 /** Attempts a standing merge request gets before the host gives up and tells the person which gate stayed closed. */
 const AUTO_MERGE_ATTEMPTS = 8
+/** How often passes look for a followed pull request's failing CI, which the Source polls on its own schedule. */
+const CI_NOTICE_INTERVAL_MS = 15_000
 
 /**
  * Composition root of dsh-superagent that connects `Store`, `Setup`, `Engine`, `SourceRegistry`, `Effects`, `Outbox`, `Passes`, `Sessions`, `Settings`, `Prompts`, `DshExecutor`, and `MasterAssessor`.
@@ -96,8 +98,12 @@ export class Runtime extends Service implements SourceHost {
   private quiet = 0
   /** Tickets whose merge is running, so a standing request and a person's cannot move one branch at the same time. */
   private readonly merging = new Set<string>()
+  /** Tickets whose revert is running, so a second request cannot revert the same merge twice. */
+  private readonly reverting = new Set<string>()
   /** The auto-merge attempt in flight, so passes do not start a second one over the same repository. */
   private autoMerging?: Promise<void>
+  /** When passes last looked for failing CI, so the scan runs on a slower schedule than the passes themselves. */
+  private ciCheckedAt = 0
   constructor(ctx: Context, readonly machine: Machine, restart: () => void) {
     super(ctx, 'orchestrator')
     const runtime = this
@@ -198,7 +204,7 @@ export class Runtime extends Service implements SourceHost {
       const evaluateDue = () => { engine.evaluateDue(); evals.set(evalsHealth(store)) }
       const passes = this.passes = new Passes({ engine: { receive: trigger => engine.receive(trigger), evaluateDue }, effects,
         health: this.runtimeHealth, lifetime: this.lifetime, configured: () => setup.configured(), closing: () => this.closing(),
-        automerge: () => { void this.runAutoMerge() } })
+        automerge: () => { void this.runAutoMerge() }, watch: () => { this.ciNotices() } })
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
@@ -208,6 +214,7 @@ export class Runtime extends Service implements SourceHost {
         mergeTicket: (id, strategy, options) => runtime.mergeTicket(id, strategy, options, 'chat'),
         autoMergeTicket: (id, options) => runtime.autoMergeTicket(id, options),
         cancelAutoMerge: id => runtime.cancelAutoMerge(id),
+        revertTicket: id => runtime.revertTicket(id),
         blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
@@ -258,16 +265,75 @@ export class Runtime extends Service implements SourceHost {
    */
   private notifyWebhook(event: Extract<DomainEvent, { type: 'ticket.attention' } | { type: 'ticket.ended' }>): void {
     const ticket = this.store.tickets.get(event.data.ticketId)
-    if (!ticket || !ticket.channels.some(channel => channel.source === 'local')) return
+    if (!ticket) return
+    const base = { at: event.at, ticket: { id: ticket.id, number: this.store.tickets.number(ticket.id) ?? 0, title: ticket.title } }
+    this.postWebhook(ticket, event.type === 'ticket.ended'
+      ? { event: 'ended', ...base, outcome: event.data.outcome, reason: event.data.reason ?? event.data.outcome }
+      : { event: 'attention', ...base, question: event.data.question })
+  }
+  /** POSTs one event about a local ticket, the Source with a webhook configured; a failure is logged and changes nothing. */
+  private postWebhook(ticket: Ticket, payload: WebhookPayload): void {
+    if (!ticket.channels.some(channel => channel.source === 'local')) return
     const url = webhookFor(this.store.settings())
     if (!url) return
-    const base = { at: event.at, ticket: { id: ticket.id, number: this.store.tickets.number(ticket.id) ?? 0, title: ticket.title } }
-    const payload = event.type === 'ticket.ended'
-      ? { event: 'ended' as const, ...base, outcome: event.data.outcome, reason: event.data.reason ?? event.data.outcome }
-      : { event: 'attention' as const, ...base, question: event.data.question }
     void sendWebhook(url, payload, this.stopped.signal).catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: webhook notification failed: %s', String(error))
     })
+  }
+  /** The label a person reads for a ticket: its display number, such as `T-0007`, or its id when it has none yet. */
+  private ticketLabel(ticket: Pick<Ticket, 'id'>): string {
+    const number = this.store.tickets.number(ticket.id)
+    return number ? `T-${String(number).padStart(4, '0')}` : ticket.id
+  }
+  /**
+   * Records a panel notification for an event a person may need to act on, and posts it to a local Source's webhook.
+   * @param kind - The event a person should see, by the same name in both interfaces.
+   * @param text - One sentence stating what happened.
+   */
+  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'ci' | 'automerge', text: string): void {
+    const at = now()
+    try { recordNotification(this.store, { at, kind, ticketId: ticket.id, title: ticket.title, text }) }
+    catch (error) { this.ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
+    this.postWebhook(ticket, { event: kind, at, text,
+      ticket: { id: ticket.id, number: this.store.tickets.number(ticket.id) ?? 0, title: ticket.title } })
+  }
+  /**
+   * Records one notification the first time a followed pull request's CI is reported failing on an ended ticket, so the same
+   * problem is announced once; a changed CI result announces again.
+   */
+  private ciNotices(): void {
+    if (this.paused() || this.closing()) return
+    const at = Date.now()
+    // The Source polls CI on its own schedule; a scan per pass would read every ticket for nothing.
+    if (at - this.ciCheckedAt < CI_NOTICE_INTERVAL_MS) return
+    this.ciCheckedAt = at
+    for (const ticket of this.store.tickets.list()) {
+      if (!ticket.ended || ticket.merged || ticket.reverted || ticket.discarded) continue
+      const failing = (ticket.follows ?? []).flatMap(follow => {
+        const thread = this.store.threads.get(follow.thread)
+        const ci = thread ? threadFacts(this.store, thread).facts.ci : undefined
+        return ci?.problem ? [{ thread: follow.thread, value: typeof ci.value === 'string' ? ci.value : ci.value.en }] : []
+      })[0]
+      if (!failing) {
+        // A recovered CI is forgotten, so the same failure later is news again.
+        if (!ticket.ciNotice) continue
+        this.store.atomic(() => {
+          const current = this.store.tickets.get(ticket.id)
+          if (!current?.ciNotice) return
+          delete current.ciNotice
+          this.store.tickets.save(current)
+        })
+        continue
+      }
+      if (ticket.ciNotice?.thread === failing.thread && ticket.ciNotice.value === failing.value) continue
+      this.ticketNotice(ticket, 'ci', `CI on ${failing.thread} is failing: ${failing.value}`)
+      this.store.atomic(() => {
+        const current = this.store.tickets.get(ticket.id)
+        if (!current) return
+        current.ciNotice = failing
+        this.store.tickets.save(current)
+      })
+    }
   }
   /**
    * Approves a held ticket, letting its pending Assignment launch, and records the approval in its local archive.
@@ -511,6 +577,10 @@ export class Runtime extends Service implements SourceHost {
       try { await recordPush(this.store.tickets.get(id) ?? current, outcome) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
     }
+    // A person may be away from the chat that asked; the panel and a local Source's webhook keep the outcome too.
+    const decided = this.store.tickets.get(id) ?? current
+    this.ticketNotice(decided, 'merged', `Merged ${this.ticketLabel(decided)} into ${result.target}`
+      + `${result.head ? ` at ${result.head}` : ''}${pushError ? `; the push failed: ${pushError}` : pushed ? ', pushed to the upstream' : ''}`)
     let cleaned: true | undefined
     if (options.cleanup) {
       try {
@@ -521,8 +591,51 @@ export class Runtime extends Service implements SourceHost {
         throw new Error(`Merged ${result.branch} into ${result.target}, but removing its worktree failed: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
-    return { ...result, ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {},
+    return { branch: result.branch, target: result.target, ...result.head ? { head: result.head } : {},
+      ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {},
       ...pushed ? { pushed } : {}, ...pushError ? { pushError } : {} }
+  }
+  /**
+   * Undoes a merged ticket's merge with a reverting commit on the branch it landed, recorded on the ticket and in its archive.
+   * The revert runs where the merge did, so it works after the worktree was cleaned up.
+   * @returns The branch reverted, its commit after the revert, and that commit.
+   * @throws when the ticket was not merged or was already reverted, the merge recorded no commit or repository, the
+   * repository is on another branch or has tracked changes, the merge commit is gone, or the revert conflicts.
+   */
+  async revertTicket(id: string, origin: ActionOrigin = 'panel'):
+    Promise<{ ticket_id: string; branch: string; target: string; commit: string }> {
+    const ticketId = this.ticketReference(id) ?? id
+    const ticket = this.store.tickets.get(ticketId)
+    if (!ticket) throw new Error('Unknown ticket')
+    const merged = ticket.merged
+    if (!merged) throw new Error('Only a merged ticket can be reverted')
+    if (ticket.reverted) throw new Error('The merge of this ticket was already reverted')
+    const commit = merged.head
+    if (!commit) throw new Error('The merge recorded no commit to revert; undo it with git in the repository')
+    const directory = merged.root ?? ticket.execution?.directory
+    if (!directory) throw new Error('The merged repository is unknown; undo the merge with git in the repository')
+    if (this.reverting.has(ticketId)) throw new Error('A revert of this ticket is already running')
+    this.reverting.add(ticketId)
+    try {
+      const result = await revertWorkspace(this.ctx.subprocess, directory, this.stopped.signal, commit, merged.target)
+        .catch((error: unknown) => {
+          if (!(error instanceof RevertConflictError)) throw error
+          throw new Error(`Reverting the merge of ${merged.branch} into ${merged.target} conflicts in ${error.files.join(', ')}; `
+            + 'resolve it with git in the repository, which keeps its commits')
+        })
+      const at = now()
+      this.store.atomic(() => {
+        const current = this.store.tickets.get(ticketId)
+        if (!current?.merged || current.reverted) return
+        current.reverted = { at, commit: result.head, target: result.target, merge: commit, via: origin }
+        this.store.tickets.save(current)
+      })
+      try { await recordRevert(ticket, { at, target: result.target, commit: result.head, merge: commit, via: origin }) }
+      catch (error) { this.ctx.logger.warn('dsh-superagent: recording a revert in the archive failed: %s', String(error)) }
+      const current = this.store.tickets.get(ticketId) ?? ticket
+      this.ticketNotice(current, 'reverted', `Reverted the merge of ${merged.branch} into ${merged.target} with ${result.head}`)
+      return { ticket_id: ticketId, branch: merged.branch, target: result.target, commit: result.head }
+    } finally { this.reverting.delete(ticketId) }
   }
   /**
    * Records a person's request to merge a ticket as soon as its gates pass, which the passes carry out when it is due.
@@ -579,6 +692,7 @@ export class Runtime extends Service implements SourceHost {
         this.engine.autoMergeDone(ticket.id)
         this.sessions.notify(...receiptNotice({ auto_merge_gave_up: { ticket_id: ticket.id, error: message } },
           `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`))
+        this.ticketNotice(ticket, 'automerge', `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`)
       } else if (!request.last) {
         // The first gate is the one the person needs to hear about; later passes retry quietly.
         this.sessions.notify(...receiptNotice({ auto_merge_blocked: { ticket_id: ticket.id, error: message } },
@@ -883,6 +997,12 @@ export class Runtime extends Service implements SourceHost {
     if (!stillEnded()) return
     try { await closeArchive(ticket, review, this.store.tickets.number(ticket.id), checks) }
     catch (error) { ctx.logger.warn('dsh-superagent: recording the ending in the archive failed: %s', String(error)) }
+    // A deployment that requires an approval gates the merge on a person, who hears of it without opening the panel.
+    const ended = this.store.tickets.get(ticket.id)
+    if (ended?.ended?.outcome === 'completed' && this.store.settings().executor.requireReview
+      && ended.reviewed?.decision !== 'approved') {
+      this.ticketNotice(ended, 'review', `${this.ticketLabel(ended)} needs an approval of its changes before it can merge`)
+    }
   }
   checkSetup(): void { this.setup.check() }
   receive(trigger: Trigger): ReceiveResult { return this.passes.receive(trigger) }
@@ -918,6 +1038,7 @@ export class Runtime extends Service implements SourceHost {
     const runtime = this
     const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
+      revertTicket: id => runtime.revertTicket(id),
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
