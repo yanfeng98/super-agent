@@ -33,7 +33,11 @@ export interface MainToolsHost {
   /** Sends a person's answer to a local ticket's Thread, where its worker reads it as an Input. */
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
-  mergeTicket(id: string, strategy?: MergeStrategy): Promise<{ branch: string; target: string }>
+  mergeTicket(id: string, strategy?: MergeStrategy): Promise<{ branch: string; target: string; rebased?: true }>
+  /** Rebases an ended Ticket's branch onto the repository's checked-out branch, so it can merge. */
+  rebaseTicket(id: string): Promise<{ branch: string; target: string }>
+  /** Removes a merged Ticket's worktree and branch, keeping the merge on the repository's branch. */
+  cleanupTicket(id: string): Promise<void>
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
@@ -224,7 +228,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_merge',
-      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; local only, no push.',
+      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past, runs the configured check when it has not passed, and merges locally without pushing.',
       schema: z.object({
         ticket_id: z.string().min(1).describe('The ended Ticket to merge.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
@@ -233,6 +237,24 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         const result = await host.mergeTicket(args.ticket_id, args.strategy)
         const ticket = host.store.tickets.get(args.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_rebase',
+      description: 'Rebase an ended Ticket\'s branch onto the repository\'s branch after it moved, so the Ticket can merge; a conflict aborts and keeps its commits, and the work then goes back to the worker with orchestrator_answer.',
+      schema: z.object({ ticket_id: z.string().min(1).describe('The ended Ticket to rebase.') }).strict(),
+      execute: async args => {
+        const result = await host.rebaseTicket(args.ticket_id)
+        return routed(host, { reason: `Rebased onto ${result.target}`, ticketId: args.ticket_id })
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_cleanup',
+      description: 'Remove a merged Ticket\'s worktree and branch; the merged work stays on the repository\'s branch.',
+      schema: z.object({ ticket_id: z.string().min(1).describe('The merged Ticket to clean up.') }).strict(),
+      execute: async args => {
+        await host.cleanupTicket(args.ticket_id)
+        return routed(host, { reason: 'Removed the merged worktree and branch', ticketId: args.ticket_id })
       },
     }),
     tool({

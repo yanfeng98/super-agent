@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -140,7 +140,9 @@ describe('merge and discard', () => {
     // The repository takes a commit of its own, so the ticket branch is no longer a fast-forward.
     writeFileSync(join(repo, 'a.txt'), 'main moved\n'); git('commit', '-qam', 'main work')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/rebase the ticket branch onto/)
+    expect(await targetContained(subprocess(), worktree, signal)).toBe(false)
     const rebased = await rebaseWorkspace(subprocess(), worktree, signal)
+    expect(await targetContained(subprocess(), worktree, signal)).toBe(true)
     expect(rebased).toEqual({ branch: 'agent/r', target: git('branch', '--show-current'), base: git('rev-parse', 'HEAD') })
     // With the recorded base moved to the target's commit, the review lists only the ticket's own commit and file.
     const review = (await captureReview(subprocess(), { ...ticket(rebased.base),
@@ -152,6 +154,20 @@ describe('merge and discard', () => {
     // The rebased history sits on top of the repository commit.
     expect(git('log', '--oneline', '-2').split('\n').map(line => line.replace(/^[0-9a-f]+ /, '')))
       .toEqual(['ticket work', 'main work'])
+  })
+  it('aborts a conflicted rebase, keeps the ticket commits, and names the files that conflict', async () => {
+    base()
+    const worktree = join(dir, 'worktree-conflict')
+    git('worktree', 'add', '-q', '-b', 'agent/c', worktree)
+    writeFileSync(join(worktree, 'a.txt'), 'ticket\n')
+    gitAt(worktree, 'commit', '-qam', 'ticket edit')
+    const ticketHead = gitAt(worktree, 'rev-parse', 'HEAD')
+    writeFileSync(join(repo, 'a.txt'), 'main\n')
+    git('commit', '-qam', 'main edit')
+    await expect(rebaseWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/conflicts in a\.txt/)
+    // The abort leaves the ticket branch on its own commit, with no rebase in progress.
+    expect(gitAt(worktree, 'rev-parse', 'HEAD')).toBe(ticketHead)
+    expect(gitAt(worktree, 'status', '--porcelain')).toBe('')
   })
   it('removes a merged worktree and branch with git\'s safe deletion check', async () => {
     base()

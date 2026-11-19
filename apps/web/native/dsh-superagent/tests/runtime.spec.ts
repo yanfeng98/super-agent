@@ -1760,7 +1760,7 @@ it('gives the Assignment a restart starts the messages the replaced one had deli
   expect(sent()).toBe(2)
 })
 
-it('refuses to merge a ticket whose configured check has not passed since its ending', async () => {
+it('runs the check when it has not passed since the ending, and stops a merge it fails', async () => {
   const { ticket } = await acceptedTicket()
   const endedAt = '2026-09-10T00:00:00.000Z'
   const settings = runtime.store.settings()
@@ -1771,14 +1771,18 @@ it('refuses to merge a ticket whose configured check has not passed since its en
     current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at: endedAt, output: 'one test failed' }
     runtime.store.tickets.save(current)
   })
-  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/has not passed/)
-  // A passing run from before this ending belongs to earlier work and does not lift the gate.
+  const check = vi.spyOn(runtime, 'checkTicket').mockResolvedValue(
+    { command: 'pnpm test', ok: false, exitCode: 1, at: endedAt, output: 'one test failed' })
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/check failed \(exit 1\)/)
+  expect(check).toHaveBeenCalledTimes(1)
+  // A passing run from before this ending belongs to earlier work, so the merge runs the check again.
   runtime.store.atomic(() => {
     const current = runtime.store.tickets.get(ticket.id)!
     current.checks = { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-09-09T00:00:00.000Z', output: 'passed' }
     runtime.store.tickets.save(current)
   })
-  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/has not passed/)
+  await expect(runtime.mergeTicket(ticket.id)).rejects.toThrow(/check failed/)
+  expect(check).toHaveBeenCalledTimes(2)
 })
 
 it('refuses to merge a ticket while a review note is open', async () => {

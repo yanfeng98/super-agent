@@ -35,7 +35,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, workspaceDiff, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workspaceDiff, type MergeStrategy } from './review.ts'
 import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
@@ -199,6 +199,8 @@ export class Runtime extends Service implements SourceHost {
         localRequest: input => this.localRequest(input),
         localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
         mergeTicket: (id, strategy) => runtime.mergeTicket(id, strategy),
+        rebaseTicket: id => runtime.rebaseTicket(id),
+        cleanupTicket: id => runtime.cleanupTicket(id),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -358,17 +360,21 @@ export class Runtime extends Service implements SourceHost {
   }
   /**
    * Merges an ended ticket's branch into the repository's checked-out branch, fast-forwarding, squashing, or making a merge
-   * commit, then records the merge on the ticket and in its local archive.
+   * commit, then records the merge on the ticket and in its local archive. A branch the repository moved past is rebased
+   * first, and a configured check that has not passed since the ending runs again, so a person who asked to merge needs no
+   * other step.
    * @throws when the ticket is unknown or open, has no workspace, was discarded, a review requested changes, an approval is
-   * required and missing, an open review note remains, its configured check has not passed since the ending, or git cannot
+   * required and missing, an open review note remains, the configured check fails, a rebase conflicts, or git cannot
    * fast-forward.
    */
-  async mergeTicket(id: string, strategy: MergeStrategy = 'ff'): Promise<{ branch: string; target: string }> {
+  async mergeTicket(id: string, strategy: MergeStrategy = 'ff'): Promise<{ branch: string; target: string; rebased?: true }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
     if (ticket.merged) throw new Error('The ticket branch was already merged')
+    const directory = ticket.execution?.directory
+    if (!directory) throw new Error('This ticket has no workspace')
     if (ticket.reviewed?.decision === 'changes-requested') {
       throw new Error('A review requested changes; address them and approve the review before merging')
     }
@@ -383,21 +389,43 @@ export class Runtime extends Service implements SourceHost {
       const ci = thread ? threadFacts(this.store, thread).facts.ci : undefined
       if (ci?.problem) throw new Error(`The pull request on ${follow.thread} has failing CI; fix it before merging`)
     }
-    const directory = ticket.execution?.directory
-    if (!directory) throw new Error('This ticket has no workspace')
-    const blocked = mergeBlockedByCheck(this.store.settings().executor.check, ticket.checks, ticket.ended.at)
-    if (blocked) throw new Error(blocked)
-    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal, strategy, ticket.execution?.target)
+    // The repository may have moved on since the ticket ended; rebasing here keeps a person's "merge it" from needing a
+    // second instruction, and the rebase captures the review again from the rebased commits. It also clears an approval, so
+    // a deployment that requires one rebases from the ticket page instead, where the new review can be approved.
+    let rebased: true | undefined
+    if (await targetContained(this.ctx.subprocess, directory, this.stopped.signal) === false) {
+      if (this.store.settings().executor.requireReview) {
+        throw new Error(`${ticket.execution?.target ?? 'The repository'} has commits the Ticket branch does not; rebase it from the ticket page and approve the review again`)
+      }
+      await this.rebaseTicket(id)
+      rebased = true
+    }
+    const current = this.store.tickets.get(id)
+    if (!current?.ended) throw new Error('Only an ended ticket can be merged')
+    if (current.reviewed?.decision === 'changes-requested') {
+      throw new Error('A review requested changes; address them and approve the review before merging')
+    }
+    const blocked = mergeBlockedByCheck(this.store.settings().executor.check, current.checks, current.ended.at)
+    if (blocked) {
+      // A rebase clears the check, and a ticket may have ended before the command was configured; run it here rather than
+      // sending the person to the ticket page for another step.
+      const check = await this.checkTicket(id)
+      if (!check.ok) {
+        const output = check.output.length > 800 ? `…${check.output.slice(-800)}` : check.output
+        throw new Error(`The configured workspace check failed (exit ${check.exitCode ?? 'unknown'}); fix it before merging.${output ? `\n${output}` : ''}`)
+      }
+    }
+    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal, strategy, current.execution?.target)
     const at = now()
     this.store.atomic(() => {
-      const current = this.store.tickets.get(id)
-      if (!current) return
-      current.merged = { at, ...result, ...strategy === 'ff' ? {} : { strategy } }
-      this.store.tickets.save(current)
+      const latest = this.store.tickets.get(id)
+      if (!latest) return
+      latest.merged = { at, ...result, ...strategy === 'ff' ? {} : { strategy } }
+      this.store.tickets.save(latest)
     })
-    try { await recordMerge(ticket, { at, ...result, ...strategy === 'ff' ? {} : { strategy } }) }
+    try { await recordMerge(current, { at, ...result, ...strategy === 'ff' ? {} : { strategy } }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a merge in the archive failed: %s', String(error)) }
-    return result
+    return { ...result, ...rebased ? { rebased } : {} }
   }
   /**
    * Adds a person's note on a file and line of a ticket's changes.
