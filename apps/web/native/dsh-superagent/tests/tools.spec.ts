@@ -91,12 +91,20 @@ it('saves with the prompt save tool an override without its base, refuses a part
   expect(tool.description).not.toContain('overrides')
 })
 
+it('reads a ticket\'s committed change from the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  // The test workspace is not a git repository, so the resource says why instead of failing the read.
+  expect(await read(`ticket/${ticket.id}/diff`)).toMatchObject({ resource: `ticket/${ticket.id}/diff` })
+})
+
 it('keeps the main Session\'s resources from an Executor Session, which lists only its own', async () => {
   const { ticket, sessionId } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   for (const resource of ['tickets', 'triggers', 'threads', 'decisions', 'settings', 'prompts', 'models']) {
     await expect(h.runTool(sessionId, 'orchestrator_read', { resource })).rejects.toThrow('belongs to the main Session')
   }
   expect(await h.runTool(sessionId, 'orchestrator_read', { resource: `ticket/${ticket.id}` })).toMatchObject({ ticket_id: ticket.id })
+  await expect(h.runTool(sessionId, 'orchestrator_read', { resource: `ticket/${ticket.id}/diff` }))
+    .rejects.toThrow('belongs to the main Session')
   type Registered = { description: string; parameters: { properties: { resource: { description: string } } } }
   const registered = h.tools.get(sessionId)!.get('orchestrator_read') as unknown as Registered
   const offered = registered.description + registered.parameters.properties.resource.description
