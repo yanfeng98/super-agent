@@ -59,3 +59,35 @@ export function mergePosition(store: Store, ticketId: string): number | undefine
   const at = queuedMerges(store).findIndex(item => item.ticketId === ticketId)
   return at >= 0 ? at + 1 : undefined
 }
+
+/** Whether the host holds the queue, such as after a check failed on a merged target. */
+export function mergeQueuePaused(store: Store): boolean { return store.get(KV.runtime.mergeQueuePaused) === true }
+
+/**
+ * Holds or releases the queue; a paused queue keeps its order and starts no new Ticket.
+ * @returns The state afterwards.
+ */
+export function setMergeQueuePaused(store: Store, paused: boolean): boolean {
+  store.set(KV.runtime.mergeQueuePaused, paused)
+  return paused
+}
+
+/** The queue as the panel shows it: its state and the Tickets waiting, in order, with their titles. */
+export interface MergeQueueView {
+  paused: boolean
+  items: { ticket_id: string; number?: number; title: string; position: number; strategy?: MergeStrategy }[]
+}
+/**
+ * Reads the queue for the panel, leaving out an entry whose Ticket no longer exists.
+ * @param store - The store that keeps the queue and the Tickets.
+ * @returns The paused state and the entries waiting, oldest first.
+ */
+export function mergeQueueView(store: Store): MergeQueueView {
+  return { paused: mergeQueuePaused(store), items: queuedMerges(store).flatMap((entry, index) => {
+    const ticket = store.tickets.get(entry.ticketId)
+    if (!ticket) return []
+    const number = store.tickets.number(entry.ticketId)
+    return [{ ticket_id: entry.ticketId, title: ticket.title, position: index + 1,
+      ...number ? { number } : {}, ...entry.strategy ? { strategy: entry.strategy } : {} }]
+  }) }
+}

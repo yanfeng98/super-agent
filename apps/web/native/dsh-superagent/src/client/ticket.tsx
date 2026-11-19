@@ -1,5 +1,6 @@
 /** Ticket detail page: stage and actions, Mandate details, undelivered/delivered Inputs, subscribed Threads, and Assignments. */
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import type { DiffFile } from '../app/review.ts'
 import { ApiError, usePoll, type TicketPageView } from './api.ts'
 import { Button, DisclosureRow, Dot, Icon, Input, Modal, Tag, type IconName } from './controls.tsx'
 import { decisionMark, reportDot, ticketMark } from './marks.ts'
@@ -10,6 +11,33 @@ import { actorName, errorText, localized, readableMarkers, reasonLabel, ticketNu
 import { ActionLink, ClampText, ConfirmButton, ExternalLink, Hint, KeyValues, LabelValue, LoadState, MarkdownLite, PageHead, Section,
   SessionButton, StageMark, When } from './widgets.tsx'
 
+/** Where this browser keeps the files a person marked reviewed, per Ticket and commit. */
+const viewedKey = (id: string, head: string | undefined): string => `dsh-superagent/viewed/${id}/${head ?? 'none'}`
+function readViewed(key: string): Set<string> {
+  try { const raw = localStorage.getItem(key); return new Set(raw ? JSON.parse(raw) as string[] : []) }
+  catch (error) { /* A browser that blocks storage keeps the marks for this page only. */ return new Set() }
+}
+function writeViewed(key: string, paths: Set<string>): void {
+  try { localStorage.setItem(key, JSON.stringify([...paths])) }
+  catch (error) { /* A browser that blocks storage keeps the marks for this page only. */ }
+}
+/** One file of the review diff: what changed, the reviewed mark, and the patch when it is opened. */
+function DiffFileLine({ file, viewed, onViewed }: { file: DiffFile; viewed: boolean; onViewed: () => void }) {
+  const { t } = usePanel()
+  const [open, setOpen] = useState(false)
+  return <li className="dt-row">
+    <div className="dt-row-main">
+      <div className="dt-row-meta">
+        <Button variant={viewed ? 'primary' : 'outline'} size="sm" aria-pressed={viewed} onClick={onViewed}>{t('diffViewed')}</Button>
+        <button type="button" className="dt-textlink dt-mono" onClick={() => setOpen(!open)}>{file.path}</button>
+        {file.oldPath && <span className="dt-hint dt-mono">← {file.oldPath}</span>}
+        <Tag tone="outline">{t(`diffStatus.${file.status}`)}</Tag>
+        <span className="dt-mono">+{file.additions} −{file.deletions}</span>
+      </div>
+      {open && <pre className="dt-workspace-diff">{file.patch}</pre>}
+    </div>
+  </li>
+}
 type Input = TicketPageView['inputs'][number]
 function InputLine({ input, earlier = [] }: { input: Input; earlier?: { id: string; at: string; preview: string }[] }) {
   const { t, navigate } = usePanel()
@@ -131,7 +159,8 @@ function MandateDetails({ ticket, actor }: { ticket: TicketPageView; actor: stri
 export function TicketPage({ id }: { id: string }) {
   const { t, call, notify, navigate } = usePanel()
   const { data, error, reload } = usePoll(() => call('GET tickets/:id', { id }), [id])
-  const [diff, setDiff] = useState<{ diff: string; truncated: boolean; error?: string }>()
+  const [diff, setDiff] = useState<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }>()
+  const [viewedFiles, setViewedFiles] = useState<Set<string>>(new Set())
   const [diffBusy, setDiffBusy] = useState(false)
   const [checkBusy, setCheckBusy] = useState(false)
   const [relatedRef, setRelatedRef] = useState('')
@@ -157,6 +186,16 @@ export function TicketPage({ id }: { id: string }) {
   const [tagsDraft, setTagsDraft] = useState('')
   const [tagsBusy, setTagsBusy] = useState(false)
   const after = async (request: Promise<unknown>) => { await request; await reload() }
+  // The reviewed marks are the browser's own, so they follow the commit being reviewed.
+  const reviewHead = data?.review?.head
+  useEffect(() => { setViewedFiles(readViewed(viewedKey(id, reviewHead))) }, [id, reviewHead])
+  const toggleViewed = (path: string): void => setViewedFiles(current => {
+    const next = new Set(current)
+    if (next.has(path)) next.delete(path)
+    else next.add(path)
+    writeViewed(viewedKey(id, reviewHead), next)
+    return next
+  })
   const relate = async (reference: string, linked: boolean) => {
     setRelatedBusy(true)
     try { await after(call('POST tickets/:id/related', { id, body: { ticket: reference, linked } })) }
@@ -393,7 +432,13 @@ export function TicketPage({ id }: { id: string }) {
         <Button variant="outline" size="sm" onClick={loadDiff} disabled={diffBusy}>{t('reviewViewDiff')}</Button>
       </div>
       {diff?.error && <Hint>{diff.error}</Hint>}
-      {diff && !diff.error && (diff.diff ? <pre className="dt-workspace-diff">{diff.diff}</pre> : <Hint>{t('reviewDiffEmpty')}</Hint>)}
+      {diff && !diff.error && (diff.files.length
+        ? <>
+          <p className="dt-hint">{t('diffFileCount', { count: diff.files.length })}</p>
+          <ul className="dt-list">{diff.files.map(file => <DiffFileLine key={file.path} file={file}
+            viewed={viewedFiles.has(file.path)} onViewed={() => toggleViewed(file.path)} />)}</ul>
+        </>
+        : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
       {data.actions.reviewDecision && <div className="dt-row-actions">
         <Button variant={data.reviewed?.decision === 'approved' ? 'primary' : 'outline'} disabled={reviewBusy}
@@ -536,6 +581,7 @@ export function TicketPage({ id }: { id: string }) {
           <div className="dt-row-meta"><When at={item.at} />{item.title && <span>{item.title}</span>}
             {item.tags && <span>{item.tags.join(', ') || t('empty')}</span>}
             {item.decision && <span>{t(`review.${item.decision}`)}</span>}
+            {item.by && <span>{t('reviewedBy', { name: item.by })}</span>}
             {item.note && <span>{item.note}</span>}
             {item.branch && <span className="dt-mono">{item.branch} → {item.target}</span>}
             {item.head && <span className="dt-mono">{item.head.slice(0, 8)}</span>}

@@ -462,10 +462,10 @@ export async function recordRequestEdit(ticket: Pick<Ticket, 'channels'>, reques
  * @param reviewed - When it was reviewed, the decision, any note, the commit it covered, and the interface it came from.
  */
 export async function recordReview(ticket: Pick<Ticket, 'channels'>, reviewed: { at: string;
-  decision: 'approved' | 'changes-requested'; note?: string; head?: string; via?: ActionOrigin }): Promise<void> {
+  decision: 'approved' | 'changes-requested'; note?: string; head?: string; via?: ActionOrigin; by?: string }): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:reviewed:${reviewed.at} -->`, `${reviewed.at} · 评审 / Review`,
     ['- status: reviewed', `- decision: ${reviewed.decision}`, ...(reviewed.head ? [`- commit: ${reviewed.head}`] : []),
-      ...(reviewed.note ? [`- note: ${oneLine(reviewed.note)}`] : []), `- by: ${OPERATOR}`,
+      ...(reviewed.note ? [`- note: ${oneLine(reviewed.note)}`] : []), `- by: ${reviewed.by ?? OPERATOR}`,
       ...(reviewed.via ? [`- via: ${reviewed.via}`] : [])])
 }
 /**

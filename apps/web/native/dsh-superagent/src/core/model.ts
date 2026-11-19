@@ -389,7 +389,7 @@ export interface TicketRevert {
   merge: string
   via?: ActionOrigin
 }
-/** One review of a ticket's ending changes: the decision, its note, the commit it covered, and the interface that made it. */
+/** One review of a ticket's ending changes: the decision, its note, the commit it covered, and who made it. */
 export interface TicketReviewRound {
   at: string
   decision: 'approved' | 'changes-requested'
@@ -398,6 +398,8 @@ export interface TicketReviewRound {
   head?: string
   /** The interface that made the review. */
   via?: ActionOrigin
+  /** The reviewer, as the deployment names the person: its operator today, a person's own name once one is known. */
+  by?: string
 }
 /**
  * A person's standing request to merge a ticket once its gates pass: the strategy and follow-up the merge will use, and how

@@ -55,6 +55,24 @@ it('lists Tickets under Execution by who they wait on, with the Executor state a
   expect(server.settings).toMatchObject({ paused: true, executor: { maxWorkers: 4 } })
 })
 
+it('shows the merge queue with its pause and takes a Ticket out of it', async () => {
+  server.mergeQueue = { paused: true, items: [{ ticket_id: 't1', number: 1, title: '修复回归', position: 1 },
+    { ticket_id: 't2', number: 2, title: '另一个工单', position: 2, strategy: 'squash' }] }
+  await mount()
+  await click(zh['tab.execution'])
+  expect(server.requests.some(request => request.path === 'merge-queue')).toBe(true)
+  expect(text()).toContain(zh.mergeQueueTitle)
+  expect(text()).toContain(zh.mergeQueuePaused)
+  expect(text()).toContain('T-0001 修复回归')
+  expect(text()).toContain('squash')
+  // The queue resumes as one action, and an entry leaves it on its own.
+  await click(zh.mergeQueueResume)
+  expect(server.requests.find(request => request.path === 'merge-queue/pause')).toMatchObject({ method: 'POST', body: { paused: false } })
+  // The first entry's own way out, which names it on its row.
+  await click(zh.queueCancel)
+  expect(server.requests.find(request => request.path === 'tickets/t1/dequeue')).toMatchObject({ method: 'POST' })
+})
+
 it('filters Tickets by a tag', async () => {
   server.tickets.open = [ticketSummary({ id: 't1', tags: ['前端'] }), ticketSummary({ id: 't2', title: '另一个工单', tags: [] })]
   await mount()
@@ -249,6 +267,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
       reviewDecision: true, revert: false, push: false, dequeue: false },
     checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
     history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题', via: 'chat' },
+      { code: 'reviewed', at: '2026-11-18T00:01:20Z', decision: 'approved', by: 'operator' },
       { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main', via: 'panel' },
       { code: 'merged', at: '2026-11-18T00:02:00Z', branch: 'agent/t5', target: 'main', via: 'auto',
         head: 'c'.repeat(40), push: { ok: false, error: 'no upstream' } }],
@@ -273,6 +292,7 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('c'.repeat(8))
   expect(text()).toContain('no upstream')
   expect(text()).toContain(zh['history.merged'])
+  expect(text()).toContain('评审人：operator')
   expect(text()).toContain('agent/t5 → main')
   await click(zh.renameTicket)
   await type(field<HTMLInputElement>(zh.newTicketTitle), '新的标题')
@@ -280,7 +300,14 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(server.requests.find(request => request.path === 'tickets/t5/title')).toMatchObject({ method: 'POST',
     body: { title: '新的标题' } })
   await click(zh.reviewViewDiff)
-  expect(text()).toContain('新文案')
+  // The diff is listed file by file, each with its counts, opened on demand and marked reviewed.
+  expect(text()).toContain('src/a.ts')
+  expect(text()).toContain('+1 −1')
+  expect(text()).not.toContain('+new')
+  await click('src/a.ts')
+  expect(text()).toContain('+new')
+  await click(zh.diffViewed)
+  expect(Object.keys(localStorage).some(key => key.startsWith('dsh-superagent/viewed/t5/'))).toBe(true)
   await click(zh.reviewApprove)
   expect(server.requests.find(request => request.path === 'tickets/t5/review')).toMatchObject({ method: 'POST',
     body: { decision: 'approved' } })
