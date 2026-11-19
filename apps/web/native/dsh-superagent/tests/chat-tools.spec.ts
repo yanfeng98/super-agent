@@ -44,26 +44,17 @@ it('merges an ended ticket through the main Session with the panel gates', async
   const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
   const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge',
     { ticket_id: ticket.id, strategy: 'squash' }) as unknown as { branch: string; target: string; ticket: { ticket_id: string } }
-  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash')
+  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash', { cleanup: false })
   expect(result).toMatchObject({ branch: 'agent/t', target: 'main', ticket: { ticket_id: ticket.id } })
   // The schema defaults to a fast-forward, and a gate error reaches the model unchanged.
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id })
-  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff')
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { cleanup: false })
+  // A person who also asks for the worktree to go gets the panel's cleanup in the same call.
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id, cleanup: true })
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { cleanup: true })
   merge.mockRejectedValueOnce(new Error('Review approval is required before merging'))
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id }))
     .rejects.toThrow('Review approval is required before merging')
-})
-
-it('rebases and cleans up a ticket through the main Session', async () => {
-  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
-  const rebase = vi.spyOn(h.runtime, 'rebaseTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
-  expect(await h.runTool(h.runtime.masterId, 'orchestrator_ticket_rebase', { ticket_id: ticket.id }))
-    .toMatchObject({ reason: 'Rebased onto main', ticket: { ticket_id: ticket.id } })
-  expect(rebase).toHaveBeenCalledWith(ticket.id)
-  const cleanup = vi.spyOn(h.runtime, 'cleanupTicket').mockResolvedValue()
-  expect(await h.runTool(h.runtime.masterId, 'orchestrator_ticket_cleanup', { ticket_id: ticket.id }))
-    .toMatchObject({ reason: 'Removed the merged worktree and branch', ticket: { ticket_id: ticket.id } })
-  expect(cleanup).toHaveBeenCalledWith(ticket.id)
 })
 
 it('refuses to answer a ticket another Source created', async () => {

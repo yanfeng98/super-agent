@@ -417,7 +417,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
 | `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward, squash and merge-commit strategies, rebase after the repository moved, a conflicted rebase that aborts, and removal of a linked worktree |
-| `tests/merge.spec.ts` | Merging from the main Session: the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase, and a branch that needs neither |
+| `tests/merge.spec.ts` | Merging from the main Session: the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase, a branch that needs neither, and the optional cleanup |
 | `tests/check.spec.ts` | The workspace check command: pass/fail with exit code and environment, truncated output, and the merge gate |
 | `tests/webhook.spec.ts` | The webhook POST and a non-2xx answer |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, and which stay quiet |
@@ -504,13 +504,13 @@ Nothing deletes old records yet, so these grow without bound: the `trigger`, `di
 
 ### Main Session tools
 
-The main Session has 19 tools: 18 application tools and `orchestrator_read`.
+The main Session has 17 tools: 16 application tools and `orchestrator_read`.
 
 | Purpose | Tools |
 | --- | --- |
 | Read and route | `orchestrator_read`, `orchestrator_route` |
 | Manage Tickets | `orchestrator_ticket_retry`, `orchestrator_ticket_request_status`, `orchestrator_ticket_note` |
-| Local Tickets and merge | `orchestrator_request`, `orchestrator_answer`, `orchestrator_ticket_merge`, `orchestrator_ticket_rebase`, `orchestrator_ticket_cleanup` |
+| Local Tickets and merge | `orchestrator_request`, `orchestrator_answer`, `orchestrator_ticket_merge` |
 | Re-evaluate | `orchestrator_trigger_requeue` |
 | Assess proactive work | `orchestrator_eval`, `orchestrator_eval_read`, `orchestrator_eval_decide` |
 | Communicate and unsubscribe | `orchestrator_reply`, `orchestrator_thread_unsubscribe` |
@@ -551,7 +551,7 @@ The worker preset is defined in `cordis.patch.yml` and selected through `WORKER_
 
 Routing results use `{decision?, reason, ticket?}`. `orchestrator_route` returns `{results}`, preserving item order and adding each item's `trigger_id` and `kind`. Invalid or refused items return `refused` and a reason without stopping the batch.
 
-Settings and prompt saves return the saved configuration. Policy sync returns the Source, allowed-list size, and `added` and `removed` names. A merge returns `{branch, target, rebased?}`, where `rebased` is true when the merge had to rebase the Ticket branch onto the repository's branch first.
+Settings and prompt saves return the saved configuration. Policy sync returns the Source, allowed-list size, and `added` and `removed` names. A merge returns `{branch, target, rebased?, cleaned?}`, where `rebased` is true when the merge had to rebase the Ticket branch onto the repository's branch first, and `cleaned` when it removed the worktree afterwards.
 
 `orchestrator_eval` returns context rather than instructions. Assessment instructions live in `runtime/admission` (`prompts/admission.md`), and rules in `runtime/policy`. Its context includes:
 

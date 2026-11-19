@@ -85,6 +85,24 @@ it('refuses to rebase for a merge when the deployment requires an approval', asy
   expect(rebase).not.toHaveBeenCalled()
 })
 
+it('removes the worktree when the merge was asked for with cleanup', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  const cleanup = vi.spyOn(h.runtime, 'cleanupTicket').mockResolvedValue()
+  expect(await h.runtime.mergeTicket(ticket.id, 'ff', { cleanup: true }))
+    .toEqual({ branch: 'agent/t', target: 'main', cleaned: true })
+  expect(cleanup).toHaveBeenCalledWith(ticket.id)
+})
+
+it('reports a cleanup failure after the merge already moved the branch', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.spyOn(h.runtime, 'cleanupTicket').mockRejectedValue(new Error('git cannot remove it'))
+  await expect(h.runtime.mergeTicket(ticket.id, 'ff', { cleanup: true }))
+    .rejects.toThrow(/Merged agent\/t into main, but removing its worktree failed: git cannot remove it/)
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toBeDefined()
+})
+
 it('merges a branch the repository already contains without rebasing or checking', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)
