@@ -137,7 +137,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     and refuses a disabled Source or an empty list; the answer tool only accepts a ticket with a local Channel and marks
     its Trigger `mainSession`, so the main Session is not notified of its own follow-up (`src/sources/local.ts`,
     `src/app/notices.ts`). `prompts/orchestrator.md` limits both to the person's own messages. `tests/chat-tools.spec.ts`
-    covers creating, answering, resuming, and the refusals.
+    covers creating, answering, resuming, and the refusals. The same session merges an ended Ticket with `orchestrator_ticket_merge`, which runs the panel's gates locally; the Executor records the main working tree's branch at launch (`Execution.target`) and a merge or rebase refuses a repository that moved to another branch (`src/app/review.ts`).
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

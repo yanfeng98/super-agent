@@ -9,7 +9,7 @@ import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Execu
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
 import { runAsWorker, verifyDirectory } from '../infra/environment.ts'
-import { workspaceHead } from '../app/review.ts'
+import { workspaceHead, workspaceRepo } from '../app/review.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
@@ -436,18 +436,21 @@ export class DshExecutor implements Executor {
   }
   private relay({ id, text }: { id: string; text: string }): void { this.host.sessions.relay(id, text) }
   /**
-   * Records the commit the workspace started from before its first Assignment runs, so a later review lists the commits the
-   * ticket added. A workspace that is not a git repository keeps no base.
+   * Records the commit and the main working tree's branch the workspace started from before its first Assignment runs, so a
+   * later review lists the commits the ticket added and a merge refuses a repository that moved to another branch. A
+   * workspace that is not a git repository keeps neither.
    */
   private async captureBase(ticket: Ticket): Promise<void> {
     const directory = ticket.execution?.directory
     if (!directory || ticket.execution?.base) return
-    const head = await workspaceHead(this.host.context.subprocess, directory, this.host.lifetime)
+    const [head, repo] = await Promise.all([workspaceHead(this.host.context.subprocess, directory, this.host.lifetime),
+      workspaceRepo(this.host.context.subprocess, directory, this.host.lifetime).catch(() => undefined)])
     if (!head) return
     this.host.store.atomic(() => {
       const current = this.host.store.tickets.get(ticket.id)
       if (!current?.execution || current.execution.base) return
       current.execution.base = head
+      if (repo?.target) current.execution.target = repo.target
       this.host.store.tickets.save(current)
     })
   }
