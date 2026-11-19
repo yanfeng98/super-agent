@@ -139,6 +139,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `src/app/notices.ts`). `prompts/orchestrator.md` limits both to the person's own messages. `tests/chat-tools.spec.ts`
     covers creating, answering, resuming, and the refusals. The same session merges an ended Ticket with `orchestrator_ticket_merge`, which runs the panel's gates locally, rebases a branch the repository moved past, runs a configured check that has not passed, and removes the worktree afterwards when asked with `cleanup`. The Executor records the main working tree's branch at launch (`Execution.target`) and a merge or rebase refuses a repository that moved to another branch (`src/app/review.ts`); `tests/merge.spec.ts` covers the sequencing.
 
+13. **Ticket dependencies and review visibility.** A Ticket records the Tickets whose merge comes first (`Ticket.blockedBy`
+    in `src/core/model.ts`, set through `Tickets.block` and `Engine.blockTicket`), refusing a dependency that would close a
+    cycle; `Runtime.mergeTicket` refuses while one of them has not merged, and the panel sets them with
+    `POST tickets/:id/blockers` (`src/app/runtime.ts`, `src/app/http.ts`). A worker's `ticket/<id>` read omits the list,
+    since it names Tickets that worker cannot read (`src/app/resources.ts`). Separately, an ending anchors the review at
+    `merge-base HEAD <target>` when the branch merged or rebased the repository in (`workingBase`, `finishTicket`), a merge
+    captures the review again when the branch moved after it (`recaptured`), and the main Session reads the same committed
+    diff as the panel through `ticket/<id>/diff`. `tests/merge.spec.ts`, `tests/review.spec.ts`, `tests/tools.spec.ts` and
+    `tests/http.spec.ts` cover them.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.
