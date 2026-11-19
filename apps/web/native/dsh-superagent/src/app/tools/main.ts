@@ -33,7 +33,10 @@ export interface MainToolsHost {
   /** Sends a person's answer to a local ticket's Thread, where its worker reads it as an Input. */
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
-  mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean }): Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true }>
+  mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean; push?: boolean }):
+    Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }>
+  /** Records or clears that one Ticket's branch must merge before another's. */
+  blockTicket(id: string, reference: string, blocked: boolean): { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
@@ -224,14 +227,30 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_merge',
-      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past, runs the configured check when it has not passed, merges locally without pushing, and removes the worktree afterwards when asked.',
+      description: 'Merge an ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, and removes the worktree or pushes upstream when asked.',
       schema: z.object({
         ticket_id: z.string().min(1).describe('The ended Ticket to merge.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
         cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging, as the ticket page does.'),
+        push: z.boolean().optional().describe('Push the merged branch to the upstream its repository names, when the person asked to push too.'),
       }).strict(),
       execute: async args => {
-        const result = await host.mergeTicket(args.ticket_id, args.strategy, { cleanup: args.cleanup === true })
+        const result = await host.mergeTicket(args.ticket_id, args.strategy,
+          { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }), ...(args.push === undefined ? {} : { push: args.push }) })
+        const ticket = host.store.tickets.get(args.ticket_id)
+        return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_dependency',
+      description: 'Record or clear that a Ticket waits for another Ticket\'s branch to merge first, on the person\'s instruction such as "wait for T-0003"; its merge refuses until the other has merged. The ticket page shows and edits the same dependency.',
+      schema: z.object({
+        ticket_id: z.string().min(1).describe('The Ticket that waits.'),
+        blocker_id: z.string().min(1).describe('The Ticket that must merge first, by id or display number such as T-0003.'),
+        blocked: z.boolean().default(true).describe('Record the dependency with true, or clear it with false.'),
+      }).strict(),
+      execute: async args => {
+        const result = host.blockTicket(args.ticket_id, args.blocker_id, args.blocked)
         const ticket = host.store.tickets.get(args.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },

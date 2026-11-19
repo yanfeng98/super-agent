@@ -44,17 +44,32 @@ it('merges an ended ticket through the main Session with the panel gates', async
   const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
   const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge',
     { ticket_id: ticket.id, strategy: 'squash' }) as unknown as { branch: string; target: string; ticket: { ticket_id: string } }
-  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash', { cleanup: false })
+  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash', {})
   expect(result).toMatchObject({ branch: 'agent/t', target: 'main', ticket: { ticket_id: ticket.id } })
   // The schema defaults to a fast-forward, and a gate error reaches the model unchanged.
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id })
-  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { cleanup: false })
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', {})
   // A person who also asks for the worktree to go gets the panel's cleanup in the same call.
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id, cleanup: true })
   expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { cleanup: true })
+  // A person who asks to push as well gets both steps in one call.
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id, push: true })
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { push: true })
   merge.mockRejectedValueOnce(new Error('Review approval is required before merging'))
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id }))
     .rejects.toThrow('Review approval is required before merging')
+})
+
+it('records a dependency the person states in chat, and clears it the same way', async () => {
+  const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
+  const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再做后续'))
+  const run = (args: unknown) => h.runTool(h.runtime.masterId, 'orchestrator_ticket_dependency', args)
+  expect(await run({ ticket_id: second.id, blocker_id: first.id }))
+    .toMatchObject({ blocked_by: [expect.objectContaining({ id: first.id, merged: false })], ticket: { ticket_id: second.id } })
+  expect(h.runtime.store.tickets.get(second.id)?.blockedBy).toEqual([first.id])
+  expect(await run({ ticket_id: second.id, blocker_id: first.id, blocked: false })).toMatchObject({ blocked_by: [] })
+  expect(h.runtime.store.tickets.get(second.id)?.blockedBy).toBeUndefined()
+  await expect(run({ ticket_id: first.id, blocker_id: first.id })).rejects.toThrow('A ticket cannot wait for itself')
 })
 
 it('refuses to answer a ticket another Source created', async () => {
