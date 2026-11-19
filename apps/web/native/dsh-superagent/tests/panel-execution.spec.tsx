@@ -204,10 +204,13 @@ it('adds a line-anchored review note and sends the notes to the executor as one 
   server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t1', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [],
       files: [], dirty: [] },
-    notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at: '2026-11-18T00:00:00Z' }],
+    notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at: '2026-11-18T00:00:00Z', outdated: true,
+      commit: 'c'.repeat(40) }],
     threads: [{ ...threadSummary(), key: 'local:r1', source: 'local', title: '本地线程' }] }
   await mount()
   expect(text()).toContain('src/a.ts:12')
+  // A note written on an older commit is marked, so an approval of the current changes is not mistaken for it.
+  expect(text()).toContain(zh.noteOutdated)
   await type(field<HTMLInputElement>(zh.noteFilePlaceholder), 'src/b.ts')
   await type(field<HTMLInputElement>(zh.noteLinePlaceholder), '4')
   await type(field<HTMLTextAreaElement>(zh.noteTextPlaceholder), '补个测试')
@@ -245,9 +248,10 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true,
       reviewDecision: true },
     checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
-    history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题' },
-      { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main' },
-      { code: 'merged', at: '2026-11-18T00:02:00Z', branch: 'agent/t5', target: 'main' }],
+    history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题', via: 'chat' },
+      { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main', via: 'panel' },
+      { code: 'merged', at: '2026-11-18T00:02:00Z', branch: 'agent/t5', target: 'main', via: 'auto',
+        head: 'c'.repeat(40), push: { ok: false, error: 'no upstream' } }],
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
       commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
   await mount()
@@ -263,6 +267,11 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('1 test failed')
   expect(text()).toContain(zh.checksRun)
   expect(text()).toContain(zh['history.rebased'])
+  // The record says which interface carried each action out, and keeps the commit and the remote's answer.
+  expect(text()).toContain(zh['via.chat'])
+  expect(text()).toContain(zh['via.auto'])
+  expect(text()).toContain('c'.repeat(8))
+  expect(text()).toContain('no upstream')
   expect(text()).toContain(zh['history.merged'])
   expect(text()).toContain('agent/t5 → main')
   await click(zh.renameTicket)

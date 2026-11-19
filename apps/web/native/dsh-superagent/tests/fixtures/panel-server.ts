@@ -434,7 +434,8 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     detail.tags = tags
     return { tags }
   } },
-  'POST tickets/:id/blockers': { body: true, answer: () => ({ blocked_by: [] }) },
+  'POST tickets/:id/automerge': { body: true, answer: () => ({ auto_merge: false }) },
+  'POST tickets/:id/blockers': { body: true, answer: ({ params }) => ({ ticket_id: params.id, blocked_by: [] }) },
   'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     const input = body as { ticket?: unknown; linked?: unknown }

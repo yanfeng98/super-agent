@@ -13,8 +13,8 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, reasonText, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket, type TicketCheck,
-  type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
+import { Engine, key, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
+  type TicketCheck, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -37,10 +37,10 @@ import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
 import { sendWebhook } from './webhook.ts'
-import { eventNotice, followupNotice } from './notices.ts'
+import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
-  recordMerge, recordRebase, recordRename, recordRequestEdit, recordReview, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
+  recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
   type LocalRequest, type LocalRequestResult } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
@@ -58,6 +58,8 @@ import { executorTools, type ExecutorToolsHost } from './tools/executor.ts'
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
 const now = (): string => new Date().toISOString()
+/** Attempts a standing merge request gets before the host gives up and tells the person which gate stayed closed. */
+const AUTO_MERGE_ATTEMPTS = 8
 
 /**
  * Composition root of dsh-superagent that connects `Store`, `Setup`, `Engine`, `SourceRegistry`, `Effects`, `Outbox`, `Passes`, `Sessions`, `Settings`, `Prompts`, `DshExecutor`, and `MasterAssessor`.
@@ -92,6 +94,10 @@ export class Runtime extends Service implements SourceHost {
   private readonly toolHost: MainToolsHost & ExecutorToolsHost
   /** Non-zero while a main-Session tool is executing an Engine command, suppressing self-triggered domain event notices. */
   private quiet = 0
+  /** Tickets whose merge is running, so a standing request and a person's cannot move one branch at the same time. */
+  private readonly merging = new Set<string>()
+  /** The auto-merge attempt in flight, so passes do not start a second one over the same repository. */
+  private autoMerging?: Promise<void>
   constructor(ctx: Context, readonly machine: Machine, restart: () => void) {
     super(ctx, 'orchestrator')
     const runtime = this
@@ -191,14 +197,17 @@ export class Runtime extends Service implements SourceHost {
       const evals = board.claim('evals', { state: 'ready', detail: 'No unavailable Eval in the last hour' })
       const evaluateDue = () => { engine.evaluateDue(); evals.set(evalsHealth(store)) }
       const passes = this.passes = new Passes({ engine: { receive: trigger => engine.receive(trigger), evaluateDue }, effects,
-        health: this.runtimeHealth, lifetime: this.lifetime, configured: () => setup.configured(), closing: () => this.closing() })
+        health: this.runtimeHealth, lifetime: this.lifetime, configured: () => setup.configured(), closing: () => this.closing(),
+        automerge: () => { void this.runAutoMerge() } })
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources,
         localRequest: input => this.localRequest(input),
         localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
-        mergeTicket: (id, strategy, options) => runtime.mergeTicket(id, strategy, options),
+        mergeTicket: (id, strategy, options) => runtime.mergeTicket(id, strategy, options, 'chat'),
+        autoMergeTicket: (id, options) => runtime.autoMergeTicket(id, options),
+        cancelAutoMerge: id => runtime.cancelAutoMerge(id),
         blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
@@ -351,7 +360,7 @@ export class Runtime extends Service implements SourceHost {
         }
         if (ticket.rebased) await recordRebase(ticket, ticket.rebased)
         if (ticket.merged) await recordMerge(ticket, ticket.merged)
-        if (ticket.cleaned) await recordCleanup(ticket, ticket.cleaned.at)
+        if (ticket.cleaned) await recordCleanup(ticket, ticket.cleaned.at, ticket.cleaned.via)
         if (ticket.discarded) await recordDiscard(ticket, ticket.discarded.at)
       } catch (error) { this.ctx.logger.warn('dsh-superagent: completing the archive of ticket %s failed: %s', ticket.id, String(error)) }
     }
@@ -366,10 +375,22 @@ export class Runtime extends Service implements SourceHost {
    * check run on the new tree, unless approvals are required.
    * @throws when the ticket is unknown or open, has no workspace, was discarded, a review requested changes, an approval is
    * required and missing, an open review note remains, the configured check fails, a rebase conflicts and the worker cannot
-   * take it, or git cannot fast-forward.
+   * take it, or git cannot fast-forward. `origin` is the interface that asked, recorded on the merge.
    */
-  async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean; push?: boolean } = {}):
-    Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }> {
+  async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean; push?: boolean } = {},
+    origin: ActionOrigin = 'panel'):
+    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }> {
+    // The person and the main Session may name a ticket by its display number, such as T-0001.
+    const ticketId = this.ticketReference(id) ?? id
+    // One merge at a time for a ticket, so a person's request and a standing one cannot run git on its worktree at once.
+    if (this.merging.has(ticketId)) throw new Error('A merge of this ticket is already running')
+    this.merging.add(ticketId)
+    try { return await this.mergeOnce(ticketId, strategy, options, origin) }
+    finally { this.merging.delete(ticketId) }
+  }
+  /** Merges with the per-ticket guard already held; `mergeTicket` is the public entry point. */
+  private async mergeOnce(id: string, strategy: MergeStrategy, options: { cleanup?: boolean; push?: boolean }, origin: ActionOrigin):
+    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
@@ -413,7 +434,7 @@ export class Runtime extends Service implements SourceHost {
       if (this.store.settings().executor.requireReview) {
         throw new Error(`${ticket.execution?.target ?? 'The repository'} has commits the Ticket branch does not; rebase it from the ticket page and approve the review again`)
       }
-      await this.rebaseTicket(id)
+      await this.rebaseTicket(id, origin)
       rebased = true
     }
     const current = this.store.tickets.get(id)
@@ -460,23 +481,40 @@ export class Runtime extends Service implements SourceHost {
     this.store.atomic(() => {
       const latest = this.store.tickets.get(id)
       if (!latest) return
-      latest.merged = { at, ...result, ...strategy === 'ff' ? {} : { strategy } }
+      latest.merged = { at, ...result, via: origin, ...strategy === 'ff' ? {} : { strategy } }
       this.store.tickets.save(latest)
     })
-    try { await recordMerge(current, { at, ...result, ...strategy === 'ff' ? {} : { strategy } }) }
+    try { await recordMerge(current, { at, ...result, via: origin, ...strategy === 'ff' ? {} : { strategy } }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a merge in the archive failed: %s', String(error)) }
     // The push is the person's request too, but the remote's answer is not this runtime's: a rejected or missing upstream
     // leaves the merge recorded and says why, so one report carries both facts.
     let pushed: true | undefined
     let pushError: string | undefined
     if (options.push) {
-      try { await pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal); pushed = true }
-      catch (error) { pushError = error instanceof Error ? error.message : String(error) }
+      const pushedAt = now()
+      let outcome: { at: string; ok: boolean; error?: string }
+      try {
+        await pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+        pushed = true
+        outcome = { at: pushedAt, ok: true }
+      } catch (error) {
+        pushError = error instanceof Error ? error.message : String(error)
+        outcome = { at: pushedAt, ok: false, error: pushError }
+      }
+      // The merge stands either way, so the remote's answer is recorded where the panel and the archive both keep it.
+      this.store.atomic(() => {
+        const latest = this.store.tickets.get(id)
+        if (!latest?.merged) return
+        latest.merged.push = outcome
+        this.store.tickets.save(latest)
+      })
+      try { await recordPush(this.store.tickets.get(id) ?? current, outcome) }
+      catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
     }
     let cleaned: true | undefined
     if (options.cleanup) {
       try {
-        await this.cleanupTicket(id)
+        await this.cleanupTicket(id, origin)
         cleaned = true
       } catch (error) {
         // The merge already moved the branch, so the report says so rather than presenting this as a failed merge.
@@ -485,6 +523,68 @@ export class Runtime extends Service implements SourceHost {
     }
     return { ...result, ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {},
       ...pushed ? { pushed } : {}, ...pushError ? { pushError } : {} }
+  }
+  /**
+   * Records a person's request to merge a ticket as soon as its gates pass, which the passes carry out when it is due.
+   * @returns The ticket with the recorded request.
+   * @throws when the ticket is unknown, still open, or already merged, discarded, or cleaned.
+   */
+  autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket {
+    const ticket = this.engine.autoMerge(this.ticketReference(id) ?? id, options)
+    this.passes.request()
+    return ticket
+  }
+  /**
+   * Clears a person's standing merge request.
+   * @returns The ticket without the request.
+   */
+  cancelAutoMerge(id: string): Ticket { return this.engine.cancelAutoMerge(id) }
+  /**
+   * Runs one due standing merge request and waits for it. A pass calls this without waiting, so the check or merge it runs
+   * cannot hold up the pass, while a test or a restart can run one directly.
+   */
+  async runAutoMerge(): Promise<void> {
+    if (this.autoMerging) return this.autoMerging
+    if (this.paused() || this.closing() || !this.setup.configured()) return
+    const ticket = this.engine.dueAutoMerge()[0]
+    if (!ticket) return
+    const attempt = this.attemptAutoMerge(ticket.id)
+      .catch((error: unknown) => { this.ctx.logger.warn('dsh-superagent: an auto-merge attempt failed: %s', String(error)) })
+      .finally(() => { this.autoMerging = undefined; this.passes.request() })
+    this.autoMerging = attempt
+    return attempt
+  }
+  /** Attempts one standing merge request, recording why it did not merge and telling the main Session once per gate. */
+  private async attemptAutoMerge(id: string): Promise<void> {
+    // The request may have been cancelled, or the Ticket merged, between the pass choosing it and this attempt.
+    const current = this.store.tickets.get(id)
+    const request = current?.autoMerge
+    if (!current || !request || current.merged || current.discarded || current.cleaned) return
+    const ticket = current
+    const number = this.store.tickets.number(ticket.id)
+    const label = number ? `T-${String(number).padStart(4, '0')}` : ticket.id
+    try {
+      const result = await this.mergeTicket(ticket.id, request.strategy ?? 'ff',
+        { ...request.cleanup === undefined ? {} : { cleanup: request.cleanup }, ...request.push === undefined ? {} : { push: request.push } },
+        'auto')
+      this.engine.autoMergeDone(ticket.id)
+      const merged = this.store.tickets.get(ticket.id)
+      this.sessions.notify(...receiptNotice({ auto_merged: merged ? ticketCard(merged) : ticket.id, ...result },
+        `Merged ${label} on the person's standing request, as its gates passed`))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.engine.autoMergeBlocked(ticket.id, message)
+      const pending = this.store.tickets.get(ticket.id)?.autoMerge
+      if (pending && pending.attempts >= AUTO_MERGE_ATTEMPTS) {
+        this.engine.autoMergeDone(ticket.id)
+        this.sessions.notify(...receiptNotice({ auto_merge_gave_up: { ticket_id: ticket.id, error: message } },
+          `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`))
+      } else if (!request.last) {
+        // The first gate is the one the person needs to hear about; later passes retry quietly.
+        this.sessions.notify(...receiptNotice({ auto_merge_blocked: { ticket_id: ticket.id, error: message } },
+          `Did not merge ${label} yet: ${message}`))
+      }
+    }
   }
   /**
    * Adds a person's note on a file and line of a ticket's changes.
@@ -526,8 +626,8 @@ export class Runtime extends Service implements SourceHost {
    * @returns The ticket with the review.
    * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
    */
-  reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
-    const ticket = this.engine.reviewTicket(id, decision, note)
+  reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel'): Ticket {
+    const ticket = this.engine.reviewTicket(id, decision, note, origin)
     if (ticket.reviewed) void recordReview(ticket, ticket.reviewed).catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: recording a review in the archive failed: %s', String(error))
     })
@@ -629,7 +729,7 @@ export class Runtime extends Service implements SourceHost {
    * @throws when the ticket is not ended, was merged or discarded, has no workspace, the rebase cannot finish cleanly, or
    * the conflict could not be handed to the worker.
    */
-  async rebaseTicket(id: string): Promise<{ branch: string; target: string }> {
+  async rebaseTicket(id: string, origin: ActionOrigin = 'panel'): Promise<{ branch: string; target: string }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be rebased')
@@ -650,13 +750,13 @@ export class Runtime extends Service implements SourceHost {
       if (!current) return
       if (current.execution) current.execution = { ...current.execution, base: result.base }
       if (review) current.review = review
-      current.rebased = { at, ...result }
+      current.rebased = { at, ...result, via: origin }
       // Upstream commits changed the tree the check ran on and the review approved, so both wait for a fresh pass.
       delete current.checks
       delete current.reviewed
       this.store.tickets.save(current)
     })
-    try { await recordRebase(ticket, { at, ...result }) }
+    try { await recordRebase(ticket, { at, ...result, via: origin }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a rebase in the archive failed: %s', String(error)) }
     return { branch: result.branch, target: result.target }
   }
@@ -680,7 +780,7 @@ export class Runtime extends Service implements SourceHost {
    * commits are represented by the squash commit rather than being ancestors of the target.
    * @throws when the ticket is not merged, its workspace was already removed, or git cannot remove it.
    */
-  async cleanupTicket(id: string): Promise<void> {
+  async cleanupTicket(id: string, origin: ActionOrigin = 'panel'): Promise<void> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.merged) throw new Error('Only a merged ticket can be cleaned up')
@@ -693,10 +793,10 @@ export class Runtime extends Service implements SourceHost {
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
       if (!current) return
-      current.cleaned = { at }
+      current.cleaned = { at, via: origin }
       this.store.tickets.save(current)
     })
-    try { await recordCleanup(ticket, at) }
+    try { await recordCleanup(ticket, at, origin) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a workspace cleanup in the archive failed: %s', String(error)) }
   }
   /**
@@ -716,6 +816,8 @@ export class Runtime extends Service implements SourceHost {
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
       if (!current) return
+      // A discarded ticket has no branch left to merge, so a standing merge request goes with it.
+      delete current.autoMerge
       current.discarded = { at }
       this.store.tickets.save(current)
     })
@@ -823,6 +925,7 @@ export class Runtime extends Service implements SourceHost {
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: (id, strategy) => runtime.mergeTicket(id, strategy),
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
+      cancelAutoMerge: id => runtime.cancelAutoMerge(id),
       linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),
       blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
       addNote: (id, input) => runtime.addNote(id, input), removeNote: (id, noteId) => runtime.removeNote(id, noteId),

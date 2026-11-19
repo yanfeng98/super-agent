@@ -1,6 +1,6 @@
 /** Ticket list, ticket detail, mandate basis formatting, and executor load views. */
-import { liveTicket, threadKey, ticketStage, type AcceptMode, type AdmissionCell, type MandateBasis, type Ticket,
-  type TicketStage } from '../../core/index.ts'
+import { liveTicket, threadKey, ticketStage, type AcceptMode, type ActionOrigin, type AdmissionCell, type MandateBasis,
+  type Ticket, type TicketStage } from '../../core/index.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
 import type { Store } from '../store.ts'
 import { channelLink, decisionView, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
@@ -95,18 +95,24 @@ export function ticketDetail(host: ViewHost, id: string) {
     && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   const reviewDecision = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
-  // The decisions a person made on the Ticket, in the order they happened.
+  // The decisions a person made on the Ticket, in the order they happened, with the interface each came from.
   const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'cleaned' | 'discarded'; at: string;
-    title?: string; tags?: string[]; decision?: 'approved' | 'changes-requested'; note?: string; branch?: string; target?: string }[] = []
+    title?: string; tags?: string[]; decision?: 'approved' | 'changes-requested'; note?: string; branch?: string; target?: string;
+    via?: ActionOrigin; head?: string; push?: { ok: boolean; error?: string } }[] = []
   if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
   if (ticket.renamed) history.push({ code: 'renamed', at: ticket.renamed.at, title: ticket.renamed.title })
   if (ticket.tagged) history.push({ code: 'tagged', at: ticket.tagged.at, tags: ticket.tags ?? [] })
-  if (ticket.reviewed) history.push({ code: 'reviewed', at: ticket.reviewed.at, decision: ticket.reviewed.decision,
-    ...(ticket.reviewed.note ? { note: ticket.reviewed.note } : {}) })
+  // Every review is shown, including rounds a resume or a rebase cleared from the current decision.
+  for (const review of ticket.reviews ?? (ticket.reviewed ? [ticket.reviewed] : [])) {
+    history.push({ code: 'reviewed', at: review.at, decision: review.decision, ...(review.note ? { note: review.note } : {}),
+      ...(review.head ? { head: review.head } : {}), ...(review.via ? { via: review.via } : {}) })
+  }
   if (ticket.rebased) history.push({ code: 'rebased', at: ticket.rebased.at, branch: ticket.rebased.branch,
-    target: ticket.rebased.target })
-  if (ticket.merged) history.push({ code: 'merged', at: ticket.merged.at, branch: ticket.merged.branch, target: ticket.merged.target })
-  if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at })
+    target: ticket.rebased.target, ...(ticket.rebased.via ? { via: ticket.rebased.via } : {}) })
+  if (ticket.merged) history.push({ code: 'merged', at: ticket.merged.at, branch: ticket.merged.branch, target: ticket.merged.target,
+    ...(ticket.merged.head ? { head: ticket.merged.head } : {}), ...(ticket.merged.via ? { via: ticket.merged.via } : {}),
+    ...(ticket.merged.push ? { push: { ok: ticket.merged.push.ok, ...(ticket.merged.push.error ? { error: ticket.merged.push.error } : {}) } } : {}) })
+  if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at, ...(ticket.cleaned.via ? { via: ticket.cleaned.via } : {}) })
   if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
   history.sort((a, b) => a.at.localeCompare(b.at))
   const origin = store.triggers.get(ticket.origin.triggerId)
@@ -119,7 +125,10 @@ export function ticketDetail(host: ViewHost, id: string) {
     rebase, cleanup, check, reviewDecision },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
-    notes: ticket.notes ?? [],
+    // A note keeps the commit it was written on, so the panel can say when the changes it described have moved.
+    notes: (ticket.notes ?? []).map(note => ({ ...note,
+      outdated: !!note.commit && !!ticket.review?.head && note.commit !== ticket.review.head })),
+    ...ticket.autoMerge ? { autoMerge: ticket.autoMerge } : {},
     ...request ? { request } : {},
     related: (ticket.related ?? []).flatMap(id => {
       const other = store.tickets.get(id)

@@ -22,6 +22,9 @@ beforeEach(async () => {
   vi.mocked(pushWorkspace).mockReset().mockResolvedValue(undefined)
 })
 afterEach(async () => { await h.stop() })
+/** Notices injected into the main Session, parsed from the message text. */
+const notices = () => h.agents.get(h.runtime.masterId)!.inject.mock.calls
+  .map(([message]) => JSON.parse(message.content.map(block => block.type === 'text' ? block.text : '').join('')) as Record<string, unknown>)
 
 /** Ends the accepted ticket without running a worker, which is the state a merge starts from. */
 const ended = (id: string): void => {
@@ -45,7 +48,7 @@ it('rebases a branch the repository moved past, runs the configured check, and m
   const check = vi.spyOn(h.runtime, 'checkTicket').mockResolvedValue(
     { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:01:00.000Z', output: 'passed' })
   expect(await h.runtime.mergeTicket(ticket.id)).toEqual({ branch: 'agent/t', target: 'main', rebased: true })
-  expect(rebase).toHaveBeenCalledWith(ticket.id)
+  expect(rebase).toHaveBeenCalledWith(ticket.id, 'panel')
   expect(check).toHaveBeenCalledWith(ticket.id)
   const order = (mock: { mock: { invocationCallOrder: number[] } }) => mock.mock.invocationCallOrder[0]!
   expect(order(rebase)).toBeLessThan(order(check))
@@ -152,7 +155,7 @@ it('removes the worktree when the merge was asked for with cleanup', async () =>
   const cleanup = vi.spyOn(h.runtime, 'cleanupTicket').mockResolvedValue()
   expect(await h.runtime.mergeTicket(ticket.id, 'ff', { cleanup: true }))
     .toEqual({ branch: 'agent/t', target: 'main', cleaned: true })
-  expect(cleanup).toHaveBeenCalledWith(ticket.id)
+  expect(cleanup).toHaveBeenCalledWith(ticket.id, 'panel')
 })
 
 it('reports a cleanup failure after the merge already moved the branch', async () => {
@@ -259,4 +262,79 @@ it('merges a branch the repository already contains without rebasing or checking
   const rebase = vi.spyOn(h.runtime, 'rebaseTicket')
   expect(await h.runtime.mergeTicket(ticket.id)).toEqual({ branch: 'agent/t', target: 'main' })
   expect(rebase).not.toHaveBeenCalled()
+})
+
+it('records which interface merged, the commit it left, and the remote answer to a push', async () => {
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha' })
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  await expect(h.runtime.mergeTicket(ticket.id, 'ff', { push: true })).resolves.toMatchObject({ pushError: 'fatal: no upstream branch' })
+  // The panel is the default interface, and the failed push is part of the record instead of only of the report.
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toMatchObject({ via: 'panel', head: 'merged-sha',
+    push: { ok: false, error: 'fatal: no upstream branch' } })
+})
+
+it('records that the main Session asked for the merge, which may name the ticket by number', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  await h.runtime.mergeTicket('T-0001', 'ff', {}, 'chat')
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.via).toBe('chat')
+})
+
+it('carries out a standing merge request and clears it once the merge lands', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  expect(h.runtime.autoMergeTicket(ticket.id, {})).toMatchObject({ autoMerge: { attempts: 0 } })
+  await h.runtime.runAutoMerge()
+  const merged = h.runtime.store.tickets.get(ticket.id)!
+  expect(merged.merged).toMatchObject({ branch: 'agent/t', target: 'main', via: 'auto' })
+  expect(merged.autoMerge).toBeUndefined()
+  await vi.waitFor(() => expect(notices().some(item => 'auto_merged' in item)).toBe(true))
+})
+
+it('waits for a dependency, records why, and retries only once the wait is over', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  ended(ticket.id)
+  h.runtime.blockTicket(ticket.id, blocker.id, true)
+  h.runtime.autoMergeTicket(ticket.id, {})
+  await h.runtime.runAutoMerge()
+  const waiting = h.runtime.store.tickets.get(ticket.id)!
+  expect(waiting.merged).toBeUndefined()
+  expect(waiting.autoMerge).toMatchObject({ attempts: 1, last: { error: expect.stringMatching(/Blocked by/) } })
+  expect(waiting.autoMerge?.next).toBeDefined()
+  // The person hears the first gate; the next pass waits for the recorded delay rather than running the check again.
+  await vi.waitFor(() => expect(notices().some(item => 'auto_merge_blocked' in item)).toBe(true))
+  await h.runtime.runAutoMerge()
+  expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge?.attempts).toBe(1)
+})
+
+it('gives up on a standing merge request after its attempts run out', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  ended(ticket.id)
+  h.runtime.blockTicket(ticket.id, blocker.id, true)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.autoMerge = { at: '2026-11-19T00:00:00.000Z', attempts: 7, last: { at: '2026-11-19T00:00:00.000Z', error: 'Blocked by t2' } }
+    h.runtime.store.tickets.save(current)
+  })
+  await h.runtime.runAutoMerge()
+  expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge).toBeUndefined()
+  await vi.waitFor(() => expect(notices().some(item => 'auto_merge_gave_up' in item)).toBe(true))
+})
+
+it('cancels a standing merge request, and a person stopping the ticket clears it', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  h.runtime.autoMergeTicket(ticket.id, {})
+  expect(h.runtime.cancelAutoMerge(ticket.id).autoMerge).toBeUndefined()
+  // No later pass picks the request up again.
+  expect(h.runtime.engine.dueAutoMerge()).toEqual([])
+  h.runtime.autoMergeTicket(ticket.id, {})
+  // A stop withdraws the request with the ticket's mandate.
+  h.runtime.engine.stopTicket(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge).toBeUndefined()
+  expect(h.runtime.engine.dueAutoMerge()).toEqual([])
 })

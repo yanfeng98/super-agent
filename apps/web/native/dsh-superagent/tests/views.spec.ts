@@ -389,11 +389,13 @@ it('lists the person actions on a ticket in time order', () => {
     { code: 'cleaned', at: '2026-09-24T00:00:00Z' }])
 })
 
-it('lists review notes with their file, line and text', () => {
+it('lists review notes with their file, line and text, and marks one the changes moved past', () => {
   const host = views()
   live('t1')
-  store.tickets.save({ ...store.tickets.get('t1')!, notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at }] })
-  expect(ticketDetail(host, 't1')!.notes).toEqual([{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at }])
+  store.tickets.save({ ...store.tickets.get('t1')!, notes: [{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at,
+    commit: 'old' }], review: { capturedAt: at, head: 'new', commits: [], files: [], dirty: [] } })
+  expect(ticketDetail(host, 't1')!.notes).toEqual([{ id: 'n1', file: 'src/a.ts', line: 12, text: '改成可选', at, commit: 'old',
+    outdated: true }])
 })
 
 it('lists related tickets with their number and title', () => {

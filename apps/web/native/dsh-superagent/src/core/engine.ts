@@ -1,7 +1,7 @@
 /** The domain Engine: the single entry point of the core, and the role interfaces its callers receive. */
 import { UserError } from './errors.ts'
 import { isoTime, liveTicket } from './model.ts'
-import type { ChannelRef, Decision, PolicyEffect, ThreadRef, Ticket, Trigger } from './model.ts'
+import type { ActionOrigin, ChannelRef, Decision, MergeStrategy, PolicyEffect, ThreadRef, Ticket, Trigger } from './model.ts'
 import type { Candidate, Repositories } from './ports.ts'
 import type { EngineOptions } from './part.ts'
 import { Assignments, type WorkerReport } from './assignments.ts'
@@ -213,13 +213,34 @@ export class Engine {
     return this.repo.atomic(() => this.tickets.removeNote(ticketId, noteId))
   }
   /**
-   * Records a person's review of an ended ticket's changes.
+   * Records a person's review of an ended ticket's changes, keeping every round where a resume or a rebase clears the
+   * latest decision.
+   * @param origin - The interface that made the review.
    * @returns The ticket with the review.
    * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
    */
-  reviewTicket(ticketId: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
-    return this.repo.atomic(() => this.tickets.review(ticketId, decision, note))
+  reviewTicket(ticketId: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel'): Ticket {
+    return this.repo.atomic(() => this.tickets.review(ticketId, decision, note, origin))
   }
+  /**
+   * Records a person's standing request to merge the ticket once its gates pass, which the host carries out.
+   * @returns The ticket with the request.
+   * @throws UserError when the ticket is unknown, still open, or its branch was already merged, discarded, or cleaned.
+   */
+  autoMerge(ticketId: string, request: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket {
+    return this.repo.atomic(() => this.tickets.autoMerge(ticketId, request))
+  }
+  /**
+   * Clears a ticket's standing merge request.
+   * @returns The ticket without the request.
+   */
+  cancelAutoMerge(ticketId: string): Ticket { return this.repo.atomic(() => this.tickets.cancelAutoMerge(ticketId)) }
+  /** The tickets whose standing merge request is due, oldest first. */
+  dueAutoMerge(): Ticket[] { return this.tickets.dueAutoMerge() }
+  /** Records why an attempt at a ticket's standing merge request did not merge, and when to try again. */
+  autoMergeBlocked(ticketId: string, error: string): void { this.repo.atomic(() => { this.tickets.autoMergeBlocked(ticketId, error) }) }
+  /** Clears a ticket's standing merge request because it ran or can no longer be carried out. */
+  autoMergeDone(ticketId: string): void { this.repo.atomic(() => { this.tickets.autoMergeDone(ticketId) }) }
   /**
    * Adds a reply to a review note's discussion.
    * @returns The ticket with the reply.
@@ -350,7 +371,7 @@ export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivere
 /** What people ask of the Engine, through the panel or the main Session. */
 export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'setTags' | 'approveTicket'
   | 'linkTicket' | 'blockTicket' | 'addNote' | 'removeNote' | 'resolveNote' | 'replyToNote' | 'reviewTicket' | 'editRequest' | 'reevaluate'
-  | 'unsubscribe' | 'dismiss'>
+  | 'unsubscribe' | 'dismiss' | 'autoMerge' | 'cancelAutoMerge' | 'dueAutoMerge' | 'autoMergeBlocked' | 'autoMergeDone'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>
 /** What the Executor tells the Engine, and what its workers ask of it. */

@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import { key, latestReport, type OutboundMessage, type Ticket, type TicketCheck, type TicketReview, type Trigger } from '../core/index.ts'
+import { key, latestReport, type ActionOrigin, type OutboundMessage, type Ticket, type TicketCheck, type TicketReview, type Trigger }
+  from '../core/index.ts'
 import { family } from '../kv.ts'
 import type { Settings, SettingsOrigin } from '../policy.ts'
 import { sourceContext, type SourceContext, type SourceHost } from './host.ts'
@@ -458,24 +459,36 @@ export async function recordRequestEdit(ticket: Pick<Ticket, 'channels'>, reques
 /**
  * Appends a person's review of a ticket's changes to its archive.
  * @param ticket - The reviewed ticket.
- * @param reviewed - When it was reviewed, the decision, and any note.
+ * @param reviewed - When it was reviewed, the decision, any note, the commit it covered, and the interface it came from.
  */
 export async function recordReview(ticket: Pick<Ticket, 'channels'>, reviewed: { at: string;
-  decision: 'approved' | 'changes-requested'; note?: string }): Promise<void> {
+  decision: 'approved' | 'changes-requested'; note?: string; head?: string; via?: ActionOrigin }): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:reviewed:${reviewed.at} -->`, `${reviewed.at} · 评审 / Review`,
-    ['- status: reviewed', `- decision: ${reviewed.decision}`, ...(reviewed.note ? [`- note: ${oneLine(reviewed.note)}`] : []),
-      `- by: ${OPERATOR}`])
+    ['- status: reviewed', `- decision: ${reviewed.decision}`, ...(reviewed.head ? [`- commit: ${reviewed.head}`] : []),
+      ...(reviewed.note ? [`- note: ${oneLine(reviewed.note)}`] : []), `- by: ${OPERATOR}`,
+      ...(reviewed.via ? [`- via: ${reviewed.via}`] : [])])
 }
 /**
  * Appends the merge of a ticket's branch into the repository to its archive.
  * @param ticket - The ticket whose branch was merged.
- * @param merged - When, which branch, and the branch it moved.
+ * @param merged - When, which branch, the branch it moved, the commit it left, and the interface that asked.
  */
 export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at: string; branch: string; target: string;
-  strategy?: 'ff' | 'squash' | 'merge' }): Promise<void> {
+  strategy?: 'ff' | 'squash' | 'merge'; head?: string; via?: ActionOrigin }): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:merged:${merged.at} -->`, `${merged.at} · 已合并 / Merged`,
     ['- status: merged', `- branch: ${merged.branch}`, `- target: ${merged.target}`,
-      ...(merged.strategy ? [`- strategy: ${merged.strategy}`] : []), `- by: ${OPERATOR}`])
+      ...(merged.head ? [`- commit: ${merged.head}`] : []), ...(merged.strategy ? [`- strategy: ${merged.strategy}`] : []),
+      `- by: ${OPERATOR}`, ...(merged.via ? [`- via: ${merged.via}`] : [])])
+}
+/**
+ * Appends the push that followed a merge to its archive, which says so either way since the merge stands on its own.
+ * @param ticket - The ticket whose merged branch was pushed.
+ * @param push - When it was pushed, whether the remote accepted it, and why not.
+ */
+export async function recordPush(ticket: Pick<Ticket, 'channels'>, push: { at: string; ok: boolean; error?: string }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:pushed:${push.at} -->`, `${push.at} · 推送 / Push`,
+    ['- status: ' + (push.ok ? 'pushed' : 'push-failed'), `- by: ${OPERATOR}`,
+      ...(push.error ? [`- error: ${oneLine(push.error)}`] : [])])
 }
 /**
  * Appends a rebase of the ticket branch to its archive, once per time.
@@ -483,9 +496,10 @@ export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at
  * @param rebased - When it was rebased, the branch, the target, and the new base.
  */
 export async function recordRebase(ticket: Pick<Ticket, 'channels'>, rebased: { at: string; branch: string; target: string;
-  base: string }): Promise<void> {
+  base: string; via?: ActionOrigin }): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:rebased:${rebased.at} -->`, `${rebased.at} · 已变基 / Rebased`,
-    ['- status: rebased', `- branch: ${rebased.branch}`, `- target: ${rebased.target}`, `- base: ${rebased.base}`, `- by: ${OPERATOR}`])
+    ['- status: rebased', `- branch: ${rebased.branch}`, `- target: ${rebased.target}`, `- base: ${rebased.base}`,
+      ...(rebased.via ? [`- via: ${rebased.via}`] : []), `- by: ${OPERATOR}`])
 }
 /**
  * Appends the discard of a ticket's worktree and branch to its archive.
@@ -501,9 +515,9 @@ export async function recordDiscard(ticket: Pick<Ticket, 'channels'>, at: string
  * @param ticket - The ticket whose workspace was cleaned up.
  * @param at - When it was cleaned up.
  */
-export async function recordCleanup(ticket: Pick<Ticket, 'channels'>, at: string): Promise<void> {
+export async function recordCleanup(ticket: Pick<Ticket, 'channels'>, at: string, via?: ActionOrigin): Promise<void> {
   await appendLifecycle(ticket, `<!-- dsh-superagent:cleaned:${at} -->`, `${at} · 已清理 / Cleaned up`,
-    ['- status: cleaned', `- by: ${OPERATOR}`])
+    ['- status: cleaned', `- by: ${OPERATOR}`, ...(via ? [`- via: ${via}`] : [])])
 }
 export const name = 'dsh-superagent-local'
 export const inject = ['orchestrator']

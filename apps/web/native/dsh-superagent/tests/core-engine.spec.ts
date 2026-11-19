@@ -1689,6 +1689,33 @@ describe('review decisions', () => {
     expect(h.engine.reviewTicket(ticketId, 'approved').reviewed).not.toHaveProperty('note')
     expect(() => h.engine.reviewTicket('missing', 'approved')).toThrow(UserError)
   })
+  it('keeps every review round, and anchors a note to the commit it was written on', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    h.engine.report(ticketId, { state: 'ready', summary: 'done' })
+    h.repo.atomic(() => {
+      const ticket = h.repo.tickets.get(ticketId)!
+      ticket.review = { capturedAt: '2026-11-19T00:00:00.000Z', head: 'abc123', commits: [], files: [], dirty: [] }
+      h.repo.tickets.save(ticket)
+    })
+    // A review recorded before the history existed is kept when the next round arrives.
+    h.repo.atomic(() => {
+      const ticket = h.repo.tickets.get(ticketId)!
+      ticket.reviewed = { at: '2026-11-18T00:00:00.000Z', decision: 'approved' }
+      h.repo.tickets.save(ticket)
+    })
+    h.engine.reviewTicket(ticketId, 'changes-requested', '请补测试', 'chat')
+    h.engine.reviewTicket(ticketId, 'approved')
+    const reviewed = h.repo.tickets.get(ticketId)!
+    expect(reviewed.reviews?.map(round => round.decision)).toEqual(['approved', 'changes-requested', 'approved'])
+    expect(reviewed.reviews?.[1]).toMatchObject({ head: 'abc123', via: 'chat' })
+    expect(reviewed.reviewed).toMatchObject({ decision: 'approved', via: 'panel' })
+    expect(h.engine.addNote(ticketId, { file: 'src/a.ts', text: '这里补一个用例' }).notes?.[0]).toMatchObject({ commit: 'abc123' })
+    // Reopening clears the decision that gates merging, while the record of what a person decided stays.
+    h.engine.reopenTicket(ticketId)
+    expect(h.repo.tickets.get(ticketId)!.reviewed).toBeUndefined()
+    expect(h.repo.tickets.get(ticketId)!.reviews?.map(round => round.decision)).toEqual(['approved', 'changes-requested', 'approved'])
+  })
 })
 
 describe('request edits', () => {

@@ -67,6 +67,8 @@ export interface HttpHost {
   checkTicket(id: string): Promise<TicketCheck>
   /** Links or unlinks another ticket, named by id or display number. */
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
+  /** Clears a ticket's standing merge request, which the main Session records. */
+  cancelAutoMerge(id: string): Ticket
   /** Records or clears that a ticket waits for another ticket's merge. */
   blockTicket(id: string, reference: string, blocked: boolean):
     { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
@@ -351,6 +353,14 @@ function routes(runtime: HttpHost): Routes {
       const { resolved } = z.object({ resolved: z.boolean() }).strict().parse(await body())
       try { return { notes: runtime.resolveNote(id, params.noteId, resolved) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/automerge': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { cancel } = z.object({ cancel: z.boolean() }).strict().parse(await body())
+      try {
+        const ticket = cancel ? runtime.cancelAutoMerge(id) : runtime.store.tickets.get(id)
+        return { auto_merge: !!ticket?.autoMerge }
+      } catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/blockers': async ({ params, body }) => {
       const id = ticket(params.id)
