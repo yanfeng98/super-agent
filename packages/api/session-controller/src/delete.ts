@@ -8,12 +8,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import {
-  SessionPersistenceBusyError,
-  SessionPersistenceNotFoundError,
-  SessionPersistenceRemoveUnsupportedError,
-  type SessionPersistence,
-} from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { ApiSessionAgentController } from './agent.ts'
@@ -153,6 +148,9 @@ export class SessionDeletion {
     try {
       await this.persistence().remove(sessionId)
     } catch (error: unknown) {
+      // The optional peer stays off this module's scope: only a removal failure needs its classes.
+      const { SessionPersistenceBusyError, SessionPersistenceNotFoundError, SessionPersistenceRemoveUnsupportedError }
+        = await import('@deepseek-ai/dsh-session-persistence')
       if (error instanceof SessionPersistenceBusyError) {
         throw new RemoteError(
           'session/in-use',

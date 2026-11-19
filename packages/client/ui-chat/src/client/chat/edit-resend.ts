@@ -138,7 +138,7 @@ export async function resendEditedMessage(
       submission?.abandon()
       try {
         deps.openSession(childId)
-      } catch {
+      } catch (_error) {
         // The prompt failure remains the report; an unavailable reveal leaves the source view in place.
       }
       const binding = deps.sessions.binding(childId)
@@ -148,7 +148,7 @@ export async function resendEditedMessage(
             prompt: request.text,
             whenDraftExists: 'keep',
           })
-        } catch {
+        } catch (_error) {
           // The prompt failure remains the report; the user can still retype in the source view.
         }
       }
