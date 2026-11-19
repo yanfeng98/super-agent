@@ -193,6 +193,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `push` notification. The desktop watcher now also announces the merge events in the inbox it cannot see in a ticket's
     state. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/notify.spec.ts` and
     `tests/panel-execution.spec.tsx` cover them.
+18. **Per-file review diff, a review worklist, a named reviewer and the queue on the page.** `GET tickets/<id>/diff` now
+    returns `files`, one entry per `diff --git` block (`parseDiff` in `src/app/review.ts`: paths, status, added/removed
+    counts, the patch), and the Ticket page lists them, opens one file at a time and keeps a browser-local **Viewed** mark
+    per Ticket and commit. `TICKET_FILTERS` gains `review`: the ended Tickets that are not merged, discarded, cleaned or
+    approved, which the panel shows as a **To review** worklist. `TicketReviewRound.by` records the reviewer's name, which
+    the runtime fills with the deployment's operator label and the page shows in the review history. The merge queue has its
+    own panel section (`GET merge-queue`, `POST merge-queue/pause`) with the order, a pause and each entry's way out, and a
+    check that fails on a merged target now pauses the queue instead of letting the next Ticket merge into a red branch.
+    `tests/review.spec.ts`, `tests/views.spec.ts`, `tests/merge.spec.ts`, `tests/core-engine.spec.ts` and
+    `tests/panel-execution.spec.tsx` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
