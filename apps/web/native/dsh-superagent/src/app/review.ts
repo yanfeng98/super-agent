@@ -1,4 +1,5 @@
 /** Captures the git facts of a ticket's workspace when it ends, so the panel shows what changed without opening the worktree. */
+import { createHash } from 'node:crypto'
 import { basename, dirname } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { MergeStrategy, Ticket, TicketReview } from '../core/index.ts'
@@ -16,6 +17,16 @@ export interface DiffFile {
   deletions: number
   /** The file's part of the diff, headers and hunks included, so the panel can show it verbatim. */
   patch: string
+}
+/**
+ * A stable name for the changes a Ticket adds on top of `base`, which a rebase leaves alone when it only moves them onto a
+ * newer commit: the same changes keep the same fingerprint, so an approval of them still holds.
+ * @returns The fingerprint, or undefined when git cannot read the diff.
+ */
+export async function patchFingerprint(subprocess: SubprocessRuntime, directory: string, base: string,
+  signal: AbortSignal): Promise<string | undefined> {
+  const diff = await run(subprocess, directory, ['diff', '--no-color', `${base}..HEAD`], signal)
+  return diff === undefined ? undefined : createHash('sha256').update(diff).digest('hex')
 }
 /** Longest diff the panel receives; a larger change set is truncated with a marker. */
 const DIFF_LIMIT = 200_000
@@ -199,10 +210,12 @@ export async function targetContained(subprocess: SubprocessRuntime, directory: 
  * @throws when the workspace is not a linked worktree, the repository is dirty, on another branch than `expectedTarget`,
  * the ticket branch is checked out there, the ticket branch does not contain the repository's commit, or git cannot complete
  * the merge.
- * @returns The branch merged, the branch it moved, the commit that branch holds after the merge, and the repository root.
+ * @returns The branch merged, the branch it moved, the commit that branch holds after the merge, the commit it moved from,
+ * and the repository root.
  */
 export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  strategy: MergeStrategy = 'ff', expectedTarget?: string): Promise<{ branch: string; target: string; head?: string; root: string }> {
+  strategy: MergeStrategy = 'ff', expectedTarget?: string):
+  Promise<{ branch: string; target: string; head?: string; base?: string; root: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
@@ -217,6 +230,8 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   }
   const run = (args: string[]) => runAsWorker(subprocess, ['git', ...args], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+  // The target's own commit, read before the merge moves it, so a fast-forward merge can be undone commit by commit.
+  const base = await run(['rev-parse', 'HEAD']).then(output => output.trim()).catch(() => undefined)
   if (strategy === 'ff') {
     await run(['merge', '--ff-only', repo.branch])
   } else if (strategy === 'merge') {
@@ -238,7 +253,7 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   }
   // The merge already moved the branch, so a head that git cannot report must not turn it into a failure.
   const head = await run(['rev-parse', 'HEAD']).then(output => output.trim()).catch(() => undefined)
-  return { branch: repo.branch, target: repo.target, root: repo.root, ...head ? { head } : {} }
+  return { branch: repo.branch, target: repo.target, root: repo.root, ...base ? { base } : {}, ...head ? { head } : {} }
 }
 /** A revert that stopped on conflicts, which the repository then abandoned, leaving the target branch as it was. */
 export class RevertConflictError extends Error {
@@ -248,17 +263,19 @@ export class RevertConflictError extends Error {
   }
 }
 /**
- * Reverts one commit on the repository's checked-out branch, which is how a person undoes a merge from any interface. A merge
- * commit is reverted against its first parent; no branch or worktree is rewritten.
+ * Reverts a merge on the repository's checked-out branch, which is how a person undoes one from any interface. A merge
+ * commit is reverted against its first parent; a fast-forward merge's commits are reverted one after another, since undoing
+ * only the last would leave the rest of its work on the branch. No branch or worktree is rewritten.
  * @param directory - Where to run git: the repository root a merge recorded, or the Ticket's worktree while it exists.
  * @param commit - The commit to undo, such as the one a merge recorded as `head`.
  * @param expectedTarget - The branch a merge recorded; a revert refuses when the repository is on another one.
+ * @param base - The commit the merge moved the target from; with it, the commits in `base..commit` are reverted in order.
  * @throws when the directory is not a git repository on a branch, the repository is on another branch or has tracked
  * changes, the commit is unknown, the revert conflicts (nothing is left half-applied), or git cannot commit the revert.
  * @returns The branch reverted and the commit it holds afterwards.
  */
 export async function revertWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  commit: string, expectedTarget?: string): Promise<{ target: string; head: string }> {
+  commit: string, expectedTarget?: string, base?: string): Promise<{ target: string; head: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The merged branch is not a git repository on a branch')
   if (expectedTarget && repo.target !== expectedTarget) {
@@ -267,20 +284,24 @@ export async function revertWorkspace(subprocess: SubprocessRuntime, directory: 
   const run = (args: string[]) => runAsWorker(subprocess, ['git', ...args], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
   // A commit git cannot name is a merge that was rewritten away, not a conflict or a dirty tree the caller can resolve.
-  await run(['cat-file', '-e', `${commit}^{commit}`]).catch(() => {
-    throw new Error(`The merge commit ${commit} is not in ${repo.root}; its branch may have been rewritten`)
-  })
+  for (const object of base && base !== commit ? [base, commit] : [commit]) {
+    await run(['cat-file', '-e', `${object}^{commit}`]).catch(() => {
+      throw new Error(`The merge commit ${object} is not in ${repo.root}; its branch may have been rewritten`)
+    })
+  }
   if (repo.dirty) throw new Error('The repository has uncommitted changes; commit or stash them before reverting')
-  // A merge commit needs its first parent named; every other commit reverts on its own.
-  const parents = await run(['rev-list', '--parents', '-n', '1', commit]).then(line => line.split(' ').slice(1))
+  // A fast-forward merge's commits are reverted one after another; a merge commit needs its first parent named.
+  const range = base && base !== commit ? `${base}..${commit}` : undefined
+  const parents = range ? [] : await run(['rev-list', '--parents', '-n', '1', commit]).then(line => line.split(' ').slice(1))
+  const args = range ? ['revert', '--no-edit', range] : parents.length > 1 ? ['revert', '--no-edit', '-m', '1', commit] : ['revert', '--no-edit', commit]
   try {
-    await run(parents.length > 1 ? ['revert', '--no-edit', '-m', '1', commit] : ['revert', '--no-edit', commit])
+    await run(args)
   } catch (error) {
     const unmerged = await run(['diff', '--name-only', '--diff-filter=U']).then(output => output.split('\n').filter(Boolean)).catch(() => [])
     await run(['revert', '--abort']).catch(() => {
       // A revert that never started has nothing to abort; the original failure is the report.
     })
-    if (unmerged.length) throw new RevertConflictError(commit, unmerged)
+    if (unmerged.length) throw new RevertConflictError(range ?? commit, unmerged)
     throw error
   }
   return { target: repo.target, head: await run(['rev-parse', 'HEAD']) }
@@ -289,11 +310,18 @@ export async function revertWorkspace(subprocess: SubprocessRuntime, directory: 
 /**
  * Pushes the repository's checked-out branch, which a merge just moved, to the remote branch its upstream names. The remote,
  * branch and credentials are the repository's own, so a deployment needs no push setting.
- * @throws when the workspace is not a git repository on a branch, has no upstream, or git cannot push.
+ * @param expectedTarget - The branch a merge recorded; a push refuses when the repository is on another one, so a retry
+ * after someone switched branches pushes the right branch or nothing.
+ * @throws when the workspace is not a git repository on a branch, is on another branch than `expectedTarget`, has no
+ * upstream, or git cannot push.
  */
-export async function pushWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<void> {
+export async function pushWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
+  expectedTarget?: string): Promise<void> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (expectedTarget && repo.target !== expectedTarget) {
+    throw new Error(`The repository is on ${repo.target}, not the branch that merge moved (${expectedTarget}); check it out and push again`)
+  }
   await runAsWorker(subprocess, ['git', 'push'], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(PUSH_TIMEOUT_MS)]))
 }

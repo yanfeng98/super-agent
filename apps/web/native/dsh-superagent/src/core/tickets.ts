@@ -375,7 +375,8 @@ export class Tickets extends EnginePart {
     // A ticket that recorded a review before this history existed keeps that round when the next one arrives.
     const earlier = ticket.reviews ?? (ticket.reviewed ? [ticket.reviewed] : [])
     ticket.reviewed = round
-    ticket.reviews = [...earlier, round].slice(-REVIEW_HISTORY)
+    // The history keeps its own copy, so re-pointing the current approval at a rebased commit leaves it as it was.
+    ticket.reviews = [...earlier, { ...round }].slice(-REVIEW_HISTORY)
     ticket.updatedAt = round.at
     this.repo.tickets.save(ticket)
     return ticket

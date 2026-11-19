@@ -37,7 +37,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type DiffFile, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
@@ -64,6 +64,8 @@ const now = (): string => new Date().toISOString()
 const AUTO_MERGE_ATTEMPTS = 8
 /** How often passes look for a followed pull request's failing CI, which the Source polls on its own schedule. */
 const CI_NOTICE_INTERVAL_MS = 15_000
+/** How long an automatic attempt trusts a check that already failed for the same ending, instead of running it again. */
+const CHECK_REUSE_MS = 10 * 60_000
 
 /**
  * Composition root of dsh-superagent that connects `Store`, `Setup`, `Engine`, `SourceRegistry`, `Effects`, `Outbox`, `Passes`, `Sessions`, `Settings`, `Prompts`, `DshExecutor`, and `MasterAssessor`.
@@ -551,6 +553,15 @@ export class Runtime extends Service implements SourceHost {
     const blocked = mergeBlockedByCheck(this.store.settings().executor.check,
       this.store.tickets.get(id)?.checks, current.ended.at)
     if (blocked) {
+      // An automatic attempt that already saw this ending's check fail waits for the code to change instead of running the
+      // same minutes again on every retry; a person asking themselves gets a fresh run.
+      const recorded = this.store.tickets.get(id)?.checks
+      const recent = origin === 'auto' && recorded && !recorded.ok && recorded.at >= current.ended.at
+        && Date.parse(recorded.at) > Date.now() - CHECK_REUSE_MS
+      if (recent) {
+        throw new Error(`The configured workspace check failed (exit ${recorded.exitCode ?? 'unknown'}) at ${recorded.at}; `
+          + 'it is not run again until the Ticket changes')
+      }
       // A rebase clears the check, and a ticket may have ended before the command was configured; run it here rather than
       // sending the person to the ticket page for another step.
       const check = await this.checkTicket(id)
@@ -577,7 +588,7 @@ export class Runtime extends Service implements SourceHost {
       const pushedAt = now()
       let outcome: { at: string; ok: boolean; error?: string; via: ActionOrigin }
       try {
-        await pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+        await pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal, result.target)
         pushed = true
         outcome = { at: pushedAt, ok: true, via: origin }
       } catch (error) {
@@ -602,7 +613,10 @@ export class Runtime extends Service implements SourceHost {
     // person's to see, and the merge can be undone.
     let targetCheck: TicketCheck | undefined
     const command = this.store.settings().executor.check.trim()
-    if (command && result.root) {
+    // A fast-forward merge leaves the target with exactly the tree the Ticket branch was checked on, so the gate's check
+    // already answered for it; running the same command again would only cost the same minutes twice.
+    const sameTree = strategy === 'ff' && !!result.head && result.head === this.store.tickets.get(id)?.review?.head
+    if (command && result.root && !sameTree) {
       try {
         targetCheck = await workspaceCheck(this.ctx.subprocess, result.root, command, this.stopped.signal,
           Object.fromEntries(this.ticketEnvironment(decided).map(variable => [variable.key, variable.value])))
@@ -615,6 +629,13 @@ export class Runtime extends Service implements SourceHost {
           latest.targetCheck = run
           this.store.tickets.save(latest)
         })
+        // A check command that writes into the checkout it runs in leaves the next merge a dirty repository.
+        const dirty = await workspaceRepo(this.ctx.subprocess, result.root, this.stopped.signal)
+          .then(repo => repo?.dirty === true).catch(() => false)
+        if (dirty) {
+          this.ticketNotice(decided, 'check', `The configured check left tracked changes in ${result.root}; `
+            + 'commit or discard them before the next merge')
+        }
         if (!targetCheck.ok) {
           // A red target branch is no place to merge the next Ticket from a queue.
           const queued = queuedMerges(this.store).length > 0
@@ -661,7 +682,10 @@ export class Runtime extends Service implements SourceHost {
     if (this.reverting.has(ticketId)) throw new Error('A revert of this ticket is already running')
     this.reverting.add(ticketId)
     try {
-      const result = await this.serialized(() => revertWorkspace(this.ctx.subprocess, directory, this.stopped.signal, commit, merged.target))
+      // A fast-forward merge moved the target through the Ticket's commits, so undoing it undoes each of them.
+      const from = merged.strategy === undefined ? merged.base : undefined
+      const result = await this.serialized(() => revertWorkspace(this.ctx.subprocess, directory, this.stopped.signal, commit,
+        merged.target, from))
         .catch((error: unknown) => {
           if (!(error instanceof RevertConflictError)) throw error
           throw new Error(`Reverting the merge of ${merged.branch} into ${merged.target} conflicts in ${error.files.join(', ')}; `
@@ -803,7 +827,7 @@ export class Runtime extends Service implements SourceHost {
     const at = now()
     const label = this.ticketLabel(ticket)
     try {
-      await this.serialized(() => pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal))
+      await this.serialized(() => pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal, merged.target))
       this.savePush(ticketId, { at, ok: true, via: origin })
       try { await recordPush(ticket, { at, ok: true, via: origin }) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
@@ -1026,6 +1050,10 @@ export class Runtime extends Service implements SourceHost {
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
+    // A rebase moves the Ticket's changes onto a newer commit without changing them; the fingerprint proves whether that
+    // is what happened, so an approval of them can survive it.
+    const changesBefore = ticket.execution?.base
+      ? await patchFingerprint(this.ctx.subprocess, directory, ticket.execution.base, this.stopped.signal) : undefined
     const result = await rebaseWorkspace(this.ctx.subprocess, directory, this.stopped.signal, ticket.execution?.target)
       .catch((error: unknown) => {
         if (error instanceof RebaseConflictError) throw this.handBackConflict(error, ticket)
@@ -1033,6 +1061,7 @@ export class Runtime extends Service implements SourceHost {
       })
     const rebased = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base: result.base } : undefined }
     const review = await captureReview(this.ctx.subprocess, rebased, this.stopped.signal)
+    const changesAfter = await patchFingerprint(this.ctx.subprocess, directory, result.base, this.stopped.signal)
     const at = now()
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
@@ -1040,9 +1069,12 @@ export class Runtime extends Service implements SourceHost {
       if (current.execution) current.execution = { ...current.execution, base: result.base }
       if (review) current.review = review
       current.rebased = { at, ...result, via: origin }
-      // Upstream commits changed the tree the check ran on and the review approved, so both wait for a fresh pass.
+      // Upstream commits changed the tree the check ran on, so it waits for a fresh pass.
       delete current.checks
-      delete current.reviewed
+      // The approval covers the changes, not the commit they sat on: keep it when the rebase moved them unchanged.
+      if (changesBefore && changesBefore === changesAfter && review && current.reviewed) {
+        current.reviewed = { ...current.reviewed, ...review.head ? { head: review.head } : {} }
+      } else delete current.reviewed
       this.store.tickets.save(current)
     })
     try { await recordRebase(ticket, { at, ...result, via: origin }) }
