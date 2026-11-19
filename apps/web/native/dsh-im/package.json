@@ -68,11 +68,12 @@
       "platform": "web"
     },
     "compatibility": {
-      "dsh": "0.2.2-rc.4",
+      "dsh": "0.2.2-rc.5",
       "dshReleases": {
         "0.2.1-rc.2": "compatible",
         "0.2.2-rc.3": "compatible",
-        "0.2.2-rc.4": "compatible"
+        "0.2.2-rc.4": "compatible",
+        "0.2.2-rc.5": "compatible"
       },
       "profiles": [
         "web"

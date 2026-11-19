@@ -21,7 +21,7 @@ Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (in
 
 ## Local modifications from upstream
 
-1. `package.json`: private workspace package, DSH `0.2.2-rc.4` compatibility, updated `dsh.client.inject` package names, build/test scripts, pinned Cordis 4.0.1 for the upstream test suite, and `pngjs` for its QR reload test.
+1. `package.json`: private workspace package, DSH `0.2.2-rc.5` compatibility, updated `dsh.client.inject` package names, build/test scripts, pinned Cordis 4.0.1 for the upstream test suite, and `pngjs` for its QR reload test.
 2. Client and Host entry points: the npm updater is hidden and not mounted when the manifest is private, so the built-in copy cannot be replaced by the upstream npm release.
 3. `plugin-src/host/host-scope.mjs`: resolve the Cordis root through `Symbol.for('cordis.root')`; Cordis 4.1 rejects reading the plain `ctx.root` property on contexts that do not inject a service named `root`.
 4. `/goal` and `/plan`: delegated from the shared `TextHarnessBridge` and from the Feishu, DingTalk, WeCom, and QQ bridges to the bound Session's Host command gateway. Help text, command catalogs, and the Feishu slash-command manifest include both commands. Upstream already supported them in Weixin only.
