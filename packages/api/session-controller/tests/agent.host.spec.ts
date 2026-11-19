@@ -76,6 +76,19 @@ function unpublishedAgent(ctx: Context, meta: SessionHeader): Agent {
   } as unknown as Agent
 }
 
+/** A prepared observation over `meta`, shaped as resume and deletion activation read it. */
+function preparedObservation(meta: SessionHeader): SessionObservation {
+  return {
+    source: 'prepared',
+    header: meta,
+    events: [],
+    cursor: -1,
+    projections: { asOfSeq: -1, values: {} },
+    retain: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
+  } as unknown as SessionObservation
+}
+
 describe('ApiSession identity failures', () => {
   it('describes cwd conflicts with and without a recorded cwd', () => {
     expect(new ApiSessionCwdConflict(brandString<SessionId>('missing-cwd'), '/wanted', undefined).message)
@@ -94,15 +107,7 @@ describe('ApiSession Agent lookup and recovery', () => {
       agent: resumed,
       dispose: () => Promise.resolve(),
     })
-    const observed = {
-      source: 'prepared',
-      header: meta,
-      events: [],
-      cursor: -1,
-      projections: { asOfSeq: -1, values: {} },
-      retain: vi.fn(),
-      [Symbol.dispose]: vi.fn(),
-    } as unknown as SessionObservation
+    const observed = preparedObservation(meta)
 
     await expect(agents.resolveObservedAgent(observed)).resolves.toEqual({ agent: resumed })
     expect(resume).toHaveBeenCalledWith(expect.objectContaining({ resumeSessionId: meta.id }))
@@ -273,15 +278,7 @@ describe('ApiSession Agent lifecycle for deletion', () => {
     const resumed = unpublishedAgent(ctx, meta)
     const dispose = vi.fn(() => Promise.resolve())
     vi.spyOn(ctx.agents, 'resume').mockResolvedValue({ agent: resumed, dispose })
-    const observed = {
-      source: 'prepared',
-      header: meta,
-      events: [],
-      cursor: -1,
-      projections: { asOfSeq: -1, values: {} },
-      retain: vi.fn(),
-      [Symbol.dispose]: vi.fn(),
-    } as unknown as SessionObservation
+    const observed = preparedObservation(meta)
 
     await expect(agents.resolveObservedAgent(observed)).resolves.toEqual({ agent: resumed })
     await expect(agents.disposeAgent(meta.id)).resolves.toBe(true)

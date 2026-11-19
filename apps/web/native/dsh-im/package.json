@@ -101,7 +101,7 @@
     "undici": "7.30.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "workspace:~",
     "@larksuiteoapi/node-sdk": "1.73.0",
     "esbuild": "0.25.9",
     "https-proxy-agent": "5.0.1",
