@@ -290,9 +290,9 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
-   * Adds a person's note on a file and optional line of the ticket's changes.
+   * Adds a person's note on a file and an optional line or range of the ticket's changes.
    * @returns The ticket with the note.
-   * @throws UserError when the ticket is unknown or the file or text is empty.
+   * @throws UserError when the ticket is unknown, the file or text is empty, or a range has no start or runs backwards.
    */
   addNote(ticketId: string, input: { file: string; line?: number; endLine?: number; text: string }): Ticket {
     const ticket = this.require(ticketId)

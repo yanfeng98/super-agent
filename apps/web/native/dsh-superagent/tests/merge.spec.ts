@@ -658,3 +658,33 @@ it('keeps why the last merge did not land, and clears it when one does', async (
   await h.runtime.mergeTicket(ticket.id)
   expect(h.runtime.store.tickets.get(ticket.id)?.mergeError).toBeUndefined()
 })
+
+it('re-queueing a failed entry clears its failure and retries it in place', async () => {
+  const { ticket: blocked } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  ended(blocked.id)
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  h.runtime.queueMerges([blocked.id], {})
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.mergeQueue().items[0]).toMatchObject({ error: expect.anything() })
+  // Asking for it again replaces the entry, which clears the failure and takes the new options.
+  h.runtime.blockTicket(blocked.id, blocker.id, false)
+  h.runtime.queueMerges([blocked.id], { cleanup: true })
+  expect(h.runtime.mergeQueue().items[0]).not.toHaveProperty('error')
+  expect(queuedMerges(h.runtime.store)[0]).toMatchObject({ ticketId: blocked.id, cleanup: true })
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeDefined()
+})
+
+it('refuses to revert a merge that a revert already undid', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  // A record from before a revert cleared `merged` still holds both, in that order.
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.merged = { at: '2026-11-19T00:00:00.000Z', branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' }
+    current.reverted = { at: '2026-11-19T00:01:00.000Z', commit: 'undo-sha', target: 'main', merge: 'merged-sha' }
+    h.runtime.store.tickets.save(current)
+  })
+  await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/already reverted/)
+})

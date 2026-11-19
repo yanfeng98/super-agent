@@ -377,8 +377,7 @@ function routes(runtime: HttpHost): Routes {
       const note = z.object({ file: z.string().trim().min(1).max(500), line: z.number().int().min(1).max(1_000_000).optional(),
         endLine: z.number().int().min(1).max(1_000_000).optional(), text: z.string().trim().min(1).max(2_000) }).strict()
         .parse(await body())
-      try { return { notes: runtime.addNote(id, note) } }
-      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+      return { notes: runtime.addNote(id, note) }
     },
     'POST tickets/:id/notes/:noteId/remove': ({ params }) => {
       const id = ticket(params.id)
