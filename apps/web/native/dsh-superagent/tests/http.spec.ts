@@ -183,7 +183,7 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     linkTicket: (id: string, reference: string, linked: boolean) => { calls.push(`link:${id}:${reference}:${linked}`)
       return { related: [] } },
     blockTicket: (id: string, reference: string, blocked: boolean) => { calls.push(`block:${id}:${reference}:${blocked}`)
-      return { blocked_by: [] } },
+      return { ticket_id: id, blocked_by: [] } },
     addNote: (id: string, input: { file: string; line?: number; text: string }) => { calls.push(`note:${id}:${input.file}`); return [] },
     removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] },
     resolveNote: (id: string, noteId: string, resolved: boolean) => { calls.push(`resolve:${id}:${noteId}:${resolved}`); return [] },
@@ -200,7 +200,7 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     at: '', output: 'passed' } } })
   expect(await call('POST', 'tickets/t1/cleanup')).toEqual({ status: 200, body: { cleaned: true } })
   expect(await call('POST', 'tickets/t1/related', { ticket: 'T-0002', linked: true })).toEqual({ status: 200, body: { related: [] } })
-  expect(await call('POST', 'tickets/t1/blockers', { ticket: 'T-0002', blocked: true })).toEqual({ status: 200, body: { blocked_by: [] } })
+  expect(await call('POST', 'tickets/t1/blockers', { ticket: 'T-0002', blocked: true })).toEqual({ status: 200, body: { ticket_id: 't1', blocked_by: [] } })
   expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, text: '改这里' })).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/remove')).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/resolve', { resolved: true })).toEqual({ status: 200, body: { notes: [] } })

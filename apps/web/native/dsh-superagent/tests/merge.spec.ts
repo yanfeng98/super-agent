@@ -80,6 +80,11 @@ it('hands a conflicting rebase to the worker instead of leaving the person a sec
   expect(resumed.review).toBeUndefined()
   expect(resumed.inputs).toContainEqual(expect.objectContaining({ kind: 'text', text: expect.stringContaining('git rebase main') }))
   expect(resumed.inputs).toContainEqual(expect.objectContaining({ kind: 'text', text: expect.stringContaining('a.txt, b.txt') }))
+  // The worker reads the conflict, in a new Assignment, rather than the person carrying it over.
+  await h.runtime.idle()
+  expect(resumed.assignments).toHaveLength(2)
+  expect(h.deliveries.mock.calls.map(([call]) => call.text))
+    .toContainEqual(expect.stringContaining('Rebasing the ticket branch onto main to merge it conflicts in a.txt, b.txt'))
   expect(mergeWorkspace).not.toHaveBeenCalled()
   expect(pushWorkspace).not.toHaveBeenCalled()
 })

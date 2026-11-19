@@ -561,15 +561,17 @@ export class Runtime extends Service implements SourceHost {
     }) }
   }
   /**
-   * Records or clears that a ticket waits for another ticket's branch to merge first.
+   * Records or clears that a ticket waits for another ticket's branch to merge first. Both may be named by id or by the
+   * display number `T-0001`, as a person and the main Session quote them.
    * @returns The blocked ticket's blockers, with their titles and display numbers.
    * @throws when either ticket is unknown, they are the same, or the dependency would close a cycle.
    */
-  blockTicket(id: string, reference: string, blocked: boolean): { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] } {
-    const target = this.ticketReference(reference)
-    if (!target) throw new Error('Unknown ticket')
-    const ticket = this.engine.blockTicket(id, target, blocked)
-    return { blocked_by: (ticket.blockedBy ?? []).flatMap(value => {
+  blockTicket(id: string, reference: string, blocked: boolean):
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] } {
+    const ticketId = this.ticketReference(id), target = this.ticketReference(reference)
+    if (!ticketId || !target) throw new Error('Unknown ticket')
+    const ticket = this.engine.blockTicket(ticketId, target, blocked)
+    return { ticket_id: ticket.id, blocked_by: (ticket.blockedBy ?? []).flatMap(value => {
       const other = this.store.tickets.get(value)
       const number = this.store.tickets.number(value)
       return other ? [{ id: value, title: other.title, merged: !!other.merged, ...number ? { number } : {} }] : []
@@ -665,9 +667,10 @@ export class Runtime extends Service implements SourceHost {
    */
   private handBackConflict(error: RebaseConflictError, ticket: Ticket): Error {
     const files = error.files.join(', ')
-    const note = `The merge into ${error.target} conflicts in ${files}; the ticket branch keeps its commits. In your worktree, `
-      + `run "git rebase ${error.target}", resolve ${error.files.length === 1 ? 'that file' : 'those files'}, and continue with `
-      + '"git add" and "git rebase --continue"; report ready again once the branch is rebased.'
+    const note = `Rebasing the ticket branch onto ${error.target} to merge it conflicts in ${files}; the branch keeps its `
+      + `commits. In your worktree, run "git rebase ${error.target}", resolve `
+      + `${error.files.length === 1 ? 'that file' : 'those files'}, and continue with "git add" and "git rebase --continue"; `
+      + 'report ready again once the branch is rebased.'
     if (!this.engine.resumeWithNote(ticket.id, note)) return error
     return new Error(`Rebasing onto ${error.target} conflicts in ${files}; the worker was told and is resolving it. `
       + 'Ask to merge again once it reports ready.')

@@ -401,7 +401,8 @@ export class Tickets extends EnginePart {
     delete ticket.reviewed
     const assignment = this.newAssignment(ticket)
     const input: TicketInput = { id: key('input', ticket.id, 'resume', at), kind: 'text', text: note, at }
-    ticket.inputs.push(input); ticket.undelivered.push(input.id); ticket.updatedAt = at
+    // The note says why the worker is running again, so it is delivered ahead of what waited for the ticket.
+    ticket.inputs.push(input); ticket.undelivered.unshift(input.id); ticket.updatedAt = at
     this.repo.tickets.save(ticket)
     this.options.executor.start(ticket, assignment)
     return true

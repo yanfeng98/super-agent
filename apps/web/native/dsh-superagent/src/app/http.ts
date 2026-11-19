@@ -68,7 +68,8 @@ export interface HttpHost {
   /** Links or unlinks another ticket, named by id or display number. */
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
   /** Records or clears that a ticket waits for another ticket's merge. */
-  blockTicket(id: string, reference: string, blocked: boolean): { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
+  blockTicket(id: string, reference: string, blocked: boolean):
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
   /** Adds a review note anchored to a file and optional line. */
   addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[]
   /** Removes a review note. */
