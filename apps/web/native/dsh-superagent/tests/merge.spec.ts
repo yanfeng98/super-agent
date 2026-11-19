@@ -1,11 +1,11 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { mergeWorkspace, targetContained } from '../src/app/review.ts'
+import { captureReview, mergeWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
-  return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn() }
+  return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn() }
 })
 
 let h: Host
@@ -13,6 +13,9 @@ beforeEach(async () => {
   h = await startRuntime()
   vi.mocked(targetContained).mockReset().mockResolvedValue(true)
   vi.mocked(mergeWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main' })
+  vi.mocked(workspaceHead).mockReset().mockResolvedValue(undefined)
+  vi.mocked(captureReview).mockReset().mockResolvedValue(
+    { capturedAt: '2026-11-19T00:03:00.000Z', head: 'new', commits: [], files: [], dirty: [] })
 })
 afterEach(async () => { await h.stop() })
 
@@ -101,6 +104,42 @@ it('reports a cleanup failure after the merge already moved the branch', async (
   await expect(h.runtime.mergeTicket(ticket.id, 'ff', { cleanup: true }))
     .rejects.toThrow(/Merged agent\/t into main, but removing its worktree failed: git cannot remove it/)
   expect(h.runtime.store.tickets.get(ticket.id)?.merged).toBeDefined()
+})
+
+it('captures the review again when the branch gained commits after its ending, and checks the new tree', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.review = { capturedAt: '2026-11-19T00:01:00.000Z', head: 'old', commits: [], files: [], dirty: [] }
+    h.runtime.store.tickets.save(current)
+  })
+  configureCheck('pnpm test')
+  vi.mocked(workspaceHead).mockResolvedValue('new')
+  const check = vi.spyOn(h.runtime, 'checkTicket').mockResolvedValue(
+    { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:04:00.000Z', output: 'passed' })
+  expect(await h.runtime.mergeTicket(ticket.id)).toEqual({ branch: 'agent/t', target: 'main', recaptured: true })
+  expect(captureReview).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: ticket.id }), expect.anything())
+  // The check ran on the tree the old review described, so the merge runs it again.
+  expect(check).toHaveBeenCalledWith(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)?.review?.head).toBe('new')
+})
+
+it('refuses a branch that changed after its review when approvals are required', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.review = { capturedAt: '2026-11-19T00:01:00.000Z', head: 'old', commits: [], files: [], dirty: [] }
+    current.reviewed = { at: '2026-11-19T00:02:00.000Z', decision: 'approved' }
+    h.runtime.store.tickets.save(current)
+  })
+  const settings = h.runtime.store.settings()
+  h.runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, requireReview: true } })
+  vi.mocked(workspaceHead).mockResolvedValue('new')
+  await expect(h.runtime.mergeTicket(ticket.id)).rejects.toThrow(/changed after its review/)
+  expect(captureReview).not.toHaveBeenCalled()
+  expect(mergeWorkspace).not.toHaveBeenCalled()
 })
 
 it('merges a branch the repository already contains without rebasing or checking', async () => {

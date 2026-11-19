@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -143,6 +143,9 @@ describe('merge and discard', () => {
     expect(await targetContained(subprocess(), worktree, signal)).toBe(false)
     const rebased = await rebaseWorkspace(subprocess(), worktree, signal)
     expect(await targetContained(subprocess(), worktree, signal)).toBe(true)
+    // A branch that rebased the repository in forked from its new commit, which is where its review starts.
+    expect(await workingBase(subprocess(), { execution: { name: 't1', directory: worktree, assignment: '',
+      base: rebased.base, target: git('branch', '--show-current') } } as Ticket, signal)).toBe(git('rev-parse', 'HEAD'))
     expect(rebased).toEqual({ branch: 'agent/r', target: git('branch', '--show-current'), base: git('rev-parse', 'HEAD') })
     // With the recorded base moved to the target's commit, the review lists only the ticket's own commit and file.
     const review = (await captureReview(subprocess(), { ...ticket(rebased.base),
@@ -168,6 +171,25 @@ describe('merge and discard', () => {
     // The abort leaves the ticket branch on its own commit, with no rebase in progress.
     expect(gitAt(worktree, 'rev-parse', 'HEAD')).toBe(ticketHead)
     expect(gitAt(worktree, 'status', '--porcelain')).toBe('')
+  })
+  it('starts the review at the fork point when the branch merged the repository in', async () => {
+    const launched = base()
+    const worktree = join(dir, 'worktree-fork')
+    git('worktree', 'add', '-q', '-b', 'agent/f', worktree)
+    writeFileSync(join(worktree, 'b.txt'), 'ticket\n')
+    gitAt(worktree, 'add', 'b.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
+    writeFileSync(join(repo, 'a.txt'), 'main moved\n'); git('commit', '-qam', 'main work')
+    const target = git('branch', '--show-current')
+    gitAt(worktree, 'merge', '-q', '--no-edit', target)
+    const execution = { name: 't1', directory: worktree, assignment: '', base: launched, target }
+    const anchored = (await workingBase(subprocess(), { execution } as Ticket, signal))!
+    expect(anchored).toBe(git('rev-parse', 'HEAD'))
+    // The repository's own change is not the ticket's, so the review lists only the file the ticket added.
+    const review = (await captureReview(subprocess(), { execution: { ...execution, base: anchored } } as Ticket, signal))!
+    expect(review.files).toEqual([{ status: 'A', path: 'b.txt' }])
+    // The repository's own commit is not the ticket's, so it is not listed.
+    expect(review.commits.map(commit => commit.subject)).toContain('ticket work')
+    expect(review.commits.map(commit => commit.subject)).not.toContain('main work')
   })
   it('removes a merged worktree and branch with git\'s safe deletion check', async () => {
     base()

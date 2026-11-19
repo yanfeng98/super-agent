@@ -35,7 +35,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, workspaceCheck } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workspaceDiff, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, type MergeStrategy } from './review.ts'
 import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
@@ -360,13 +360,14 @@ export class Runtime extends Service implements SourceHost {
    * Merges an ended ticket's branch into the repository's checked-out branch, fast-forwarding, squashing, or making a merge
    * commit, then records the merge on the ticket and in its local archive. A branch the repository moved past is rebased
    * first, and a configured check that has not passed since the ending runs again, so a person who asked to merge needs no
-   * other step. With `cleanup`, the merged worktree and branch are removed afterwards.
+   * other step. With `cleanup`, the merged worktree and branch are removed afterwards. A branch that gained commits after
+   * its review was captured is captured again, with the check run on the new tree, unless approvals are required.
    * @throws when the ticket is unknown or open, has no workspace, was discarded, a review requested changes, an approval is
    * required and missing, an open review note remains, the configured check fails, a rebase conflicts, or git cannot
    * fast-forward.
    */
   async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean } = {}):
-    Promise<{ branch: string; target: string; rebased?: true; cleaned?: true }> {
+    Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
@@ -404,7 +405,27 @@ export class Runtime extends Service implements SourceHost {
     if (current.reviewed?.decision === 'changes-requested') {
       throw new Error('A review requested changes; address them and approve the review before merging')
     }
-    const blocked = mergeBlockedByCheck(this.store.settings().executor.check, current.checks, current.ended.at)
+    // A commit made after the ending leaves the review and check describing an older tree. Capture them again instead of
+    // merging work no recorded review covers; an approval requirement keeps that decision in the panel.
+    let recaptured: true | undefined
+    const head = await workspaceHead(this.ctx.subprocess, directory, this.stopped.signal)
+    if (head && current.review?.head && current.review.head !== head) {
+      if (this.store.settings().executor.requireReview) {
+        throw new Error('The Ticket branch changed after its review; approve the new review from the ticket page before merging')
+      }
+      const review = await captureReview(this.ctx.subprocess, current, this.stopped.signal)
+      this.store.atomic(() => {
+        const latest = this.store.tickets.get(id)
+        if (!latest?.ended || latest.merged) return
+        if (review) latest.review = review
+        // The check ran on the tree the review described, so it waits for a fresh run on this one.
+        delete latest.checks
+        this.store.tickets.save(latest)
+      })
+      recaptured = true
+    }
+    const blocked = mergeBlockedByCheck(this.store.settings().executor.check,
+      this.store.tickets.get(id)?.checks, current.ended.at)
     if (blocked) {
       // A rebase clears the check, and a ticket may have ended before the command was configured; run it here rather than
       // sending the person to the ticket page for another step.
@@ -434,7 +455,7 @@ export class Runtime extends Service implements SourceHost {
         throw new Error(`Merged ${result.branch} into ${result.target}, but removing its worktree failed: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
-    return { ...result, ...rebased ? { rebased } : {}, ...cleaned ? { cleaned } : {} }
+    return { ...result, ...rebased ? { rebased } : {}, ...recaptured ? { recaptured } : {}, ...cleaned ? { cleaned } : {} }
   }
   /**
    * Adds a person's note on a file and line of a ticket's changes.
@@ -639,6 +660,21 @@ export class Runtime extends Service implements SourceHost {
    * review to its local archive. Runs after the ending transaction, so a capture failure leaves the ending intact.
    */
   private async finishTicket(ticket: Ticket, ctx: Context): Promise<void> {
+    // A worker may merge or rebase the repository's branch into its own before reporting, which leaves the recorded launch
+    // base outside the branch; re-anchoring it at the fork point keeps the review to this ticket's own commits.
+    const launchBase = ticket.execution?.base
+    const base = await workingBase(ctx.subprocess, ticket, this.stopped.signal)
+    if (base && launchBase && base !== launchBase) {
+      const anchored = this.store.atomic(() => {
+        const current = this.store.tickets.get(ticket.id)
+        if (!current?.execution || current.execution.base !== launchBase) return false
+        current.execution.base = base
+        this.store.tickets.save(current)
+        return true
+      })
+      if (!anchored) return
+      ticket = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base } : undefined }
+    }
     // A follow-up may resume the ticket while the review is captured; its close then belongs to the next ending.
     const stillEnded = (): boolean => {
       const current = this.store.tickets.get(ticket.id)

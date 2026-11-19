@@ -33,7 +33,7 @@ export interface MainToolsHost {
   /** Sends a person's answer to a local ticket's Thread, where its worker reads it as an Input. */
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
-  mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean }): Promise<{ branch: string; target: string; rebased?: true; cleaned?: true }>
+  mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean }): Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true }>
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
