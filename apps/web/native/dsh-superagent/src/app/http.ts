@@ -67,6 +67,8 @@ export interface HttpHost {
   checkTicket(id: string): Promise<TicketCheck>
   /** Links or unlinks another ticket, named by id or display number. */
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
+  /** Records or clears that a ticket waits for another ticket's merge. */
+  blockTicket(id: string, reference: string, blocked: boolean): { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
   /** Adds a review note anchored to a file and optional line. */
   addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[]
   /** Removes a review note. */
@@ -347,6 +349,13 @@ function routes(runtime: HttpHost): Routes {
       const id = ticket(params.id)
       const { resolved } = z.object({ resolved: z.boolean() }).strict().parse(await body())
       try { return { notes: runtime.resolveNote(id, params.noteId, resolved) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/blockers': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { ticket: reference, blocked } = z.object({ ticket: z.string().trim().min(1).max(200), blocked: z.boolean() }).strict()
+        .parse(await body())
+      try { return runtime.blockTicket(id, reference, blocked) }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/related': async ({ params, body }) => {

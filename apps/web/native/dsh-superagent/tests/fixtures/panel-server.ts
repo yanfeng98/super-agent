@@ -208,7 +208,7 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
 const ticketDetail = (): TicketPageView => ({
   ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
     cleanup: false, check: false, reviewDecision: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
-  history: [], related: [], notes: [],
+  history: [], related: [], blockedBy: [], notes: [],
   request: { text: '修复登录页回归', at: '2026-09-22T00:00:00Z' }, decision: acceptDecision(),
   threads: [threadSummary()],
   mandate: { strength: 'explicit', policyVersion: 'abcdef1234567890', basis: { via: 'addressed', sender: 'Alice', addressed: 'mention' },
@@ -434,6 +434,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     detail.tags = tags
     return { tags }
   } },
+  'POST tickets/:id/blockers': { body: true, answer: () => ({ blocked_by: [] }) },
   'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     const input = body as { ticket?: unknown; linked?: unknown }

@@ -322,6 +322,8 @@ export interface Ticket {
   checkHistory?: TicketCheck[]
   /** Other tickets this one relates to, such as the work it builds on or depends on. */
   related?: string[]
+  /** Tickets whose branch must merge first; while one is not merged, this ticket does not merge. */
+  blockedBy?: string[]
   /** A person's notes on files and lines of this ticket's changes, kept until they send them to the Executor. */
   notes?: TicketNote[]
   /** Set when the request asked to wait for a person's approval before its first Assignment runs. */

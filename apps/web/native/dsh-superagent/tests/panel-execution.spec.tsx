@@ -182,6 +182,23 @@ it('links and unlinks related Tickets from a Ticket page', async () => {
     body: { ticket: 'T-0003', linked: true } })
 })
 
+it('blocks a ticket on another ticket\'s merge from its page', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
+    blockedBy: [{ id: 't2', number: 2, title: '前置工单', merged: false }] }
+  await mount()
+  await click(zh.blockedByTitle)
+  expect(text()).toContain('T-0002')
+  expect(text()).toContain(zh.blockerWaiting)
+  await click(all('button').find(button => button.textContent === zh.remove)!)
+  expect(server.requests.find(request => request.path === 'tickets/t1/blockers')).toMatchObject({ method: 'POST',
+    body: { ticket: 't2', blocked: false } })
+  await type(field<HTMLInputElement>(zh.blockedByPlaceholder), 'T-0003')
+  await click(zh.blockedByAdd)
+  expect(server.requests.filter(request => request.path === 'tickets/t1/blockers').at(-1)).toMatchObject({ method: 'POST',
+    body: { ticket: 'T-0003', blocked: true } })
+})
+
 it('adds a line-anchored review note and sends the notes to the executor as one follow-up', async () => {
   at({ page: 'execution', id: 't1' })
   server.ticketDetails.t1 = { ...server.ticketDetails.t1!,

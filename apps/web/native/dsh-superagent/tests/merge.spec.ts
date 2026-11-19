@@ -142,6 +142,43 @@ it('refuses a branch that changed after its review when approvals are required',
   expect(mergeWorkspace).not.toHaveBeenCalled()
 })
 
+it('waits for a ticket it is blocked by to merge first', async () => {
+  const { ticket: blocker } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
+  const { ticket: blocked } = await h.acceptedTicket(feishu('2', '@bot 再做后续'))
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  ended(blocked.id)
+  await expect(h.runtime.mergeTicket(blocked.id)).rejects.toThrow(new RegExp(`Blocked by ${blocker.id}`))
+  expect(mergeWorkspace).not.toHaveBeenCalled()
+  // Once the blocker's branch has landed, the blocked ticket merges.
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(blocker.id)!
+    current.merged = { at: '2026-11-19T00:05:00.000Z', branch: 'agent/b', target: 'main' }
+    h.runtime.store.tickets.save(current)
+  })
+  expect(await h.runtime.mergeTicket(blocked.id)).toEqual({ branch: 'agent/t', target: 'main' })
+})
+
+it('names a discarded blocker as a dependency to remove rather than merge', async () => {
+  const { ticket: blocker } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
+  const { ticket: blocked } = await h.acceptedTicket(feishu('2', '@bot 再做后续'))
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  ended(blocked.id)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(blocker.id)!
+    current.discarded = { at: '2026-11-19T00:05:00.000Z' }
+    h.runtime.store.tickets.save(current)
+  })
+  await expect(h.runtime.mergeTicket(blocked.id)).rejects.toThrow(/discarded Ticket never merges/)
+})
+
+it('refuses a dependency that would make two tickets wait for each other', async () => {
+  const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
+  const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再做后续'))
+  h.runtime.blockTicket(second.id, first.id, true)
+  expect(() => h.runtime.blockTicket(first.id, second.id, true)).toThrow(/wait for the other/)
+  expect(h.runtime.store.tickets.get(first.id)?.blockedBy).toBeUndefined()
+})
+
 it('merges a branch the repository already contains without rebasing or checking', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)

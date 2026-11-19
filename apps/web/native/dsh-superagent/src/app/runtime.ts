@@ -373,6 +373,20 @@ export class Runtime extends Service implements SourceHost {
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
     if (ticket.merged) throw new Error('The ticket branch was already merged')
+    // A ticket that waits on another branch merges only once that branch has landed, so order is a recorded fact rather
+    // than something the person has to remember.
+    const waiting = (ticket.blockedBy ?? []).filter(value => !this.store.tickets.get(value)?.merged)
+    if (waiting.length) {
+      const names = waiting.map(value => {
+        const other = this.store.tickets.get(value)
+        return other ? `${value} (${other.title}${other.discarded ? ', discarded' : ''})` : value
+      })
+      // A discarded blocker never merges, so naming it as a step to take would send the person in a circle.
+      const discarded = waiting.some(value => this.store.tickets.get(value)?.discarded)
+      throw new Error(discarded
+        ? `Blocked by ${names.join(', ')}; a discarded Ticket never merges, so remove that dependency first`
+        : `Blocked by ${names.join(', ')}; merge ${waiting.length === 1 ? 'it' : 'them'} first`)
+    }
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
     if (ticket.reviewed?.decision === 'changes-requested') {
@@ -529,6 +543,21 @@ export class Runtime extends Service implements SourceHost {
       const other = this.store.tickets.get(value)
       const number = this.store.tickets.number(value)
       return other ? [{ id: value, title: other.title, ...number ? { number } : {} }] : []
+    }) }
+  }
+  /**
+   * Records or clears that a ticket waits for another ticket's branch to merge first.
+   * @returns The blocked ticket's blockers, with their titles and display numbers.
+   * @throws when either ticket is unknown, they are the same, or the dependency would close a cycle.
+   */
+  blockTicket(id: string, reference: string, blocked: boolean): { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] } {
+    const target = this.ticketReference(reference)
+    if (!target) throw new Error('Unknown ticket')
+    const ticket = this.engine.blockTicket(id, target, blocked)
+    return { blocked_by: (ticket.blockedBy ?? []).flatMap(value => {
+      const other = this.store.tickets.get(value)
+      const number = this.store.tickets.number(value)
+      return other ? [{ id: value, title: other.title, merged: !!other.merged, ...number ? { number } : {} }] : []
     }) }
   }
   /** Resolves a ticket id or display number (`T-0001`) to its id. */
@@ -757,6 +786,7 @@ export class Runtime extends Service implements SourceHost {
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: (id, strategy) => runtime.mergeTicket(id, strategy),
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
       linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),
+      blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
       addNote: (id, input) => runtime.addNote(id, input), removeNote: (id, noteId) => runtime.removeNote(id, noteId),
       resolveNote: (id, noteId, resolved) => runtime.resolveNote(id, noteId, resolved),
       replyToNote: (id, noteId, text) => runtime.replyToNote(id, noteId, text),

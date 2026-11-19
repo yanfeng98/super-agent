@@ -580,7 +580,7 @@ Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open
 | `models`, `models/<provider>` | Available models |
 | `feishu/<trigger id>/…`, `github/…` | Original Source records, described in the Source skills |
 
-`/diff` is the main Session's read of the committed change the panel shows as View diff. Ticket Threads are marked `context` for context-only follows and `bound` for Source bindings. Assignment pages are newest first and include report previews. Continue lists with `next_offset`. `/input/<id>` accepts an Input's name or id. `settings` includes small blocks in full and summarizes Policy and Source blocks.
+`/diff` is the main Session's read of the committed change the panel shows as View diff; a Ticket's details also list `blocked_by`, the Tickets whose merge comes first. Ticket Threads are marked `context` for context-only follows and `bound` for Source bindings. Assignment pages are newest first and include report previews. Continue lists with `next_offset`. `/input/<id>` accepts an Input's name or id. `settings` includes small blocks in full and summarizes Policy and Source blocks.
 
 Source resources include message neighborhoods, `github/pulls/<n>/thread/<comment id>` and `github/commits/<sha>/checks`.
 

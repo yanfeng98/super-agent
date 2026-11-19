@@ -237,6 +237,13 @@ export class Engine {
   linkTicket(ticketId: string, otherId: string, linked: boolean): Ticket {
     return this.repo.atomic(() => this.tickets.link(ticketId, otherId, linked))
   }
+  /**
+   * Records or clears that a ticket waits for another ticket's branch to merge first.
+   * @returns The blocked ticket after the change.
+   */
+  blockTicket(ticketId: string, otherId: string, blocked: boolean): Ticket {
+    return this.repo.atomic(() => this.tickets.block(ticketId, otherId, blocked))
+  }
 
   // The Executor
 
@@ -336,7 +343,7 @@ export type EngineForSources = Pick<Engine, 'receive' | 'bindThread' | 'threadCl
 export type EngineForMainSession = Pick<Engine, 'candidate' | 'candidateDelivered' | 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'>
 /** What people ask of the Engine, through the panel or the main Session. */
 export type EngineForPeople = Pick<Engine, 'stopTicket' | 'retryTicket' | 'reopenTicket' | 'renameTicket' | 'setTags' | 'approveTicket'
-  | 'linkTicket' | 'addNote' | 'removeNote' | 'resolveNote' | 'replyToNote' | 'reviewTicket' | 'editRequest' | 'reevaluate'
+  | 'linkTicket' | 'blockTicket' | 'addNote' | 'removeNote' | 'resolveNote' | 'replyToNote' | 'reviewTicket' | 'editRequest' | 'reevaluate'
   | 'unsubscribe' | 'dismiss'>
 /** What Settings tells the Engine. */
 export type EngineForSettings = Pick<Engine, 'policyChanged'>

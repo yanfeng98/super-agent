@@ -250,6 +250,35 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
+   * Records or clears that a ticket waits for another ticket's branch to merge first.
+   * @returns The blocked ticket after the change.
+   * @throws UserError when either ticket is unknown, they are the same, or the dependency would close a cycle.
+   */
+  block(ticketId: string, otherId: string, blocked: boolean): Ticket {
+    if (ticketId === otherId) throw new UserError('selfLink')
+    const ticket = this.require(ticketId)
+    this.require(otherId)
+    const ids = new Set(ticket.blockedBy ?? [])
+    if (blocked) {
+      // A cycle would keep both tickets from ever merging, so it is refused instead of recorded.
+      const seen = new Set<string>()
+      const open = [otherId]
+      while (open.length) {
+        const current = open.pop()!
+        if (current === ticketId) throw new UserError('blockCycle')
+        if (seen.has(current)) continue
+        seen.add(current)
+        open.push(...this.repo.tickets.get(current)?.blockedBy ?? [])
+      }
+      ids.add(otherId)
+    } else ids.delete(otherId)
+    if (ids.size) ticket.blockedBy = [...ids]
+    else delete ticket.blockedBy
+    ticket.updatedAt = this.now()
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
    * Adds a person's note on a file and optional line of the ticket's changes.
    * @returns The ticket with the note.
    * @throws UserError when the ticket is unknown or the file or text is empty.
