@@ -171,6 +171,11 @@ it('names a discarded blocker as a dependency to remove rather than merge', asyn
   await expect(h.runtime.mergeTicket(blocked.id)).rejects.toThrow(/discarded Ticket never merges/)
 })
 
+it('refuses a ticket that waits for itself', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
+  expect(() => h.runtime.blockTicket(ticket.id, ticket.id, true)).toThrow(/wait for itself/)
+})
+
 it('refuses a dependency that would make two tickets wait for each other', async () => {
   const { ticket: first } = await h.acceptedTicket(feishu('1', '@bot 先做前置'))
   const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再做后续'))
