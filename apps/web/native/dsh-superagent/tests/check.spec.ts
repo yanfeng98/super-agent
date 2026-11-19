@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
-import { mergeBlockedByCheck, workspaceCheck } from '../src/app/check.ts'
+import { mergeBlockedByCheck, parseChecks, workspaceCheck, workspaceChecks } from '../src/app/check.ts'
 
 let directory: string
 let signal: AbortSignal
@@ -26,6 +26,27 @@ const subprocess = (): SubprocessRuntime => ({
     return { done, collected: { stdout: reader('stdout'), stderr: reader('stderr') } }
   },
 }) as unknown as SubprocessRuntime
+
+it('reads named checks from the setting, one per line', () => {
+  expect(parseChecks('')).toEqual([])
+  // A bare command is its own name, and a command that contains a colon without a space stays a command.
+  expect(parseChecks('pnpm test')).toEqual([{ name: 'pnpm test', command: 'pnpm test' }])
+  expect(parseChecks('pnpm test:unit')).toEqual([{ name: 'pnpm test:unit', command: 'pnpm test:unit' }])
+  expect(parseChecks('lint: pnpm lint\n\n  test: pnpm test  ')).toEqual([{ name: 'lint', command: 'pnpm lint' },
+    { name: 'test', command: 'pnpm test' }])
+})
+
+it('runs every check and fails the aggregate when one of them fails', async () => {
+  const { runs, aggregate } = await workspaceChecks(subprocess(), directory, [
+    { name: 'first', command: 'printf one' }, { name: 'second', command: 'echo boom >&2; exit 3' }], signal)
+  expect(runs.map(run => [run.name, run.ok])).toEqual([['first', true], ['second', false]])
+  expect(aggregate).toMatchObject({ ok: false, exitCode: 3, command: 'first, second' })
+  // The output keeps each check's own output under its name, so the page can point at the failing one.
+  expect(aggregate.output).toContain('## first')
+  expect(aggregate.output).toContain('boom')
+  const passing = await workspaceChecks(subprocess(), directory, [{ name: 'only', command: 'true' }], signal)
+  expect(passing.aggregate).toMatchObject({ ok: true, exitCode: 0, command: 'only' })
+})
 
 it('reports a passing check with its output and working directory', async () => {
   const checks = await workspaceCheck(subprocess(), directory, 'pwd && printf ok', signal)

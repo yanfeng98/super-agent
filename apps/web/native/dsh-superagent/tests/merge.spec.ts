@@ -1,18 +1,19 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
-import { workspaceCheck } from '../src/app/check.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { workspaceCheck, workspaceChecks } from '../src/app/check.ts'
 import { queuedMerges } from '../src/app/merge-queue.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 
 vi.mock('../src/app/check.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/check.ts')>()
-  return { ...actual, workspaceCheck: vi.fn() }
+  return { ...actual, workspaceCheck: vi.fn(), workspaceChecks: vi.fn() }
 })
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
-    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn(), patchFingerprint: vi.fn() }
+    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn(), patchFingerprint: vi.fn(),
+    workspaceDiff: vi.fn() }
 })
 
 let h: Host
@@ -27,11 +28,22 @@ beforeEach(async () => {
   vi.mocked(discardWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(pushWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(revertWorkspace).mockReset().mockResolvedValue({ target: 'main', head: 'undo-sha' })
-  vi.mocked(workspaceCheck).mockReset().mockResolvedValue(
-    { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:02:00.000Z', output: 'passed' })
+  vi.mocked(workspaceChecks).mockReset().mockResolvedValue(passingRuns('2026-11-19T00:02:00.000Z'))
   vi.mocked(patchFingerprint).mockReset().mockResolvedValue('same-changes')
+  vi.mocked(workspaceDiff).mockReset().mockResolvedValue({ diff: '', truncated: false, files: [] })
 })
 afterEach(async () => { await h.stop() })
+/** A passing run of the configured checks, as the runtime records them. */
+const passingRuns = (at: string): { runs: { name: string; command: string; ok: boolean; exitCode: number; at: string; output: string }[];
+  aggregate: { command: string; ok: boolean; exitCode: number; at: string; output: string } } => {
+  const check = { command: 'pnpm test', ok: true, exitCode: 0, at, output: 'passed' }
+  return { runs: [{ name: 'pnpm test', ...check }], aggregate: check }
+}
+/** A failing run of the configured checks. */
+const failingRuns = (at: string, output = '1 test failed'): ReturnType<typeof passingRuns> => {
+  const check = { command: 'pnpm test', ok: false, exitCode: 1, at, output }
+  return { runs: [{ name: 'pnpm test', ...check }], aggregate: check }
+}
 /** Notices injected into the main Session, parsed from the message text. */
 const notices = () => h.agents.get(h.runtime.masterId)!.inject.mock.calls
   .map(([message]) => JSON.parse(message.content.map(block => block.type === 'text' ? block.text : '').join('')) as Record<string, unknown>)
@@ -420,13 +432,13 @@ it('does not re-run a check that already failed for the same ending on an automa
     current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at, output: 'one test failed' }
     h.runtime.store.tickets.save(current)
   })
-  vi.mocked(workspaceCheck).mockClear()
+  vi.mocked(workspaceChecks).mockClear()
   // The automatic attempt reports the recorded failure instead of spending the same minutes again.
   await expect(h.runtime.mergeTicket(ticket.id, 'ff', {}, 'auto')).rejects.toThrow(/not run again until the Ticket changes/)
-  expect(workspaceCheck).not.toHaveBeenCalled()
+  expect(workspaceChecks).not.toHaveBeenCalled()
   // A person asking gets a fresh run.
   await expect(h.runtime.mergeTicket(ticket.id, 'ff', {}, 'chat')).resolves.toMatchObject({ target: 'main' })
-  expect(workspaceCheck).toHaveBeenCalled()
+  expect(workspaceChecks).toHaveBeenCalled()
 })
 
 it('announces a followed pull request\'s failing CI once, and again when the result changes', async () => {
@@ -468,9 +480,9 @@ it('checks the merged branch on the target after merging, and reports a failure'
   ended(ticket.id)
   configureCheck('pnpm test')
   // The gate's run passes; the run on the merged target is the one that fails.
-  vi.mocked(workspaceCheck)
-    .mockResolvedValueOnce({ command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:05:00.000Z', output: 'passed' })
-    .mockResolvedValueOnce({ command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-19T00:06:00.000Z', output: '1 test failed' })
+  vi.mocked(workspaceChecks)
+    .mockResolvedValueOnce(passingRuns('2026-11-19T00:05:00.000Z'))
+    .mockResolvedValueOnce(failingRuns('2026-11-19T00:06:00.000Z'))
   const result = await h.runtime.mergeTicket(ticket.id)
   expect(result).toMatchObject({ targetCheck: { ok: false, exitCode: 1 } })
   expect(h.runtime.store.tickets.get(ticket.id)?.targetCheck).toMatchObject({ ok: false, output: '1 test failed' })
@@ -576,9 +588,9 @@ it('pauses the queue when the check on the merged target fails, leaving the rest
   ended(second.id)
   configureCheck('pnpm test')
   // The first Ticket's gate passes; the check on the merged target fails.
-  vi.mocked(workspaceCheck)
-    .mockResolvedValueOnce({ command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:05:00.000Z', output: 'passed' })
-    .mockResolvedValueOnce({ command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-19T00:06:00.000Z', output: 'broke main' })
+  vi.mocked(workspaceChecks)
+    .mockResolvedValueOnce(passingRuns('2026-11-19T00:05:00.000Z'))
+    .mockResolvedValueOnce(failingRuns('2026-11-19T00:06:00.000Z', 'broke main'))
   h.runtime.queueMerges([first.id, second.id], {})
   await h.runtime.runMergeQueue()
   expect(h.runtime.store.tickets.get(first.id)?.targetCheck).toMatchObject({ ok: false })
@@ -588,10 +600,46 @@ it('pauses the queue when the check on the merged target fails, leaving the rest
   expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'check',
     text: expect.stringContaining('merge queue is paused') }))
   // Resuming continues with the Ticket that waited.
-  vi.mocked(workspaceCheck).mockResolvedValue({ command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:07:00.000Z',
-    output: 'passed' })
+  vi.mocked(workspaceChecks).mockResolvedValue(passingRuns('2026-11-19T00:07:00.000Z'))
   h.runtime.pauseMergeQueue(false)
   await h.runtime.runMergeQueue()
   expect(h.runtime.store.tickets.get(second.id)?.merged).toBeDefined()
   expect(h.runtime.mergeQueue()).toMatchObject({ paused: false, items: [] })
+})
+
+it('runs every configured check, named or not, and keeps each run', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  configureCheck('lint: pnpm lint\npnpm test')
+  await h.runtime.checkTicket(ticket.id)
+  expect(workspaceChecks).toHaveBeenLastCalledWith(expect.anything(), expect.any(String),
+    [{ name: 'lint', command: 'pnpm lint' }, { name: 'pnpm test', command: 'pnpm test' }], expect.anything(), expect.anything())
+  expect(h.runtime.store.tickets.get(ticket.id)?.checkRuns).toHaveLength(1)
+  expect(h.runtime.store.tickets.get(ticket.id)?.checks?.ok).toBe(true)
+})
+
+it('diffs from the commit a review covered, and from the base when none is named', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.execution = { ...current.execution!, base: 'base-sha' }
+    h.runtime.store.tickets.save(current)
+  })
+  expect(await h.runtime.ticketDiff(ticket.id, 'abc1234')).toMatchObject({ base: 'abc1234' })
+  expect(workspaceDiff).toHaveBeenLastCalledWith(expect.anything(), expect.any(String), 'abc1234', expect.anything())
+  expect(await h.runtime.ticketDiff(ticket.id)).toMatchObject({ base: 'base-sha' })
+  expect(workspaceDiff).toHaveBeenLastCalledWith(expect.anything(), expect.any(String), 'base-sha', expect.anything())
+})
+
+it('keeps why the last merge did not land, and clears it when one does', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  ended(ticket.id)
+  h.runtime.blockTicket(ticket.id, blocker.id, true)
+  await expect(h.runtime.mergeTicket(ticket.id)).rejects.toThrow(/Blocked by/)
+  expect(h.runtime.store.tickets.get(ticket.id)?.mergeError).toMatchObject({ via: 'panel',
+    error: expect.stringMatching(/Blocked by/) })
+  h.runtime.blockTicket(ticket.id, blocker.id, false)
+  await h.runtime.mergeTicket(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)?.mergeError).toBeUndefined()
 })

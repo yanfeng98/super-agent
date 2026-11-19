@@ -43,7 +43,8 @@ export interface Api {
   'POST tickets/:id/retry': { response: { retried: true } }
   'POST tickets/:id/stop': { response: { stopped: true } }
   'POST tickets/:id/reopen': { response: { reopened: true } }
-  'GET tickets/:id/diff': { response: { diff: string; truncated: boolean; files: DiffFile[]; error?: string } }
+  'GET tickets/:id/diff': { query?: { since?: string };
+    response: { diff: string; truncated: boolean; files: DiffFile[]; base?: string; error?: string } }
   'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' };
     response: { merged: true; branch: string; target: string; rebased?: true; recaptured?: true } }
   'POST tickets/:id/revert': { response: { branch: string; target: string; commit: string } }

@@ -322,6 +322,8 @@ export interface Ticket {
   targetCheck?: TicketCheck
   /** Earlier runs of the check, oldest first and capped, so a person sees how a failure was repaired. */
   checkHistory?: TicketCheck[]
+  /** The latest run of each configured check, when the deployment names more than one. */
+  checkRuns?: TicketCheckRun[]
   /** Other tickets this one relates to, such as the work it builds on or depends on. */
   related?: string[]
   /** Tickets whose branch must merge first; while one is not merged, this ticket does not merge. */
@@ -348,6 +350,8 @@ export interface Ticket {
   reverted?: TicketRevert
   /** The last failing CI a followed pull request reported, so the same failure is announced once. */
   ciNotice?: { thread: string; value: string }
+  /** Why the latest merge attempt did not land, kept after the chat that asked has scrolled away. */
+  mergeError?: { at: string; error: string; via?: ActionOrigin }
   /** When a person discarded the ticket's worktree and branch. */
   discarded?: { at: string }
   /** When a person removed the worktree and branch of a merged ticket, keeping its commits on the target branch. */
@@ -417,6 +421,10 @@ export interface AutoMerge {
   /** The earliest time the next attempt may run, so a closed gate is retried with a growing wait. */
   next?: string
 }
+/** One named check the executor runs, such as `lint: pnpm lint`. */
+export interface NamedCheck { name: string; command: string }
+/** One named check's latest run, so the page can say which part of the suite failed. */
+export type TicketCheckRun = TicketCheck & { name: string }
 /** Outcome of one run of the executor's check command in a ticket workspace. */
 export interface TicketCheck {
   command: string

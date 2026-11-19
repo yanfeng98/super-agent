@@ -265,14 +265,18 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
   server.ticketDetails.t5 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { retry: false, stop: false, reopen: true, approve: false, merge: true, discard: true, rebase: true, cleanup: false, check: true,
       reviewDecision: true, revert: false, push: false, dequeue: false },
-    checks: { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
+    checks: { command: 'lint, test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' },
+    checkRuns: [{ name: 'lint', command: 'pnpm lint', ok: true, exitCode: 0, at: '2026-11-18T00:00:00Z', output: 'ok' },
+      { name: 'test', command: 'pnpm test', ok: false, exitCode: 1, at: '2026-11-18T00:00:00Z', output: '1 test failed' }],
     history: [{ code: 'renamed', at: '2026-11-18T00:01:00Z', title: '新的标题', via: 'chat' },
       { code: 'reviewed', at: '2026-11-18T00:01:20Z', decision: 'approved', by: 'operator' },
       { code: 'rebased', at: '2026-11-18T00:01:30Z', branch: 'agent/t5', target: 'main', via: 'panel' },
       { code: 'merged', at: '2026-11-18T00:02:00Z', branch: 'agent/t5', target: 'main', via: 'auto',
         head: 'c'.repeat(40), push: { ok: false, error: 'no upstream' } }],
     review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t5', base: 'a'.repeat(40), head: 'b'.repeat(40),
-      commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
+      commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] },
+    reviewed: { at: '2026-11-18T00:01:00Z', decision: 'approved', head: 'd'.repeat(40) },
+    mergeError: { at: '2026-11-18T00:00:30Z', error: 'Blocked by T-0009; merge it first', via: 'chat' } }
   await mount()
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])
@@ -282,8 +286,11 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).toContain('修复窄屏')
   expect(text()).toContain('src/a.ts')
   // The configured check's failure is visible on the page with its output.
-  expect(text()).toContain('pnpm test')
+  expect(text()).toContain('lint, test')
   expect(text()).toContain('1 test failed')
+  // Each configured check keeps its own result, so the page says which part failed.
+  expect(all('.dt-plain-list').filter(list => list.textContent?.includes('lint')
+    && list.textContent?.includes('test')).length).toBeGreaterThan(0)
   expect(text()).toContain(zh.checksRun)
   expect(text()).toContain(zh['history.rebased'])
   // The record says which interface carried each action out, and keeps the commit and the remote's answer.
@@ -299,6 +306,11 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   await click(zh.save)
   expect(server.requests.find(request => request.path === 'tickets/t5/title')).toMatchObject({ method: 'POST',
     body: { title: '新的标题' } })
+  expect(text()).toContain('Blocked by T-0009')
+  await click(zh.reviewViewDiff)
+  // A Ticket whose branch moved past the reviewed commit offers only what changed after it.
+  await click(all('button').find(button => button.textContent?.includes('自评审以来的改动')) as HTMLElement)
+  expect(server.requests.some(request => request.path === `tickets/t5/diff?since=${'d'.repeat(40)}`)).toBe(true)
   await click(zh.reviewViewDiff)
   // The diff is listed file by file, each with its counts, opened on demand and marked reviewed.
   expect(text()).toContain('src/a.ts')
