@@ -246,7 +246,7 @@ Each model request binds the Session to the current prompt revision. The revisio
 | --- | --- |
 | `src/app/runtime.ts` | The composition root: builds the parts with the interfaces they use, registers the routes and the Source host, and starts and stops dsh-superagent |
 | `src/app/notices.ts` | Domain events and worker reports into notices and relays for the main Session |
-| `src/app/review.ts` | A Ticket's workspace into the git facts of its review: branch, commits since its launch base, changed and uncommitted files; and its merge, rebase and cleanup operations |
+| `src/app/review.ts` | A Ticket's workspace into the git facts of its review: branch, commits since its launch base, changed and uncommitted files; and its merge, rebase, push and cleanup operations |
 | `src/app/tools/main.ts`, `src/app/tools/executor.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards |
 | `src/app/http.ts`, `src/app/views/`, `src/app/api.ts` | HTTP requests into calls, and Store reads into the panel's views; `api.ts` types every route for the panel |
 | `src/app/resources.ts`, `src/app/links.ts`, `src/app/cards.ts` | Resource names into reads, source messages into links, records into compact cards for models |
@@ -345,7 +345,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/tools/main.ts` | The main Session's tools |
 | `src/app/tools/executor.ts` | An Executor Session's tools |
 | `src/app/http.ts` | The `/orchestrator/api` routes: the same-origin check, request limits and one status per kind of failure |
-| `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files; rebase onto the repository branch, fast-forward, squash and merge-commit strategies, and worktree removal |
+| `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files; rebase onto the repository branch, a typed rebase conflict, fast-forward, squash and merge-commit strategies, a push to the named upstream, and worktree removal |
 | `src/app/check.ts` | The executor's check command in a ticket workspace: pass/fail with exit code and captured output, and whether it blocks a merge |
 | `src/app/webhook.ts` | A local Ticket's question or ending as a best-effort JSON POST to the configured webhook |
 | `src/app/api.ts` | `Api`, every route with its parameters, query, body and response, and the filters of the lists; it imports only types, so the panel bundles it |
