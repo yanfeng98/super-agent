@@ -94,9 +94,11 @@ export function ticketDetail(host: ViewHost, id: string) {
   const check = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
     && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
   const cleanup = !liveTicket(ticket) && !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
+  // Undoing a merge needs the repository the merge recorded, which survives the removal of its worktree.
+  const revert = !!ticket.merged && !ticket.reverted && !!(ticket.merged.root ?? ticket.execution?.directory)
   const reviewDecision = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
   // The decisions a person made on the Ticket, in the order they happened, with the interface each came from.
-  const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'cleaned' | 'discarded'; at: string;
+  const history: { code: 'approved' | 'renamed' | 'tagged' | 'reviewed' | 'rebased' | 'merged' | 'reverted' | 'cleaned' | 'discarded'; at: string;
     title?: string; tags?: string[]; decision?: 'approved' | 'changes-requested'; note?: string; branch?: string; target?: string;
     via?: ActionOrigin; head?: string; push?: { ok: boolean; error?: string } }[] = []
   if (ticket.approved) history.push({ code: 'approved', at: ticket.approved.at })
@@ -112,6 +114,8 @@ export function ticketDetail(host: ViewHost, id: string) {
   if (ticket.merged) history.push({ code: 'merged', at: ticket.merged.at, branch: ticket.merged.branch, target: ticket.merged.target,
     ...(ticket.merged.head ? { head: ticket.merged.head } : {}), ...(ticket.merged.via ? { via: ticket.merged.via } : {}),
     ...(ticket.merged.push ? { push: { ok: ticket.merged.push.ok, ...(ticket.merged.push.error ? { error: ticket.merged.push.error } : {}) } } : {}) })
+  if (ticket.reverted) history.push({ code: 'reverted', at: ticket.reverted.at, head: ticket.reverted.commit,
+    ...(ticket.reverted.via ? { via: ticket.reverted.via } : {}) })
   if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at, ...(ticket.cleaned.via ? { via: ticket.cleaned.via } : {}) })
   if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
   history.sort((a, b) => a.at.localeCompare(b.at))
@@ -122,7 +126,7 @@ export function ticketDetail(host: ViewHost, id: string) {
   const checks = ticket.checks && (!ticket.ended || ticket.checks.at >= ticket.ended.at) ? ticket.checks : undefined
   const local = ticket.channels.find(channel => channel.source === 'local')
   return { ...line, actions: { ...line.actions, reopen, approve: liveTicket(ticket) && !!ticket.hold, merge: finish, discard: finish,
-    rebase, cleanup, check, reviewDecision },
+    rebase, cleanup, check, reviewDecision, revert },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
     // A note keeps the commit it was written on, so the panel can say when the changes it described have moved.
@@ -142,7 +146,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     ...ticket.reviewed ? { reviewed: ticket.reviewed } : {},
     ...ticket.checkHistory?.length ? { checkHistory: ticket.checkHistory } : {},
     review: ticket.review,
-    merged: ticket.merged, discarded: ticket.discarded, cleaned: ticket.cleaned,
+    merged: ticket.merged, reverted: ticket.reverted, discarded: ticket.discarded, cleaned: ticket.cleaned,
     mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },
     basis: basisFacts(ticket.mandate.basis, view.rule), paused: store.settings().paused,
     channels: ticket.channels.map(channel => channelLink(view, channel)),

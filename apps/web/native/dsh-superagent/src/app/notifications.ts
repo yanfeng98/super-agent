@@ -1,4 +1,4 @@
-/** Persistent panel notifications for work that needs a person: an open question or an ended Ticket. */
+/** Persistent panel notifications for work that needs a person: a question, an ending, or a merge event. */
 import { key } from '../core/index.ts'
 import { family } from '../kv.ts'
 import type { Store } from './store.ts'
@@ -7,10 +7,11 @@ import type { Store } from './store.ts'
 export interface Notification {
   id: string
   at: string
-  kind: 'attention' | 'ended'
+  /** A question (`attention`), an ending (`ended`), or a merge outcome a person may need to see. */
+  kind: 'attention' | 'ended' | 'merged' | 'reverted' | 'review' | 'ci' | 'automerge'
   ticketId: string
   title: string
-  /** The question, or the ending outcome and reason. */
+  /** The question, the ending outcome and reason, or the merge event in one sentence. */
   text: string
   read?: true
 }

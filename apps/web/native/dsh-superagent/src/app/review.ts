@@ -151,10 +151,10 @@ export async function targetContained(subprocess: SubprocessRuntime, directory: 
  * @throws when the workspace is not a linked worktree, the repository is dirty, on another branch than `expectedTarget`,
  * the ticket branch is checked out there, the ticket branch does not contain the repository's commit, or git cannot complete
  * the merge.
- * @returns The branch merged and the branch it moved, with the commit that branch holds after the merge.
+ * @returns The branch merged, the branch it moved, the commit that branch holds after the merge, and the repository root.
  */
 export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  strategy: MergeStrategy = 'ff', expectedTarget?: string): Promise<{ branch: string; target: string; head?: string }> {
+  strategy: MergeStrategy = 'ff', expectedTarget?: string): Promise<{ branch: string; target: string; head?: string; root: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
@@ -190,7 +190,52 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   }
   // The merge already moved the branch, so a head that git cannot report must not turn it into a failure.
   const head = await run(['rev-parse', 'HEAD']).then(output => output.trim()).catch(() => undefined)
-  return { branch: repo.branch, target: repo.target, ...head ? { head } : {} }
+  return { branch: repo.branch, target: repo.target, root: repo.root, ...head ? { head } : {} }
+}
+/** A revert that stopped on conflicts, which the repository then abandoned, leaving the target branch as it was. */
+export class RevertConflictError extends Error {
+  constructor(readonly commit: string, readonly files: readonly string[]) {
+    super(`Reverting ${commit} conflicts in ${files.join(', ')}; the branch keeps its commits`)
+    this.name = 'RevertConflictError'
+  }
+}
+/**
+ * Reverts one commit on the repository's checked-out branch, which is how a person undoes a merge from any interface. A merge
+ * commit is reverted against its first parent; no branch or worktree is rewritten.
+ * @param directory - Where to run git: the repository root a merge recorded, or the Ticket's worktree while it exists.
+ * @param commit - The commit to undo, such as the one a merge recorded as `head`.
+ * @param expectedTarget - The branch a merge recorded; a revert refuses when the repository is on another one.
+ * @throws when the directory is not a git repository on a branch, the repository is on another branch or has tracked
+ * changes, the commit is unknown, the revert conflicts (nothing is left half-applied), or git cannot commit the revert.
+ * @returns The branch reverted and the commit it holds afterwards.
+ */
+export async function revertWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
+  commit: string, expectedTarget?: string): Promise<{ target: string; head: string }> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) throw new Error('The merged branch is not a git repository on a branch')
+  if (expectedTarget && repo.target !== expectedTarget) {
+    throw new Error(`The repository is on ${repo.target}, not the branch that merge moved (${expectedTarget}); check it out and revert again`)
+  }
+  const run = (args: string[]) => runAsWorker(subprocess, ['git', ...args], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
+  // A commit git cannot name is a merge that was rewritten away, not a conflict or a dirty tree the caller can resolve.
+  await run(['cat-file', '-e', `${commit}^{commit}`]).catch(() => {
+    throw new Error(`The merge commit ${commit} is not in ${repo.root}; its branch may have been rewritten`)
+  })
+  if (repo.dirty) throw new Error('The repository has uncommitted changes; commit or stash them before reverting')
+  // A merge commit needs its first parent named; every other commit reverts on its own.
+  const parents = await run(['rev-list', '--parents', '-n', '1', commit]).then(line => line.split(' ').slice(1))
+  try {
+    await run(parents.length > 1 ? ['revert', '--no-edit', '-m', '1', commit] : ['revert', '--no-edit', commit])
+  } catch (error) {
+    const unmerged = await run(['diff', '--name-only', '--diff-filter=U']).then(output => output.split('\n').filter(Boolean)).catch(() => [])
+    await run(['revert', '--abort']).catch(() => {
+      // A revert that never started has nothing to abort; the original failure is the report.
+    })
+    if (unmerged.length) throw new RevertConflictError(commit, unmerged)
+    throw error
+  }
+  return { target: repo.target, head: await run(['rev-parse', 'HEAD']) }
 }
 /** Longest a push may take; a remote that stalls ends the wait with a failure rather than blocking the merge. */const PUSH_TIMEOUT_MS = 120_000
 /**

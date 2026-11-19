@@ -481,6 +481,17 @@ export async function recordMerge(ticket: Pick<Ticket, 'channels'>, merged: { at
       `- by: ${OPERATOR}`, ...(merged.via ? [`- via: ${merged.via}`] : [])])
 }
 /**
+ * Appends the commit that undid a merge to its archive.
+ * @param ticket - The ticket whose merge was reverted.
+ * @param reverted - When it was reverted, the reverting commit, the branch, the merge it undoes, and the interface that asked.
+ */
+export async function recordRevert(ticket: Pick<Ticket, 'channels'>, reverted: { at: string; target: string; commit: string;
+  merge: string; via?: ActionOrigin }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:reverted:${reverted.at} -->`, `${reverted.at} · 已回退 / Reverted`,
+    ['- status: reverted', `- branch: ${reverted.target}`, `- commit: ${reverted.commit}`, `- merge: ${reverted.merge}`,
+      `- by: ${OPERATOR}`, ...(reverted.via ? [`- via: ${reverted.via}`] : [])])
+}
+/**
  * Appends the push that followed a merge to its archive, which says so either way since the merge stands on its own.
  * @param ticket - The ticket whose merged branch was pushed.
  * @param push - When it was pushed, whether the remote accepted it, and why not.

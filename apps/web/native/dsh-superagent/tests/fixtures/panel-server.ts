@@ -207,7 +207,8 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
   triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ticketTitle: undefined })
 const ticketDetail = (): TicketPageView => ({
   ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
-    cleanup: false, check: false, reviewDecision: false }, review: undefined, merged: undefined, discarded: undefined, cleaned: undefined, paused: false,
+    cleanup: false, check: false, reviewDecision: false, revert: false }, review: undefined, merged: undefined, discarded: undefined,
+  reverted: undefined, cleaned: undefined, paused: false,
   history: [], related: [], blockedBy: [], notes: [],
   request: { text: '修复登录页回归', at: '2026-09-22T00:00:00Z' }, decision: acceptDecision(),
   threads: [threadSummary()],
@@ -435,6 +436,10 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     return { tags }
   } },
   'POST tickets/:id/automerge': { body: true, answer: () => ({ auto_merge: false }) },
+  'POST tickets/:id/revert': { answer: ({ params }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    return { branch: 'agent/t1', target: 'main', commit: 'a'.repeat(40) }
+  } },
   'POST tickets/:id/blockers': { body: true, answer: ({ params }) => ({ ticket_id: params.id, blocked_by: [] }) },
   'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')

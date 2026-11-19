@@ -1849,6 +1849,16 @@ it('records a panel notification when a worker asks a person and when the ticket
   expect(runtime.notifications().unread).toBe(2)
 })
 
+it('records a panel notification when an ending needs the review a deployment requires', async () => {
+  const { ticket, sessionId } = await acceptedTicket()
+  const settings = runtime.store.settings()
+  runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, requireReview: true } })
+  await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  // The ending captures its review before it announces the gate, so the notification follows the report.
+  await vi.waitFor(() => expect(runtime.notifications().items)
+    .toContainEqual(expect.objectContaining({ kind: 'review', ticketId: ticket.id })))
+})
+
 it('refuses to merge a ticket whose bound pull request CI has failed', async () => {
   const { ticket } = await acceptedTicket()
   runtime.store.threads.save({ key: 'github:7', ref: { source: 'github', id: '7' }, createdAt: '', subscriptions: [ticket.id],
