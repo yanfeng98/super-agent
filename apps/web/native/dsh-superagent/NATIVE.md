@@ -159,6 +159,17 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `ticket_id` so the tool can read the card. `orchestrator_ticket_merge` takes `push`, which runs `pushWorkspace` after the
     merge is recorded and reports `pushed` or `pushError` rather than undoing the merge. `tests/merge.spec.ts`,
     `tests/chat-tools.spec.ts`, `tests/review.spec.ts` and `tests/http.spec.ts` cover them.
+15. **Merge audit, review history and standing merges.** A merge records `via` (`chat`, `panel`, or `auto`), the `head`
+    commit the target branch holds afterwards and, when a push was part of the request, its `push` outcome, so a failed
+    push is no longer only a chat report; the archive's merge and review sections carry the same facts, and a separate push
+    section records the remote's answer. Every review round is kept in `Ticket.reviews` with the commit it covered, where a
+    resume or a rebase clears only `Ticket.reviewed`, the decision that gates merging. A note records the commit it was
+    written on, and the panel marks it once the commits move past. `orchestrator_ticket_automerge` records a standing merge
+    request (`Ticket.autoMerge`) that a pass carries out: `Runtime.runAutoMerge` merges through the same gates, retries with
+    a growing wait, notifies the main Session of the first closed gate and of a merge or a give-up after eight attempts, and
+    is cleared by the merge, by `orchestrator_ticket_automerge` with `cancel`, by `POST tickets/:id/automerge`, or by a
+    person stopping the Ticket. `tests/merge.spec.ts`, `tests/core-engine.spec.ts`, `tests/chat-tools.spec.ts`,
+    `tests/panel-execution.spec.tsx` and `tests/views.spec.ts` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
