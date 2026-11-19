@@ -182,6 +182,8 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     cleanupTicket: async (id: string) => { calls.push(`cleanup:${id}`) },
     linkTicket: (id: string, reference: string, linked: boolean) => { calls.push(`link:${id}:${reference}:${linked}`)
       return { related: [] } },
+    blockTicket: (id: string, reference: string, blocked: boolean) => { calls.push(`block:${id}:${reference}:${blocked}`)
+      return { blocked_by: [] } },
     addNote: (id: string, input: { file: string; line?: number; text: string }) => { calls.push(`note:${id}:${input.file}`); return [] },
     removeNote: (id: string, noteId: string) => { calls.push(`unnote:${id}:${noteId}`); return [] },
     resolveNote: (id: string, noteId: string, resolved: boolean) => { calls.push(`resolve:${id}:${noteId}:${resolved}`); return [] },
@@ -198,6 +200,7 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
     at: '', output: 'passed' } } })
   expect(await call('POST', 'tickets/t1/cleanup')).toEqual({ status: 200, body: { cleaned: true } })
   expect(await call('POST', 'tickets/t1/related', { ticket: 'T-0002', linked: true })).toEqual({ status: 200, body: { related: [] } })
+  expect(await call('POST', 'tickets/t1/blockers', { ticket: 'T-0002', blocked: true })).toEqual({ status: 200, body: { blocked_by: [] } })
   expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', line: 3, text: '改这里' })).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/remove')).toEqual({ status: 200, body: { notes: [] } })
   expect(await call('POST', 'tickets/t1/notes/n1/resolve', { resolved: true })).toEqual({ status: 200, body: { notes: [] } })
@@ -208,7 +211,8 @@ it('merges or discards a ticket workspace, and reports a git refusal as a bad re
   expect(await call('POST', 'tickets/t1/request', { text: '新的正文' })).toEqual({ status: 200,
     body: { request: { text: '新的正文', at: '2026-11-18T00:00:00Z' } } })
   expect(calls).toEqual(['merge:t1', 'discard:t1', 'rebase:t1', 'check:t1', 'cleanup:t1', 'link:t1:T-0002:true',
-    'note:t1:src/a.ts', 'unnote:t1:n1', 'resolve:t1:n1:true', 'reply:t1:n1:已处理', 'tags:t1:前端,p1', 'review:t1:approved', 'request:t1:新的正文'])
+    'block:t1:T-0002:true', 'note:t1:src/a.ts', 'unnote:t1:n1', 'resolve:t1:n1:true', 'reply:t1:n1:已处理', 'tags:t1:前端,p1',
+    'review:t1:approved', 'request:t1:新的正文'])
   expect(await call('POST', 'tickets/t9/merge')).toMatchObject({ status: 404, body: { error: 'Ticket not found' } })
   const refused = serve({ store: { tickets: { get: () => ({ id: 't1' }) } },
     mergeTicket: async () => { throw new Error('The repository has uncommitted changes') } })

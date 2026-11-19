@@ -136,6 +136,8 @@ export function TicketPage({ id }: { id: string }) {
   const [checkBusy, setCheckBusy] = useState(false)
   const [relatedRef, setRelatedRef] = useState('')
   const [relatedBusy, setRelatedBusy] = useState(false)
+  const [blockerRef, setBlockerRef] = useState('')
+  const [blockerBusy, setBlockerBusy] = useState(false)
   const [noteFile, setNoteFile] = useState('')
   const [noteLine, setNoteLine] = useState('')
   const [noteText, setNoteText] = useState('')
@@ -166,6 +168,18 @@ export function TicketPage({ id }: { id: string }) {
     if (!relatedRef.trim()) return
     await relate(relatedRef.trim(), true)
     setRelatedRef('')
+  }
+  const block = async (reference: string, blocked: boolean) => {
+    setBlockerBusy(true)
+    try { await after(call('POST tickets/:id/blockers', { id, body: { ticket: reference, blocked } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setBlockerBusy(false) }
+  }
+  const addBlocker = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!blockerRef.trim()) return
+    await block(blockerRef.trim(), true)
+    setBlockerRef('')
   }
   const runCheck = async () => {
     setCheckBusy(true)
@@ -526,6 +540,26 @@ export function TicketPage({ id }: { id: string }) {
         { count: data.inputs.length - undelivered.length })}>
         <InputList inputs={data.inputs.filter(input => input.delivered)} />
       </Details>}
+      <Details icon="hash" title={t('blockedByTitle')}>
+        <Hint>{t('blockedByHint')}</Hint>
+        {data.blockedBy.length > 0 && <ul className="dt-list">{data.blockedBy.map(item => <li className="dt-row" key={item.id}>
+          <div className="dt-row-main"><div className="dt-row-title">{item.number
+            ? <span className="dt-ticket-number">{ticketRef(item.number)}</span> : null}
+            <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: item.id })}>{item.title}</button>
+          </div>
+            <div className="dt-row-meta">{item.merged ? t('blockerMerged') : t('blockerWaiting')}</div>
+          </div>
+          <div className="dt-row-actions"><Button variant="ghost" size="sm" disabled={blockerBusy}
+            onClick={() => block(item.id, false)}>{t('remove')}</Button></div>
+        </li>)}</ul>}
+        <form className="dt-form" onSubmit={addBlocker}>
+          <div className="dt-row-meta">
+            <Input className="dt-mono" value={blockerRef} placeholder={t('blockedByPlaceholder')} aria-label={t('blockedByPlaceholder')}
+              onChange={event => setBlockerRef(event.target.value)} />
+            <Button variant="outline" type="submit" disabled={!blockerRef.trim() || blockerBusy}>{t('blockedByAdd')}</Button>
+          </div>
+        </form>
+      </Details>
       <Details icon="hash" title={t('relatedTitle')}>
         <Hint>{t('relatedHint')}</Hint>
         {data.related.length > 0 && <ul className="dt-list">{data.related.map(item => <li className="dt-row" key={item.id}>

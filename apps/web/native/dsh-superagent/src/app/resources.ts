@@ -264,7 +264,11 @@ const ROUTES: readonly Route[] = [
         ({ thread: key, ...context ? { context: true } : {}, ...bound.has(key) ? { bound: true } : {} })
       const threads = [...subscribed.map(thread => marked(thread.key, !!thread.context?.includes(id))),
         ...[...bound].filter(key => !subscribed.some(thread => thread.key === key)).map(key => marked(key, false))]
-      return { ...ticketDetails(ticket, threads, batchOf(host, ticket), !!ticketId), ...retry }
+      const blocked = (ticket.blockedBy ?? []).flatMap(value => {
+        const other = host.store.tickets.get(value)
+        return other ? [{ id: value, title: other.title, merged: !!other.merged }] : []
+      })
+      return { ...ticketDetails(ticket, threads, batchOf(host, ticket), !!ticketId), ...blocked.length ? { blocked_by: blocked } : {}, ...retry }
     }
     if (section === 'assignments' || section === 'inputs') {
       if (part !== undefined) throw new Error('Unknown context resource')

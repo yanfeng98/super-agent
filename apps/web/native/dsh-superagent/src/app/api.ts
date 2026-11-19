@@ -47,6 +47,8 @@ export interface Api {
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }
+  'POST tickets/:id/blockers': { body: { ticket: string; blocked: boolean };
+    response: { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] } }
   'POST tickets/:id/related': { body: { ticket: string; linked: boolean };
     response: { related: { id: string; number?: number; title: string }[] } }
   'POST tickets/:id/notes': { body: { file: string; line?: number; text: string }; response: { notes: TicketNote[] } }
