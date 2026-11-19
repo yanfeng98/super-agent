@@ -374,6 +374,8 @@ export interface TicketMerge {
   via?: ActionOrigin
   /** The commit the target branch holds after the merge. */
   head?: string
+  /** The commit the target branch was on before the merge, so a fast-forward merge can be undone commit by commit. */
+  base?: string
   /** The push that followed the merge, when one was asked for; a failed push leaves the merge recorded. */
   push?: { at: string; ok: boolean; error?: string; via?: ActionOrigin }
   /** The repository the merge moved, so a revert needs no worktree that cleanup may have removed. */

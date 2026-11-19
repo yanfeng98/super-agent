@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -163,6 +163,52 @@ describe('merge and discard', () => {
     expect(git('rev-list', '--parents', '-n1', commit.head!).split(' ')).toHaveLength(3)
     await revertWorkspace(subprocess(), commit.root, signal, commit.head!, commit.target)
     expect(existsSync(join(repo, 'rm.txt'))).toBe(false)
+  })
+  it('undoes every commit of a fast-forward merge, not only the last one', async () => {
+    base()
+    const worktree = join(dir, 'worktree-revert-range')
+    git('worktree', 'add', '-q', '-b', 'agent/rr', worktree)
+    writeFileSync(join(worktree, 'one.txt'), '1\n')
+    gitAt(worktree, 'add', 'one.txt'); gitAt(worktree, 'commit', '-q', '-m', 'first')
+    writeFileSync(join(worktree, 'two.txt'), '2\n')
+    gitAt(worktree, 'add', 'two.txt'); gitAt(worktree, 'commit', '-q', '-m', 'second')
+    const merged = await mergeWorkspace(subprocess(), worktree, signal)
+    expect(merged.base).toBeDefined()
+    expect(existsSync(join(repo, 'one.txt'))).toBe(true)
+    // The range covers both commits the merge moved the target through.
+    await revertWorkspace(subprocess(), merged.root, signal, merged.head!, merged.target, merged.base)
+    expect(existsSync(join(repo, 'one.txt'))).toBe(false)
+    expect(existsSync(join(repo, 'two.txt'))).toBe(false)
+  })
+  it('keeps one fingerprint for the changes a rebase moves onto a newer commit', async () => {
+    const baseCommit = base()
+    const worktree = join(dir, 'worktree-fingerprint')
+    git('worktree', 'add', '-q', '-b', 'agent/fp', worktree)
+    writeFileSync(join(worktree, 'a.txt'), 'ticket\n')
+    gitAt(worktree, 'add', 'a.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket change')
+    const before = await patchFingerprint(subprocess(), worktree, baseCommit, signal)
+    // The repository moves on with a file the Ticket did not touch, and the Ticket rebases onto it.
+    writeFileSync(join(repo, 'other.txt'), 'other\n')
+    git('add', 'other.txt'); git('commit', '-q', '-m', 'upstream change')
+    const rebased = await rebaseWorkspace(subprocess(), worktree, signal)
+    const after = await patchFingerprint(subprocess(), worktree, rebased.base, signal)
+    expect(before).toBeDefined()
+    expect(after).toBe(before)
+    // A changed patch is a different fingerprint, which a merge treats as an unreviewed change.
+    writeFileSync(join(worktree, 'a.txt'), 'changed again\n')
+    gitAt(worktree, 'commit', '-q', '-am', 'more work')
+    expect(await patchFingerprint(subprocess(), worktree, rebased.base, signal)).not.toBe(before)
+  })
+  it('refuses to push when the repository is on another branch than the merge moved', async () => {
+    base()
+    const worktree = join(dir, 'worktree-push-target')
+    git('worktree', 'add', '-q', '-b', 'agent/pt', worktree)
+    writeFileSync(join(worktree, 'p.txt'), 'p\n')
+    gitAt(worktree, 'add', 'p.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
+    const target = git('branch', '--show-current')
+    const merged = await mergeWorkspace(subprocess(), worktree, signal)
+    git('checkout', '-q', '-b', 'elsewhere')
+    await expect(pushWorkspace(subprocess(), merged.root, signal, merged.target)).rejects.toThrow(/not the branch that merge moved/)
   })
   it('leaves the branch where it was when the revert conflicts, and refuses one git cannot start', async () => {
     base()

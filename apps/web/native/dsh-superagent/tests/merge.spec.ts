@@ -1,6 +1,6 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceHead } from '../src/app/review.ts'
 import { workspaceCheck } from '../src/app/check.ts'
 import { queuedMerges } from '../src/app/merge-queue.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
@@ -12,7 +12,7 @@ vi.mock('../src/app/check.ts', async importOriginal => {
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
-    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn() }
+    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn(), patchFingerprint: vi.fn() }
 })
 
 let h: Host
@@ -29,6 +29,7 @@ beforeEach(async () => {
   vi.mocked(revertWorkspace).mockReset().mockResolvedValue({ target: 'main', head: 'undo-sha' })
   vi.mocked(workspaceCheck).mockReset().mockResolvedValue(
     { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:02:00.000Z', output: 'passed' })
+  vi.mocked(patchFingerprint).mockReset().mockResolvedValue('same-changes')
 })
 afterEach(async () => { await h.stop() })
 /** Notices injected into the main Session, parsed from the message text. */
@@ -355,12 +356,16 @@ it('cancels a standing merge request, and a person stopping the ticket clears it
 it('undoes a recorded merge on the branch it moved, and records the reverting commit', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)
-  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', base: 'before-sha',
+    root: '/repo' })
   await h.runtime.mergeTicket('T-0001')
   const merged = h.runtime.store.tickets.get(ticket.id)!.merged!
-  expect(merged.root).toBe('/repo')
+  expect(merged).toMatchObject({ root: '/repo', base: 'before-sha' })
+  // A fast-forward merge moved the target through the Ticket's commits, so the base travels with the revert.
+  expect(merged.strategy).toBeUndefined()
   expect(await h.runtime.revertTicket('T-0001')).toEqual({ ticket_id: ticket.id, branch: 'agent/t', target: 'main', commit: 'undo-sha' })
-  expect(revertWorkspace).toHaveBeenCalledWith(expect.anything(), '/repo', expect.anything(), merged.head, 'main')
+  expect(revertWorkspace).toHaveBeenCalledWith(expect.anything(), '/repo', expect.anything(), merged.head, 'main',
+    merged.base)
   expect(h.runtime.store.tickets.get(ticket.id)?.reverted).toMatchObject({ commit: 'undo-sha', target: 'main',
     merge: merged.head, via: 'panel' })
   expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'reverted', ticketId: ticket.id }))
@@ -378,6 +383,50 @@ it('reports a conflicting revert without changing the branch, and refuses a tick
   expect(h.runtime.store.tickets.get(ticket.id)?.reverted).toBeUndefined()
   const { ticket: open } = await h.acceptedTicket(feishu('2', '@bot 还没合'))
   await expect(h.runtime.revertTicket(open.id)).rejects.toThrow(/Only a merged ticket/)
+})
+
+it('keeps an approval when a rebase moves the same changes onto a newer commit, and drops it when they change', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  const approve = (): void => {
+    h.runtime.store.atomic(() => {
+      const current = h.runtime.store.tickets.get(ticket.id)!
+      current.execution = { ...current.execution!, base: 'old-base' }
+      current.review = { capturedAt: '2026-11-19T00:00:00.000Z', head: 'old-head', commits: [], files: [], dirty: [] }
+      h.runtime.store.tickets.save(current)
+    })
+    h.runtime.reviewTicket(ticket.id, 'approved')
+  }
+  approve()
+  await h.runtime.rebaseTicket(ticket.id)
+  // The capture the rebase made names the new commit, and the approval still covers the same changes.
+  expect(h.runtime.store.tickets.get(ticket.id)?.reviewed).toMatchObject({ decision: 'approved', head: 'new' })
+  expect(h.runtime.store.tickets.get(ticket.id)?.reviews?.at(-1)).toMatchObject({ decision: 'approved', head: 'old-head' })
+  // Changes that differ after the rebase leave the approval behind.
+  approve()
+  vi.mocked(patchFingerprint).mockResolvedValueOnce('before').mockResolvedValueOnce('after')
+  await h.runtime.rebaseTicket(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)?.reviewed).toBeUndefined()
+})
+
+it('does not re-run a check that already failed for the same ending on an automatic attempt', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  configureCheck('pnpm test')
+  const at = new Date().toISOString()
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.ended = { at, by: 'executor', outcome: 'completed' }
+    current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at, output: 'one test failed' }
+    h.runtime.store.tickets.save(current)
+  })
+  vi.mocked(workspaceCheck).mockClear()
+  // The automatic attempt reports the recorded failure instead of spending the same minutes again.
+  await expect(h.runtime.mergeTicket(ticket.id, 'ff', {}, 'auto')).rejects.toThrow(/not run again until the Ticket changes/)
+  expect(workspaceCheck).not.toHaveBeenCalled()
+  // A person asking gets a fresh run.
+  await expect(h.runtime.mergeTicket(ticket.id, 'ff', {}, 'chat')).resolves.toMatchObject({ target: 'main' })
+  expect(workspaceCheck).toHaveBeenCalled()
 })
 
 it('announces a followed pull request\'s failing CI once, and again when the result changes', async () => {
@@ -508,6 +557,7 @@ it('retries a push that failed on the branch the merge moved, and records the an
   expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: false, via: 'panel',
     error: 'fatal: no upstream branch' })
   expect(await h.runtime.pushTicket('T-0001')).toEqual({ ticket_id: ticket.id, pushed: true })
+  expect(pushWorkspace).toHaveBeenLastCalledWith(expect.anything(), '/repo', expect.anything(), 'main')
   expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: true, via: 'panel' })
   expect(h.runtime.notifications().items.filter(item => item.kind === 'push')).toHaveLength(1)
   // A failure of the retry is recorded and reported too, and a Ticket that never merged cannot be pushed.
