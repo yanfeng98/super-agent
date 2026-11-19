@@ -19,6 +19,19 @@ export const workspaceHead = (subprocess: SubprocessRuntime, directory: string, 
   run(subprocess, directory, ['rev-parse', 'HEAD'], signal)
 
 /**
+ * The commit the ticket branch forked from the repository's branch, which is where its review starts even when the branch
+ * merged or rebased the repository's newer commits in after it launched.
+ * @returns `undefined` when the ticket records no workspace or target branch, or git cannot answer.
+ */
+export async function workingBase(subprocess: SubprocessRuntime, ticket: Ticket, signal: AbortSignal): Promise<string | undefined> {
+  const directory = ticket.execution?.directory
+  const target = ticket.execution?.target
+  if (!directory || !target) return undefined
+  const base = await run(subprocess, directory, ['merge-base', 'HEAD', target], signal)
+  return base?.split('\n')[0] || undefined
+}
+
+/**
  * Reads the committed diff of a ticket workspace since `base`, for the panel's on-demand view.
  * @returns The diff, truncated when it exceeds the panel limit.
  * @throws when git fails, such as in a workspace that is not a repository.
