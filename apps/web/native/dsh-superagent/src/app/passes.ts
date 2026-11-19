@@ -10,6 +10,8 @@ export interface PassesHost {
   readonly lifetime: AbortSignal
   configured(): boolean
   closing(): boolean
+  /** Runs one standing merge request that is due, when the deployment has one; the pass does not wait for it. */
+  automerge?: () => void
 }
 
 const now = (): string => new Date().toISOString()
@@ -65,5 +67,7 @@ export class Passes {
     if (this.host.closing()) return
     // While processing is paused, the Engine only records the pause on active Evals so they do not expire.
     this.host.engine.evaluateDue()
+    // A standing merge request runs beside the pass rather than in it, since its check or merge may take minutes.
+    this.host.automerge?.()
   }
 }

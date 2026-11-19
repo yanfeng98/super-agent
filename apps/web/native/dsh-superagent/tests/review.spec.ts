@@ -96,11 +96,11 @@ describe('merge and discard', () => {
     writeFileSync(join(worktree, 'a.txt'), 'two\n')
     gitAt(worktree, 'add', 'a.txt'); gitAt(worktree, 'commit', '-q', '-m', 'change')
     const head = gitAt(worktree, 'rev-parse', 'HEAD')
-    expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
+    expect(await mergeWorkspace(subprocess(), worktree, signal)).toMatchObject({ branch: 'agent/t', target: git('branch', '--show-current') })
     expect(git('rev-parse', 'HEAD')).toBe(head)
     // The main working tree must be clean of tracked changes; an untracked file alone does not block the merge.
     writeFileSync(join(repo, 'dirty.txt'), 'x\n')
-    expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
+    expect(await mergeWorkspace(subprocess(), worktree, signal)).toMatchObject({ branch: 'agent/t', target: git('branch', '--show-current') })
     writeFileSync(join(repo, 'a.txt'), 'dirty\n')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/uncommitted/)
   })
@@ -152,7 +152,7 @@ describe('merge and discard', () => {
       execution: { name: 't1', directory: worktree, assignment: '', base: rebased.base } }, signal))!
     expect(review.commits.map(commit => commit.subject)).toEqual(['ticket work'])
     expect(review.files).toEqual([{ status: 'A', path: 'b.txt' }])
-    expect(await mergeWorkspace(subprocess(), worktree, signal)).toEqual({ branch: 'agent/r', target: git('branch', '--show-current') })
+    expect(await mergeWorkspace(subprocess(), worktree, signal)).toMatchObject({ branch: 'agent/r', target: git('branch', '--show-current') })
     expect(git('log', '--oneline', '-1')).toMatch(/ticket work/)
     // The rebased history sits on top of the repository commit.
     expect(git('log', '--oneline', '-2').split('\n').map(line => line.replace(/^[0-9a-f]+ /, '')))
@@ -215,7 +215,7 @@ describe('merge and discard', () => {
     await expect(rebaseWorkspace(subprocess(), worktree, signal, 'other')).rejects.toThrow(/not the Ticket's target/)
     // The recorded target still merges.
     expect(await mergeWorkspace(subprocess(), worktree, signal, 'ff', git('branch', '--show-current')))
-      .toEqual({ branch: 'agent/t', target: git('branch', '--show-current') })
+      .toMatchObject({ branch: 'agent/t', target: git('branch', '--show-current') })
   })
   it('refuses a merged cleanup when the target does not contain the branch, keeping its worktree', async () => {
     base()

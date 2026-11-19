@@ -2,12 +2,17 @@
 import { key } from './ids.ts'
 import { UserError } from './errors.ts'
 import { latestAssignment, latestReport, liveTicket, readUntil, runningAssignment, settled, threadKey, waitsForPerson } from './model.ts'
-import type { Assignment, ChannelRef, Evaluation, Follow, Mandate, PolicyEffect, ThreadRef, Ticket, TicketEndBy, TicketInput, TicketOutcome,
-  Trigger, TriggerDisposition } from './model.ts'
+import type { ActionOrigin, Assignment, ChannelRef, Evaluation, Follow, Mandate, MergeStrategy, PolicyEffect, ThreadRef, Ticket, TicketEndBy, TicketInput,
+  TicketOutcome, TicketReviewRound, Trigger, TriggerDisposition } from './model.ts'
 import type { AssessmentOutcome } from './ports.ts'
 import { EnginePart, type EngineOptions } from './part.ts'
 import type { Replies } from './replies.ts'
 import { canRetry } from './stage.ts'
+
+/** Reviews a ticket keeps in its history; older ones fall off so the record stays bounded. */
+const REVIEW_HISTORY = 50
+/** Waits before retrying an auto-merge whose gates are still closed; the last one repeats. */
+const AUTO_MERGE_WAITS = [60_000, 120_000, 240_000, 480_000, 900_000] as const
 
 const sameChannel = (a: ChannelRef, b: ChannelRef): boolean => JSON.stringify(a) === JSON.stringify(b)
 /** Whether an Input is a message no person wrote, such as CI's, a bot's, or the main Session's note. */
@@ -159,7 +164,13 @@ export class Tickets extends EnginePart {
    */
   stop(ticketId: string, reason?: string): Ticket {
     this.end(ticketId, 'human', 'stopped', this.now(), reason)
-    return this.require(ticketId)
+    const ticket = this.require(ticketId)
+    // A person's stop withdraws their standing merge request along with the ticket's mandate.
+    if (ticket.autoMerge) {
+      delete ticket.autoMerge
+      this.repo.tickets.save(ticket)
+    }
+    return ticket
   }
   /**
    * Approves a ticket that waits for approval, so its pending Assignment may launch.
@@ -290,7 +301,8 @@ export class Tickets extends EnginePart {
     if (!file || !text) throw new UserError('emptyNote')
     const at = this.now()
     const id = key('note', ticketId, at, String((ticket.notes ?? []).length))
-    const note = { id, file, text, at, ...input.line ? { line: input.line } : {} }
+    const note = { id, file, text, at, ...ticket.review?.head ? { commit: ticket.review.head } : {},
+      ...input.line ? { line: input.line } : {} }
     ticket.notes = [...(ticket.notes ?? []), note]
     ticket.updatedAt = at
     this.repo.tickets.save(ticket)
@@ -343,19 +355,91 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
-   * Records a person's review of an ended ticket's changes.
+   * Records a person's review of an ended ticket's changes: the latest decision gates merging, while the review stays in the
+   * ticket's history once a resume or a rebase clears that gate.
+   * @param origin - The interface that made the review.
    * @returns The ticket with the review.
    * @throws UserError when the ticket is unknown, still open, or its workspace is gone or merged.
    */
-  review(ticketId: string, decision: 'approved' | 'changes-requested', note?: string): Ticket {
+  review(ticketId: string, decision: 'approved' | 'changes-requested', note?: string, origin: ActionOrigin = 'panel'): Ticket {
     const ticket = this.require(ticketId)
     if (!ticket.ended) throw new UserError('reviewNeedsEnded')
     if (ticket.merged) throw new UserError('ticketMerged')
     if (ticket.discarded) throw new UserError('ticketDiscarded')
     if (ticket.cleaned) throw new UserError('ticketCleaned')
     const text = note?.trim()
-    ticket.reviewed = { at: this.now(), decision, ...text ? { note: text.slice(0, 2000) } : {} }
-    ticket.updatedAt = ticket.reviewed.at
+    const round: TicketReviewRound = { at: this.now(), decision, ...text ? { note: text.slice(0, 2000) } : {},
+      ...ticket.review?.head ? { head: ticket.review.head } : {}, via: origin }
+    // A ticket that recorded a review before this history existed keeps that round when the next one arrives.
+    const earlier = ticket.reviews ?? (ticket.reviewed ? [ticket.reviewed] : [])
+    ticket.reviewed = round
+    ticket.reviews = [...earlier, round].slice(-REVIEW_HISTORY)
+    ticket.updatedAt = round.at
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
+   * Records a person's standing request to merge the ticket as soon as its gates pass, which the host carries out.
+   * @returns The ticket with the request.
+   * @throws UserError when the ticket is unknown, still open, or its branch was already merged, discarded, or cleaned.
+   */
+  autoMerge(ticketId: string, request: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket {
+    const ticket = this.require(ticketId)
+    if (!ticket.ended) throw new UserError('autoMergeNeedsEnded')
+    if (ticket.merged) throw new UserError('ticketMerged')
+    if (ticket.discarded) throw new UserError('ticketDiscarded')
+    if (ticket.cleaned) throw new UserError('ticketCleaned')
+    const at = this.now()
+    ticket.autoMerge = { at, ...request, attempts: 0 }
+    ticket.updatedAt = at
+    this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
+   * Clears a ticket's standing merge request, such as when a person cancels it; a ticket without one is left as it is.
+   * @returns The ticket without the request.
+   */
+  cancelAutoMerge(ticketId: string): Ticket {
+    const ticket = this.require(ticketId)
+    if (ticket.autoMerge) {
+      delete ticket.autoMerge
+      ticket.updatedAt = this.now()
+      this.repo.tickets.save(ticket)
+    }
+    return ticket
+  }
+  /**
+   * The tickets whose standing merge request is due, oldest first: ended, not merged, discarded, or cleaned, and past the
+   * wait its last failed attempt set.
+   */
+  dueAutoMerge(): Ticket[] {
+    const now = Date.parse(this.now())
+    return this.repo.tickets.list().filter(ticket => ticket.autoMerge && ticket.ended && !ticket.merged
+      && !ticket.discarded && !ticket.cleaned
+      && (!ticket.autoMerge.next || Date.parse(ticket.autoMerge.next) <= now))
+  }
+  /**
+   * Records that an attempt at a ticket's standing merge request met a gate that is closed now, and when to try again: the
+   * wait doubles up to `AUTO_MERGE_WAITS`'s last entry, so a check that keeps failing is not run on every pass.
+   */
+  autoMergeBlocked(ticketId: string, error: string): void {
+    const ticket = this.repo.tickets.get(ticketId)
+    if (!ticket?.autoMerge) return
+    const at = this.now()
+    const attempts = ticket.autoMerge.attempts + 1
+    const wait = AUTO_MERGE_WAITS[Math.min(attempts, AUTO_MERGE_WAITS.length) - 1]!
+    ticket.autoMerge = { ...ticket.autoMerge, attempts, last: { at, error },
+      next: new Date(Date.parse(at) + wait).toISOString() }
+    this.repo.tickets.save(ticket)
+  }
+  /**
+   * Clears a ticket's standing merge request because it ran, or because the request can no longer be carried out.
+   * @returns The ticket without the request.
+   */
+  autoMergeDone(ticketId: string): Ticket | undefined {
+    const ticket = this.repo.tickets.get(ticketId)
+    if (!ticket?.autoMerge) return ticket
+    delete ticket.autoMerge
     this.repo.tickets.save(ticket)
     return ticket
   }
@@ -602,6 +686,12 @@ export class Tickets extends EnginePart {
       && (!readBefore(input, until) || ticket.undelivered.includes(input.id)) ? [input.id] : []))
     // An end dated earlier, such as a PR's merge, does not move the ticket's last change back.
     ticket.ended = { at, by, outcome, ...why }; ticket.undelivered = []; ticket.updatedAt = this.now()
+    // A ticket that ends again after resuming starts its standing merge request over, so the next attempt is immediate.
+    if (ticket.autoMerge) {
+      delete ticket.autoMerge.last
+      delete ticket.autoMerge.next
+      ticket.autoMerge.attempts = 0
+    }
     delete ticket.attention; delete ticket.delivery
     // The Assignments the end stops end with it; the ticket's end says why.
     for (const assignment of stopping) { assignment.state = 'ended'; assignment.endedAt = at }

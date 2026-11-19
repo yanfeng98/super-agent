@@ -335,17 +335,65 @@ export interface Ticket {
   /** When a person last replaced the ticket's labels, so a crash can complete its archive section. */
   tagged?: { at: string }
   /** A person's review of the ending's changes: approving them, or asking for changes; cleared when work resumes or the branch is rebased. */
-  reviewed?: { at: string; decision: 'approved' | 'changes-requested'; note?: string }
+  reviewed?: TicketReviewRound
+  /** Every review the ticket received, oldest first and capped; a resume or a rebase keeps it where `reviewed` is cleared. */
+  reviews?: TicketReviewRound[]
   /** When a person rebased the ticket's branch, and the target commit it now starts from. */
-  rebased?: { at: string; branch: string; target: string; base: string }
-  /** When a person merged the ticket's branch into the repository, where, and how. */
-  merged?: { at: string; branch: string; target: string; strategy?: 'ff' | 'squash' | 'merge' }
+  rebased?: { at: string; branch: string; target: string; base: string; via?: ActionOrigin }
+  /** When the ticket's branch was merged into the repository, where, how, which commit it left, and the interface that asked. */
+  merged?: TicketMerge
   /** When a person discarded the ticket's worktree and branch. */
   discarded?: { at: string }
   /** When a person removed the worktree and branch of a merged ticket, keeping its commits on the target branch. */
-  cleaned?: { at: string }
+  cleaned?: { at: string; via?: ActionOrigin }
+  /**
+   * A person's standing request to merge as soon as the gates pass, recorded when they asked to merge once the check or a
+   * bound pull request's CI succeeds rather than now; the host carries it out and clears it.
+   */
+  autoMerge?: AutoMerge
   /** The latest failed delivery of an Input to its worker, until a delivery succeeds. */
   delivery?: { error: string; at: string }
+}
+/** Which interface carried out a person's action: their conversation with the main Session, the panel, or a standing request the host carried out. */
+export type ActionOrigin = 'chat' | 'panel' | 'auto'
+/** How a merge combines the ticket branch with its target. */
+export type MergeStrategy = 'ff' | 'squash' | 'merge'
+/** How a ticket's branch landed on its target, and the remote's answer when pushing was part of the request. */
+export interface TicketMerge {
+  at: string
+  branch: string
+  target: string
+  strategy?: MergeStrategy
+  /** The interface that asked for the merge. */
+  via?: ActionOrigin
+  /** The commit the target branch holds after the merge. */
+  head?: string
+  /** The push that followed the merge, when one was asked for; a failed push leaves the merge recorded. */
+  push?: { at: string; ok: boolean; error?: string }
+}
+/** One review of a ticket's ending changes: the decision, its note, the commit it covered, and the interface that made it. */
+export interface TicketReviewRound {
+  at: string
+  decision: 'approved' | 'changes-requested'
+  note?: string
+  /** The commit the review covered, so an approval of a later commit is not mistaken for this one. */
+  head?: string
+  /** The interface that made the review. */
+  via?: ActionOrigin
+}
+/**
+ * A person's standing request to merge a ticket once its gates pass: the strategy and follow-up the merge will use, and how
+ * many attempts the host made, why the latest failed, and when the next one is due.
+ */
+export interface AutoMerge {
+  at: string
+  strategy?: MergeStrategy
+  cleanup?: boolean
+  push?: boolean
+  attempts: number
+  last?: { at: string; error: string }
+  /** The earliest time the next attempt may run, so a closed gate is retried with a growing wait. */
+  next?: string
 }
 /** Outcome of one run of the executor's check command in a ticket workspace. */
 export interface TicketCheck {
@@ -371,6 +419,8 @@ export interface TicketNote {
   line?: number
   text: string
   at: string
+  /** The commit the ticket's changes were at when the note was written, so the panel can mark it outdated once they move. */
+  commit?: string
   /** When a person marked the note resolved; an open note keeps its ticket from merging. */
   resolved?: { at: string }
   /** Replies in the note's discussion, oldest first. */

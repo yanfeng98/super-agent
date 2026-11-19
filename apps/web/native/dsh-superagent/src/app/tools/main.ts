@@ -2,8 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { z } from 'zod'
-import { UserError, followupOwners, key, reasonText, type Decision, type DecisionKind, type EngineForMainSession, type EngineForPeople }
-  from '../../core/index.ts'
+import { UserError, followupOwners, key, reasonText, type Decision, type DecisionKind, type EngineForMainSession, type EngineForPeople,
+  type Ticket } from '../../core/index.ts'
 import { IM_WORDS, NOTE_WORDS, wordCount } from '../../infra/text.ts'
 import { AssessmentSchema, EvalReadSchema, WorktreeNameSchema, type MasterAssessor } from '../assessment.ts'
 import { ticketCard } from '../cards.ts'
@@ -34,7 +34,11 @@ export interface MainToolsHost {
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
   mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean; push?: boolean }):
-    Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }>
+    Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }>
+  /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
+  autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
+  /** Clears a person's standing merge request. */
+  cancelAutoMerge(id: string): Ticket
   /** Records or clears that one Ticket's branch must merge before another's. */
   blockTicket(id: string, reference: string, blocked: boolean):
     { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
@@ -254,6 +258,24 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         const result = host.blockTicket(args.ticket_id, args.blocker_id, args.blocked)
         const ticket = host.store.tickets.get(result.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_automerge',
+      description: 'Record a person\'s standing request to merge an ended Ticket by itself as soon as its gates pass, for "merge it once the check passes" rather than now: the passes retry with a growing wait and report the merge, or the gate that stayed closed, to this conversation. Asking to merge now goes through orchestrator_ticket_merge; cancel with cancel.',
+      schema: z.object({
+        ticket_id: z.string().min(1).describe('The ended Ticket whose merge is requested.'),
+        strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
+        cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging, as the ticket page does.'),
+        push: z.boolean().optional().describe('Push the merged branch to the upstream its repository names, when the person asked to push too.'),
+        cancel: z.boolean().default(false).describe('Clear the standing request instead of recording it.'),
+      }).strict(),
+      execute: async args => {
+        const ticket = args.cancel
+          ? host.cancelAutoMerge(args.ticket_id)
+          : host.autoMergeTicket(args.ticket_id, { ...args.strategy === 'ff' ? {} : { strategy: args.strategy },
+            ...args.cleanup === undefined ? {} : { cleanup: args.cleanup }, ...args.push === undefined ? {} : { push: args.push } })
+        return { ticket: ticketCard(ticket), auto_merge: !!ticket.autoMerge }
       },
     }),
     tool({

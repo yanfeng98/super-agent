@@ -409,6 +409,7 @@ export function TicketPage({ id }: { id: string }) {
         {notes.length > 0 && <ul className="dt-list">{notes.map(note => <li className="dt-row" key={note.id}>
           <div className="dt-row-main">
             <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line ? `:${note.line}` : ''}</span><When at={note.at} />
+              {note.outdated && <Tag tone="warning">{t('noteOutdated')}</Tag>}
               {note.resolved && <Tag tone="success">{t('noteResolvedTag')}</Tag>}</div>
             <div className="dt-row-quote">{note.text}</div>
             {note.replies?.map(reply => <div className="dt-row-quote" key={reply.id}>
@@ -492,6 +493,16 @@ export function TicketPage({ id }: { id: string }) {
       </div>}
     </Section>}
     {data.merged && <Hint>{t('mergedHint', { branch: data.merged.branch, target: data.merged.target })}</Hint>}
+    {data.merged?.head && <Hint>{t('mergedCommit', { commit: data.merged.head.slice(0, 8) })}</Hint>}
+    {data.merged?.push && <Hint>{data.merged.push.ok ? t('pushOk') : t('pushFailed', { error: data.merged.push.error ?? '' })}</Hint>}
+    {data.autoMerge && <div className="dt-form">
+      <Hint>{t('autoMergeHint', { attempts: data.autoMerge.attempts })}</Hint>
+      {data.autoMerge.last?.error && <Hint>{t('autoMergeLast', { error: data.autoMerge.last.error })}</Hint>}
+      <div className="dt-row-buttons">
+        <Button variant="outline" size="sm" onClick={() => after(call('POST tickets/:id/automerge', { id, body: { cancel: true } }))}>
+          {t('autoMergeCancel')}</Button>
+      </div>
+    </div>}
     {data.actions.cleanup && <div className="dt-row-actions">
       <ConfirmButton variant="outline" icon="trash" label={t('cleanupWorktree')} title={t('cleanupTitle')}
         message={t('cleanupConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/cleanup', { id }))} />
@@ -506,7 +517,10 @@ export function TicketPage({ id }: { id: string }) {
             {item.tags && <span>{item.tags.join(', ') || t('empty')}</span>}
             {item.decision && <span>{t(`review.${item.decision}`)}</span>}
             {item.note && <span>{item.note}</span>}
-            {item.branch && <span className="dt-mono">{item.branch} → {item.target}</span>}</div>
+            {item.branch && <span className="dt-mono">{item.branch} → {item.target}</span>}
+            {item.head && <span className="dt-mono">{item.head.slice(0, 8)}</span>}
+            {item.push && <span>{item.push.ok ? t('pushOk') : t('pushFailed', { error: item.push.error ?? '' })}</span>}
+            {item.via && <span>{t(`via.${item.via}`)}</span>}</div>
         </div>
       </li>)}</ul>
     </Section>}

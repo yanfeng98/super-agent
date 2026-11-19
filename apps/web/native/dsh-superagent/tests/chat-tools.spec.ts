@@ -44,20 +44,36 @@ it('merges an ended ticket through the main Session with the panel gates', async
   const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
   const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge',
     { ticket_id: ticket.id, strategy: 'squash' }) as unknown as { branch: string; target: string; ticket: { ticket_id: string } }
-  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash', {})
+  // The tool records that a person asked from the main Session, which the ticket's record and archive keep.
+  expect(merge).toHaveBeenCalledWith(ticket.id, 'squash', {}, 'chat')
   expect(result).toMatchObject({ branch: 'agent/t', target: 'main', ticket: { ticket_id: ticket.id } })
   // The schema defaults to a fast-forward, and a gate error reaches the model unchanged.
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id })
-  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', {})
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', {}, 'chat')
   // A person who also asks for the worktree to go gets the panel's cleanup in the same call.
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id, cleanup: true })
-  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { cleanup: true })
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { cleanup: true }, 'chat')
   // A person who asks to push as well gets both steps in one call.
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id, push: true })
-  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { push: true })
+  expect(merge).toHaveBeenLastCalledWith(ticket.id, 'ff', { push: true }, 'chat')
   merge.mockRejectedValueOnce(new Error('Review approval is required before merging'))
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_merge', { ticket_id: ticket.id }))
     .rejects.toThrow('Review approval is required before merging')
+})
+
+it('records a standing merge request from the main Session, and cancels it', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const request = { at: '2026-11-19T00:00:00.000Z', attempts: 0 } as const
+  const auto = vi.spyOn(h.runtime, 'autoMergeTicket').mockReturnValue({ ...ticket, autoMerge: { ...request } })
+  const recorded = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_automerge',
+    { ticket_id: ticket.id, strategy: 'squash', push: true }) as unknown as { auto_merge: boolean; ticket: { ticket_id: string } }
+  expect(auto).toHaveBeenCalledWith(ticket.id, { strategy: 'squash', push: true })
+  expect(recorded).toMatchObject({ auto_merge: true, ticket: { ticket_id: ticket.id } })
+  const cancel = vi.spyOn(h.runtime, 'cancelAutoMerge').mockReturnValue({ ...ticket })
+  const cancelled = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_automerge',
+    { ticket_id: ticket.id, cancel: true }) as unknown as { auto_merge: boolean }
+  expect(cancel).toHaveBeenCalledWith(ticket.id)
+  expect(cancelled.auto_merge).toBe(false)
 })
 
 it('records a dependency the person states in chat, and clears it the same way', async () => {

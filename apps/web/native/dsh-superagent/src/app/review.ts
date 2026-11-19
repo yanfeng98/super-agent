@@ -1,7 +1,7 @@
 /** Captures the git facts of a ticket's workspace when it ends, so the panel shows what changed without opening the worktree. */
 import { basename, dirname } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
-import type { Ticket, TicketReview } from '../core/index.ts'
+import type { MergeStrategy, Ticket, TicketReview } from '../core/index.ts'
 import { CliError } from '../infra/commands.ts'
 import { runAsWorker } from '../infra/environment.ts'
 
@@ -79,7 +79,7 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
 }
 
 /** How a merge moves the target branch: fast-forward only, a squashed commit, or a merge commit. */
-export type MergeStrategy = 'ff' | 'squash' | 'merge'
+export type { MergeStrategy }
 /**
  * A rebase that stopped on conflicts, which the workspace then abandoned, leaving the branch on its commits.
  * `files` are the paths git left unmerged, which a worker resolves in its own worktree.
@@ -151,10 +151,10 @@ export async function targetContained(subprocess: SubprocessRuntime, directory: 
  * @throws when the workspace is not a linked worktree, the repository is dirty, on another branch than `expectedTarget`,
  * the ticket branch is checked out there, the ticket branch does not contain the repository's commit, or git cannot complete
  * the merge.
- * @returns The branch merged and the branch it moved.
+ * @returns The branch merged and the branch it moved, with the commit that branch holds after the merge.
  */
 export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  strategy: MergeStrategy = 'ff', expectedTarget?: string): Promise<{ branch: string; target: string }> {
+  strategy: MergeStrategy = 'ff', expectedTarget?: string): Promise<{ branch: string; target: string; head?: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
@@ -188,10 +188,11 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
       throw error
     }
   }
-  return { branch: repo.branch, target: repo.target }
+  // The merge already moved the branch, so a head that git cannot report must not turn it into a failure.
+  const head = await run(['rev-parse', 'HEAD']).then(output => output.trim()).catch(() => undefined)
+  return { branch: repo.branch, target: repo.target, ...head ? { head } : {} }
 }
-/** Longest a push may take; a remote that stalls ends the wait with a failure rather than blocking the merge. */
-const PUSH_TIMEOUT_MS = 120_000
+/** Longest a push may take; a remote that stalls ends the wait with a failure rather than blocking the merge. */const PUSH_TIMEOUT_MS = 120_000
 /**
  * Pushes the repository's checked-out branch, which a merge just moved, to the remote branch its upstream names. The remote,
  * branch and credentials are the repository's own, so a deployment needs no push setting.
