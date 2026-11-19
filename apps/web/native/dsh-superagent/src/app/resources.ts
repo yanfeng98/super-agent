@@ -264,7 +264,8 @@ const ROUTES: readonly Route[] = [
         ({ thread: key, ...context ? { context: true } : {}, ...bound.has(key) ? { bound: true } : {} })
       const threads = [...subscribed.map(thread => marked(thread.key, !!thread.context?.includes(id))),
         ...[...bound].filter(key => !subscribed.some(thread => thread.key === key)).map(key => marked(key, false))]
-      const blocked = (ticket.blockedBy ?? []).flatMap(value => {
+      // Another Ticket's id and title stay out of a worker's copy, which never shows tickets it cannot read.
+      const blocked = ticketId ? [] : (ticket.blockedBy ?? []).flatMap(value => {
         const other = host.store.tickets.get(value)
         return other ? [{ id: value, title: other.title, merged: !!other.merged }] : []
       })

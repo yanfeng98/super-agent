@@ -866,6 +866,7 @@ const TEXT = {
   'userError.notLocalTicket': ['这个工单不是本地工单，请到它来源的对话里回答。', USER_ERRORS.notLocalTicket[1]],
   'userError.selfLink': ['工单不能关联到它自己。', USER_ERRORS.selfLink[1]],
   'userError.blockCycle': ['这样设置会让两张工单互相等待，无法合并。', USER_ERRORS.blockCycle[1]],
+  'userError.selfBlock': ['工单不能等待自己。', USER_ERRORS.selfBlock[1]],
   'userError.emptyNote': ['备注需要文件名和内容。', USER_ERRORS.emptyNote[1]],
   'userError.emptyNoteReply': ['评审备注的回复不能为空。', USER_ERRORS.emptyNoteReply[1]],
   'userError.unknownNote': ['找不到这条备注。', USER_ERRORS.unknownNote[1]],

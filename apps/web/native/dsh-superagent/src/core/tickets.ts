@@ -255,7 +255,7 @@ export class Tickets extends EnginePart {
    * @throws UserError when either ticket is unknown, they are the same, or the dependency would close a cycle.
    */
   block(ticketId: string, otherId: string, blocked: boolean): Ticket {
-    if (ticketId === otherId) throw new UserError('selfLink')
+    if (ticketId === otherId) throw new UserError('selfBlock')
     const ticket = this.require(ticketId)
     this.require(otherId)
     const ids = new Set(ticket.blockedBy ?? [])

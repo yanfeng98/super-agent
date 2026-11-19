@@ -21,6 +21,7 @@ export const USER_ERRORS = {
   notLocalTicket: ['refused', 'This ticket did not come from the local Source; answer it in the conversation it came from'],
   selfLink: ['refused', 'A ticket cannot be related to itself'],
   blockCycle: ['refused', 'That dependency would make each ticket wait for the other'],
+  selfBlock: ['refused', 'A ticket cannot wait for itself'],
   emptyNote: ['refused', 'A note needs a file and text'],
   unknownNote: ['missing', 'Unknown note'],
   emptyNoteReply: ['refused', 'A note reply cannot be empty'],

@@ -105,6 +105,11 @@ it('keeps the main Session\'s resources from an Executor Session, which lists on
   expect(await h.runTool(sessionId, 'orchestrator_read', { resource: `ticket/${ticket.id}` })).toMatchObject({ ticket_id: ticket.id })
   await expect(h.runTool(sessionId, 'orchestrator_read', { resource: `ticket/${ticket.id}/diff` }))
     .rejects.toThrow('belongs to the main Session')
+  // A Ticket it waits on is another Ticket, so a worker's copy names neither its id nor its title.
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 另一件事'))
+  h.runtime.blockTicket(ticket.id, blocker.id, true)
+  expect(await read(`ticket/${ticket.id}`)).toMatchObject({ blocked_by: [{ id: blocker.id, merged: false }] })
+  expect(await h.runTool(sessionId, 'orchestrator_read', { resource: `ticket/${ticket.id}` })).not.toHaveProperty('blocked_by')
   type Registered = { description: string; parameters: { properties: { resource: { description: string } } } }
   const registered = h.tools.get(sessionId)!.get('orchestrator_read') as unknown as Registered
   const offered = registered.description + registered.parameters.properties.resource.description

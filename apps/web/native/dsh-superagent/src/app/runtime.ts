@@ -427,15 +427,19 @@ export class Runtime extends Service implements SourceHost {
       if (this.store.settings().executor.requireReview) {
         throw new Error('The Ticket branch changed after its review; approve the new review from the ticket page before merging')
       }
+      const endedAt = current.ended.at
       const review = await captureReview(this.ctx.subprocess, current, this.stopped.signal)
-      this.store.atomic(() => {
+      const saved = this.store.atomic(() => {
         const latest = this.store.tickets.get(id)
-        if (!latest?.ended || latest.merged) return
+        // A Ticket that ended again meanwhile owns a newer review, which this capture must not overwrite.
+        if (!latest?.ended || latest.merged || latest.ended.at !== endedAt) return false
         if (review) latest.review = review
         // The check ran on the tree the review described, so it waits for a fresh run on this one.
         delete latest.checks
         this.store.tickets.save(latest)
+        return true
       })
+      if (!saved) throw new Error('The ticket changed while its review was captured; merge it again')
       recaptured = true
     }
     const blocked = mergeBlockedByCheck(this.store.settings().executor.check,
