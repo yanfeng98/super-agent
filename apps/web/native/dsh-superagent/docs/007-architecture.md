@@ -345,7 +345,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/tools/main.ts` | The main Session's tools |
 | `src/app/tools/executor.ts` | An Executor Session's tools |
 | `src/app/http.ts` | The `/orchestrator/api` routes: the same-origin check, request limits and one status per kind of failure |
-| `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files; rebase onto the repository branch, a typed rebase conflict, fast-forward, squash and merge-commit strategies that report the commit they leave, a push to the named upstream, and worktree removal |
+| `src/app/review.ts` | A ticket workspace's git facts at its end: branch, commits since the launch base, changed and uncommitted files; rebase onto the repository branch, a typed rebase conflict, fast-forward, squash and merge-commit strategies that report the commit and repository they leave, a typed revert with its conflict, a push to the named upstream, and worktree removal |
 | `src/app/check.ts` | The executor's check command in a ticket workspace: pass/fail with exit code and captured output, and whether it blocks a merge |
 | `src/app/webhook.ts` | A local Ticket's question or ending as a best-effort JSON POST to the configured webhook |
 | `src/app/api.ts` | `Api`, every route with its parameters, query, body and response, and the filters of the lists; it imports only types, so the panel bundles it |
@@ -416,8 +416,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
-| `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward, squash and merge-commit strategies, rebase after the repository moved, a conflicted rebase that aborts, the fork point a rebased or merged branch is reviewed from, a push to the named upstream or its refusal, and removal of a linked worktree |
-| `tests/merge.spec.ts` | Merging from the main Session: the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase handed to the worker or kept as a report for a stopped Ticket or a paused Policy, a branch that needs neither, a branch that changed after its review, the optional cleanup and push, the interface and commit the record keeps, and a standing merge request that runs, waits with a growing wait, gives up, and is cancelled or withdrawn by a stop |
+| `tests/review.spec.ts` | A ticket workspace's review and delivery: branch, commits since the launch base, changed and uncommitted files, a non-git directory, fast-forward, squash and merge-commit strategies, a revert of each and the conflicts and refusals it reports, rebase after the repository moved, a conflicted rebase that aborts, the fork point a rebased or merged branch is reviewed from, a push to the named upstream or its refusal, and removal of a linked worktree |
+| `tests/merge.spec.ts` | Merging from the main Session: a revert of a recorded merge and its conflict, a failing followed CI announced once, the panel notifications a merge, a revert and a given-up standing merge leave; the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase handed to the worker or kept as a report for a stopped Ticket or a paused Policy, a branch that needs neither, a branch that changed after its review, the optional cleanup and push, the interface and commit the record keeps, and a standing merge request that runs, waits with a growing wait, gives up, and is cancelled or withdrawn by a stop |
 | `tests/check.spec.ts` | The workspace check command: pass/fail with exit code and environment, truncated output, and the merge gate |
 | `tests/webhook.spec.ts` | The webhook POST and a non-2xx answer |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, and which stay quiet |
@@ -439,7 +439,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/retry-health.spec.ts`, `tests/role-models.spec.ts` | Model budget retries, and the models of the two roles |
 | `tests/runtime.spec.ts` | The whole application on a simulated DeepSeek Harness host, through tools and HTTP |
 | `tests/tools.spec.ts` | The Sessions' tools: what `orchestrator_read` reads for each role, and the shapes and checks of the other main Session tools |
-| `tests/chat-tools.spec.ts` | A request and an answer the main Session records from its own conversation, a ticket the answer resumes, a controlled merge with its cleanup and push options, a standing merge request and its cancel, a dependency recorded from chat, and the refusals for another Source's ticket, a disabled local Source and an empty operator list |
+| `tests/chat-tools.spec.ts` | A request and an answer the main Session records from its own conversation, a ticket the answer resumes, a controlled merge with its cleanup and push options, several Tickets merged in one call with each answered on its own, a revert recorded from chat, a standing merge request and its cancel, a dependency recorded from chat, and the refusals for another Source's ticket, a disabled local Source and an empty operator list |
 | `tests/runtime-concurrency.spec.ts` | Work that overlaps: Triggers during a pass, Tickets that change during deliveries and launches |
 | `tests/http.spec.ts` | The same-origin and loopback checks, the status of each kind of failure, the body limit, path parameters and queries |
 | `tests/settings.spec.ts` | Settings saves that race a model or account check, a Policy sync that a save outran, and the refusals of the pause, a sync and a block |
@@ -504,13 +504,13 @@ Nothing deletes old records yet, so these grow without bound: the `trigger`, `di
 
 ### Main Session tools
 
-The main Session has 19 tools: 18 application tools and `orchestrator_read`.
+The main Session has 20 tools: 19 application tools and `orchestrator_read`.
 
 | Purpose | Tools |
 | --- | --- |
 | Read and route | `orchestrator_read`, `orchestrator_route` |
 | Manage Tickets | `orchestrator_ticket_retry`, `orchestrator_ticket_request_status`, `orchestrator_ticket_note` |
-| Local Tickets and merge | `orchestrator_request`, `orchestrator_answer`, `orchestrator_ticket_merge`, `orchestrator_ticket_automerge`, `orchestrator_ticket_dependency` |
+| Local Tickets and merge | `orchestrator_request`, `orchestrator_answer`, `orchestrator_ticket_merge` (one Ticket or several in order), `orchestrator_ticket_revert`, `orchestrator_ticket_automerge`, `orchestrator_ticket_dependency` |
 | Re-evaluate | `orchestrator_trigger_requeue` |
 | Assess proactive work | `orchestrator_eval`, `orchestrator_eval_read`, `orchestrator_eval_decide` |
 | Communicate and unsubscribe | `orchestrator_reply`, `orchestrator_thread_unsubscribe` |

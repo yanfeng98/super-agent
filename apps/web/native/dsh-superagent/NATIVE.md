@@ -170,6 +170,18 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     is cleared by the merge, by `orchestrator_ticket_automerge` with `cancel`, by `POST tickets/:id/automerge`, or by a
     person stopping the Ticket. `tests/merge.spec.ts`, `tests/core-engine.spec.ts`, `tests/chat-tools.spec.ts`,
     `tests/panel-execution.spec.tsx` and `tests/views.spec.ts` cover them.
+16. **Undoing a merge, merging several Tickets, and the wider inbox.** A merge records the repository root it moved, so
+    `Runtime.revertTicket` can add a reverting commit after the worktree was cleaned up: `revertWorkspace` reverts a merge
+    commit against its first parent, aborts a conflicted revert without leaving it half-applied, and names a missing commit
+    or a dirty or wrong branch; `Ticket.reverted` and the archive's **Reverted** section keep the reverting commit and the
+    merge it undoes. `orchestrator_ticket_merge` takes `ticket_ids` for several Tickets, which merge in the order given and
+    are each answered on their own, and `orchestrator_ticket_revert` undoes one from the chat; `POST tickets/<id>/revert`
+    does the same from the panel. Panel notifications now cover `merged`, `reverted`, `review` (a deployment that requires an
+    approval), `ci` (a followed pull request reporting failing CI, once per reported result) and `automerge` (a standing
+    merge given up after its attempts), and each also reaches a local Source's webhook. `tests/review.spec.ts`,
+    `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/runtime.spec.ts` and `tests/panel-execution.spec.tsx` cover
+    them. The router prompt now says the main Session merges or undoes a merge only on the person's explicit ask, within
+    its 1,400-character budget.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
