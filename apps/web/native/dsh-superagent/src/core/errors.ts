@@ -24,6 +24,7 @@ export const USER_ERRORS = {
   blockCycle: ['refused', 'That dependency would make each ticket wait for the other'],
   selfBlock: ['refused', 'A ticket cannot wait for itself'],
   emptyNote: ['refused', 'A note needs a file and text'],
+  invalidNoteRange: ['refused', 'A note range needs a start line, and its end cannot come before it'],
   unknownNote: ['missing', 'Unknown note'],
   emptyNoteReply: ['refused', 'A note reply cannot be empty'],
   assignmentEnded: ['refused', 'Assignment has ended; a newer assignment owns this ticket'],

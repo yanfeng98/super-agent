@@ -75,6 +75,8 @@ export interface HttpHost {
   pushTicket(id: string): Promise<{ ticket_id: string; pushed: true }>
   /** Takes a ticket out of the merge queue. */
   dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
+  /** Clears the recorded failure of queued tickets, so the next pass tries them again. */
+  retryMerges(ids: readonly string[]): { retried: number; queue: { ticket_id: string; position: number }[] }
   /** The merge queue as the panel shows it. */
   mergeQueue(): MergeQueueView
   /** Holds or releases the merge queue. */
@@ -85,7 +87,7 @@ export interface HttpHost {
   blockTicket(id: string, reference: string, blocked: boolean):
     { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
   /** Adds a review note anchored to a file and optional line. */
-  addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[]
+  addNote(id: string, input: { file: string; line?: number; endLine?: number; text: string }): TicketNote[]
   /** Removes a review note. */
   removeNote(id: string, noteId: string): TicketNote[]
   /** Marks a review note resolved, or open again. */
@@ -351,6 +353,11 @@ function routes(runtime: HttpHost): Routes {
       return runtime.dequeueMerges([id])
     },
     'GET merge-queue': () => runtime.mergeQueue(),
+    'POST merge-queue/retry': async ({ body }) => {
+      const { ticket_ids: ids } = z.object({ ticket_ids: z.array(z.string().trim().min(1).max(200)).min(1).max(20) }).strict()
+        .parse(await body())
+      return runtime.retryMerges(ids)
+    },
     'POST merge-queue/pause': async ({ body }) => {
       const { paused } = z.object({ paused: z.boolean() }).strict().parse(await body())
       return { paused: runtime.pauseMergeQueue(paused) }
@@ -368,7 +375,8 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/notes': async ({ params, body }) => {
       const id = ticket(params.id)
       const note = z.object({ file: z.string().trim().min(1).max(500), line: z.number().int().min(1).max(1_000_000).optional(),
-        text: z.string().trim().min(1).max(2_000) }).strict().parse(await body())
+        endLine: z.number().int().min(1).max(1_000_000).optional(), text: z.string().trim().min(1).max(2_000) }).strict()
+        .parse(await body())
       try { return { notes: runtime.addNote(id, note) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },

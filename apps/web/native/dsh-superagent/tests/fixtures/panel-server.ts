@@ -443,6 +443,13 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST tickets/:id/push': { answer: ({ params }) => ({ ticket_id: params.id, pushed: true }) },
   'POST tickets/:id/dequeue': { answer: () => ({ removed: 1, queue: [] }) },
   'GET merge-queue': { answer: () => server.mergeQueue },
+  'POST merge-queue/retry': { body: true, answer: ({ body }) => {
+    const ids = (body as { ticket_ids: string[] }).ticket_ids
+    server.mergeQueue = { ...server.mergeQueue, items: server.mergeQueue.items.map(item =>
+      ids.includes(item.ticket_id) ? { ...item, error: undefined } : item) }
+    return { retried: ids.length, queue: server.mergeQueue.items.map(item => ({ ticket_id: item.ticket_id,
+      position: item.position })) }
+  } },
   'POST merge-queue/pause': { body: true, answer: ({ body }) => {
     server.mergeQueue = { ...server.mergeQueue, paused: (body as { paused: boolean }).paused }
     return { paused: server.mergeQueue.paused }

@@ -24,8 +24,8 @@ import type { SetupProblem } from '../setup.ts'
 import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
 import { notifications as listNotifications, readAllNotifications, readNotification, recordNotification } from './notifications.ts'
-import { dequeueMerges, enqueueMerges, mergeQueuePaused, mergeQueueView, queuedMerges, setMergeQueuePaused, shiftQueuedMerge,
-  type MergeQueueView, type QueuedMerge } from './merge-queue.ts'
+import { dequeueMerges, enqueueMerges, markMergeFailed, mergeQueuePaused, mergeQueueView, nextQueuedMerge, queuedMerges,
+  retryMerges, setMergeQueuePaused, type MergeQueueView, type QueuedMerge } from './merge-queue.ts'
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
 import { Store } from './store.ts'
@@ -225,7 +225,7 @@ export class Runtime extends Service implements SourceHost {
         cancelAutoMerge: id => runtime.cancelAutoMerge(id),
         revertTicket: id => runtime.revertTicket(id),
         queueMerges: (ids, options) => runtime.queueMerges(ids, options),
-        dequeueMerges: ids => runtime.dequeueMerges(ids),
+        dequeueMerges: ids => runtime.dequeueMerges(ids), retryMerges: ids => runtime.retryMerges(ids),
         blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
@@ -700,7 +700,6 @@ export class Runtime extends Service implements SourceHost {
     if (!ticket) throw new Error('Unknown ticket')
     const merged = ticket.merged
     if (!merged) throw new Error('Only a merged ticket can be reverted')
-    if (ticket.reverted) throw new Error('The merge of this ticket was already reverted')
     const commit = merged.head
     if (!commit) throw new Error('The merge recorded no commit to revert; undo it with git in the repository')
     const directory = merged.root ?? ticket.execution?.directory
@@ -720,8 +719,10 @@ export class Runtime extends Service implements SourceHost {
       const at = now()
       this.store.atomic(() => {
         const current = this.store.tickets.get(ticketId)
-        if (!current?.merged || current.reverted) return
+        if (!current?.merged) return
+        // The merge is undone, so the Ticket may merge again; the revert keeps which commit it undid.
         current.reverted = { at, commit: result.head, target: result.target, merge: commit, via: origin }
+        delete current.merged
         this.store.tickets.save(current)
       })
       try { await recordRevert(ticket, { at, target: result.target, commit: result.head, merge: commit, via: origin }) }
@@ -771,6 +772,16 @@ export class Runtime extends Service implements SourceHost {
     return { queued: entries.map(entry => line(entry.ticketId)), queue: queue.map(item => line(item.ticketId)) }
   }
   /**
+   * Clears the recorded failure of queued Tickets, so the next pass tries them again.
+   * @returns How many entries were waiting on a retry, and the queue afterwards.
+   */
+  retryMerges(ids: readonly string[]): { retried: number; queue: { ticket_id: string; position: number }[] } {
+    const ticketIds = ids.map(id => this.ticketReference(id) ?? id)
+    const retried = retryMerges(this.store, ticketIds)
+    return { retried, queue: queuedMerges(this.store).map((item, index) => ({ ticket_id: this.ticketLabel({ id: item.ticketId }),
+      position: index + 1 })) }
+  }
+  /**
    * Takes Tickets out of the merge queue, which a pass drains; one already merging finishes.
    * @returns How many entries were removed, and the queue afterwards.
    */
@@ -786,7 +797,7 @@ export class Runtime extends Service implements SourceHost {
   async runMergeQueue(): Promise<void> {
     if (this.queueMerging) return this.queueMerging
     if (this.paused() || this.closing() || !this.setup.configured() || mergeQueuePaused(this.store)) return
-    if (!queuedMerges(this.store).length) return
+    if (!nextQueuedMerge(this.store)) return
     const task = this.drainMergeQueue()
       .catch((error: unknown) => { this.ctx.logger.warn('dsh-superagent: a queued merge failed: %s', String(error)) })
       .finally(() => { this.queueMerging = undefined; this.passes.request() })
@@ -795,10 +806,15 @@ export class Runtime extends Service implements SourceHost {
   }
   /** Merges the whole queue in order, one Ticket at a time, until it is empty or the deployment stops taking work. */
   private async drainMergeQueue(): Promise<void> {
+    let previous: string | undefined
     for (;;) {
       if (this.paused() || this.closing() || mergeQueuePaused(this.store)) return
-      const entry = queuedMerges(this.store)[0]
+      // An entry whose last attempt failed waits for a retry rather than running again on its own.
+      const entry = nextQueuedMerge(this.store)
       if (!entry) return
+      // A drain that cannot make progress on the same entry stops instead of spinning on it.
+      if (entry.ticketId === previous) return
+      previous = entry.ticketId
       await this.drainQueuedMerge(entry)
     }
   }
@@ -811,7 +827,7 @@ export class Runtime extends Service implements SourceHost {
     // A person may have taken it out, or the Ticket may have moved on, since the pass read the queue.
     if (!queuedMerges(this.store).some(item => item.ticketId === entry.ticketId)) return
     if (!ticket?.ended || ticket.merged || ticket.discarded || ticket.cleaned) {
-      shiftQueuedMerge(this.store, entry.ticketId)
+      dequeueMerges(this.store, [entry.ticketId])
       this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, skipped: 'not an ended Ticket that can merge' } },
         `Skipped ${label} in the merge queue: it is no longer an ended Ticket that can merge`))
       return
@@ -819,16 +835,18 @@ export class Runtime extends Service implements SourceHost {
     try {
       const result = await this.mergeTicket(entry.ticketId, entry.strategy ?? 'ff',
         { ...entry.cleanup === undefined ? {} : { cleanup: entry.cleanup }, ...entry.push === undefined ? {} : { push: entry.push } }, 'auto')
-      shiftQueuedMerge(this.store, entry.ticketId)
+      dequeueMerges(this.store, [entry.ticketId])
       const left = rest()
       this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, ...result, remaining: left } },
         `Merged ${label} from the merge queue${left ? `; ${left} left` : ''}`))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      shiftQueuedMerge(this.store, entry.ticketId)
+      // The entry stays at its place with the reason, so a person can retry it or take it out.
+      markMergeFailed(this.store, entry.ticketId, message)
       const left = rest()
-      this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, error: message, remaining: left } },
-        `Did not merge ${label} from the merge queue: ${message}${left ? `; ${left} left` : ''}`))
+      this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, error: message, remaining: left,
+        retryable: true } },
+        `Did not merge ${label} from the merge queue: ${message}${left ? `; ${left} left` : ''}. Retry it with orchestrator_merge_queue.`))
     }
   }
   /** The merge queue as the panel shows it. */
@@ -929,7 +947,7 @@ export class Runtime extends Service implements SourceHost {
    * Adds a person's note on a file and line of a ticket's changes.
    * @returns The ticket's notes after the addition.
    */
-  addNote(id: string, input: { file: string; line?: number; text: string }): TicketNote[] {
+  addNote(id: string, input: { file: string; line?: number; endLine?: number; text: string }): TicketNote[] {
     return this.engine.addNote(id, input).notes ?? []
   }
   /**
@@ -1282,7 +1300,8 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
       revertTicket: id => runtime.revertTicket(id), pushTicket: id => runtime.pushTicket(id),
-      dequeueMerges: ids => runtime.dequeueMerges(ids), mergeQueue: () => runtime.mergeQueue(),
+      dequeueMerges: ids => runtime.dequeueMerges(ids), retryMerges: ids => runtime.retryMerges(ids),
+      mergeQueue: () => runtime.mergeQueue(),
       pauseMergeQueue: paused => runtime.pauseMergeQueue(paused),
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },

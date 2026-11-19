@@ -447,6 +447,8 @@ export interface TicketNote {
   id: string
   file: string
   line?: number
+  /** The last line of a range the note covers, when it covers more than one. */
+  endLine?: number
   text: string
   at: string
   /** The commit the ticket's changes were at when the note was written, so the panel can mark it outdated once they move. */

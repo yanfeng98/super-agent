@@ -52,6 +52,8 @@ export interface Api {
   'POST tickets/:id/dequeue': { response: { removed: number; queue: { ticket_id: string; position: number }[] } }
   'GET merge-queue': { response: MergeQueueView }
   'POST merge-queue/pause': { body: { paused: boolean }; response: { paused: boolean } }
+  'POST merge-queue/retry': { body: { ticket_ids: string[] };
+    response: { retried: number; queue: { ticket_id: string; position: number }[] } }
   'POST tickets/:id/discard': { response: { discarded: true } }
   'POST tickets/:id/rebase': { response: { rebased: true; branch: string; target: string } }
   'POST tickets/:id/check': { response: { checks: TicketCheck } }
@@ -60,7 +62,8 @@ export interface Api {
     response: { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] } }
   'POST tickets/:id/related': { body: { ticket: string; linked: boolean };
     response: { related: { id: string; number?: number; title: string }[] } }
-  'POST tickets/:id/notes': { body: { file: string; line?: number; text: string }; response: { notes: TicketNote[] } }
+  'POST tickets/:id/notes': { body: { file: string; line?: number; endLine?: number; text: string };
+    response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/remove': { response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/resolve': { body: { resolved: boolean }; response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/replies': { body: { text: string }; response: { notes: TicketNote[] } }

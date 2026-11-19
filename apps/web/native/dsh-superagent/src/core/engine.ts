@@ -202,7 +202,7 @@ export class Engine {
    * Adds a person's note on a file and line of a ticket's changes.
    * @returns The ticket with the note.
    */
-  addNote(ticketId: string, input: { file: string; line?: number; text: string }): Ticket {
+  addNote(ticketId: string, input: { file: string; line?: number; endLine?: number; text: string }): Ticket {
     return this.repo.atomic(() => this.tickets.addNote(ticketId, input))
   }
   /**

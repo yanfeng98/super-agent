@@ -10,22 +10,63 @@ export interface QueuedMerge {
   strategy?: MergeStrategy
   cleanup?: boolean
   push?: boolean
+  /** Why its last attempt did not merge; an entry with an error waits for a retry instead of running again. */
+  error?: { at: string; message: string }
 }
 
 /** The queue as the store holds it, oldest first. */
 export function queuedMerges(store: Store): QueuedMerge[] { return store.get(KV.runtime.mergeQueue) ?? [] }
 
 /**
- * Appends Tickets to the queue in the order given, leaving one that is already queued where it is.
+ * Appends Tickets to the queue in the order given; one already queued keeps its place and takes the new options, which also
+ * clears a failure so the person asking again retries it.
  * @returns The queue after the addition.
  */
 export function enqueueMerges(store: Store, entries: readonly QueuedMerge[]): QueuedMerge[] {
   return store.atomic(() => {
     const queue = queuedMerges(store)
-    for (const entry of entries) if (!queue.some(item => item.ticketId === entry.ticketId)) queue.push(entry)
+    for (const entry of entries) {
+      const at = queue.findIndex(item => item.ticketId === entry.ticketId)
+      if (at < 0) queue.push(entry)
+      else queue[at] = { ...queue[at]!, ...entry }
+    }
     store.set(KV.runtime.mergeQueue, queue)
     return queue
   })
+}
+
+/** Records why an entry did not merge, keeping it in the queue for a retry or a removal. */
+export function markMergeFailed(store: Store, ticketId: string, message: string): void {
+  store.atomic(() => {
+    const queue = queuedMerges(store)
+    const at = queue.findIndex(item => item.ticketId === ticketId)
+    if (at < 0) return
+    queue[at] = { ...queue[at]!, error: { at: new Date().toISOString(), message: message.slice(0, 1000) } }
+    store.set(KV.runtime.mergeQueue, queue)
+  })
+}
+
+/**
+ * Clears the recorded failure of Tickets in the queue, so the next pass tries them again.
+ * @returns How many entries were waiting on a retry.
+ */
+export function retryMerges(store: Store, ticketIds: readonly string[]): number {
+  return store.atomic(() => {
+    const queue = queuedMerges(store)
+    let retried = 0
+    for (const entry of queue) {
+      if (!entry.error || !ticketIds.includes(entry.ticketId)) continue
+      delete entry.error
+      retried++
+    }
+    store.set(KV.runtime.mergeQueue, queue)
+    return retried
+  })
+}
+
+/** The first entry whose last attempt did not fail, in queue order; one that failed waits for a retry. */
+export function nextQueuedMerge(store: Store): QueuedMerge | undefined {
+  return queuedMerges(store).find(entry => !entry.error)
 }
 
 /**
@@ -38,19 +79,6 @@ export function dequeueMerges(store: Store, ticketIds: readonly string[]): { rem
     const queue = before.filter(item => !ticketIds.includes(item.ticketId))
     store.set(KV.runtime.mergeQueue, queue)
     return { removed: before.length - queue.length, queue }
-  })
-}
-
-/**
- * Removes the first entry, which a drain took up, when it is still the one the drain named.
- * @returns The entry that was removed, or undefined when the queue changed meanwhile.
- */
-export function shiftQueuedMerge(store: Store, ticketId: string): QueuedMerge | undefined {
-  return store.atomic(() => {
-    const [first, ...rest] = queuedMerges(store)
-    if (first?.ticketId !== ticketId) return undefined
-    store.set(KV.runtime.mergeQueue, rest)
-    return first
   })
 }
 
@@ -75,7 +103,8 @@ export function setMergeQueuePaused(store: Store, paused: boolean): boolean {
 /** The queue as the panel shows it: its state and the Tickets waiting, in order, with their titles. */
 export interface MergeQueueView {
   paused: boolean
-  items: { ticket_id: string; number?: number; title: string; position: number; strategy?: MergeStrategy }[]
+  items: { ticket_id: string; number?: number; title: string; position: number; strategy?: MergeStrategy;
+    error?: { at: string; message: string } }[]
 }
 /**
  * Reads the queue for the panel, leaving out an entry whose Ticket no longer exists.
@@ -88,6 +117,6 @@ export function mergeQueueView(store: Store): MergeQueueView {
     if (!ticket) return []
     const number = store.tickets.number(entry.ticketId)
     return [{ ticket_id: entry.ticketId, title: ticket.title, position: index + 1,
-      ...number ? { number } : {}, ...entry.strategy ? { strategy: entry.strategy } : {} }]
+      ...number ? { number } : {}, ...entry.strategy ? { strategy: entry.strategy } : {}, ...entry.error ? { error: entry.error } : {} }]
   }) }
 }

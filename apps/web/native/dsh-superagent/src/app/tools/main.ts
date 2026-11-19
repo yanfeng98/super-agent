@@ -41,6 +41,8 @@ export interface MainToolsHost {
     { queued: { ticket_id: string; position: number }[]; queue: { ticket_id: string; position: number }[] }
   /** Takes Tickets out of the merge queue. */
   dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
+  /** Clears the recorded failure of queued Tickets, so the next pass tries them again. */
+  retryMerges(ids: readonly string[]): { retried: number; queue: { ticket_id: string; position: number }[] }
   /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
   /** Undoes a merged Ticket's merge with a reverting commit on the branch it landed. */
@@ -256,20 +258,21 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_merge_queue',
-      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker. Cancel queued Tickets with cancel.',
+      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place and its reason. Cancel queued Tickets with cancel, or retry a failed one with retry.',
       schema: z.object({
         ticket_ids: z.array(z.string().min(1)).min(1).max(20).describe('The ended Tickets to queue, in merge order, by id or number.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
         cleanup: z.boolean().optional().describe('Remove each worktree and branch after merging, as the ticket page does.'),
         push: z.boolean().optional().describe('Push each merged branch to the upstream its repository names, when the person asked to push too.'),
         cancel: z.boolean().default(false).describe('Take these Tickets out of the queue instead of adding them.'),
+        retry: z.boolean().default(false).describe('Clear the recorded failure of these queued Tickets, so they are tried again.'),
       }).strict(),
       execute: async args => {
         const options = { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }),
           ...(args.push === undefined ? {} : { push: args.push }) }
-        return args.cancel
-          ? { cancelled: true as const, ...host.dequeueMerges(args.ticket_ids) }
-          : { cancelled: false as const, ...host.queueMerges(args.ticket_ids, options) }
+        if (args.cancel) return { cancelled: true as const, ...host.dequeueMerges(args.ticket_ids) }
+        if (args.retry) return { cancelled: false as const, ...host.retryMerges(args.ticket_ids) }
+        return { cancelled: false as const, ...host.queueMerges(args.ticket_ids, options) }
       },
     }),
     tool({

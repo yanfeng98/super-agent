@@ -381,8 +381,13 @@ it('undoes a recorded merge on the branch it moved, and records the reverting co
   expect(h.runtime.store.tickets.get(ticket.id)?.reverted).toMatchObject({ commit: 'undo-sha', target: 'main',
     merge: merged.head, via: 'panel' })
   expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'reverted', ticketId: ticket.id }))
-  // A merge is undone once; the record says which commit did it.
-  await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/already reverted/)
+  // The undone merge leaves the Ticket mergeable again, and the revert keeps which commit it undid.
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toBeUndefined()
+  await h.runtime.mergeTicket(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toBeDefined()
+  await expect(h.runtime.revertTicket(ticket.id)).resolves.toMatchObject({ commit: 'undo-sha' })
+  // With nothing merged, there is nothing to undo.
+  await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/Only a merged ticket/)
 })
 
 it('reports a conflicting revert without changing the branch, and refuses a ticket without a merge', async () => {
@@ -520,12 +525,22 @@ it('reports a queued merge that cannot land, and still merges the ones after it'
   h.runtime.blockTicket(blocked.id, blocker.id, true)
   h.runtime.queueMerges([blocked.id, later.id], {})
   await h.runtime.runMergeQueue()
-  // The blocked Ticket leaves the queue with its reason, and the next one merges.
+  // The blocked Ticket keeps its place with its reason, and the next one still merges.
   expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeUndefined()
   expect(h.runtime.store.tickets.get(later.id)?.merged).toBeDefined()
-  expect(queuedMerges(h.runtime.store)).toHaveLength(0)
+  expect(h.runtime.mergeQueue().items).toMatchObject([{ ticket_id: blocked.id,
+    error: { message: expect.stringMatching(/Blocked by/) } }])
   await vi.waitFor(() => expect(notices().some(item => 'merge_queue' in item
     && String((item.merge_queue as { error?: string }).error ?? '').match(/Blocked by/))).toBe(true))
+  // A failed entry waits for a retry instead of running again on its own.
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeUndefined()
+  // Once the blocker is gone, retrying merges it without queueing it again.
+  h.runtime.blockTicket(blocked.id, blocker.id, false)
+  expect(h.runtime.retryMerges([blocked.id])).toMatchObject({ retried: 1 })
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeDefined()
+  expect(queuedMerges(h.runtime.store)).toHaveLength(0)
 })
 
 it('takes a ticket out of the merge queue, and skips one that moved on meanwhile', async () => {

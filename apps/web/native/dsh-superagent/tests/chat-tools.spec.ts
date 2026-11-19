@@ -70,6 +70,12 @@ it('queues several tickets from one instruction, and cancels them', async () => 
     { ticket_ids: [first.id, second.id], cleanup: true }) as unknown as { cancelled: boolean; queued: { position: number }[] }
   expect(queue).toHaveBeenCalledWith([first.id, second.id], { cleanup: true })
   expect(queued).toMatchObject({ cancelled: false, queued: [{ position: 1 }, { position: 2 }] })
+  // A failed entry is retried through the same tool.
+  const retry = vi.spyOn(h.runtime, 'retryMerges').mockReturnValue({ retried: 1, queue: [] })
+  const retried = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
+    { ticket_ids: ['T-0001'], retry: true }) as unknown as { retried: number }
+  expect(retry).toHaveBeenCalledWith(['T-0001'])
+  expect(retried).toMatchObject({ retried: 1 })
   // The same tool takes Tickets out of the queue.
   const dequeue = vi.spyOn(h.runtime, 'dequeueMerges').mockReturnValue({ removed: 2, queue: [] })
   const cancelled = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
