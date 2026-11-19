@@ -54,6 +54,18 @@ it('merges an ended ticket through the main Session with the panel gates', async
     .rejects.toThrow('Review approval is required before merging')
 })
 
+it('rebases and cleans up a ticket through the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const rebase = vi.spyOn(h.runtime, 'rebaseTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
+  expect(await h.runTool(h.runtime.masterId, 'orchestrator_ticket_rebase', { ticket_id: ticket.id }))
+    .toMatchObject({ reason: 'Rebased onto main', ticket: { ticket_id: ticket.id } })
+  expect(rebase).toHaveBeenCalledWith(ticket.id)
+  const cleanup = vi.spyOn(h.runtime, 'cleanupTicket').mockResolvedValue()
+  expect(await h.runTool(h.runtime.masterId, 'orchestrator_ticket_cleanup', { ticket_id: ticket.id }))
+    .toMatchObject({ reason: 'Removed the merged worktree and branch', ticket: { ticket_id: ticket.id } })
+  expect(cleanup).toHaveBeenCalledWith(ticket.id)
+})
+
 it('refuses to answer a ticket another Source created', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_answer', { ticket_id: ticket.id, text: '用单列布局。' }))

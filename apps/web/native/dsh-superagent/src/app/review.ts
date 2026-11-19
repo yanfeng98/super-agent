@@ -100,6 +100,27 @@ export async function workspaceRepo(subprocess: SubprocessRuntime, directory: st
   return { root, branch, head, target, dirty, linked: root !== directory }
 }
 /**
+ * Whether the repository's checked-out commit is already in the ticket branch, which is what lets a fast-forward, a squash
+ * or a merge commit finish without a conflict.
+ */
+const contains = (subprocess: SubprocessRuntime, repo: WorkspaceRepo, signal: AbortSignal): Promise<boolean> =>
+  runAsWorker(subprocess, ['git', 'merge-base', '--is-ancestor', repo.target, repo.branch], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+    .then(() => true).catch((error: unknown) => {
+      // Exit code 1 answers that the commit is not an ancestor; any other failure is a broken repository, not an answer.
+      if (error instanceof CliError && error.exitCode === 1) return false
+      throw error
+    })
+
+/**
+ * Whether the repository's checked-out commit is already in the ticket branch, so a merge would not conflict.
+ * @returns `undefined` when the workspace is not a git repository on a branch.
+ */
+export async function targetContained(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<boolean | undefined> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  return repo ? contains(subprocess, repo, signal) : undefined
+}
+/**
  * Merges the ticket branch into the repository's checked-out branch by `strategy`: a fast-forward, one squashed commit, or a
  * merge commit. The ticket branch must contain the repository's commit, so the merge cannot conflict.
  * @param strategy - The merge form to use; `ff` refuses when the repository moved.
@@ -120,13 +141,9 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   if (repo.dirty) throw new Error('The repository has uncommitted changes; commit or stash them before merging')
   if (repo.target === repo.branch) throw new Error('The repository already has the ticket branch checked out')
   // A branch that lacks the repository's newer commits cannot fast-forward; name the fix instead of git's bare refusal.
-  const ahead = await runAsWorker(subprocess, ['git', 'merge-base', '--is-ancestor', repo.target, repo.branch], repo.root,
-    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
-    .then(() => true).catch((error: unknown) => {
-      if (error instanceof CliError && error.exitCode === 1) return false
-      throw error
-    })
-  if (!ahead) throw new Error(`${repo.target} has commits that ${repo.branch} does not; rebase the ticket branch onto ${repo.target} and merge again`)
+  if (!await contains(subprocess, repo, signal)) {
+    throw new Error(`${repo.target} has commits that ${repo.branch} does not; rebase the ticket branch onto ${repo.target} and merge again`)
+  }
   const run = (args: string[]) => runAsWorker(subprocess, ['git', ...args], repo.root,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
   if (strategy === 'ff') {
@@ -171,10 +188,14 @@ export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: 
     await runAsWorker(subprocess, ['git', 'rebase', repo.target], directory,
       AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
   } catch (error) {
+    // Name the files still in conflict before the abort clears them, so the report says what stopped the rebase.
+    const unmerged = await runAsWorker(subprocess, ['git', 'diff', '--name-only', '--diff-filter=U'], directory,
+      AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.split('\n').filter(Boolean)).catch(() => [])
     await runAsWorker(subprocess, ['git', 'rebase', '--abort'], directory,
       AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).catch(() => {
       // A rebase that never started has nothing to abort; the original failure is the report.
     })
+    if (unmerged.length) throw new Error(`Rebasing onto ${repo.target} conflicts in ${unmerged.join(', ')}; the Ticket branch keeps its commits`)
     throw error
   }
   const base = (await runAsWorker(subprocess, ['git', 'rev-parse', repo.target], repo.root,
