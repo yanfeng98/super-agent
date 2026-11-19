@@ -67,8 +67,14 @@ it('records a dependency the person states in chat, and clears it the same way',
   expect(await run({ ticket_id: second.id, blocker_id: first.id }))
     .toMatchObject({ blocked_by: [expect.objectContaining({ id: first.id, merged: false })], ticket: { ticket_id: second.id } })
   expect(h.runtime.store.tickets.get(second.id)?.blockedBy).toEqual([first.id])
-  expect(await run({ ticket_id: second.id, blocker_id: first.id, blocked: false })).toMatchObject({ blocked_by: [] })
+  expect(await run({ ticket_id: second.id, blocker_id: first.id, blocked: false }))
+    .toMatchObject({ ticket_id: second.id, blocked_by: [] })
   expect(h.runtime.store.tickets.get(second.id)?.blockedBy).toBeUndefined()
+  // Both Tickets may be named by the display number the ticket page shows, which is how a person quotes them.
+  const number = (id: string) => `T-${String(h.runtime.store.tickets.numbering().get(id)).padStart(4, '0')}`
+  expect(await run({ ticket_id: number(second.id), blocker_id: number(first.id) }))
+    .toMatchObject({ ticket_id: second.id, blocked_by: [expect.objectContaining({ id: first.id })] })
+  expect(h.runtime.store.tickets.get(second.id)?.blockedBy).toEqual([first.id])
   await expect(run({ ticket_id: first.id, blocker_id: first.id })).rejects.toThrow('A ticket cannot wait for itself')
 })
 

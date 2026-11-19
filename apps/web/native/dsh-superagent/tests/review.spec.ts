@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, pushWorkspace, RebaseConflictError, rebaseWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -167,7 +167,10 @@ describe('merge and discard', () => {
     const ticketHead = gitAt(worktree, 'rev-parse', 'HEAD')
     writeFileSync(join(repo, 'a.txt'), 'main\n')
     git('commit', '-qam', 'main edit')
-    await expect(rebaseWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/conflicts in a\.txt/)
+    // The typed conflict names the target and the files, which is what hands the work back to the worker.
+    const conflict = await rebaseWorkspace(subprocess(), worktree, signal).then(() => undefined, (error: unknown) => error)
+    expect(conflict).toBeInstanceOf(RebaseConflictError)
+    expect(conflict).toMatchObject({ target: git('branch', '--show-current'), files: ['a.txt'] })
     // The abort leaves the ticket branch on its own commit, with no rebase in progress.
     expect(gitAt(worktree, 'rev-parse', 'HEAD')).toBe(ticketHead)
     expect(gitAt(worktree, 'status', '--porcelain')).toBe('')
@@ -222,6 +225,27 @@ describe('merge and discard', () => {
     gitAt(worktree, 'add', 'b.txt'); gitAt(worktree, 'commit', '-q', '-m', 'not merged')
     await expect(discardWorkspace(subprocess(), worktree, signal, { merged: true })).rejects.toThrow(/does not contain/)
     expect(existsSync(join(worktree, 'b.txt'))).toBe(true)
+  })
+  it('pushes the repository branch to its upstream, and says when it has none', async () => {
+    const remote = join(dir, 'origin.git')
+    execFileSync('git', ['init', '-q', '--bare', remote])
+    git('init', '-q')
+    writeFileSync(join(repo, 'a.txt'), 'one\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'base')
+    const branch = git('branch', '--show-current')
+    git('remote', 'add', 'origin', remote)
+    git('push', '-q', '-u', 'origin', branch)
+    writeFileSync(join(repo, 'a.txt'), 'two\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'work')
+    await pushWorkspace(subprocess(), repo, signal)
+    expect(gitAt(remote, 'rev-parse', branch)).toBe(git('rev-parse', 'HEAD'))
+    // A repository that names no upstream fails without touching the branch.
+    const other = join(dir, 'no-upstream')
+    mkdirSync(other)
+    execFileSync('git', ['init', '-q'], { cwd: other })
+    writeFileSync(join(other, 'b.txt'), 'x\n')
+    gitAt(other, 'add', 'b.txt'); gitAt(other, 'commit', '-q', '-m', 'base')
+    await expect(pushWorkspace(subprocess(), other, signal)).rejects.toThrow(/no upstream|destination|upstream/i)
   })
   it('removes a linked worktree and its branch, and refuses the repository itself', async () => {
     base()

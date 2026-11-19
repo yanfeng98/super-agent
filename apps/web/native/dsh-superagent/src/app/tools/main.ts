@@ -36,7 +36,8 @@ export interface MainToolsHost {
   mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean; push?: boolean }):
     Promise<{ branch: string; target: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true; pushError?: string }>
   /** Records or clears that one Ticket's branch must merge before another's. */
-  blockTicket(id: string, reference: string, blocked: boolean): { blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
+  blockTicket(id: string, reference: string, blocked: boolean):
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
@@ -245,13 +246,13 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       name: 'orchestrator_ticket_dependency',
       description: 'Record or clear that a Ticket waits for another Ticket\'s branch to merge first, on the person\'s instruction such as "wait for T-0003"; its merge refuses until the other has merged. The ticket page shows and edits the same dependency.',
       schema: z.object({
-        ticket_id: z.string().min(1).describe('The Ticket that waits.'),
+        ticket_id: z.string().min(1).describe('The Ticket that waits, by id or display number such as T-0003.'),
         blocker_id: z.string().min(1).describe('The Ticket that must merge first, by id or display number such as T-0003.'),
         blocked: z.boolean().default(true).describe('Record the dependency with true, or clear it with false.'),
       }).strict(),
       execute: async args => {
         const result = host.blockTicket(args.ticket_id, args.blocker_id, args.blocked)
-        const ticket = host.store.tickets.get(args.ticket_id)
+        const ticket = host.store.tickets.get(result.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },
     }),
