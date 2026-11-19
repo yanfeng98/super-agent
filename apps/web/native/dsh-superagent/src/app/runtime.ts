@@ -198,9 +198,7 @@ export class Runtime extends Service implements SourceHost {
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources,
         localRequest: input => this.localRequest(input),
         localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
-        mergeTicket: (id, strategy) => runtime.mergeTicket(id, strategy),
-        rebaseTicket: id => runtime.rebaseTicket(id),
-        cleanupTicket: id => runtime.cleanupTicket(id),
+        mergeTicket: (id, strategy, options) => runtime.mergeTicket(id, strategy, options),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -362,12 +360,13 @@ export class Runtime extends Service implements SourceHost {
    * Merges an ended ticket's branch into the repository's checked-out branch, fast-forwarding, squashing, or making a merge
    * commit, then records the merge on the ticket and in its local archive. A branch the repository moved past is rebased
    * first, and a configured check that has not passed since the ending runs again, so a person who asked to merge needs no
-   * other step.
+   * other step. With `cleanup`, the merged worktree and branch are removed afterwards.
    * @throws when the ticket is unknown or open, has no workspace, was discarded, a review requested changes, an approval is
    * required and missing, an open review note remains, the configured check fails, a rebase conflicts, or git cannot
    * fast-forward.
    */
-  async mergeTicket(id: string, strategy: MergeStrategy = 'ff'): Promise<{ branch: string; target: string; rebased?: true }> {
+  async mergeTicket(id: string, strategy: MergeStrategy = 'ff', options: { cleanup?: boolean } = {}):
+    Promise<{ branch: string; target: string; rebased?: true; cleaned?: true }> {
     const ticket = this.store.tickets.get(id)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
@@ -425,7 +424,17 @@ export class Runtime extends Service implements SourceHost {
     })
     try { await recordMerge(current, { at, ...result, ...strategy === 'ff' ? {} : { strategy } }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a merge in the archive failed: %s', String(error)) }
-    return { ...result, ...rebased ? { rebased } : {} }
+    let cleaned: true | undefined
+    if (options.cleanup) {
+      try {
+        await this.cleanupTicket(id)
+        cleaned = true
+      } catch (error) {
+        // The merge already moved the branch, so the report says so rather than presenting this as a failed merge.
+        throw new Error(`Merged ${result.branch} into ${result.target}, but removing its worktree failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return { ...result, ...rebased ? { rebased } : {}, ...cleaned ? { cleaned } : {} }
   }
   /**
    * Adds a person's note on a file and line of a ticket's changes.
