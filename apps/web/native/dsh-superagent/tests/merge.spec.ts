@@ -89,6 +89,18 @@ it('hands a conflicting rebase to the worker instead of leaving the person a sec
   expect(pushWorkspace).not.toHaveBeenCalled()
 })
 
+it('keeps the plain conflict report while processing is paused, which starts no work', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  const settings = h.runtime.store.settings()
+  h.runtime.store.saveSettings({ ...settings, paused: true })
+  vi.mocked(targetContained).mockResolvedValue(false)
+  vi.mocked(rebaseWorkspace).mockRejectedValue(new RebaseConflictError('main', ['a.txt']))
+  await expect(h.runtime.mergeTicket(ticket.id))
+    .rejects.toThrow(/^Rebasing onto main conflicts in a\.txt; the Ticket branch keeps its commits$/)
+  expect(h.runtime.store.tickets.get(ticket.id)?.ended).toBeDefined()
+})
+
 it('keeps the plain conflict report for a stopped ticket, which takes no new work', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   h.runtime.store.atomic(() => {
