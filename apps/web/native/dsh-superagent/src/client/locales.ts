@@ -857,6 +857,7 @@ const TEXT = {
   'userError.ticketDiscarded': ['这个工单的工作区已被丢弃；请新建工单继续。', USER_ERRORS.ticketDiscarded[1]],
   'userError.ticketCleaned': ['这个工单的工作区在合并后已被清理；请新建工单继续。', USER_ERRORS.ticketCleaned[1]],
   'userError.ticketMerged': ['这个工单的分支已经合并；请新建工单继续。', USER_ERRORS.ticketMerged[1]],
+  'userError.notLocalTicket': ['这个工单不是本地工单，请到它来源的对话里回答。', USER_ERRORS.notLocalTicket[1]],
   'userError.selfLink': ['工单不能关联到它自己。', USER_ERRORS.selfLink[1]],
   'userError.emptyNote': ['备注需要文件名和内容。', USER_ERRORS.emptyNote[1]],
   'userError.emptyNoteReply': ['评审备注的回复不能为空。', USER_ERRORS.emptyNoteReply[1]],

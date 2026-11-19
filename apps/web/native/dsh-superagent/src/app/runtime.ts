@@ -39,8 +39,9 @@ import { captureReview, discardWorkspace, mergeWorkspace, rebaseWorkspace, works
 import { sendWebhook } from './webhook.ts'
 import { eventNotice, followupNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
-import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, recordApproval, recordCleanup, recordDiscard,
-  recordMerge, recordRebase, recordRename, recordRequestEdit, recordReview, recordTags, reopenArchive, ticketArchive, webhookFor } from '../sources/local.ts'
+import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
+  recordMerge, recordRebase, recordRename, recordRequestEdit, recordReview, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
+  type LocalRequest, type LocalRequestResult } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
 import { Passes } from './passes.ts'
@@ -195,6 +196,8 @@ export class Runtime extends Service implements SourceHost {
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources,
+        localRequest: input => this.localRequest(input),
+        localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -293,6 +296,22 @@ export class Runtime extends Service implements SourceHost {
       this.ctx.logger.warn('dsh-superagent: recording labels in the archive failed: %s', String(error))
     })
     return ticket
+  }
+  /**
+   * Creates a local ticket request from the main Session's conversation, seeding the local Source's Policy part first so an
+   * installation that never opened the panel still admits the operator.
+   * @returns The request, Thread, Trigger and archive file the local Source recorded.
+   * @throws when setup is pending, the local Source is off, or its Policy allows nobody.
+   */
+  private async localRequest(input: LocalRequest): Promise<LocalRequestResult> {
+    if (!this.configured()) throw new Error('dsh-superagent is waiting for the setup check')
+    if (!this.sources.instance('local')?.enabled) throw new Error('The local Source is off; turn it on in Settings → Sources')
+    // The tool is the caller, so its Policy seed must not notify the main Session of its own change.
+    await seedPolicy(this, 'tool')
+    if (!this.store.settings().policy.sources.local?.allowed.some(entry => entry.id === OPERATOR)) {
+      throw new Error('The local Source allows nobody; add the operator under Policy → On each Source')
+    }
+    return createLocalRequest(this, input)
   }
   /**
    * Completes archive records a crash may have left half-written: the close section of ended local tickets, and the merge or

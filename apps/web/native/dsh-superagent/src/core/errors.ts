@@ -18,6 +18,7 @@ export const USER_ERRORS = {
   ticketDiscarded: ['refused', 'This ticket worktree was discarded; create a new ticket for more work'],
   ticketCleaned: ['refused', 'This ticket workspace was removed after its merge; create a new ticket for more work'],
   ticketMerged: ['refused', 'This ticket branch was already merged; create a new ticket for more work'],
+  notLocalTicket: ['refused', 'This ticket did not come from the local Source; answer it in the conversation it came from'],
   selfLink: ['refused', 'A ticket cannot be related to itself'],
   emptyNote: ['refused', 'A note needs a file and text'],
   unknownNote: ['missing', 'Unknown note'],

@@ -12,6 +12,7 @@ import { readResource, type MainResourceHost, type ResourceHost } from '../resou
 import type { Sessions } from '../sessions.ts'
 import type { Settings } from '../settings.ts'
 import type { Store } from '../store.ts'
+import type { LocalFollowup, LocalFollowupResult, LocalRequest, LocalRequestResult } from '../../sources/local.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
 
 const RoutingNoteSchema = z.string().trim()
@@ -26,6 +27,10 @@ export interface MainToolsHost {
   readonly settings: Pick<Settings, 'view' | 'block' | 'save' | 'pause' | 'sync'>
   readonly assessor: Pick<MasterAssessor, 'context' | 'read' | 'decide'>
   readonly resources: ResourceHost
+  /** Records a person's explicit request from the main Session's conversation as a local ticket request. */
+  localRequest(input: LocalRequest): Promise<LocalRequestResult>
+  /** Sends a person's answer to a local ticket's Thread, where its worker reads it as an Input. */
+  localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
@@ -183,6 +188,35 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       execute: async args => {
         host.engine.note(args.ticket_id, args.text)
         return routed(host, { reason: 'Noted for the worker', ticketId: args.ticket_id })
+      },
+    }),
+    tool({
+      name: 'orchestrator_request',
+      description: 'Record the person\'s explicit request here as a local Ticket request instead of doing it yourself; its Trigger is assessed and its candidate arrives separately.',
+      schema: z.object({
+        title: z.string().trim().min(1).max(120).describe('One line naming the request.'),
+        text: z.string().trim().min(1).max(20_000).describe('The request in the person\'s words, with any constraint.'),
+        project: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'Letters, digits, dot, dash or underscore').optional()
+          .describe('A project label configured on the local Source.'),
+        hold: z.boolean().optional().describe('Wait for approval before the worker starts.'),
+      }).strict(),
+      execute: async args => ({ ...await host.localRequest({ title: args.title, text: args.text, ...(args.project ? { project: args.project } : {}),
+        ...(args.hold ? { hold: true } : {}) }), status: 'Queued for Eval; its candidate arrives as a message.' }),
+    }),
+    tool({
+      name: 'orchestrator_answer',
+      description: 'Send the person\'s answer to a local Ticket\'s conversation; its worker reads it as an Input, and an ended Ticket resumes (a stopped one does not).',
+      schema: z.object({
+        ticket_id: z.string().min(1).describe('The local Ticket the person is answering.'),
+        text: z.string().trim().min(1).max(20_000).describe('The person\'s answer in their own words.'),
+      }).strict(),
+      execute: async args => {
+        const ticket = host.store.tickets.get(args.ticket_id)
+        if (!ticket) throw new UserError('unknownTicket')
+        const channel = ticket.channels.find(item => item.source === 'local')
+        if (!channel) throw new UserError('notLocalTicket')
+        const sent = await host.localFollowup({ thread: channel.thread, text: args.text }, { mainSession: true })
+        return { ...sent, ticket: ticketCard(host.store.tickets.get(ticket.id) ?? ticket) }
       },
     }),
     tool({

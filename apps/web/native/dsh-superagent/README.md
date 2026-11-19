@@ -4,7 +4,7 @@
 >
 > We have adapted it for publication, so it is not identical to our internal version or the implementation described in *Exploring Super-agent Design: Towards a More Autonomous Agent System*. Some designs discussed in the article are directions for future development and are not implemented in this prototype.
 
-dsh-superagent is a proactive coding agent for one workspace and one GitHub repository, packaged as a bundle for [DeepSeek Harness](https://www.deepseek.com/en/harness/). It takes requests from local tickets created in its panel, from GitHub, and optionally from Feishu. When someone allowed asks the agent for work, it opens a work item, works on it in its own agent session and directory, and answers in the original conversation, for example with a pull request. A web panel shows what needs a person.
+dsh-superagent is a proactive coding agent for one workspace and one GitHub repository, packaged as a bundle for [DeepSeek Harness](https://www.deepseek.com/en/harness/). It takes requests from local tickets created in its panel or by its main Session, from GitHub, and optionally from Feishu. When someone allowed asks the agent for work, it opens a work item, works on it in its own agent session and directory, and answers in the original conversation, for example with a pull request. A web panel shows what needs a person.
 
 ## Built-in copy in this checkout
 
@@ -13,7 +13,7 @@ This checkout ships dsh-superagent as a built-in Web capability. After `pnpm ins
 ### Quick start
 
 1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), and open **Superagent** in the sidebar.
-2. **Without GitHub:** use **Execution → New ticket**. The ticket accepts a title, request, optional project and tags, up to five attachments, and an optional **hold for approval**; its Markdown archive and every reply live under `<stateDir>/tickets/` by default. Set **Execution → Directory root** or a prepare command when the work needs files.
+2. **Without GitHub:** use **Execution → New ticket**, or ask the main Session in the DSH chat for the work. The ticket accepts a title, request, optional project and tags, up to five attachments, and an optional **hold for approval**; its Markdown archive and every reply live under `<stateDir>/tickets/` by default. Set **Execution → Directory root** or a prepare command when the work needs files.
 3. **With GitHub:** sign in a dedicated agent account through a `gh` wrapper, set the repository and wrapper under **Settings → Sources → GitHub**, add at least one allowed login under **Settings → Eval**, and set a prepare command under **Settings → Execution**. Then comment `@<agent login> <request>` from an allowed account; Overview shows the Ticket within the polling interval.
 4. A Ticket can be inspected after it ends: the request in full, changes and diff, review notes (each resolvable), a review decision (approve or request changes) with note discussions, editable labels and request text, related Tickets and the person-action history; merge it (fast-forward, squash or merge commit; configured checks, a failed bound PR CI, open notes and rejected reviews must be clear first, and an approval may be required), rebase it after the repository moved, discard or clean up its worktree, and edit its title, labels or request text. A merged, discarded or cleaned Ticket cannot be reopened or resumed. A held Ticket waits for **Approve**; the header inbox, a configured webhook or a desktop notification reports work that needs a person.
 
