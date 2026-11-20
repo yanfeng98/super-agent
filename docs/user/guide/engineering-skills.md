@@ -2,7 +2,7 @@
 
 English | [中文](engineering-skills.zh.md)
 
-Every base-backed profile ships 27 engineering workflow skills, so a new Session has them without installing a plugin or copying files. The Plugins page lists the component as **Engineering workflow skills**, and the skill text comes from the upstream [mattpocock/skills](https://github.com/mattpocock/skills) project.
+Every base-backed profile ships 27 engineering workflow skills, so a new Session has them without installing a plugin or copying files. The component is part of the base composition, its plugin metadata names it **Engineering workflow skills**, and the skill text comes from the upstream [mattpocock/skills](https://github.com/mattpocock/skills) project.
 
 ## What ships
 

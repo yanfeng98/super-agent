@@ -155,6 +155,14 @@ const homeAndGuide = pairedPages([
     order: 5,
   },
   {
+    source: 'docs/user/guide/engineering-skills.md',
+    route: 'guide/engineering-skills.md',
+    label: { root: '内置工程技能', en: 'Built-in engineering skills' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '入门', en: 'Guide' },
+    order: 6,
+  },
+  {
     source: 'docs/user/guide/python-sdk.md',
     route: 'guide/python-sdk.md',
     label: { root: 'Python', en: 'Python' },

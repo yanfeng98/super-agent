@@ -27,7 +27,7 @@ A dedicated built-in provider ships the corpus inside the Harness and the base b
 - **Failure reporting.** A missing (`ENOENT`/`ENOTDIR`) or invalid skill is omitted from a complete catalog, reported once, and a load returns `undefined` after invalidating the catalog. Any other read error leaves discovery incomplete and propagates from a load.
 - **Precedence.** Local discovery wins a same-name skill because it registers into the nearer preset layer; the bundled rank decides only within one layer. An existing project or user `tdd` therefore overrides the shipped one without configuration.
 - **Adaptations for this Harness.** The vendored prose names the `skill` tool, drops the Codex `agents/openai.yaml` files and plugin manifests, and replaces `/clear` with opening a new session (the Harness has `/compact` but no `/clear`). Machine identifiers, names, slash commands, labels, paths, and template field names stay as upstream wrote them.
-- **Presentation.** `locale/*.json` supplies the plugin-page title and description in the eight UI languages, and `docs/user/guide/engineering-skills.md` documents invocation, the main flow, repository setup, and overrides for users.
+- **Presentation.** `locale/*.json` supplies the component title and description in the eight UI languages for plugin inventories, and `docs/user/guide/engineering-skills.md` documents invocation, the main flow, repository setup, and overrides for users.
 - **Source.** Assets come from `mattpocock/skills` `main` at `abeeaf9` (v1.3.2); the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors it byte for byte. `assets/LICENSE` carries the upstream MIT notice. The package README owns the re-sync procedure.
 
 ## Alternatives considered
