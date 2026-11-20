@@ -1,26 +1,26 @@
 ---
 name: prototype
-description: 搭一个用完就扔的原型（prototype），用来回答一个设计问题。当用户想检验一个状态模型或逻辑是否感觉对，或者想探索 UI 该长什么样时使用。
+description: Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.
 ---
 
-# 原型
+# Prototype
 
-原型是**能回答一个问题的用完就扔的代码**。问题决定它的形状。
+A prototype is **throwaway code that answers a question**. The question decides the shape.
 
-## 挑一个分支
+## Pick a branch
 
-判定正在回答的是哪个问题：用用户的提示、周围的代码，或者如果用户在旁边就直接问：
+Identify which question is being answered, using the user's prompt, the surrounding code, or by asking if the user is around:
 
-- **「这套逻辑 / 状态模型感觉对吗？」** → [LOGIC.md](LOGIC.md)。搭一个可分享的单个 HTML 文件（自由点按的按钮，加上分标签页的引导式演练），把状态机推过那些在纸上很难推理的情形，并且让非开发者也能驱动它。
-- **「这个该长什么样？」** → [UI.md](UI.md)。在单一路由上生成几个截然不同的 UI 变体，通过一个 URL 搜索参数与一条悬浮底栏来切换。
+- **"Does this logic / state model feel right?"** → [LOGIC.md](LOGIC.md). Build a single shareable HTML file (free-play buttons plus tabbed guided walkthroughs) that pushes the state machine through cases that are hard to reason about on paper, and that a non-developer can drive.
+- **"What should this look like?"** → [UI.md](UI.md). Generate several radically different UI variations on a single route, switchable via a URL search param and a floating bottom bar.
 
-这两条分支产出的东西差别极大，所以挑错了会浪费掉整个原型。如果问题确实模棱两可，又联系不上用户，就默认选与周围代码更匹配的那条分支（后端模块 → 逻辑；页面或组件 → UI），并把这个假设写在原型顶部。
+The two branches produce very different artifacts, so getting this wrong wastes the whole prototype. If the question is genuinely ambiguous and the user isn't reachable, default to whichever branch better matches the surrounding code (a backend module → logic; a page or component → UI) and state the assumption at the top of the prototype.
 
-## 两条分支都适用的规则
+## Rules that apply to both
 
-1. **从第一天起就是用完就扔的，并且明确标注出来。** 把原型代码放在它真正会被用到的位置附近（挨着它正在为之做原型的模块或页面），让上下文一目了然；但要给它起个名字，让随手看一眼的人能看出这是原型，不是生产代码。用完就扔的 UI 路由，遵守项目已经在用的那套路由约定；不要另造一套新的顶层结构。
-2. **运行起来毫不费力。** UI 原型从项目任务运行器里的一条命令启动：`pnpm <name>`、`python <path>`、`bun <path>` 等等。逻辑演示是用户双击打开的单个 HTML 文件。两种都是：启动它不需要动脑子。
-3. **默认不做持久化。** 状态住在内存里。持久化是原型要*检验*的东西，不是它该依赖的东西。如果问题明确涉及数据库，就打一个临时 DB，或者一个名字清清楚楚写着 "PROTOTYPE, wipe me" 的本地文件。
-4. **跳过打磨。** 不要测试，不要超出让原型*能跑*所必需的报错处理，不要抽象。要点是快速学到东西。
-5. **把状态摆出来。** 每次动作之后（逻辑）或每次切换变体时（UI），打印或渲染完整的相关状态，让用户看到什么变了。
-6. **做完之后把它捕获下来。** 把任何已验证的决策折进真实代码，然后把原型本身作为**一手来源（primary source）**捕获下来：把它提交到一个用完就扔的分支上，不进 main，并在实现 issue 上留一条指向那个分支的上下文指针（context pointer）。答案也要捕获（结论，以及它定下的那个问题），写进 issue 或某个 commit。main 上只留下被验证过的决策。
+1. **Throwaway from day one, and clearly marked as such.** Locate the prototype code close to where it will actually be used (next to the module or page it's prototyping for) so context is obvious, but name it so a casual reader can see it's a prototype, not production. For throwaway UI routes, obey whatever routing convention the project already uses; don't invent a new top-level structure.
+2. **Trivial to run.** A UI prototype starts from one command in the project's task runner: `pnpm <name>`, `python <path>`, `bun <path>`, etc. A logic demo is a single HTML file the user double-clicks. Either way, no thinking required to start it.
+3. **No persistence by default.** State lives in memory. Persistence is the thing the prototype is _checking_, not something it should depend on. If the question explicitly involves a database, hit a scratch DB or a local file with a clear "PROTOTYPE, wipe me" name.
+4. **Skip the polish.** No tests, no error handling beyond what makes the prototype _runnable_, no abstractions. The point is to learn something fast.
+5. **Surface the state.** After every action (logic) or on every variant switch (UI), print or render the full relevant state so the user can see what changed.
+6. **Capture it when done.** Fold any validated decision into the real code, then capture the prototype itself as a **primary source**: commit it to a throwaway branch, out of main, and leave a context pointer to that branch on the implementation issue. Capture the answer too (the verdict and the question it settled) in the issue or a commit. The main branch keeps only the validated decision.

@@ -22,12 +22,12 @@ A dedicated bundled provider ships the corpus inside the Harness and the base bu
 
 - **Package.** `@deepseek-ai/dsh-skill-mattpocock` at `packages/skill/skill-mattpocock/` registers provider `dsh-mattpocock` on `ctx.skills` at the bundled rank (600), with `source: 'bundled'`. It follows `dsh-skill-office`'s provider shape: a fixed directory-name list, a packaged `assets/` root, and per-load reads.
 - **Composition.** The `skill-mattpocock` row in `packages/bundle/base/cordis.patch.yml` makes every base-backed profile (`web`, `headless`, `acp`, `sdk`) mount it with no configuration. A profile removes it by replacing the row with `disabled: true`. The provider attaches through a deferred `skills` injection, so a composition that disables the skill registry keeps the row idle instead of reporting a pending service.
-- **Content.** 27 skills from the `engineering/` and `productivity/` buckets of the translation. Eleven are model-invoked and appear in the session catalog; sixteen carry `disable-model-invocation: true` and are reachable only through the `/` skill picker. `ask-matt` remains the router over the user-invoked set.
+- **Content.** 27 skills from the `engineering/` and `productivity/` buckets of upstream [`mattpocock/skills`](https://github.com/mattpocock/skills) `main` at `abeeaf9` (v1.3.2). Eleven are model-invoked and appear in the session catalog; sixteen carry `disable-model-invocation: true` and are reachable only through the `/` skill picker. `ask-matt` remains the router over the user-invoked set.
 - **Frontmatter contract.** The directory name is the skill identity, so a declared `name` that disagrees is invalid metadata. `description` is required. `disable-model-invocation` and `user-invocable` are optional booleans and project into the registry's invocation policy.
 - **Failure reporting.** A missing (`ENOENT`/`ENOTDIR`) or invalid skill is omitted from a complete catalog, reported once, and a load returns `undefined` after invalidating the catalog. Any other read error leaves discovery incomplete and propagates from a load.
 - **Precedence.** Local discovery wins a same-name skill because it registers into the nearer preset layer; the bundled rank decides only within one layer. An existing project or user `tdd` therefore overrides the shipped one without configuration.
-- **Adaptations for this Harness.** The vendored prose names the `skill` tool, drops the Codex `agents/openai.yaml` files and plugin manifests, and replaces `/clear` with opening a new session (the Harness has `/compact` but no `/clear`). The translation keeps every machine identifier: names, slash commands, labels, paths, and template field names.
-- **Source.** Assets come from `yanfeng98/nano-mattpocock-skills` branch `260922-dev` at `a7b4cdd`, tracking upstream `mattpocock/skills` v1.3.x. `assets/LICENSE` carries the upstream MIT notice. The package README owns the re-sync procedure.
+- **Adaptations for this Harness.** The vendored prose names the `skill` tool, drops the Codex `agents/openai.yaml` files and plugin manifests, and replaces `/clear` with opening a new session (the Harness has `/compact` but no `/clear`). Machine identifiers, names, slash commands, labels, paths, and template field names stay as upstream wrote them.
+- **Source.** Assets come from `mattpocock/skills` `main` at `abeeaf9` (v1.3.2); the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors it byte for byte. `assets/LICENSE` carries the upstream MIT notice. The package README owns the re-sync procedure.
 
 ## Alternatives considered
 
@@ -35,7 +35,7 @@ A dedicated bundled provider ships the corpus inside the Harness and the base bu
 - **Populate the preset's `skills/` directory instead of a package.** `packages/preset/agent-preset/skills/` reaches only presets that mount it as a custom directory, so headless and SDK compositions would miss the skills, and third-party content would live in the preset package's own asset tree. A provider package reaches the global layer of every profile.
 - **Download the corpus at startup, like `upstream-skills`.** It lost because it needs network access and an upstream host, and the requirement is that a clone works offline with no external project.
 - **Keep the upstream plugin/marketplace route.** It lost because it requires an explicit install step, which contradicts turning the capability on by default.
-- **Vendor the English upstream instead of the translation.** It lost because the reviewed and installed corpus is the translation, and English would regress the user's working text; a second English provider remains possible later.
+- **Vendor the Chinese translation fork instead.** The `260922-dev` branch of `yanfeng98/nano-mattpocock-skills` offers the same 27 skills in Simplified Chinese. It lost because the requested source is upstream `main`, and a translation layer would add a second corpus to keep in step with upstream.
 - **Prefix the names (`mp-tdd`).** It lost because every cross-skill reference, `/name`, and upstream document names the unprefixed skill; renaming would fork the corpus and increase sync cost for a collision that layer precedence already solves.
 
 ## Consequences
@@ -46,8 +46,8 @@ Costs that remain:
 
 - Every base-backed profile gains eleven catalog entries (descriptions only; bodies load on demand) and one plugin row.
 - Synchronization is manual: copying the promoted buckets, re-applying the adaptations, and updating the `SKILL_NAMES` list is a reviewable diff, not a build step.
-- The translation can drift from upstream English, and no gate detects it; the drift test only compares the asset directories with the provider's fixed list.
-- The content is Chinese-only, so a session in English receives Chinese descriptions and bodies.
+- The vendored text can drift from upstream `main`, and no gate detects it; the drift test only compares the asset directories with the provider's fixed list.
+- The content is English-only, so a session in another language receives English descriptions and bodies.
 - A user-installed same-name skill silently shadows the bundled one, which is the intended precedence but can surprise during debugging.
 
 ## Testing

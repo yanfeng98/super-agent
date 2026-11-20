@@ -1,15 +1,15 @@
 ---
 name: domain-modeling
-description: "建立并磨利项目的领域模型。当讨论代码库术语、撰写或编辑 GLOSSARY.md、记录或编辑 ADR 时使用。"
+description: Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR.
 ---
 
-# 领域建模
+# Domain Modeling
 
-在设计的过程中主动建立并磨利项目的领域模型。这是一门*主动*的纪律：质疑术语、编出边缘场景，并在术语表与决策一旦成形的当下就把它们写下来。（仅仅为了取词汇而*读* `GLOSSARY.md` 不算这个技能：那是一行就能做完的习惯，任何技能都能做。这个技能处理的是你在改变模型的时候，而不只是消费它。）
+Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
-## 文件结构
+## File structure
 
-多数仓库只有一个上下文：
+Most repos have a single context:
 
 ```
 /
@@ -21,7 +21,7 @@ description: "建立并磨利项目的领域模型。当讨论代码库术语、
 └── src/
 ```
 
-如果根目录下存在 `GLOSSARY-MAP.md`，这个仓库就有多个上下文。上下文地图指向每一个的所在：
+If a `GLOSSARY-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
 
 ```
 /
@@ -37,38 +37,38 @@ description: "建立并磨利项目的领域模型。当讨论代码库术语、
 │       └── docs/adr/
 ```
 
-按需创建文件：只有真的有东西要写时才创建。如果还没有 `GLOSSARY.md`，就在第一个术语定下来时创建它。如果还没有 `docs/adr/`，就在第一次需要 ADR 时创建它。
+Create files lazily: only when you have something to write. If no `GLOSSARY.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
 
-## 会话进行中
+## During the session
 
-### 用术语表检验用词
+### Challenge against the glossary
 
-当用户用的术语与 `GLOSSARY.md` 里既有的语言冲突时，立刻指出来。「你的术语表把 'cancellation' 定义成 X，但你想说的似乎是 Y。到底是哪个？」
+When the user uses a term that conflicts with the existing language in `GLOSSARY.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y. Which is it?"
 
-### 把模糊的说法磨利
+### Sharpen fuzzy language
 
-当用户用了含糊或一词多义的术语时，提一个精确的规范术语。「你说的是 'account'：你指的是 Customer 还是 User？这是两个不同的东西。」
+When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account': do you mean the Customer or the User? Those are different things."
 
-### 讨论具体场景
+### Discuss concrete scenarios
 
-讨论领域关系时，用具体场景去压力测试它们。编一些能探到边缘情况的场景，逼用户把概念之间的界线说清楚。
+When domain relationships are being discussed, stress-test them with specific scenarios. Invent scenarios that probe edge cases and force the user to be precise about the boundaries between concepts.
 
-### 与代码交叉核对
+### Cross-reference with code
 
-当用户断言某个东西是怎么工作的，就去核对代码是否同意。发现矛盾就摆出来：「你的代码会取消整张 Order，但你刚说可以部分取消。哪个是对的？」
+When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible. Which is right?"
 
-### 就地更新 GLOSSARY.md
+### Update GLOSSARY.md inline
 
-一个术语定下来，就地更新 `GLOSSARY.md`。不要攒起来一起写：发生的时候就记下。使用 [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md) 里的格式。
+When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up: capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
 
-`GLOSSARY.md` 里不应有任何实现细节。不要把 `GLOSSARY.md` 当成 spec、草稿本，或实现决策的存放处。它是术语表，仅此而已。
+`GLOSSARY.md` should be totally devoid of implementation details. Do not treat `GLOSSARY.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 
-### 克制地提议写 ADR
+### Offer ADRs sparingly
 
-只有这三条同时成立时，才提议创建 ADR：
+Only offer to create an ADR when all three are true:
 
-1. **难以回退**：将来改主意要有可观的代价
-2. **脱离上下文会显得费解**：将来的读者会想「他们为什么这么做？」
-3. **真做过取舍**：确实存在多个选项，而你出于具体的理由选了其中一个
+1. **Hard to reverse**: the cost of changing your mind later is meaningful
+2. **Surprising without context**: a future reader will wonder "why did they do it this way?"
+3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
 
-三条里缺任何一条，就不要写 ADR。使用 [ADR-FORMAT.md](./ADR-FORMAT.md) 里的格式。
+If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).

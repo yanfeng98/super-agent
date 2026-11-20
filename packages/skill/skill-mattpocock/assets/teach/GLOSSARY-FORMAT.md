@@ -1,35 +1,35 @@
-# GLOSSARY.md 的格式
+# GLOSSARY.md Format
 
-`GLOSSARY.md` 是这个教学工作区的规范语言。所有讲解材料、练习和学习记录（learning record）都应遵循它的术语。构建它本身就是学习的一部分：把一个概念压缩成紧凑的定义，正是用户理解它的证据。
+`GLOSSARY.md` is the canonical language for this teaching workspace. All explainers, exercises, and learning records should adhere to its terminology. Building it is itself part of learning: compressing a concept into a tight definition is evidence the user understands it.
 
-## 结构
+## Structure
 
 ```md
 # {Topic} Glossary
 
-{一两句话，说明这份术语表覆盖的主题。}
+{One or two sentence description of the topic this glossary covers.}
 
 ## Terms
 
 **Hypertrophy**:
-由反复训练中的机械张力与代谢压力驱动的肌肉增长。
-_Avoid_: Bulking, getting big（增重增肥、练大块头）
+Muscle growth driven by mechanical tension and metabolic stress over repeated training sessions.
+_Avoid_: Bulking, getting big
 
 **Progressive overload**:
-通过负荷、容量或强度，随时间系统地提高对一块肌肉的要求。
-_Avoid_: Pushing harder, levelling up（拼命加练、升级打怪）
+Systematically increasing the demand on a muscle over time, via load, volume, or intensity.
+_Avoid_: Pushing harder, levelling up
 
 **RPE (Rate of Perceived Exertion)**:
-对一组动作有多难的 1–10 自评，其中 10 表示力竭，8 表示还能再做两次。
-_Avoid_: Effort score, intensity rating（发力评分、强度评级）
+A 1–10 self-rating of how hard a set felt, where 10 is failure and 8 means two reps left in the tank.
+_Avoid_: Effort score, intensity rating
 ```
 
-## 规则
+## Rules
 
-- **只有当用户理解了一个术语才收录它。** 术语表是压缩知识的记录，不是给用户读着学的词典。如果用户刚接触一个概念，等他们能正确使用它了，再把它升进这里。
-- **要有主见。** 同一个概念有多个词时，挑最好的那个，把其余的列为要避免的别名。语言就是这样压缩的。
-- **定义要收紧。** 一到两句话。定义这个术语*是*什么，而不是它做*什么*、怎么做。
-- **定义里也要用术语表自己的术语。** 一个术语进了术语表，就在所有地方优先用它，包括别的定义内部。这样才能让复杂的术语往后更容易抓住。
-- 当自然成簇时（例如 `## Anatomy`、`## Programming`），**把术语归到小标题下**。术语彼此内聚时，一张扁平列表就够了。
-- **把歧义明确标出来。** 如果一个术语在更大的领域里被用得含糊，就记下这里怎么定：「在本工作区里，‘set’一律指正式训练组；热身另算。」
-- **理解深了就要改。** 用户第一周写下的定义，到第六周可能是错的。就地更新；不要留下过期的条目。
+- **Add a term only when the user understands it.** The glossary is a record of compressed knowledge, not a dictionary the user reads to learn. If the user has just been introduced to a concept, wait until they can use it correctly before promoting it here.
+- **Be opinionated.** When several words exist for the same concept, pick the best one and list the rest as aliases to avoid. This is how language compresses.
+- **Keep definitions tight.** One or two sentences. Define what the term IS, not what it does or how to do it.
+- **Use the glossary's own terms inside definitions.** Once a term is in the glossary, prefer it everywhere, including inside other definitions. This is what makes complex terms easier to grasp later.
+- **Group under subheadings** when natural clusters emerge (e.g. `## Anatomy`, `## Programming`). A flat list is fine when terms cohere.
+- **Flag ambiguities explicitly.** If a term is used loosely in the wider field, note the resolution: "In this workspace, 'set' always means a working set; warm-ups are tracked separately."
+- **Revise as understanding deepens.** A definition the user wrote in week one may be wrong by week six. Update in place; do not leave stale entries.

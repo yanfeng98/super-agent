@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-该提供方在 Harness 内部附带 27 个工程与生产力技能，因此一份全新的 checkout 无需单独安装、符号链接或插件下载就能使用它们：拷问、spec 与工单、实现、测试驱动开发、代码评审、领域建模、架构评审，以及围绕它们的较小工作流技能。其中 11 个由模型调用，出现在会话目录中；16 个由用户调用，只能在输入框里输入 `/` 触达。这些技能是 [mattpocock/skills](https://github.com/mattpocock/skills) 的简体中文译本，机器标识符保持原样。
+该提供方在 Harness 内部附带 27 个工程与生产力技能，因此一份全新的 checkout 无需单独安装、符号链接或插件下载就能使用它们：拷问、spec 与工单、实现、测试驱动开发、代码评审、领域建模、架构评审，以及围绕它们的较小工作流技能。其中 11 个由模型调用，出现在会话目录中；16 个由用户调用，只能在输入框里输入 `/` 触达。这些技能取自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `main` 分支 v1.3.2（`abeeaf9`），并带有开发备注里列出的少量 Harness 措辞调整。
 
 ## 目录
 
@@ -106,7 +106,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 
 这些限制界定了该随包提供方不做的事。它们是当前的包约束，不是任务清单。
 
-- **只有中文** —— 随包译本替换了英文散文；没有按语言选择，因此英文目录需要另一个提供方或本地覆盖。
+- **只有英文** —— 随包文本是上游英文语料；没有按语言选择，因此本地化目录需要翻译版提供方或本地覆盖。
 - **手动同步** —— 上游变更通过复制晋升桶、重新套用下面的改编步骤并更新固定名称列表进入本包；没有构建步骤跟踪上游仓库。
 - **没有按技能配置** —— 该提供方只暴露一个资源根目录，并且总是发布随包集合；想要子集的部署方应自己编写提供方。
 - **这些技能假设存在工作区** —— 工程技能会读取 `GLOSSARY.md`、ADR 与问题跟踪器；`setup-matt-pocock-skills` 写入这些配置，没有它时技能会要求运行它。
@@ -117,10 +117,10 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 <details>
 <summary>维护者工作背景——点击展开</summary>
 
-资源随包取自 [`yanfeng98/nano-mattpocock-skills`](https://github.com/yanfeng98/nano-mattpocock-skills)，分支 `260922-dev`，提交 `a7b4cdd`；该分支翻译上游英文仓库的 `engineering/` 与 `productivity/` 两个桶。重新同步时：
+资源随包取自 [`mattpocock/skills`](https://github.com/mattpocock/skills)，分支 `main`，提交 `abeeaf9`（v1.3.2）；`yanfeng98/nano-mattpocock-skills` 的 `main` 与该分支逐字节一致。重新同步时：
 
 1. 把每个晋升技能目录复制进 `assets/`，排除 Codex 的 `agents/openai.yaml`。
-2. 重新套用 Harness 改编：把「Skill 工具」改名为 `skill` 工具，把 `/clear` 改为开新会话（Harness 有 `/compact` 但没有 `/clear`），并去掉安装器、市场清单与桶 README。
+2. 重新套用 Harness 改编：把 `Skill tool` 改名为 `skill` 工具，把 `/clear` 改为开新会话（Harness 有 `/compact` 但没有 `/clear`），并去掉安装器、市场清单、桶 README 与 Codex 的 `agents/openai.yaml`。
 3. 更新 `src/index.ts` 里的 `SKILL_NAMES`；漂移测试会把该列表与资源目录比对。
 4. 运行该包的测试与包 README 门禁。
 

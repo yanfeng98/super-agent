@@ -1,31 +1,31 @@
-# MISSION.md 的格式
+# MISSION.md Format
 
-`MISSION.md` 放在工作区根目录。它记录用户学这个主题的_理由_。每一个教学决策（接下来教什么、该翻出哪些资源、该设计哪些练习）都应该能追溯到这份文档。
+`MISSION.md` lives at the workspace root. It captures the _reason_ the user is learning this topic. Every teaching decision (what to teach next, which resources to surface, which exercises to design) should trace back to this document.
 
-## 模板
+## Template
 
 ```md
 # Mission: {Topic}
 
 ## Why
-{1-3 句话。用户正在追的具体现实目标。拥有这项技能之后，他们的生活或工作会有什么变化？避免「为了理解 X」这类抽象说法，追问它背后的结果。}
+{1-3 sentences. The concrete real-world goal the user is chasing. What changes in their life or work when they have this skill? Avoid abstract framings like "to understand X"; push for the underlying outcome.}
 
 ## Success looks like
-- {用户将能做到的一件具体、可观察到的事}
-- {另一件具体的事}
+- {A specific, observable thing the user will be able to do}
+- {Another specific thing}
 - {…}
 
 ## Constraints
-- {时间、预算、既有的承诺、学习偏好，任何限制这条路怎么走的因素}
+- {Time, budget, prior commitments, learning preferences, anything that bounds the approach}
 
 ## Out of scope
-- {用户明确表示眼下不想去追的相邻主题，护住最近发展区（zone of proximal development）}
+- {Adjacent topics the user explicitly does not want to chase right now, protecting the zone of proximal development}
 ```
 
-## 规则
+## Rules
 
-- **一个工作区一个使命（mission）。** 用户想学两件互不相关的事，那就是两个工作区。
-- **具体优先于抽象。**「十月前跑完半程马拉松」胜过「变得更健康」。「给我们团队交付一个 Rust CLI」胜过「学 Rust」。
-- **对含糊其辞要顶回去。** 如果用户说不清为什么，先访谈他们，再动笔。糟糕的使命比没有使命更糟。
-- **现实一变就修订。** 使命会变。用户的目标挪了，就更新这份文件：别留下一份过期的使命去带偏后续的会话。
-- **保持简短。** 如果 `MISSION.md` 超过一屏，它就不再是罗盘，而变成了一份计划。
+- **One mission per workspace.** If the user wants to learn two unrelated things, that is two workspaces.
+- **Concrete over abstract.** "Run a half marathon by October" beats "get fitter." "Ship a Rust CLI to my team" beats "learn Rust."
+- **Push back on vagueness.** If the user cannot articulate why, interview them before writing anything. A bad mission is worse than no mission.
+- **Revise when reality shifts.** Missions change. When the user's goal moves, update this file: don't leave a stale mission steering future sessions.
+- **Keep it short.** If `MISSION.md` runs past a screen, it has stopped being a compass and started being a plan.

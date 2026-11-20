@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This provider ships 27 engineering and productivity skills inside the Harness, so a fresh checkout has them without a separate install, symlink, or plugin download: grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflow skills around them. Eleven are model-invoked and appear in the session catalog; sixteen are user-invoked and reachable only by typing `/` in the composer. The skills are a Simplified-Chinese translation of [mattpocock/skills](https://github.com/mattpocock/skills) with its machine identifiers preserved.
+This provider ships 27 engineering and productivity skills inside the Harness, so a fresh checkout has them without a separate install, symlink, or plugin download: grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflow skills around them. Eleven are model-invoked and appear in the session catalog; sixteen are user-invoked and reachable only by typing `/` in the composer. The skills are vendored from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`), with the small Harness wording adjustments listed in the dev note.
 
 ## Table of Contents
 
@@ -106,7 +106,7 @@ The eleven model-invoked entries add their translated descriptions to the sessio
 
 These limits define what the bundled provider does not do. They are current package constraints, not a task backlog.
 
-- **Chinese only** — the vendored translation replaces English prose; there is no per-locale selection, so an English catalog needs a separate provider or a local override.
+- **English only** — the vendored text is the upstream English corpus; there is no per-locale selection, so a localized catalog needs a translated provider or a local override.
 - **Manual synchronization** — upstream changes arrive by copying the promoted buckets, re-applying the adaptation below, and updating the fixed name list; no build step tracks the upstream repository.
 - **No per-skill configuration** — the provider exposes one asset root and always publishes the packaged set; deployments that want a subset author their own provider.
 - **The skills assume a workspace** — engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker; `setup-matt-pocock-skills` writes that configuration, and without it the skills ask for it.
@@ -117,10 +117,10 @@ These limits define what the bundled provider does not do. They are current pack
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The assets are vendored from [`yanfeng98/nano-mattpocock-skills`](https://github.com/yanfeng98/nano-mattpocock-skills), branch `260922-dev` at `a7b4cdd`, which translates the `engineering/` and `productivity/` buckets of the upstream English repository. To re-sync:
+The assets are vendored from [`mattpocock/skills`](https://github.com/mattpocock/skills), branch `main` at `abeeaf9` (v1.3.2); the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors it byte for byte. To re-sync:
 
 1. Copy each promoted skill directory into `assets/`, excluding the Codex `agents/openai.yaml` files.
-2. Re-apply the Harness adaptations: name the `skill` tool instead of "Skill 工具", replace `/clear` with opening a new session (the Harness has `/compact` but no `/clear`), and drop installers, marketplace manifests, and the bucket READMEs.
+2. Re-apply the Harness adaptations: name the `skill` tool, replace `/clear` with opening a new session (the Harness has `/compact` but no `/clear`), and drop installers, marketplace manifests, the bucket READMEs, and the Codex `agents/openai.yaml` files.
 3. Update `SKILL_NAMES` in `src/index.ts`; the drift test compares it with the asset directories.
 4. Run the package tests and the package README gates.
 

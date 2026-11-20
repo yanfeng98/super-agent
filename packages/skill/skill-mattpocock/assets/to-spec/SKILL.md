@@ -1,75 +1,75 @@
 ---
 name: to-spec
-description: "把当前对话变成一份 spec 并发布到项目的问题跟踪器：不做访谈，只把你已经讨论过的内容归纳出来。"
+description: "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
 disable-model-invocation: true
 ---
 
-这个技能拿当前的对话上下文和对代码库的理解，产出一份 spec。绝不要访谈用户，只把你已经知道的东西归纳出来。
+This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know.
 
-问题跟踪器和分诊标签的词汇本应已经提供给你。如果没有，让用户运行 `/setup-matt-pocock-skills`。
+The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
-## 流程
+## Process
 
-1. 如果还没探索过，先探索仓库，弄清代码库当前的状况。整份 spec 通篇使用项目的领域术语表里的词汇，并尊重你即将改动那片区域里的 ADR。
+1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
 
-2. 把你要用来测试这个特性的接缝（seam）勾勒出来。既有接缝应当优先于新接缝。用尽可能高的接缝。如果需要新接缝，就在你能提出的最高点上提议。整个代码库里的接缝越少越好，理想数目是一个。
+2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
 
-与用户确认这些接缝符合他们的预期。
+Check with the user that these seams match their expectations.
 
-3. 用下面的模板写出 spec，然后把它发布到项目的问题跟踪器上。打上 `ready-for-agent` 分诊标签，不需要再做额外的分诊。
+3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
 
 <spec-template>
 
 ## Problem Statement
 
-用户正面临的问题，从用户的视角来写。
+The problem that the user is facing, from the user's perspective.
 
 ## Solution
 
-这个问题的解决方案，从用户的视角来写。
+The solution to the problem, from the user's perspective.
 
 ## User Stories
 
-一份**很长**的、带编号的用户故事清单。每条用户故事都应当是这个格式：
+A LONG, numbered list of user stories. Each user story should be in the format of:
 
-1. 作为一个 <actor>，我想要一个 <feature>，这样就能 <benefit>
+1. As an <actor>, I want a <feature>, so that <benefit>
 
 <user-story-example>
-1. 作为一个手机银行客户，我想看到我账户上的余额，这样我就能对花销做出更有依据的决定
+1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
 </user-story-example>
 
-这份用户故事清单应当极其详尽，覆盖这个特性的所有方面。
+This list of user stories should be extremely extensive and cover all aspects of the feature.
 
 ## Implementation Decisions
 
-一份已经做出的实现决策清单。可以包括：
+A list of implementation decisions that were made. This can include:
 
-- 将要构建/修改的模块
-- 那些模块里将要修改的接口
-- 开发者给出的技术澄清
-- 架构决策
-- schema 变更
-- API 契约
-- 具体的交互
+- The modules that will be built/modified
+- The interfaces of those modules that will be modified
+- Technical clarifications from the developer
+- Architectural decisions
+- Schema changes
+- API contracts
+- Specific interactions
 
-绝不要写具体的文件路径或代码片段。它们可能很快就过时。
+Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
-例外：如果某个原型产出的片段比散文更精确地编码了一项决策（状态机、reducer、schema、类型形状），就把它内联在相关的那条决策里，并简短说明它来自某个原型。只保留决策密集的部分，不是能跑起来的演示，只要重要的那几段。
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
 
 ## Testing Decisions
 
-一份已经做出的测试决策清单。包括：
+A list of testing decisions that were made. Include:
 
-- 什么样的测试才算好测试（只测外部行为，不测实现细节）
-- 哪些模块会被测试
-- 测试的先例（也就是代码库里同类的测试）
+- A description of what makes a good test (only test external behavior, not implementation details)
+- Which modules will be tested
+- Prior art for the tests (i.e. similar types of tests in the codebase)
 
 ## Out of Scope
 
-这份 spec 范围之外的那些东西的描述。
+A description of the things that are out of scope for this spec.
 
 ## Further Notes
 
-关于这个特性的其他任何补充说明。
+Any further notes about the feature.
 
 </spec-template>
