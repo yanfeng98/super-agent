@@ -1,7 +1,7 @@
 ---
 name: grill-me
-description: 一场刨根问底的访谈，用来磨利一个计划或设计。
+description: A relentless interview to sharpen a plan or design.
 disable-model-invocation: true
 ---
 
-调用 `skill` 工具，参数 "grilling"。
+Call the `skill` tool with "grilling".

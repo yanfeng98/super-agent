@@ -1,18 +1,18 @@
 # Domain Docs
 
-工程类技能在探索代码库时应当如何消费这个仓库的领域文档。
+How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
 ## Before exploring, read these
 
-- 仓库根目录下的 **`GLOSSARY.md`**，或者
-- 仓库根目录下的 **`GLOSSARY-MAP.md`**（如果存在）：它为每个上下文指向一个 `GLOSSARY.md`。读其中每个与主题相关的。
-- **`docs/adr/`**：读那些触及你即将改动区域的 ADR。在多上下文仓库里，还要看 `src/<context>/docs/adr/`，那里是上下文范围的决定。
+- **`GLOSSARY.md`** at the repo root, or
+- **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
+- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
 
-如果这些文件里任何一个不存在，就**静默继续**。不要指出它们不存在；不要建议提前创建它们。`/domain-modeling` 技能（经由 `/grill-with-docs` 和 `/improve-codebase-architecture` 抵达）会在术语或决策真正定下来时惰性创建它们。
+If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
 ## File structure
 
-单上下文仓库（大多数仓库）：
+Single-context repo (most repos):
 
 ```
 /
@@ -23,7 +23,7 @@
 └── src/
 ```
 
-多上下文仓库（根目录存在 `GLOSSARY-MAP.md`）：
+Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
 
 ```
 /
@@ -40,12 +40,12 @@
 
 ## Use the glossary's vocabulary
 
-当你的产出要命名一个领域概念时（在 issue 标题、重构提案、假设、测试名字里），用 `GLOSSARY.md` 里定义的术语。不要漂移到术语表明确回避的同义词。
+When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids.
 
-如果你需要的概念还不在术语表里，这是一个信号：要么你在发明项目不用的说法（重新考虑），要么那里真有一个缺口（记下来交给 `/domain-modeling`）。
+If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 
 ## Flag ADR conflicts
 
-如果你的产出与某个既有 ADR 相矛盾，就明确地把它摆出来，而不是悄悄地推翻：
+If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _与 ADR-0007（事件溯源的订单）相矛盾，但值得重新打开，因为……_
+> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_

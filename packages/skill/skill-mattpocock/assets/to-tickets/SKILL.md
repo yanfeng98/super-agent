@@ -1,83 +1,83 @@
 ---
 name: to-tickets
-description: 把一份计划、spec 或当前对话拆成一组曳光弹（tracer bullet）工单，每张工单声明自己的阻塞边，发布到已配置好的跟踪器上（本地是每张工单一个文件、边写成文字，真实跟踪器上则用原生的阻塞链接）。
+description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker).
 disable-model-invocation: true
 ---
 
-# 拆成工单
+# To Tickets
 
-把一份计划、spec 或对话拆成一组**工单**：曳光弹（tracer bullet）式的垂直切片，每张都声明那些**阻塞**它的工单。
+Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-问题跟踪器和分诊标签的词汇本应已经提供给你。如果没有，让用户运行 `/setup-matt-pocock-skills`。
+The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
-## 流程
+## Process
 
-### 1. 收集上下文
+### 1. Gather context
 
-就从对话上下文里已有的东西开始。如果用户把某个引用（spec 路径、issue 编号或 URL）作为参数传进来，就取回它，读完它的完整正文和评论。
+Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
-### 2. 探索代码库（可选）
+### 2. Explore the codebase (optional)
 
-如果还没探索过代码库，就探索一遍，弄清代码当前的状况。工单标题和描述都应当使用项目的领域术语表词汇，并尊重你正在触碰的那片区域里的 ADR。
+If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
 
-寻找机会先给代码做预重构（prefactor），让实现更省力。「先让改动变容易，再做那个容易的改动。」
+Look for opportunities to prefactor the code to make the implementation easier. "Make the change easy, then make the easy change."
 
-### 3. 起草垂直切片
+### 3. Draft vertical slices
 
-把工作拆成**曳光弹工单**。
+Break the work into **tracer bullet** tickets.
 
 <vertical-slice-rules>
 
-- 每个切片都穿过每一层（schema、API、UI、测试），走出一条窄但**完整**的路径：是垂直的，绝不是某一层的一条水平切片
-- 一个完成的切片本身就能演示，或者能自己验证
-- 每个切片的体量都定得能装进单个全新的上下文窗口
-- 任何预重构都应当先做完
+- Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests): vertical, NOT a horizontal slice of one layer
+- A completed slice is demoable or verifiable on its own
+- Each slice is sized to fit in a single fresh context window
+- Any prefactoring should be done first
 
 </vertical-slice-rules>
 
-给每张工单定出它的**阻塞边**：在它开始之前必须完成的那些工单。没有阻塞者的工单可以立即开始。
+Give each ticket its **blocking edges**: the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
-**大范围重构是垂直切片的例外。**一次**大范围重构**是一项机械改动（重命名一列、给共享符号换类型），它的**影响半径（blast radius）**扇遍整个代码库，于是一次编辑会同时打断成千上万个调用点，任何垂直切片都不可能单独落地并保持绿。不要硬把它塞进一张曳光弹工单；把它排成**扩展-收缩（expand-contract）**。先扩展：在旧形式旁边加上新形式，这样什么都不会坏。然后按影响半径分批把调用点迁过去（按包、按目录），每一批自己一张工单、被扩展那张阻塞，因为旧形式还在，所以一批接一批都能保持 CI 绿。最后收缩：在没有任何调用者之后删掉旧形式，这张工单被每一个迁移批次阻塞。当这些批次各自都无法单独保持绿时，保留这个顺序，但让它们共用一条集成分支，并且都阻塞一张最终的集成并验证工单；只有在那里才承诺绿。
+**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket; green is promised only there.
 
-### 4. 向用户提问
+### 4. Quiz the user
 
-把提议的拆法作为一份带编号的清单摆出来。每张工单都显示：
+Present the proposed breakdown as a numbered list. For each ticket, show:
 
-- **Title**：简短、能说明问题的名字
-- **Blocked by**：还有哪些工单（如果有）必须先完成
-- **What it delivers**：这张工单让哪个端到端行为跑通
+- **Title**: short descriptive name
+- **Blocked by**: which other tickets (if any) must complete first
+- **What it delivers**: the end-to-end behaviour this ticket makes work
 
-问用户：
+Ask the user:
 
-- 粒度感觉对吗？（太粗 / 太细）
-- 阻塞边对吗：每张工单是否只依赖那些真正卡住它的工单？
-- 有没有工单该合并或再拆开？
+- Does the granularity feel right? (too coarse / too fine)
+- Are the blocking edges correct: does each ticket only depend on tickets that genuinely gate it?
+- Should any tickets be merged or split further?
 
-反复迭代，直到用户认可这份拆法。
+Iterate until the user approves the breakdown.
 
-### 5. 把工单发布到配置好的跟踪器
+### 5. Publish the tickets to the configured tracker
 
-发布获批的工单。**怎么发**取决于 `/setup-matt-pocock-skills` 配置好的跟踪器；两种方式下工单都一样，变的只是阻塞边的形态：
+Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock-skills` configured; the tickets are the same either way, only the shape of the blocking edges changes:
 
-- **本地文件** → 在 `.scratch/<feature-slug>/issues/<NN>-<slug>.md` 下每张工单写一个文件，按依赖顺序从 `01` 开始编号（阻塞者在前）。每个文件的 "Blocked by" 列出它依赖的编号/标题。用下面那份每张工单一个文件的模板：一张工单一个文件，绝不是一个把所有工单合成一个的文件。
-- **真实的 issue 跟踪器（GitHub、Linear、…）** → 按依赖顺序（阻塞者在前）每张工单发布一个 issue，这样每张工单的阻塞边都能引用真实的标识符。平台有原生的阻塞关系就使用它；否则把每张工单的 "Blocked by" 设为那些阻塞它的 issue。如果来源是一条已有的 issue，就把每张工单都做成它的子 issue（用跟踪器文档里的操作）。除非另有指示，否则打上 `ready-for-agent` 分诊标签；这些工单按构造就是 agent 可以直接抓的。
+- **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below: one ticket per file, never a single combined file.
+- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. If the source was an existing issue, make each ticket its sub-issue (tracker doc's operation). Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
 
-按**前沿（frontier）**推进：先做阻塞者全都做完的那些工单。对于一条纯粹的线性链，那就是从上到下。
+Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
-绝不要关闭或修改任何父 issue。
+Do NOT close or modify any parent issue.
 
 <local-ticket-template>
 
 # <NN>: <Ticket title>
 
-**What to build:** 这张工单让哪个端到端行为跑通，从用户的视角来写，不是逐层罗列实现。
+**What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective, not a layer-by-layer implementation list.
 
-**Blocked by:** 阻塞它的那些工单的编号/标题，或者 "None (can start immediately)"。
+**Blocked by:** the numbers/titles of the tickets that gate this one, or "None (can start immediately)".
 
 **Status:** ready-for-agent
 
-- [ ] 验收标准 1
-- [ ] 验收标准 2
+- [ ] Acceptance criterion 1
+- [ ] Acceptance criterion 2
 
 </local-ticket-template>
 
@@ -85,21 +85,21 @@ disable-model-invocation: true
 
 ## Parent
 
-对跟踪器上父 issue 的引用（如果来源本来就是一个既有的 issue，否则省略这一节）。
+A reference to the parent issue on the tracker (if the source was an existing issue, otherwise omit this section).
 
 ## What to build
 
-这张工单让哪个端到端行为跑通，从用户的视角来写，不是逐层罗列实现。
+The end-to-end behaviour this ticket makes work, from the user's perspective, not layer-by-layer implementation.
 
 ## Acceptance criteria
 
-- [ ] 验收标准 1
-- [ ] 验收标准 2
+- [ ] Criterion 1
+- [ ] Criterion 2
 
 ## Blocked by
 
-- 对每张阻塞工单的引用，或者 "None (can start immediately)"。当阻塞关系已用原生边设置时，省略这一节。
+- A reference to each blocking ticket, or "None (can start immediately)". Omit this section when blockers were set as native edges.
 
 </issue-template>
 
-无论哪种形式，都要避免具体的文件路径或代码片段：它们很快就过时。例外：如果某个原型产出的片段比散文更精确地编码了一项决策（状态机、reducer、schema、类型形状），就把它内联进来，并简短说明它来自某个原型。只保留决策密集的部分，不是能跑起来的演示，只要重要的那几段。
+In either form, avoid specific file paths or code snippets: they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
