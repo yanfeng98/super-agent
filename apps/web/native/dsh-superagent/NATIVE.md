@@ -291,6 +291,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     orchestrator model-surface budget moved from 64,700 to 65,500 after trimming existing descriptions, measured
     65,390 characters.
 
+27. **Anchored notes, rejections, and the merge aftermath from the chat.** `orchestrator_ticket_note` takes `file`, `line`
+    and `end_line` and records a review note through `Engine.addNote` instead of sending a message, so a comment made in the
+    chat appears on the diff and blocks the merge like one made on the page; `review` still hands the unsent notes over.
+    `orchestrator_ticket_review` takes `changes` and `note`, recording a `changes-requested` decision that blocks merging
+    until a later approval, and `orchestrator_ticket_finish` retries a failed push through `pushTicket` or removes a merged
+    worktree through `cleanupTicket`. `orchestrator_merge_queue` takes `paused`, so a queue paused by a failed target check
+    can be released from the chat. The review, push and cleanup records name `chat` as their interface and reach the
+    archive. `tests/chat-tools.spec.ts` covers them; the orchestrator model-surface budget moved from 65,500 to 67,500 for
+    the new tool and options.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.
@@ -302,7 +312,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,298 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,396 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a

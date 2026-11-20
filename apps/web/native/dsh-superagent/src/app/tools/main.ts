@@ -41,6 +41,10 @@ export interface MainToolsHost {
   /** Stops a live ticket, or with `discard` removes an ended ticket's worktree, on the person's explicit instruction. */
   stopTicket(id: string, options?: { discard?: boolean; reason?: string }):
     Promise<{ ticket: Ticket; stopped: boolean; discarded: boolean }>
+  /** Pushes the branch a merge or a revert moved to its upstream again, for a failed or missing push. */
+  pushTicket(id: string): Promise<{ ticket_id: string; pushed: true }>
+  /** Removes a merged ticket's worktree and deletes its branch. */
+  cleanupTicket(id: string): Promise<void>
   /** Records a person's review decision on an ended ticket's changes. */
   reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket
   /** Marks every review note resolved, or opens every resolved one again. */
@@ -58,6 +62,8 @@ export interface MainToolsHost {
   dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
   /** Clears the recorded failure of queued Tickets, so the next pass tries them again. */
   retryMerges(ids: readonly string[]): { retried: number; queue: { ticket_id: string; position: number }[] }
+  /** Holds or releases the merge queue, which keeps its order; returns the state afterwards. */
+  pauseMergeQueue(paused: boolean): boolean
   /** The merge queue and the ended Tickets still waiting for a merge or a person's decision. */
   pendingMerges(): { queue: MergeQueueView;
     waiting: { ticket_id: string; title: string; outcome: string; needs: string; reason?: string; blocked_by?: string[] }[] }
@@ -222,36 +228,59 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_note',
-      description: 'Tell a worker a fact, or hand an ended ticket back on its unsent notes or failing check; it grants no authority.',
+      description: 'Tell a worker a fact, record a review note on a file or line, or hand an ended ticket back on its unsent notes or failing check; an open note blocks merging until resolved, and it grants no authority.',
       schema: z.object({
         ticket_id: z.string(),
         text: z.string().trim().min(1).refine(text => wordCount(text) <= IM_WORDS, `At most ${IM_WORDS} words`).optional()
-          .describe('A fact or instruction in the person\'s words.'),
+          .describe('A fact or instruction in the person\'s words, or the note\'s text when file is given.'),
+        file: z.string().trim().min(1).max(500).optional()
+          .describe('A path from the ticket\'s diff; with text, records a review note anchored there instead of sending a message.'),
+        line: z.number().int().positive().optional().describe('The line the note starts on.'),
+        end_line: z.number().int().positive().optional().describe('The last line of the note\'s range.'),
         review: z.boolean().default(false).describe('Send the unsent review notes.'),
         check: z.boolean().default(false).describe('Send the failing check.'),
-      }).strict().refine(args => !!args.text || args.review || args.check, 'text, review or check is required'),
+      }).strict()
+        .refine(args => !args.line || !!args.file, 'file is required with line')
+        .refine(args => !args.end_line || (!!args.file && !!args.line), 'file and line are required with end_line')
+        .refine(args => !args.end_line || !args.line || args.end_line >= args.line, 'end_line must not be before line')
+        .refine(args => !args.file || !!args.text, 'text is required for a note')
+        .refine(args => !!args.text || args.review || args.check, 'text, review or check is required'),
       execute: async args => {
-        const result = host.handbackTicket(args.ticket_id, { ...(args.text ? { text: args.text } : {}),
-          ...(args.review ? { notes: true } : {}), ...(args.check ? { check: true } : {}) }, 'chat')
-        return routed(host, { reason: result.resumed ? 'Handed the ticket back to its worker' : 'Noted for the worker',
-          ticketId: args.ticket_id })
+        const id = host.ticketId(args.ticket_id)
+        if (args.file) {
+          host.engine.addNote(id, { file: args.file, ...(args.line ? { line: args.line } : {}),
+            ...(args.end_line ? { endLine: args.end_line } : {}), text: args.text ?? '' })
+        }
+        const send = (!args.file && !!args.text) || args.review || args.check
+        const result = send ? host.handbackTicket(id, { ...(args.text && !args.file ? { text: args.text } : {}),
+          ...(args.review ? { notes: true } : {}), ...(args.check ? { check: true } : {}) }, 'chat') : undefined
+        const reason = result?.resumed ? 'Handed the ticket back to its worker'
+          : args.file ? 'Recorded a note on the changes' : 'Noted for the worker'
+        return routed(host, { reason, ticketId: id })
       },
     }),
     tool({
       name: 'orchestrator_ticket_review',
-      description: 'Approve an ended ticket\'s changes, or resolve its open review notes; an approval is what Require review approval waits for.',
+      description: 'Approve or reject an ended ticket\'s changes, or resolve its open review notes; an approval is what Require review approval waits for, and a rejection blocks merging.',
       schema: z.object({
         ticket_id: z.string().describe('Ticket id or T-0007.'),
         approve: z.boolean().default(false).describe('Approve the ending changes.'),
+        changes: z.boolean().default(false).describe('Request changes, which blocks merging until a later approval.'),
         resolve: z.boolean().default(false).describe('Resolve every open review note.'),
-      }).strict().refine(args => args.approve || args.resolve, 'approve or resolve is required'),
+        note: z.string().trim().max(2000).optional().describe('A sentence recorded with the decision.'),
+      }).strict()
+        .refine(args => !(args.approve && args.changes), 'approve and changes are exclusive')
+        .refine(args => !args.note || args.approve || args.changes, 'note needs approve or changes')
+        .refine(args => args.approve || args.changes || args.resolve, 'approve, changes or resolve is required'),
       execute: async args => {
         const id = host.ticketId(args.ticket_id)
-        if (args.approve) host.reviewTicket(id, 'approved')
+        if (args.approve) host.reviewTicket(id, 'approved', args.note)
+        if (args.changes) host.reviewTicket(id, 'changes-requested', args.note)
         if (args.resolve) host.resolveNotes(id, true)
-        host.requestPass()
+        if (args.approve || args.resolve) host.requestPass()
         const ticket = host.store.tickets.get(id)
-        return { approved: args.approve, resolved: args.resolve, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+        return { approved: args.approve, changes: args.changes, resolved: args.resolve,
+          ...(args.note ? { note: args.note } : {}), ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },
     }),
     tool({
@@ -278,6 +307,22 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         host.requestPass()
         const ticket = host.store.tickets.get(id)
         return { check, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_finish',
+      description: 'Finish a merged or reverted Ticket: retry a push that failed or was never made, or remove a merged Ticket\'s worktree and branch; a merge with cleanup already does the last step.',
+      schema: z.object({
+        ticket_id: z.string().describe('Ticket id or T-0007.'),
+        push: z.boolean().default(false).describe('Push the branch the merge or revert moved to its upstream again.'),
+        cleanup: z.boolean().default(false).describe('Remove the merged worktree and delete its branch.'),
+      }).strict().refine(args => args.push || args.cleanup, 'push or cleanup is required'),
+      execute: async args => {
+        const id = host.ticketId(args.ticket_id)
+        if (args.push) await host.pushTicket(id)
+        if (args.cleanup) await host.cleanupTicket(id)
+        const ticket = host.store.tickets.get(id)
+        return { pushed: args.push, cleaned: args.cleanup, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },
     }),
     tool({
@@ -327,7 +372,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_merge_queue',
-      description: 'Queue ended Tickets to merge one after another: the host merges them in the order given, reports each result here, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place until its gate opens. With no ticket_ids it reports the queue and the Tickets waiting.',
+      description: 'Queue ended Tickets to merge one after another: the host merges them in the order given, reports each result here, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place until its gate opens. With no ticket_ids it reports the queue and the Tickets waiting. paused holds or releases the queue, such as after a target check paused it.',
       schema: z.object({
         ticket_ids: z.array(z.string().min(1)).max(20).optional().describe('The ended Tickets, in merge order; omit for the status.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
@@ -335,11 +380,16 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         push: z.boolean().optional().describe('Push each merged branch to its upstream, when the person asked.'),
         cancel: z.boolean().default(false).describe('Take these Tickets out of the queue.'),
         retry: z.boolean().default(false).describe('Clear these queued Tickets\' recorded failure.'),
+        paused: z.boolean().optional().describe('Hold the queue, or release it; it keeps its order either way.'),
       }).strict(),
       execute: async args => {
         const options = { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }),
           ...(args.push === undefined ? {} : { push: args.push }) }
         const ids = args.ticket_ids ?? []
+        if (args.paused !== undefined) {
+          if (ids.length || args.cancel || args.retry) throw new Error('paused cannot be combined with Tickets, cancel or retry')
+          return { cancelled: false as const, paused: host.pauseMergeQueue(args.paused), status: host.pendingMerges() }
+        }
         if (!ids.length) {
           // The status report is read-only, so it never takes the cancel or retry branch by accident.
           if (args.cancel || args.retry) throw new Error('Name the Tickets to cancel or retry')

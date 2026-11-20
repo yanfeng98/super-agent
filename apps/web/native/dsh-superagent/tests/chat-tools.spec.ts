@@ -119,6 +119,77 @@ it('records an approval and resolves open notes from the main Session', async ()
   expect(reviewed.notes?.every(note => note.resolved)).toBe(true)
 })
 
+it('records a line-anchored note and a rejection from the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  const noted = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/a.ts', line: 3, end_line: 5, text: '这段抽出来' }) as unknown as
+    { reason: string; ticket: { ticket_id: string } }
+  expect(noted).toMatchObject({ reason: 'Recorded a note on the changes', ticket: { ticket_id: ticket.id } })
+  const withNote = h.runtime.store.tickets.get(ticket.id)!
+  expect(withNote.notes?.[0]).toMatchObject({ file: 'src/a.ts', line: 3, endLine: 5, text: '这段抽出来' })
+  expect(withNote.notes?.[0]?.sent).toBeUndefined()
+  // The same call with review hands the new note over and resumes the ticket.
+  const handed = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/b.ts', line: 7, text: '这里也要改', review: true }) as unknown as { reason: string }
+  expect(handed.reason).toBe('Handed the ticket back to its worker')
+  const resumed = h.runtime.store.tickets.get(ticket.id)!
+  expect(resumed.ended).toBeUndefined()
+  expect(resumed.notes?.every(note => note.sent?.at)).toBe(true)
+  expect(resumed.inputs.at(-1)).toMatchObject({ kind: 'text', text: expect.stringContaining('src/b.ts:7: 这里也要改') })
+  // A note without a file still reaches the worker as a plain message.
+  const plain = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', text: '继续用单列布局。' }) as unknown as { reason: string }
+  expect(plain.reason).toBe('Noted for the worker')
+  // The schema refuses a line without a file, a backwards range, and a note without text.
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', line: 3, text: 'x' })).rejects.toThrow(/file is required with line/)
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/a.ts', line: 5, end_line: 3, text: 'x' })).rejects.toThrow(/end_line must not be before line/)
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/a.ts' })).rejects.toThrow(/text is required for a note/)
+
+  const { ticket: second } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  await h.runTool(`worker-${second.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  const rejected = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_review',
+    { ticket_id: 'T-0002', changes: true, note: '先别合，补个测试' }) as unknown as
+    { changes: boolean; note: string; ticket: { ticket_id: string } }
+  expect(rejected).toMatchObject({ changes: true, note: '先别合，补个测试', ticket: { ticket_id: second.id } })
+  const reviewed = h.runtime.store.tickets.get(second.id)!
+  expect(reviewed.reviewed).toMatchObject({ decision: 'changes-requested', note: '先别合，补个测试', via: 'chat' })
+  expect(reviewed.reviews?.at(-1)).toMatchObject({ decision: 'changes-requested', note: '先别合，补个测试' })
+  // An approval and a rejection cannot be asked for together.
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_review',
+    { ticket_id: 'T-0002', approve: true, changes: true })).rejects.toThrow(/exclusive/)
+})
+
+it('retries a push and cleans up a merged ticket from the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const push = vi.spyOn(h.runtime, 'pushTicket').mockResolvedValue({ ticket_id: ticket.id, pushed: true })
+  const cleanup = vi.spyOn(h.runtime, 'cleanupTicket').mockResolvedValue(undefined)
+  const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_finish',
+    { ticket_id: 'T-0001', push: true, cleanup: true }) as unknown as
+    { pushed: boolean; cleaned: boolean; ticket: { ticket_id: string } }
+  expect(push).toHaveBeenCalledWith(ticket.id, 'chat')
+  expect(cleanup).toHaveBeenCalledWith(ticket.id, 'chat')
+  expect(result).toMatchObject({ pushed: true, cleaned: true, ticket: { ticket_id: ticket.id } })
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_finish', { ticket_id: 'T-0001' }))
+    .rejects.toThrow(/push or cleanup is required/)
+})
+
+it('pauses and releases the merge queue from the main Session', async () => {
+  const paused = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
+    { paused: true }) as unknown as { paused: boolean; status: { queue: { paused: boolean } } }
+  expect(paused).toMatchObject({ paused: true, status: { queue: { paused: true } } })
+  const released = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
+    { paused: false }) as unknown as { paused: boolean; status: { queue: { paused: boolean } } }
+  expect(released).toMatchObject({ paused: false, status: { queue: { paused: false } } })
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_merge_queue',
+    { paused: true, ticket_ids: ['T-0001'] })).rejects.toThrow(/paused cannot be combined/)
+})
+
 it('reruns the configured check from the main Session', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
