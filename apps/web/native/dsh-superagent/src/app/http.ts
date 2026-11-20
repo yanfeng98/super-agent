@@ -14,7 +14,7 @@ import { PromptConflict, SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, b
 import { policyVersion } from '../policy.ts'
 import { SettingsConflict, type Settings } from './settings.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
-import { UserError, type EngineForPeople, type Ticket, type TicketCheck, type TicketNote } from '../core/index.ts'
+import { UserError, type ActionOrigin, type EngineForPeople, type Ticket, type TicketCheck, type TicketNote } from '../core/index.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import type { DshExecutor } from '../executor/dsh.ts'
 import type { Health } from '../sources/host.ts'
@@ -59,8 +59,9 @@ export interface HttpHost {
   configured(): boolean
   /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
   ticketDiff(id: string, since?: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; base?: string; error?: string }>
-  /** Merges an ended ticket's branch into the repository and records the merge. */
-  mergeTicket(id: string, strategy?: 'ff' | 'squash' | 'merge'): Promise<{ branch: string; target: string }>
+  /** Merges an ended ticket's branch into the repository and records the merge, pushing it when asked. */
+  mergeTicket(id: string, strategy?: 'ff' | 'squash' | 'merge', options?: { push?: boolean }):
+    Promise<{ branch: string; target: string; pushed?: true; pushError?: string }>
   /** Removes an ended ticket's linked worktree and branch. */
   discardTicket(id: string): Promise<void>
   /** Rebases an ended ticket's branch onto the repository's checked-out branch. */
@@ -69,8 +70,9 @@ export interface HttpHost {
   checkTicket(id: string): Promise<TicketCheck>
   /** Links or unlinks another ticket, named by id or display number. */
   linkTicket(id: string, reference: string, linked: boolean): { related: { id: string; number?: number; title: string }[] }
-  /** Undoes a merged ticket's merge with a reverting commit on the branch it landed. */
-  revertTicket(id: string): Promise<{ branch: string; target: string; commit: string }>
+  /** Undoes a merged ticket's merge with a reverting commit on the branch it landed, pushing it when asked. */
+  revertTicket(id: string, origin?: ActionOrigin, options?: { push?: boolean }):
+    Promise<{ ticket_id: string; branch: string; target: string; commit: string; pushed?: true; pushError?: string }>
   /** Pushes the branch a merge moved again, for a push that failed. */
   pushTicket(id: string): Promise<{ ticket_id: string; pushed: true }>
   /** Takes a ticket out of the merge queue. */
@@ -130,6 +132,9 @@ async function readBody(req: IncomingMessage, maxBytes = 128 * 1024): Promise<un
     if (size > maxBytes) throw new RouteError(400, `Request exceeds ${maxBytes} bytes`)
     chunks.push(bytes)
   }
+  // A request without a body reads as `undefined`, so a route whose options are all optional accepts it; malformed JSON
+  // still fails with the same report.
+  if (!chunks.length) return undefined
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown }
   catch { throw new RouteError(400, 'The request body is not JSON') }
 }
@@ -304,10 +309,11 @@ function routes(runtime: HttpHost): Routes {
       const since = z.string().regex(/^[0-9a-f]{7,40}$/i, 'A commit id').optional().parse(query.since)
       return runtime.ticketDiff(id, since)
     },
-    'POST tickets/:id/merge': async ({ params, query }) => {
+    'POST tickets/:id/merge': async ({ params, query, body }) => {
       const id = ticket(params.id)
       const strategy = z.enum(['ff', 'squash', 'merge']).default('ff').parse(query.strategy)
-      try { return { merged: true as const, ...await runtime.mergeTicket(id, strategy) } }
+      const { push } = z.object({ push: z.boolean().default(false) }).strict().parse(await body() ?? {})
+      try { return { merged: true as const, ...await runtime.mergeTicket(id, strategy, push ? { push } : {}) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/title': async ({ params, body }) => {
@@ -338,9 +344,10 @@ function routes(runtime: HttpHost): Routes {
       try { return { tags: runtime.setTags(id, tags).tags ?? [] } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
-    'POST tickets/:id/revert': async ({ params }) => {
+    'POST tickets/:id/revert': async ({ params, body }) => {
       const id = ticket(params.id)
-      try { return await runtime.revertTicket(id) }
+      const { push } = z.object({ push: z.boolean().default(false) }).strict().parse(await body() ?? {})
+      try { return await runtime.revertTicket(id, 'panel', push ? { push } : {}) }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/push': async ({ params }) => {

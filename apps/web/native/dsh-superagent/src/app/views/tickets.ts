@@ -105,8 +105,9 @@ export function ticketDetail(host: ViewHost, id: string) {
   const revert = !!ticket.merged && !undone && !!(ticket.merged.root ?? ticket.execution?.directory)
   // A revert of a merge that a later merge replaced is history, not the ticket's current state.
   const reverted = ticket.reverted && ticket.reverted.at > (ticket.merged?.at ?? '') ? ticket.reverted : undefined
-  // A push that failed can be retried where the merge ran, from the panel.
-  const push = !!ticket.merged && ticket.merged.push?.ok === false && !!(ticket.merged.root ?? ticket.execution?.directory)
+  // A merge or a revert that was never pushed, or whose push failed, can be pushed where it ran, from the panel.
+  const pushTarget = reverted ?? ticket.merged
+  const push = !!pushTarget && pushTarget.push?.ok !== true && !!(pushTarget.root ?? ticket.execution?.directory)
   // A queued Ticket shows its place and can leave the queue from its page.
   const queuePosition = mergePosition(store, ticket.id)
   const reviewDecision = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
@@ -129,7 +130,9 @@ export function ticketDetail(host: ViewHost, id: string) {
     ...(ticket.merged.head ? { head: ticket.merged.head } : {}), ...(ticket.merged.via ? { via: ticket.merged.via } : {}),
     ...(ticket.merged.push ? { push: { ok: ticket.merged.push.ok, ...(ticket.merged.push.error ? { error: ticket.merged.push.error } : {}) } } : {}) })
   if (ticket.reverted) history.push({ code: 'reverted', at: ticket.reverted.at, head: ticket.reverted.commit,
-    merge: ticket.reverted.merge, ...(ticket.reverted.via ? { via: ticket.reverted.via } : {}) })
+    merge: ticket.reverted.merge, ...(ticket.reverted.push ? { push: { ok: ticket.reverted.push.ok,
+      ...(ticket.reverted.push.error ? { error: ticket.reverted.push.error } : {}) } } : {}),
+    ...(ticket.reverted.via ? { via: ticket.reverted.via } : {}) })
   if (ticket.cleaned) history.push({ code: 'cleaned', at: ticket.cleaned.at, ...(ticket.cleaned.via ? { via: ticket.cleaned.via } : {}) })
   if (ticket.discarded) history.push({ code: 'discarded', at: ticket.discarded.at })
   history.sort((a, b) => a.at.localeCompare(b.at))

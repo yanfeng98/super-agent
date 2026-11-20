@@ -45,9 +45,10 @@ export interface Api {
   'POST tickets/:id/reopen': { response: { reopened: true } }
   'GET tickets/:id/diff': { query?: { since?: string };
     response: { diff: string; truncated: boolean; files: DiffFile[]; base?: string; error?: string } }
-  'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' };
-    response: { merged: true; branch: string; target: string; rebased?: true; recaptured?: true } }
-  'POST tickets/:id/revert': { response: { branch: string; target: string; commit: string } }
+  'POST tickets/:id/merge': { query?: { strategy?: 'ff' | 'squash' | 'merge' }; body?: { push?: boolean };
+    response: { merged: true; branch: string; target: string; rebased?: true; recaptured?: true; pushed?: true; pushError?: string } }
+  'POST tickets/:id/revert': { body?: { push?: boolean };
+    response: { ticket_id: string; branch: string; target: string; commit: string; pushed?: true; pushError?: string } }
   'POST tickets/:id/push': { response: { ticket_id: string; pushed: true } }
   'POST tickets/:id/dequeue': { response: { removed: number; queue: { ticket_id: string; position: number }[] } }
   'GET merge-queue': { response: MergeQueueView }

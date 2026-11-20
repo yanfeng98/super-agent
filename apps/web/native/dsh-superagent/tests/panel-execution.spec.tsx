@@ -341,15 +341,24 @@ it('shows the review captured when a ticket ended and lets a person reopen it', 
   expect(text()).not.toContain('+new')
   await click('src/a.ts')
   expect(text()).toContain('+new')
+  // A line offers its own comment, which fills in the file and the line it anchors on.
+  await click(document.querySelector('.dt-diff-add .dt-diff-comment') as HTMLElement)
+  expect(field<HTMLInputElement>(zh.noteFilePlaceholder).value).toBe('src/a.ts')
+  expect(field<HTMLInputElement>(zh.noteLinePlaceholder).value).toBe('1')
+  await type(field<HTMLTextAreaElement>(zh.noteTextPlaceholder), '这一行要改名')
+  await click(zh.noteAdd)
+  expect(server.requests.find(request => request.path === 'tickets/t5/notes')).toMatchObject({ method: 'POST',
+    body: { file: 'src/a.ts', line: 1, text: '这一行要改名' } })
   await click(zh.diffViewed)
   expect(Object.keys(localStorage).some(key => key.startsWith('dsh-superagent/viewed/t5/'))).toBe(true)
   await click(zh.reviewApprove)
   expect(server.requests.find(request => request.path === 'tickets/t5/review')).toMatchObject({ method: 'POST',
     body: { decision: 'approved' } })
+  await click(field<HTMLInputElement>(zh.mergePush))
   await click(zh.ticketMerge)
   await click(zh.confirm)
-  expect(server.requests.some(request => request.path.startsWith('tickets/t5/merge') && request.method === 'POST'
-    && request.path.includes('strategy=ff'))).toBe(true)
+  expect(server.requests.find(request => request.path.startsWith('tickets/t5/merge') && request.method === 'POST'
+    && request.path.includes('strategy=ff'))).toMatchObject({ body: { push: true } })
   await click(zh.ticketDiscard)
   await click(zh.confirm)
   expect(server.requests.some(request => request.path === 'tickets/t5/discard' && request.method === 'POST')).toBe(true)
@@ -520,6 +529,29 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
     reason: '不需要了' } }
   await remount(en)
   expect(all('.dt-hint').map(hint => hint.textContent).find(line => line?.includes(en['outcome.stopped']))).toMatch(/Stopped by a person: 不需要了$/)
+})
+
+it('offers a push after a merge that was not pushed, and after a revert', async () => {
+  const base = server.ticketDetails.t1!
+  server.ticketDetails.t1 = { ...base, actions: { ...base.actions, push: true },
+    merged: { at: '2026-11-18T00:00:00Z', branch: 'agent/t1', target: 'main', head: 'e'.repeat(40) } }
+  at({ page: 'execution', id: 't1' })
+  await mount()
+  // A merge made without a push can still be sent to its upstream from the page.
+  expect(text()).toContain(zh.pushNow)
+  await click(zh.pushNow)
+  expect(server.requests.find(request => request.path === 'tickets/t1/push')).toMatchObject({ method: 'POST' })
+  // A revert removes the merge, so the revert keeps its own push action and the remote's answer.
+  const reverted = { ...base, actions: { ...base.actions, push: true },
+    reverted: { at: '2026-11-18T00:01:00Z', commit: 'f'.repeat(40), target: 'main', merge: 'e'.repeat(40), root: '/repo',
+      push: { at: '2026-11-18T00:02:00Z', ok: false, error: 'fatal: no upstream branch' } } }
+  delete reverted.merged
+  server.ticketDetails.t1 = reverted
+  await remount()
+  expect(text()).toContain(zh.pushRetry)
+  expect(text()).toContain('fatal: no upstream branch')
+  await click(zh.pushRetry)
+  expect(server.requests.filter(request => request.path === 'tickets/t1/push')).toHaveLength(2)
 })
 
 it('sends one stop for a double click on Confirm', async () => {

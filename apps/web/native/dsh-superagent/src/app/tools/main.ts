@@ -50,7 +50,8 @@ export interface MainToolsHost {
   /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
   /** Undoes a merged Ticket's merge with a reverting commit on the branch it landed. */
-  revertTicket(id: string): Promise<{ ticket_id: string; branch: string; target: string; commit: string }>
+  revertTicket(id: string, options?: { push?: boolean }): Promise<{ ticket_id: string; branch: string; target: string; commit: string;
+    pushed?: true; pushError?: string }>
   /** Clears a person's standing merge request. */
   cancelAutoMerge(id: string): Ticket
   /** Records or clears that one Ticket's branch must merge before another's. */
@@ -246,7 +247,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_merge',
-      description: 'Merge one ended Ticket\'s branch into the repository\'s checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, runs that check on the merged branch, and removes the worktree or pushes upstream when asked. Several Tickets go through orchestrator_merge_queue.',
+      description: 'Merge one ended Ticket\'s branch into the checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, runs that check on the merged branch, and removes the worktree or pushes upstream when asked. Several Tickets go through orchestrator_merge_queue.',
       schema: z.object({
         ticket_id: z.string().min(1).describe('The ended Ticket to merge, by id or display number such as T-0007.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
@@ -262,7 +263,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_merge_queue',
-      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place and is retried once its gate opens. Cancel queued Tickets with cancel, or retry a failed one with retry. With no ticket_ids it reports what is queued and what still waits.',
+      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place and is retried once its gate opens. Cancel queued Tickets with cancel, or retry a failed one with retry. With no ticket_ids it reports what is queued and waiting.',
       schema: z.object({
         ticket_ids: z.array(z.string().min(1)).max(20).optional().describe('The ended Tickets to queue, in merge order; omit to report the status.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
@@ -287,12 +288,13 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_revert',
-      description: 'Undo a merged Ticket\'s merge with a reverting commit on the branch it landed, on the person\'s explicit request such as "回退 T-0007"; the record names the commit and the merge it undoes. A conflicting revert leaves the repository untouched, and the person resolves it with git.',
+      description: 'Undo a merged Ticket\'s merge with a reverting commit on the branch it landed, on the person\'s explicit request such as "回退 T-0007"; the record names the commit and the merge it undoes. A conflicting revert leaves the repository untouched.',
       schema: z.object({
         ticket_id: z.string().min(1).describe('The merged Ticket to undo, by id or display number such as T-0007.'),
+        push: z.boolean().optional().describe('Push the reverting commit upstream, when the person asked.'),
       }).strict(),
       execute: async args => {
-        const result = await host.revertTicket(args.ticket_id)
+        const result = await host.revertTicket(args.ticket_id, { ...args.push === undefined ? {} : { push: args.push } })
         const ticket = host.store.tickets.get(result.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },

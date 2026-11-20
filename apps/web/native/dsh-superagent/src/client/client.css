@@ -382,5 +382,21 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-field-segmented { max-width: 240px; }
 
 .dt-workspace-diff { margin: 8px 0 0; padding: 12px; max-height: 360px; overflow: auto; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-l2); font: 12px/18px var(--dsw-alias-font-mono); white-space: pre; }
+.dt-diff { margin: 8px 0 0; max-height: 480px; overflow: auto; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-l2); font: 12px/18px var(--dsw-alias-font-mono); }
+.dt-diff-row { position: relative; }
+.dt-diff-line { display: flex; gap: 8px; padding: 0 8px; white-space: pre; background: var(--dsw-alias-bg-l2); }
+.dt-diff-line:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dt-diff-no { flex: none; width: 48px; text-align: right; color: var(--dsw-alias-label-caption); user-select: none; }
+.dt-diff-text { flex: 1; min-width: 0; }
+.dt-diff-add { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, var(--dsw-alias-bg-l2)); }
+.dt-diff-del { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, var(--dsw-alias-bg-l2)); }
+.dt-diff-hunk, .dt-diff-meta { color: var(--dsw-alias-label-caption); }
+.dt-diff-comment { position: sticky; right: 0; flex: none; padding: 0 4px; border: 0; background: inherit; color: var(--dsw-alias-brand-primary); font: inherit; cursor: pointer; opacity: 0; }
+.dt-diff-line:hover .dt-diff-comment, .dt-diff-comment:focus-visible { opacity: 1; }
+.dt-diff-note { margin: 0 8px 4px 64px; padding: 4px 8px; border-left: 2px solid var(--dsw-alias-brand-primary); color: var(--dsw-alias-label-secondary); white-space: pre-wrap; }
+.dt-diff-note-resolved { border-left-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-caption); }
+@media (hover: none) {
+  .dt-diff-comment { opacity: 1; }
+}
 .dt-ticket-number { margin-right: 8px; padding: 0 5px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 4px; font: 11px/18px var(--dsw-alias-font-mono); color: var(--dsw-alias-label-caption); }
 .dt-file { font: 13px/20px var(--dsw-alias-font-family); color: var(--dsw-alias-label-primary); }

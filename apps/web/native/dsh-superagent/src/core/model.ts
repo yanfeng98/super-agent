@@ -393,6 +393,10 @@ export interface TicketRevert {
   target: string
   /** The merge commit that was reverted. */
   merge: string
+  /** The repository the revert ran in, which a later push of the reverting commit needs after the worktree is gone. */
+  root?: string
+  /** The remote's answer when the person asked to push the reverting commit, which a later retry replaces. */
+  push?: { at: string; ok: boolean; error?: string; via?: ActionOrigin }
   via?: ActionOrigin
 }
 /** One review of a ticket's ending changes: the decision, its note, the commit it covered, and who made it. */
