@@ -1,8 +1,8 @@
-# Agent Note: Vendored engineering workflow skills
+# Agent Note: Built-in engineering workflow skills
 
 Status: implemented
 
-English | [中文](2026-11-20-vendored-engineering-workflow-skills.zh.md)
+English | [中文](2026-11-20-built-in-engineering-workflow-skills.zh.md)
 
 ## Problem
 
@@ -18,10 +18,10 @@ The requirement is that a clone of this repository carries the skills and turns 
 
 ## Decision
 
-A dedicated bundled provider ships the corpus inside the Harness and the base bundle mounts it.
+A dedicated built-in provider ships the corpus inside the Harness and the base bundle mounts it.
 
-- **Package.** `@deepseek-ai/dsh-skill-mattpocock` at `packages/skill/skill-mattpocock/` registers provider `dsh-mattpocock` on `ctx.skills` at the bundled rank (600), with `source: 'bundled'`. It follows `dsh-skill-office`'s provider shape: a fixed directory-name list, a packaged `assets/` root, and per-load reads.
-- **Composition.** The `skill-mattpocock` row in `packages/bundle/base/cordis.patch.yml` makes every base-backed profile (`web`, `headless`, `acp`, `sdk`) mount it with no configuration. A profile removes it by replacing the row with `disabled: true`. The provider attaches through a deferred `skills` injection, so a composition that disables the skill registry keeps the row idle instead of reporting a pending service.
+- **Package.** `@deepseek-ai/dsh-skill-engineering` at `packages/skill/skill-engineering/` registers provider `dsh-engineering` on `ctx.skills` at the bundled rank (600), with `source: 'bundled'`. It follows `dsh-skill-office`'s provider shape: a fixed directory-name list, a packaged `assets/` root, and per-load reads.
+- **Composition.** The `skill-engineering` row in `packages/bundle/base/cordis.patch.yml` makes every base-backed profile (`web`, `headless`, `acp`, `sdk`) mount it with no configuration. A profile removes it by replacing the row with `disabled: true`. The provider attaches through a deferred `skills` injection, so a composition that disables the skill registry keeps the row idle instead of reporting a pending service.
 - **Content.** 27 skills from the `engineering/` and `productivity/` buckets of upstream [`mattpocock/skills`](https://github.com/mattpocock/skills) `main` at `abeeaf9` (v1.3.2). Eleven are model-invoked and appear in the session catalog; sixteen carry `disable-model-invocation: true` and are reachable only through the `/` skill picker. `ask-matt` remains the router over the user-invoked set.
 - **Frontmatter contract.** The directory name is the skill identity, so a declared `name` that disagrees is invalid metadata. `description` is required. `disable-model-invocation` and `user-invocable` are optional booleans and project into the registry's invocation policy.
 - **Failure reporting.** A missing (`ENOENT`/`ENOTDIR`) or invalid skill is omitted from a complete catalog, reported once, and a load returns `undefined` after invalidating the catalog. Any other read error leaves discovery incomplete and propagates from a load.
@@ -52,4 +52,4 @@ Costs that remain:
 
 ## Testing
 
-`packages/skill/skill-mattpocock/tests/skill-mattpocock.spec.ts` covers the provider contract at 100% statement, branch, function, and line coverage: catalog contents and invocation policy, packaged-body loading, asset-directory drift, a real `cordis.yml` composition through the Loader, persistent and transient failure reporting, deduplication, disposal, and abort. `verify-config-catalog` records the `assetRoot` field. Existing keyless scenarios republish the eleven catalog entries; `pnpm run test:snapshot:refresh` regenerated them because the replay input stayed valid.
+`packages/skill/skill-engineering/tests/skill-engineering.spec.ts` covers the provider contract at 100% statement, branch, function, and line coverage: catalog contents and invocation policy, packaged-body loading, asset-directory drift, a real `cordis.yml` composition through the Loader, persistent and transient failure reporting, deduplication, disposal, and abort. `verify-config-catalog` records the `assetRoot` field. Existing keyless scenarios republish the eleven catalog entries; `pnpm run test:snapshot:refresh` regenerated them because the replay input stayed valid.

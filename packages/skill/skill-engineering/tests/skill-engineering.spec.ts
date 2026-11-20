@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import SkillRegistry, { type SkillCandidate, type SkillProvider, type SkillProviderObservation } from '@deepseek-ai/dsh-skill'
-import * as SkillMattpocock from '@deepseek-ai/dsh-skill-mattpocock'
+import * as SkillMattpocock from '@deepseek-ai/dsh-skill-engineering'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -89,7 +89,7 @@ describe('bundled engineering workflow skills', () => {
       const catalog = await ctx.skills.list()
       expect(catalog.map(skill => skill.name)).toEqual([...names])
       for (const skill of catalog) {
-        expect(skill).toMatchObject({ source: 'bundled', provider: 'dsh-mattpocock' })
+        expect(skill).toMatchObject({ source: 'bundled', provider: 'dsh-engineering' })
         expect(skill.description.length).toBeGreaterThan(0)
         expect(skill.description.length).toBeLessThanOrEqual(500)
         expect(skill.resourceBase).toEqual({ kind: 'directory', path: join(assets, skill.name).split(sep).join('/') })
@@ -130,7 +130,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('loads relocated resources through a real cordis.yml composition', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-mattpocock-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'dsh-engineering-skills-'))
     const ctx = new Context()
     try {
       const external = join(root, '中文 assets')
@@ -138,7 +138,7 @@ describe('bundled engineering workflow skills', () => {
       const configPath = join(root, 'cordis.yml')
       await writeFile(configPath, [
         "- name: '@deepseek-ai/dsh-skill'",
-        "- name: '@deepseek-ai/dsh-skill-mattpocock'",
+        "- name: '@deepseek-ai/dsh-skill-engineering'",
         '  config:',
         `    assetRoot: ${JSON.stringify(external)}`,
         '',
@@ -148,7 +148,7 @@ describe('bundled engineering workflow skills', () => {
       ctx.loader.builtins.include = Include
       const modules = new Map<string, unknown>([
         ['@deepseek-ai/dsh-skill', SkillRegistry],
-        ['@deepseek-ai/dsh-skill-mattpocock', SkillMattpocock],
+        ['@deepseek-ai/dsh-skill-engineering', SkillMattpocock],
       ])
       ctx.loader.internal = {
         version: 'v2',
@@ -184,7 +184,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('omits unreadable or invalid skills from a complete catalog and reports each failure once', async () => {
-    const { root, skill } = await relocatedAssets('dsh-mattpocock-invalid-', 'tdd')
+    const { root, skill } = await relocatedAssets('dsh-engineering-invalid-', 'tdd')
     const ctx = new Context()
     try {
       const warnings = captureWarnings(ctx)
@@ -204,7 +204,7 @@ describe('bundled engineering workflow skills', () => {
       await rm(skill)
       expect(await ctx.skills.get('tdd')).toBeUndefined()
       expect(await missing()).toEqual({ complete: true, names: remaining })
-      expect(warnings).toEqual([expect.stringMatching(/^skill-mattpocock: skill "tdd" is unavailable: Error: ENOENT.*SKILL\.md/u)])
+      expect(warnings).toEqual([expect.stringMatching(/^skill-engineering: skill "tdd" is unavailable: Error: ENOENT.*SKILL\.md/u)])
       await observe(provider)
       expect(warnings).toHaveLength(1)
 
@@ -239,7 +239,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('reads extra invocation fields and rejects a load whose file became unreadable', async () => {
-    const { root, skill } = await relocatedAssets('dsh-mattpocock-policy-', 'implement')
+    const { root, skill } = await relocatedAssets('dsh-engineering-policy-', 'implement')
     const ctx = new Context()
     try {
       const warnings = captureWarnings(ctx)
@@ -267,7 +267,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('treats a read failure without an error code as transient', async () => {
-    const { root } = await relocatedAssets('dsh-mattpocock-transient-', 'tdd')
+    const { root } = await relocatedAssets('dsh-engineering-transient-', 'tdd')
     const ctx = new Context()
     try {
       const warnings = captureWarnings(ctx)
@@ -286,7 +286,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('stops discovery when its signal aborts', async () => {
-    const { root, skill } = await relocatedAssets('dsh-mattpocock-abort-', 'tdd')
+    const { root, skill } = await relocatedAssets('dsh-engineering-abort-', 'tdd')
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)

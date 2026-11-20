@@ -1,4 +1,4 @@
-/** Bundled engineering workflow skills, adapted from Matt Pocock's skills repository. */
+/** Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling. */
 
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, join, sep } from 'node:path'
@@ -13,8 +13,8 @@ import {
 import { parse as parseYaml } from 'yaml'
 
 /** Log prefix and provider identity shared by every failure report. */
-const PROVIDER_NAME = 'dsh-mattpocock'
-const LOG_PREFIX = 'skill-mattpocock'
+const PROVIDER_NAME = 'dsh-engineering'
+const LOG_PREFIX = 'skill-engineering'
 
 /** Packaged skill directories, in catalog order. */
 const SKILL_NAMES = [
@@ -59,7 +59,7 @@ export const Config: z<Config> = z.object({
 })
 
 /** Cordis plugin identity. */
-export const name = 'skill-mattpocock'
+export const name = 'skill-engineering'
 
 /** One parsed skill: catalog metadata plus the instruction body. */
 interface ParsedSkill {
