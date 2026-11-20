@@ -425,13 +425,17 @@ export class Tickets extends EnginePart {
   /**
    * Records that an attempt at a ticket's standing merge request met a gate that is closed now, and when to try again: the
    * wait doubles up to `AUTO_MERGE_WAITS`'s last entry, so a check that keeps failing is not run on every pass.
+   * `counts` adds to the attempts that end the request; a gate that waits for another Ticket or for the person passes false,
+   * so a long dependency does not use the request up and is rechecked within a minute.
    */
-  autoMergeBlocked(ticketId: string, error: string): void {
+  autoMergeBlocked(ticketId: string, error: string, counts = true): void {
     const ticket = this.repo.tickets.get(ticketId)
     if (!ticket?.autoMerge) return
     const at = this.now()
-    const attempts = ticket.autoMerge.attempts + 1
-    const wait = AUTO_MERGE_WAITS[Math.min(attempts, AUTO_MERGE_WAITS.length) - 1]!
+    const attempts = counts ? ticket.autoMerge.attempts + 1 : ticket.autoMerge.attempts
+    const wait = counts
+      ? AUTO_MERGE_WAITS[Math.min(Math.max(attempts, 1), AUTO_MERGE_WAITS.length) - 1]!
+      : AUTO_MERGE_WAITS[0]!
     ticket.autoMerge = { ...ticket.autoMerge, attempts, last: { at, error },
       next: new Date(Date.parse(at) + wait).toISOString() }
     this.repo.tickets.save(ticket)

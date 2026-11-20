@@ -25,7 +25,7 @@ import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId } from '../
 import { ticketCard } from './cards.ts'
 import { notifications as listNotifications, readAllNotifications, readNotification, recordNotification } from './notifications.ts'
 import { dequeueMerges, enqueueMerges, markMergeFailed, mergeQueuePaused, mergeQueueView, nextQueuedMerge, queuedMerges,
-  retryMerges, setMergeQueuePaused, type MergeQueueView, type QueuedMerge } from './merge-queue.ts'
+  recoverableMerges, retryMerges, setMergeQueuePaused, type MergeFailureCode, type MergeQueueView, type QueuedMerge } from './merge-queue.ts'
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
 import { Store } from './store.ts'
@@ -34,7 +34,7 @@ import { TextCache } from './cache.ts'
 import { Effects } from './effects.ts'
 import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
-import { threadFacts, type LinkTarget } from './views/records.ts'
+import { newestFirst, threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy } from './review.ts'
@@ -66,6 +66,8 @@ const AUTO_MERGE_ATTEMPTS = 8
 const CI_NOTICE_INTERVAL_MS = 15_000
 /** How long an automatic attempt trusts a check that already failed for the same ending, instead of running it again. */
 const CHECK_REUSE_MS = 10 * 60_000
+/** What keeps an ended Ticket from merging, as a standing request and the chat's status report read it. */
+type MergeGate = { code: 'merge' } | { code: 'dependency' | 'review' | 'notes'; message: string; counts: boolean }
 
 /**
  * Composition root of dsh-superagent that connects `Store`, `Setup`, `Engine`, `SourceRegistry`, `Effects`, `Outbox`, `Passes`, `Sessions`, `Settings`, `Prompts`, `DshExecutor`, and `MasterAssessor`.
@@ -226,6 +228,7 @@ export class Runtime extends Service implements SourceHost {
         revertTicket: id => runtime.revertTicket(id),
         queueMerges: (ids, options) => runtime.queueMerges(ids, options),
         dequeueMerges: ids => runtime.dequeueMerges(ids), retryMerges: ids => runtime.retryMerges(ids),
+        pendingMerges: () => runtime.pendingMerges(),
         blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
@@ -800,12 +803,21 @@ export class Runtime extends Service implements SourceHost {
     if (this.queueMerging) return this.queueMerging
     if (this.paused() || this.closing() || !this.setup.configured() || mergeQueuePaused(this.store)) return
     this.pruneMergeQueue()
+    this.recoverMergeQueue()
     if (!nextQueuedMerge(this.store)) return
     const task = this.drainMergeQueue()
       .catch((error: unknown) => { this.ctx.logger.warn('dsh-superagent: a queued merge failed: %s', String(error)) })
       .finally(() => { this.queueMerging = undefined; this.passes.request() })
     this.queueMerging = task
     return task
+  }
+  /**
+   * Retries failed entries whose gate opened since, such as a dependency that merged or a review that was approved, so a
+   * person does not have to ask again. A failure that needs new work keeps waiting for `retryMerges`.
+   */
+  private recoverMergeQueue(): void {
+    const retried = recoverableMerges(this.store)
+    if (retried.length) retryMerges(this.store, retried)
   }
   /**
    * Drops failed entries whose Ticket moved on, such as one a person merged from the chat while it waited: a retry could
@@ -857,8 +869,10 @@ export class Runtime extends Service implements SourceHost {
         `Merged ${label} from the merge queue${left ? `; ${left} left` : ''}`))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      // The entry stays at its place with the reason, so a person can retry it or take it out.
-      markMergeFailed(this.store, entry.ticketId, message)
+      // The entry stays at its place with the reason, so a person can retry it or take it out; the gate it names lets a
+      // later pass retry it on its own once that gate opens.
+      const after = this.store.tickets.get(entry.ticketId)
+      markMergeFailed(this.store, entry.ticketId, message, after ? this.mergeFailureCode(after) : 'other')
       const left = rest()
       this.sessions.notify(...receiptNotice({ merge_queue: { ticket_id: entry.ticketId, error: message, remaining: left,
         retryable: true } },
@@ -867,6 +881,26 @@ export class Runtime extends Service implements SourceHost {
   }
   /** The merge queue as the panel shows it. */
   mergeQueue(): MergeQueueView { return mergeQueueView(this.store) }
+  /**
+   * The queue and the ended Tickets that are not queued but still wait for a merge or a person's decision, so the main
+   * Session can answer what is left instead of the person opening the panel.
+   * @returns The queue in order and up to twenty waiting Tickets, newest first, each with the gate it waits on.
+   */
+  pendingMerges(): { queue: MergeQueueView; waiting: { ticket_id: string; title: string; needs: string; reason?: string;
+    blocked_by?: string[] }[] } {
+    const queued = new Set(queuedMerges(this.store).map(entry => entry.ticketId))
+    const waiting = this.store.tickets.list()
+      .filter(ticket => ticket.ended && !ticket.merged && !ticket.discarded && !ticket.cleaned && !queued.has(ticket.id))
+      .sort(newestFirst)
+      .slice(0, 20)
+      .map(ticket => {
+        const gate = this.mergeGate(ticket)
+        return { ticket_id: this.ticketLabel(ticket), title: ticket.title, needs: gate.code,
+          ...gate.code === 'merge' ? {} : { reason: gate.message },
+          ...ticket.blockedBy?.length ? { blocked_by: ticket.blockedBy.map(id => this.ticketLabel({ id })) } : {} }
+      })
+    return { queue: this.mergeQueue(), waiting }
+  }
   /**
    * Holds or releases the merge queue, which keeps its order while paused.
    * @returns The state afterwards.
@@ -912,6 +946,47 @@ export class Runtime extends Service implements SourceHost {
     })
   }
   /**
+   * What keeps an ended Ticket from merging, for a standing request that must not use up its attempts on a gate the person
+   * or another Ticket opens, and for the status the main Session reports.
+   */
+  private mergeGate(ticket: Ticket): MergeGate {
+    const waiting = (ticket.blockedBy ?? []).filter(value => !this.store.tickets.get(value)?.merged)
+    if (waiting.length) {
+      const names = waiting.map(value => {
+        const other = this.store.tickets.get(value)
+        return other ? `${this.ticketLabel(other)} (${other.title}${other.discarded ? ', discarded' : ''})` : value
+      })
+      const discarded = waiting.some(value => this.store.tickets.get(value)?.discarded)
+      return { code: 'dependency', counts: discarded, message: discarded
+        ? `Blocked by ${names.join(', ')}; a discarded Ticket never merges, so remove that dependency first`
+        : `Blocked by ${names.join(', ')}; merge ${waiting.length === 1 ? 'it' : 'them'} first` }
+    }
+    if (ticket.reviewed?.decision === 'changes-requested') {
+      return { code: 'review', counts: false, message: 'A review requested changes; address them and approve the review before merging' }
+    }
+    if (this.store.settings().executor.requireReview && ticket.reviewed?.decision !== 'approved') {
+      return { code: 'review', counts: false, message: 'Review approval is required before merging' }
+    }
+    const open = ticket.notes?.filter(note => !note.resolved).length ?? 0
+    if (open) {
+      return { code: 'notes', counts: false,
+        message: `${open} review note${open === 1 ? '' : 's'} still open; resolve them before merging` }
+    }
+    return { code: 'merge' }
+  }
+  /** The gate a failed merge left closed, so a queued entry can be retried once that gate opens. */
+  private mergeFailureCode(ticket: Ticket): MergeFailureCode {
+    const gate = this.mergeGate(ticket)
+    return gate.code === 'merge' ? 'other' : gate.code
+  }
+  /** Ends a standing request that ran out of attempts, telling both the conversation and the panel. */
+  private autoMergeGaveUp(ticket: Ticket, label: string, message: string): void {
+    this.engine.autoMergeDone(ticket.id)
+    this.sessions.notify(...receiptNotice({ auto_merge_gave_up: { ticket_id: ticket.id, error: message } },
+      `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`))
+    this.ticketNotice(ticket, 'automerge', `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`)
+  }
+  /**
    * Runs one due standing merge request and waits for it. A pass calls this without waiting, so the check or merge it runs
    * cannot hold up the pass, while a test or a restart can run one directly.
    */
@@ -935,6 +1010,25 @@ export class Runtime extends Service implements SourceHost {
     const ticket = current
     const number = this.store.tickets.number(ticket.id)
     const label = number ? `T-${String(number).padStart(4, '0')}` : ticket.id
+    // A gate that another Ticket or the person opens waits without using up the request, so a long dependency does not
+    // cancel a merge the person asked for.
+    const gate = this.mergeGate(ticket)
+    if (gate.code !== 'merge') {
+      this.engine.autoMergeBlocked(ticket.id, gate.message, gate.counts)
+      const pending = this.store.tickets.get(ticket.id)?.autoMerge
+      // A gate that counts still ends the request when its attempts run out, such as a dependency that was discarded and
+      // can never open.
+      if (gate.counts && pending && pending.attempts >= AUTO_MERGE_ATTEMPTS) {
+        this.autoMergeGaveUp(ticket, label, gate.message)
+        return
+      }
+      // The person hears each gate the first time it stops the request; later passes retry quietly.
+      if (!request.last || request.last.error !== gate.message) {
+        this.sessions.notify(...receiptNotice({ auto_merge_blocked: { ticket_id: ticket.id, error: gate.message } },
+          `Did not merge ${label} yet: ${gate.message}`))
+      }
+      return
+    }
     try {
       const result = await this.mergeTicket(ticket.id, request.strategy ?? 'ff',
         { ...request.cleanup === undefined ? {} : { cleanup: request.cleanup }, ...request.push === undefined ? {} : { push: request.push } },
@@ -948,12 +1042,9 @@ export class Runtime extends Service implements SourceHost {
       this.engine.autoMergeBlocked(ticket.id, message)
       const pending = this.store.tickets.get(ticket.id)?.autoMerge
       if (pending && pending.attempts >= AUTO_MERGE_ATTEMPTS) {
-        this.engine.autoMergeDone(ticket.id)
-        this.sessions.notify(...receiptNotice({ auto_merge_gave_up: { ticket_id: ticket.id, error: message } },
-          `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`))
-        this.ticketNotice(ticket, 'automerge', `Gave up merging ${label} after ${AUTO_MERGE_ATTEMPTS} attempts: ${message}`)
-      } else if (!request.last) {
-        // The first gate is the one the person needs to hear about; later passes retry quietly.
+        this.autoMergeGaveUp(ticket, label, message)
+      } else if (!request.last || request.last.error !== message) {
+        // Each gate is the one the person needs to hear about once; later passes retry quietly.
         this.sessions.notify(...receiptNotice({ auto_merge_blocked: { ticket_id: ticket.id, error: message } },
           `Did not merge ${label} yet: ${message}`))
       }

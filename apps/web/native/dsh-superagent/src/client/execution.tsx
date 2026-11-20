@@ -108,7 +108,8 @@ function MergeQueue() {
           id: item.ticket_id })}>{item.number ? `T-${String(item.number).padStart(4, '0')} ` : ''}{item.title}</button></div>
         <div className="dt-row-meta"><span>#{item.position}</span>{item.strategy && <span className="dt-mono">{item.strategy}</span>}
           {data.paused && !item.error && <span>{t('mergeQueueWaiting')}</span>}
-          {item.error && <span>{t('queueFailed', { error: item.error.message })}</span>}</div>
+          {item.error && <span>{t('queueFailed', { error: item.error.message })}</span>}
+          {item.error?.code && item.error.code !== 'other' && <span>{t('queueAutoRetry')}</span>}</div>
       </div>
       <div className="dt-row-actions">
         {item.error && <Button variant="outline" size="sm" onClick={() => retry(item.ticket_id)}>{t('queueRetry')}</Button>}

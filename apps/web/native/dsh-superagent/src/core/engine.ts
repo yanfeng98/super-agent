@@ -239,7 +239,9 @@ export class Engine {
   /** The tickets whose standing merge request is due, oldest first. */
   dueAutoMerge(): Ticket[] { return this.tickets.dueAutoMerge() }
   /** Records why an attempt at a ticket's standing merge request did not merge, and when to try again. */
-  autoMergeBlocked(ticketId: string, error: string): void { this.repo.atomic(() => { this.tickets.autoMergeBlocked(ticketId, error) }) }
+  autoMergeBlocked(ticketId: string, error: string, counts = true): void {
+    this.repo.atomic(() => { this.tickets.autoMergeBlocked(ticketId, error, counts) })
+  }
   /** Clears a ticket's standing merge request because it ran or can no longer be carried out. */
   autoMergeDone(ticketId: string): void { this.repo.atomic(() => { this.tickets.autoMergeDone(ticketId) }) }
   /**

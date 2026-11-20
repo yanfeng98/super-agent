@@ -88,6 +88,37 @@ it('queues several tickets from one instruction, and cancels them', async () => 
   expect(merge).toHaveBeenCalledWith(first.id, 'ff', {}, 'chat')
 })
 
+it('reports the merge queue and the tickets waiting for a merge or a review', async () => {
+  const { ticket: queuedTicket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: ready } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  const { ticket: waiting } = await h.acceptedTicket(feishu('3', '@bot 等前一个'))
+  const end = (id: string): void => {
+    h.runtime.store.atomic(() => {
+      const ticket = h.runtime.store.tickets.get(id)!
+      ticket.ended = { at: '2026-11-19T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+      h.runtime.store.tickets.save(ticket)
+    })
+  }
+  end(queuedTicket.id); end(ready.id); end(waiting.id)
+  h.runtime.blockTicket(waiting.id, queuedTicket.id, true)
+  // Pausing keeps the queue still, so the status is what the tool reports rather than what a pass drained.
+  h.runtime.pauseMergeQueue(true)
+  h.runtime.queueMerges([queuedTicket.id], {})
+  const reported = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue', {}) as unknown as
+    { cancelled: boolean; status: { queue: { paused: boolean; items: { ticket_id: string; position: number }[] };
+      waiting: { ticket_id: string; needs: string }[] } }
+  expect(reported).toMatchObject({ cancelled: false, status: { queue: { paused: true,
+    items: [{ ticket_id: queuedTicket.id, position: 1 }] } } })
+  expect(reported.status.waiting).toHaveLength(2)
+  expect(reported.status.waiting).toEqual(expect.arrayContaining([
+    expect.objectContaining({ ticket_id: 'T-0002', needs: 'merge' }),
+    expect.objectContaining({ ticket_id: 'T-0003', needs: 'dependency', reason: expect.stringMatching(/Blocked by/) }),
+  ]))
+  // Cancelling or retrying still needs the Tickets it acts on.
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_merge_queue', { cancel: true })).rejects.toThrow(/Name the Tickets/)
+  h.runtime.pauseMergeQueue(false)
+})
+
 it('undoes a merged ticket from the main Session', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   const revert = vi.spyOn(h.runtime, 'revertTicket').mockResolvedValue({ ticket_id: ticket.id, branch: 'agent/t', target: 'main',

@@ -251,7 +251,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 | `POST local/followups` with `{"thread": …, "text": …}` | Appends a person's message to a local ticket's Thread and archives it: `trigger` and `thread` |
 | `GET tickets?state=<filter>&tag=<tag>` | Ticket rows filtered by stage and, optionally, an exact request tag |
 | `GET tags` | Every tag on a request, sorted, for the Execution filter |
-| `GET merge-queue` | The merge queue the panel shows: `paused`, and the waiting entries with `ticket_id`, `number`, `title`, `position` and `strategy` |
+| `GET merge-queue` | The merge queue the panel shows: `paused`, and the waiting entries with `ticket_id`, `number`, `title`, `position`, `strategy` and, for a failed one, `error` with its time, message and gate |
 | `POST merge-queue/pause` with `{"paused": true}` | Holds or releases the queue, which keeps its order: `paused` |
 | `POST merge-queue/retry` with `{"ticket_ids": ["T-0003"]}` | Clears the recorded failure of queued Tickets so the next pass tries them again: `retried` and the `queue` |
 | `GET notifications` | The newest panel notifications with `unread`; `POST notifications/<id>/read` marks one read, and `POST notifications/read-all` marks every one read |

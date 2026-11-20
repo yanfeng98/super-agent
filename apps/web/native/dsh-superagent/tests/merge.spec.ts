@@ -318,37 +318,69 @@ it('carries out a standing merge request and clears it once the merge lands', as
   await vi.waitFor(() => expect(notices().some(item => 'auto_merged' in item)).toBe(true))
 })
 
-it('waits for a dependency, records why, and retries only once the wait is over', async () => {
+it('waits for a dependency without using up a standing merge request', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
   ended(ticket.id)
+  ended(blocker.id)
   h.runtime.blockTicket(ticket.id, blocker.id, true)
   h.runtime.autoMergeTicket(ticket.id, {})
   await h.runtime.runAutoMerge()
   const waiting = h.runtime.store.tickets.get(ticket.id)!
   expect(waiting.merged).toBeUndefined()
-  expect(waiting.autoMerge).toMatchObject({ attempts: 1, last: { error: expect.stringMatching(/Blocked by/) } })
-  expect(waiting.autoMerge?.next).toBeDefined()
+  // The dependency gate waits for another Ticket, so it does not count toward the attempts that end the request.
+  expect(waiting.autoMerge).toMatchObject({ attempts: 0, last: { error: expect.stringMatching(/Blocked by/) } })
+  expect(Date.parse(waiting.autoMerge!.next!) - Date.parse(waiting.autoMerge!.last!.at)).toBe(60_000)
   // The person hears the first gate; the next pass waits for the recorded delay rather than running the check again.
   await vi.waitFor(() => expect(notices().some(item => 'auto_merge_blocked' in item)).toBe(true))
   await h.runtime.runAutoMerge()
-  expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge?.attempts).toBe(1)
+  expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge?.attempts).toBe(0)
+  // Once the dependency lands, the standing request merges on its own.
+  await h.runtime.mergeTicket(blocker.id)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.autoMerge = { ...current.autoMerge!, next: '2026-11-19T00:00:00.000Z' }
+    h.runtime.store.tickets.save(current)
+  })
+  await h.runtime.runAutoMerge()
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged).toMatchObject({ via: 'auto' })
 })
 
 it('gives up on a standing merge request after its attempts run out', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.autoMerge = { at: '2026-11-19T00:00:00.000Z', attempts: 7, last: { at: '2026-11-19T00:00:00.000Z', error: 'The check failed' } }
+    h.runtime.store.tickets.save(current)
+  })
+  // A gate that needs new work counts, so a check that keeps failing eventually ends the request.
+  const merge = vi.spyOn(h.runtime, 'mergeTicket').mockRejectedValue(new Error('The configured check failed'))
+  await h.runtime.runAutoMerge()
+  expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge).toBeUndefined()
+  await vi.waitFor(() => expect(notices().some(item => 'auto_merge_gave_up' in item)).toBe(true))
+  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'automerge', ticketId: ticket.id }))
+  merge.mockRestore()
+})
+
+it('gives up on a dependency that was discarded instead of waiting forever', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
   ended(ticket.id)
   h.runtime.blockTicket(ticket.id, blocker.id, true)
   h.runtime.store.atomic(() => {
     const current = h.runtime.store.tickets.get(ticket.id)!
-    current.autoMerge = { at: '2026-11-19T00:00:00.000Z', attempts: 7, last: { at: '2026-11-19T00:00:00.000Z', error: 'Blocked by t2' } }
+    current.autoMerge = { at: '2026-11-19T00:00:00.000Z', attempts: 7,
+      last: { at: '2026-11-19T00:00:00.000Z', error: 'Blocked by T-0002' } }
     h.runtime.store.tickets.save(current)
+    // A discarded dependency never merges, so its gate is the one that still counts toward giving up.
+    const other = h.runtime.store.tickets.get(blocker.id)!
+    other.discarded = { at: '2026-11-19T00:00:00.000Z' }
+    h.runtime.store.tickets.save(other)
   })
   await h.runtime.runAutoMerge()
   expect(h.runtime.store.tickets.get(ticket.id)?.autoMerge).toBeUndefined()
   await vi.waitFor(() => expect(notices().some(item => 'auto_merge_gave_up' in item)).toBe(true))
-  expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'automerge', ticketId: ticket.id }))
 })
 
 it('cancels a standing merge request, and a person stopping the ticket clears it', async () => {
@@ -535,9 +567,9 @@ it('reports a queued merge that cannot land, and still merges the ones after it'
   // A failed entry waits for a retry instead of running again on its own.
   await h.runtime.runMergeQueue()
   expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeUndefined()
-  // Once the blocker is gone, retrying merges it without queueing it again.
-  h.runtime.blockTicket(blocked.id, blocker.id, false)
-  expect(h.runtime.retryMerges([blocked.id])).toMatchObject({ retried: 1 })
+  // Once the dependency it named has merged, the next pass retries it without the person asking.
+  ended(blocker.id)
+  await h.runtime.mergeTicket(blocker.id)
   await h.runtime.runMergeQueue()
   expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeDefined()
   expect(queuedMerges(h.runtime.store)).toHaveLength(0)

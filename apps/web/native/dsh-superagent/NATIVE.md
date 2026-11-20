@@ -231,6 +231,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `UserError` code, so the panel words `invalidNoteRange` in the interface language. `tests/merge.spec.ts`,
     `tests/core-engine.spec.ts`, `tests/chat-tools.spec.ts`, `tests/http.spec.ts` and `tests/panel-execution.spec.tsx` cover
     them.
+22. **A chat status report, a standing request that waits, and a queue entry retried on its own.**
+    `orchestrator_merge_queue` with no `ticket_ids` reports the queue and the ended Tickets still waiting for a merge or a
+    person's decision (`Runtime.pendingMerges`), each with the gate it waits on, so the main Session answers "what is left"
+    without the panel. A standing merge request checks the gates another Ticket or the person opens before merging
+    (`Runtime.mergeGate`), and records such a wait without adding to the attempts that end the request
+    (`Tickets.autoMergeBlocked(..., counts)`), so a dependency that takes an hour no longer cancels it; a gate that needs new
+    work still counts and still ends after eight attempts, and so does a dependency that was discarded, which can never merge. A failed queue entry records the gate it failed on
+    (`MergeFailureCode`), and a drain retries it once that gate opens (`recoverableMerges`), such as a dependency that merged
+    or a review that was approved, while the page says so. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts` and
+    `tests/panel-execution.spec.tsx` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
