@@ -155,6 +155,8 @@ function route(host: MainToolsHost, item: RouteItem, decided: ReadonlyMap<string
     // Through `engine.decide`, so only a person's message the gate admits with explicit strength stops a ticket.
     case 'stop': {
       const decision = host.engine.decide(item.trigger_id, { kind: 'stop', ticketId: item.ticket_id!, reason: item.reason || { code: 'humanStop' } })
+      // A person's stop withdraws a queued merge, as the Engine withdraws a standing one.
+      if (decision.kind === 'stop') host.dequeueMerges([item.ticket_id!])
       return { ...fromDecision(decision), triggerIds: decision.triggerIds }
     }
     case 'ignore': {
@@ -247,13 +249,14 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         const id = host.ticketId(args.ticket_id)
         if (args.approve) host.reviewTicket(id, 'approved')
         if (args.resolve) host.resolveNotes(id, true)
+        host.requestPass()
         const ticket = host.store.tickets.get(id)
         return { approved: args.approve, resolved: args.resolve, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },
     }),
     tool({
       name: 'orchestrator_ticket_abandon',
-      description: 'Stop a live ticket on the person\'s explicit instruction; with discard, also remove the worktree and branch of a ticket that has ended.',
+      description: 'Stop a live ticket or withdraw an ended ticket\'s queued or standing merge; with discard, also remove the worktree and branch of a ticket that has ended.',
       schema: z.object({
         ticket_id: z.string().describe('Ticket id or T-0007.'),
         discard: z.boolean().default(false).describe('Remove its worktree and branch once ended.'),
@@ -272,6 +275,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       execute: async args => {
         const id = host.ticketId(args.ticket_id)
         const check = await host.checkTicket(id)
+        host.requestPass()
         const ticket = host.store.tickets.get(id)
         return { check, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },

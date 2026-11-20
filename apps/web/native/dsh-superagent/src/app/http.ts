@@ -306,7 +306,7 @@ function routes(runtime: HttpHost): Routes {
     'GET tags': () => ({ tags: ticketTags(store) }),
     'GET tickets/:id': ({ params }) => ticketPage(runtime, params.id),
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
-    'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
+    'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); runtime.dequeueMerges([id]); return { stopped: true } },
     'POST tickets/:id/reopen': ({ params }) => { const id = ticket(params.id); runtime.engine.reopenTicket(id); return { reopened: true } },
     'POST tickets/:id/approve': ({ params }) => { const id = ticket(params.id); runtime.approveTicket(id); return { approved: true } },
     'GET tickets/:id/diff': async ({ params, query }) => {

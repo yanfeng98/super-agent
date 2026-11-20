@@ -89,6 +89,22 @@ it('stops a live ticket from the main Session, and discards an ended one when as
   expect(h.runtime.store.tickets.get(live.id)?.ended).toMatchObject({ reason: '不做了' })
 })
 
+it('withdraws a queued merge when an ended ticket is stopped', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 先排队再停'))
+  await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  h.runtime.pauseMergeQueue(true)
+  h.runtime.queueMerges([ticket.id], {})
+  const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
+  const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_abandon', { ticket_id: ticket.id }) as unknown as
+    { stopped: boolean; discarded: boolean }
+  expect(result).toMatchObject({ stopped: false, discarded: false })
+  expect(h.runtime.mergeQueue().items).toEqual([])
+  h.runtime.pauseMergeQueue(false)
+  await h.runtime.runMergeQueue()
+  expect(merge).not.toHaveBeenCalled()
+})
+
 it('records an approval and resolves open notes from the main Session', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
