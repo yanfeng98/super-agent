@@ -1,15 +1,15 @@
 ---
-description: "The bundled engineering workflow skills adapted from Matt Pocock's skills repository: the shipped catalog entries, invocation split, and the asset root maintainers update."
+description: "The built-in engineering workflow skills: shipped catalog entries, invocation split, plugin-page metadata, and the asset root maintainers update."
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-skill-mattpocock
+# @deepseek-ai/dsh-skill-engineering
 
 English | [中文](README.zh.md)
 
 ## Summary
 
-This provider ships 27 engineering and productivity skills inside the Harness, so a fresh checkout has them without a separate install, symlink, or plugin download: grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflow skills around them. Eleven are model-invoked and appear in the session catalog; sixteen are user-invoked and reachable only by typing `/` in the composer. The skills are vendored from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`), with the small Harness wording adjustments listed in the dev note.
+This provider ships the Harness's built-in engineering workflow skills: 27 skills covering grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflows around them. A fresh checkout has them without a separate install, symlink, or plugin download. Eleven are model-invoked and appear in the session catalog; sixteen are user-invoked and reachable only by typing `/` in the composer. The text derives from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`) under the MIT license, with the small Harness wording adjustments listed in the dev note.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This provider ships 27 engineering and productivity skills inside the Harness, s
 <a id="use-this-package"></a>
 ## Use this package
 
-The base bundle inserts this provider, so every base-backed profile (`web`, `headless`, `acp`, `sdk`) ships the skills and no configuration is required. The provider registers into the global skill layer under the provider name `dsh-mattpocock` at the bundled skill rank (600).
+The base bundle inserts this provider, so every base-backed profile (`web`, `headless`, `acp`, `sdk`) ships the skills and no configuration is required. The provider registers into the global skill layer under the provider name `dsh-engineering` at the bundled skill rank (600).
 
 ### What the catalog contains
 
@@ -45,10 +45,10 @@ A same-name skill from a nearer layer wins: a preset's local discovery (project 
 | `assetRoot` | packaged `assets/` | Absolute directory holding one skill directory per name. Set it to serve a relocated copy, as tests do. |
 
 ```yaml
-- id: skill-mattpocock
-  name: '@deepseek-ai/dsh-skill-mattpocock'
+- id: skill-engineering
+  name: '@deepseek-ai/dsh-skill-engineering'
   config:
-    assetRoot: /opt/skills/mattpocock
+    assetRoot: /opt/skills/engineering
 ```
 
 A relative `assetRoot` fails at load. To remove the skills from a profile, replace the base row with `disabled: true`.
@@ -98,7 +98,7 @@ Indirectly, through `dsh-tool-skill`, which renders the provider's catalog entri
 
 #### KV Cache effect
 
-The eleven model-invoked entries add their translated descriptions to the session catalog; loaded bodies enter the conversation at the load point. A user-invoked skill adds nothing until the user references it.
+The eleven model-invoked entries add their descriptions to the session catalog; loaded bodies enter the conversation at the load point. A user-invoked skill adds nothing until the user references it.
 
 ## Known Limitations and Deferred Work
 
@@ -106,7 +106,7 @@ The eleven model-invoked entries add their translated descriptions to the sessio
 
 These limits define what the bundled provider does not do. They are current package constraints, not a task backlog.
 
-- **English only** — the vendored text is the upstream English corpus; there is no per-locale selection, so a localized catalog needs a translated provider or a local override.
+- **English only** — the skill text is the upstream English corpus; the plugin-page metadata is localized, but the catalog and bodies are not, so a localized catalog needs a local override.
 - **Manual synchronization** — upstream changes arrive by copying the promoted buckets, re-applying the adaptation below, and updating the fixed name list; no build step tracks the upstream repository.
 - **No per-skill configuration** — the provider exposes one asset root and always publishes the packaged set; deployments that want a subset author their own provider.
 - **The skills assume a workspace** — engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker; `setup-matt-pocock-skills` writes that configuration, and without it the skills ask for it.
@@ -117,13 +117,13 @@ These limits define what the bundled provider does not do. They are current pack
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The assets are vendored from [`mattpocock/skills`](https://github.com/mattpocock/skills), branch `main` at `abeeaf9` (v1.3.2); the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors it byte for byte. To re-sync:
+The package is part of this repository; its skill text is synced from [`mattpocock/skills`](https://github.com/mattpocock/skills), branch `main` at `abeeaf9` (v1.3.2), and the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors it byte for byte. To re-sync:
 
 1. Copy each promoted skill directory into `assets/`, excluding the Codex `agents/openai.yaml` files.
 2. Re-apply the Harness adaptations: name the `skill` tool, replace `/clear` with opening a new session (the Harness has `/compact` but no `/clear`), and drop installers, marketplace manifests, the bucket READMEs, and the Codex `agents/openai.yaml` files.
 3. Update `SKILL_NAMES` in `src/index.ts`; the drift test compares it with the asset directories.
 4. Run the package tests and the package README gates.
 
-`assets/LICENSE` carries the upstream MIT notice.
+`assets/LICENSE` carries the upstream MIT notice, and `locale/*.json` supplies the plugin-page title and description in each UI language.
 
 </details>

@@ -71,5 +71,5 @@
       name: ./resolve-spill-command.mjs
 
 # The authored spill layout pins message order; a bundled skill catalog would shift it.
-- id: skill-mattpocock
+- id: skill-engineering
   disabled: true

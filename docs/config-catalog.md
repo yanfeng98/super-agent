@@ -3791,6 +3791,22 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-engineering -->
+<a id="deepseek-aidsh-skill-engineering"></a>
+
+## `@deepseek-ai/dsh-skill-engineering`
+
+- `source`: [`packages/skill/skill-engineering/src/index.ts:51`](../packages/skill/skill-engineering/src/index.ts)
+
+```ts config-catalog
+/** Bundled skill asset location. */
+export interface Config {
+  /** Absolute assets directory containing one directory per skill; defaults to the packaged assets. */
+  assetRoot?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-engineering -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-filesystem -->
 <a id="deepseek-aidsh-skill-filesystem"></a>
 
@@ -3829,22 +3845,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-filesystem -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-mattpocock -->
-<a id="deepseek-aidsh-skill-mattpocock"></a>
-
-## `@deepseek-ai/dsh-skill-mattpocock`
-
-- `source`: [`packages/skill/skill-mattpocock/src/index.ts:51`](../packages/skill/skill-mattpocock/src/index.ts)
-
-```ts config-catalog
-/** Bundled skill asset location. */
-export interface Config {
-  /** Absolute assets directory containing one directory per skill; defaults to the packaged assets. */
-  assetRoot?: string
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-mattpocock -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
 <a id="deepseek-aidsh-skill-office"></a>

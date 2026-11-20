@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-skill-mattpocock",
-  "description": "Bundled engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling",
+  "name": "@deepseek-ai/dsh-skill-engineering",
+  "description": "Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling",
   "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/skill/skill-mattpocock"
+    "directory": "packages/skill/skill-engineering"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -18,9 +18,11 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "assets",
     "lib/types/**/*.d.ts",

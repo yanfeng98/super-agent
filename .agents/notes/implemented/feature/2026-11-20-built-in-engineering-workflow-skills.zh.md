@@ -1,8 +1,8 @@
-# Agent Note: Vendored engineering workflow skills
+# Agent Note: Built-in engineering workflow skills
 
 Status: implemented
 
-[English](2026-11-20-vendored-engineering-workflow-skills.md) | 中文
+[English](2026-11-20-built-in-engineering-workflow-skills.md) | 中文
 
 ## 问题
 
@@ -18,10 +18,10 @@ Status: implemented
 
 ## 决定
 
-用一个专门的随包提供方把语料装进 Harness，并由 base bundle 挂载。
+用一个专门的内置提供方把语料装进 Harness，并由 base bundle 挂载。
 
-- **包。** `@deepseek-ai/dsh-skill-mattpocock` 位于 `packages/skill/skill-mattpocock/`，以 provider `dsh-mattpocock` 注册到 `ctx.skills`，排名为随包技能的 600，`source: 'bundled'`。它沿用 `dsh-skill-office` 的提供方形态：固定的目录名列表、随包的 `assets/` 根目录、每次加载时重新读取。
-- **组合。** `packages/bundle/base/cordis.patch.yml` 中的 `skill-mattpocock` 行使每个以 base 为基础的 profile（`web`、`headless`、`acp`、`sdk`）都能零配置挂载它。profile 把该行替换为 `disabled: true` 即可移除。该提供方通过延迟的 `skills` 注入挂载，因此禁用技能注册表的组合会让该行保持空闲，而不是报告待处理的服务。
+- **包。** `@deepseek-ai/dsh-skill-engineering` 位于 `packages/skill/skill-engineering/`，以 provider `dsh-engineering` 注册到 `ctx.skills`，排名为随包技能的 600，`source: 'bundled'`。它沿用 `dsh-skill-office` 的提供方形态：固定的目录名列表、随包的 `assets/` 根目录、每次加载时重新读取。
+- **组合。** `packages/bundle/base/cordis.patch.yml` 中的 `skill-engineering` 行使每个以 base 为基础的 profile（`web`、`headless`、`acp`、`sdk`）都能零配置挂载它。profile 把该行替换为 `disabled: true` 即可移除。该提供方通过延迟的 `skills` 注入挂载，因此禁用技能注册表的组合会让该行保持空闲，而不是报告待处理的服务。
 - **内容。** 上游 [`mattpocock/skills`](https://github.com/mattpocock/skills) `main`（提交 `abeeaf9`，v1.3.2）`engineering/` 与 `productivity/` 两个桶中的 27 个技能。其中 11 个由模型调用，出现在会话目录；16 个带 `disable-model-invocation: true`，只能通过 `/` 技能选择器触达。`ask-matt` 仍是用户调用集合的路由。
 - **frontmatter 契约。** 目录名就是技能身份，因此声明的 `name` 与目录名不一致属于无效元数据。`description` 必填。`disable-model-invocation` 与 `user-invocable` 是可选布尔值，会投影到注册表的调用策略。
 - **失败报告。** 缺失（`ENOENT`/`ENOTDIR`）或无效的技能会从完整目录中省略，只报告一次；加载会先使目录失效再返回 `undefined`。其他任何读取错误都会让发现不完整，并从加载中抛出。
@@ -52,4 +52,4 @@ Status: implemented
 
 ## 测试
 
-`packages/skill/skill-mattpocock/tests/skill-mattpocock.spec.ts` 以语句、分支、函数与行四个维度 100% 覆盖提供方契约：目录内容与调用策略、随包正文加载、资源目录漂移、经由 Loader 的真实 `cordis.yml` 组合、持久与瞬态失败报告、去重、销毁与中止。`verify-config-catalog` 记录 `assetRoot` 字段。既有的无密钥场景会重新发布这 11 个目录条目；由于回放输入仍然有效，`pnpm run test:snapshot:refresh` 已重新生成它们。
+`packages/skill/skill-engineering/tests/skill-engineering.spec.ts` 以语句、分支、函数与行四个维度 100% 覆盖提供方契约：目录内容与调用策略、随包正文加载、资源目录漂移、经由 Loader 的真实 `cordis.yml` 组合、持久与瞬态失败报告、去重、销毁与中止。`verify-config-catalog` 记录 `assetRoot` 字段。既有的无密钥场景会重新发布这 11 个目录条目；由于回放输入仍然有效，`pnpm run test:snapshot:refresh` 已重新生成它们。

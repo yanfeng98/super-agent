@@ -28,6 +28,7 @@ The composer keeps the newest 100 accepted inputs for the current workspace fold
 
 ## Continue
 
+- [Use the built-in engineering skills](./engineering-skills.md)
 - [Configure models](./providers.md)
 - [Use the Python SDK](./python-sdk.md)
 - [Publish the Web UI behind a reverse proxy](./public-deployments.md)

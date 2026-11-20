@@ -120,8 +120,8 @@ flowchart LR
   cfg --> plugin_dsh_base_skill
   plugin_dsh_base_skill_filesystem["skill-filesystem<br/>@deepseek-ai/dsh-skill-filesystem"]
   cfg --> plugin_dsh_base_skill_filesystem
-  plugin_dsh_base_skill_mattpocock["skill-mattpocock<br/>@deepseek-ai/dsh-skill-mattpocock"]
-  cfg --> plugin_dsh_base_skill_mattpocock
+  plugin_dsh_base_skill_engineering["skill-engineering<br/>@deepseek-ai/dsh-skill-engineering"]
+  cfg --> plugin_dsh_base_skill_engineering
   plugin_dsh_base_tool_skill["tool-skill<br/>@deepseek-ai/dsh-tool-skill"]
   cfg --> plugin_dsh_base_tool_skill
   plugin_dsh_base_upstream_skills["upstream-skills<br/>@deepseek-ai/dsh-upstream-skills"]
@@ -272,7 +272,7 @@ flowchart LR
 | `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
 | `skill` | `@deepseek-ai/dsh-skill` |
 | `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |
-| `skill-mattpocock` | `@deepseek-ai/dsh-skill-mattpocock` |
+| `skill-engineering` | `@deepseek-ai/dsh-skill-engineering` |
 | `tool-skill` | `@deepseek-ai/dsh-tool-skill` |
 | `upstream-skills` | `@deepseek-ai/dsh-upstream-skills` |
 | `commands` | `@deepseek-ai/dsh-commands` |
