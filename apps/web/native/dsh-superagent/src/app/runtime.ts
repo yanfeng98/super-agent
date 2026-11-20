@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
+import { Engine, key, liveTicket, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
   type TicketCheck, type TicketCheckRun, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
@@ -37,12 +37,12 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { newestFirst, threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, staleNoteIds, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
-  recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordRevert, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
+  recordHandback, recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordRevert, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
   type LocalRequest, type LocalRequestResult } from '../sources/local.ts'
 import { HealthBoard } from '../infra/health.ts'
 import { Outbox } from './outbox.ts'
@@ -224,6 +224,7 @@ export class Runtime extends Service implements SourceHost {
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources,
         localRequest: input => this.localRequest(input),
         localFollowup: (input, options) => createLocalFollowup(runtime, input, options),
+        handbackTicket: (id, input, origin) => runtime.handbackTicket(id, input, origin),
         mergeTicket: (id, strategy, options) => runtime.mergeTicket(id, strategy, options, 'chat'),
         autoMergeTicket: (id, options) => runtime.autoMergeTicket(id, options),
         cancelAutoMerge: id => runtime.cancelAutoMerge(id),
@@ -563,11 +564,15 @@ export class Runtime extends Service implements SourceHost {
       }
       const endedAt = current.ended.at
       const review = await captureReview(this.ctx.subprocess, current, this.stopped.signal)
+      const stale = await this.noteFreshness(current, review)
       const saved = this.store.atomic(() => {
         const latest = this.store.tickets.get(id)
         // A Ticket that ended again meanwhile owns a newer review, which this capture must not overwrite.
         if (!latest?.ended || latest.merged || latest.ended.at !== endedAt) return false
-        if (review) latest.review = review
+        if (review) {
+          latest.review = review
+          this.applyNoteFreshness(latest, review, stale)
+        }
         // The check ran on the tree the review described, so it waits for a fresh run on this one.
         delete latest.checks
         this.store.tickets.save(latest)
@@ -1118,6 +1123,82 @@ export class Runtime extends Service implements SourceHost {
   replyToNote(id: string, noteId: string, text: string): TicketNote[] {
     return this.engine.replyToNote(id, noteId, text).notes ?? []
   }
+  /**
+   * Marks every review note resolved, or opens every resolved one again.
+   * @returns The ticket's notes after the change.
+   */
+  resolveAllNotes(id: string, resolved: boolean): TicketNote[] {
+    return this.engine.resolveAllNotes(id, resolved).notes ?? []
+  }
+  /**
+   * Hands a ticket back to its worker with a person's text, its unsent review notes, or its failing check, resuming an
+   * ended ticket so the worker can act on it.
+   * @param input - The text to send, whether to send the unsent notes, and whether to send the failing check.
+   * @returns The ticket after the hand-back, whether it resumed, and how many notes were sent.
+   * @throws When the ticket is unknown, the selected source has nothing to send, or an ended ticket cannot resume.
+   */
+  handbackTicket(id: string, input: { text?: string; notes?: boolean; check?: boolean }, origin: ActionOrigin = 'panel'):
+    { ticket: Ticket; resumed: boolean; sent: number } {
+    const ticket = this.store.tickets.get(id)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (!input.text && !input.notes && !input.check) throw new Error('Name text, notes or check to hand back')
+    if (input.check && !ticket.ended) throw new Error('The ticket is still open; a check runs when it ends')
+    const notes = input.notes ? (ticket.notes ?? []).filter(note => !note.resolved && !note.sent) : []
+    if (input.notes && !notes.length) throw new Error('No unsent review notes to hand back')
+    const check = input.check ? this.failingCheck(ticket) : undefined
+    if (input.check && !check) throw new Error('The ticket has no failing check to hand back')
+    const parts: string[] = []
+    if (input.text) parts.push(input.text)
+    if (notes.length) parts.push(`Review notes on the changes:\n${notes.map(note => {
+      const range = note.line ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''
+      const replies = note.replies?.length ? `\n  ${note.replies.map(reply => reply.text).join('\n  ')}` : ''
+      return `- ${note.file}${range}: ${note.text}${replies}`
+    }).join('\n')}`)
+    if (check) parts.push(`The configured check failed:\n${check.command}\n${check.output}`)
+    const text = parts.join('\n\n').slice(0, 8_000)
+    const live = liveTicket(ticket)
+    if (live) this.engine.note(id, text)
+    else if (!this.engine.resumeWithNote(id, text)) {
+      throw new Error('The ticket cannot resume: it ended by a person, was merged, discarded, or cleaned, or processing is paused')
+    }
+    if (notes.length) this.engine.markNotesSent(id, notes.map(note => note.id))
+    const updated = this.store.tickets.get(id)!
+    void recordHandback(updated, { at: now(), text, via: origin }).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: recording a hand-back in the archive failed: %s', String(error))
+    })
+    return { ticket: updated, resumed: !live, sent: notes.length }
+  }
+  /** The failing check of an ended ticket, when its result belongs to the current ending. */
+  private failingCheck(ticket: Ticket): TicketCheck | undefined {
+    const check = ticket.checks
+    return check && !check.ok && (!ticket.ended || check.at >= ticket.ended.at) ? check : undefined
+  }
+  /** Records which notes still describe the current lines after a review capture, so the page marks only those outdated. */
+  private applyNoteFreshness(ticket: Ticket, review: TicketReview, stale: Map<string, boolean> | undefined): void {
+    if (!review.head) return
+    for (const note of ticket.notes ?? []) {
+      if (!note.commit) continue
+      if (note.commit === review.head) {
+        note.checkedHead = review.head
+        delete note.stale
+        continue
+      }
+      const changed = stale?.get(note.id)
+      if (changed === undefined) continue
+      note.checkedHead = review.head
+      if (changed) note.stale = { at: review.capturedAt, head: review.head }
+      else delete note.stale
+    }
+  }
+  /** Computes note freshness against a captured review, leaving notes unchecked when git cannot answer. */
+  private async noteFreshness(ticket: Ticket, review: TicketReview | undefined): Promise<Map<string, boolean> | undefined> {
+    if (!review) return undefined
+    try { return await staleNoteIds(this.ctx.subprocess, ticket, review, this.stopped.signal) }
+    catch (error) {
+      this.ctx.logger.warn('dsh-superagent: checking review-note freshness failed: %s', String(error))
+      return undefined
+    }
+  }
   /** The newest panel notifications and the unread count. */
   notifications(): ReturnType<typeof listNotifications> { return listNotifications(this.store) }
   /** Marks one notification read; false when its id is unknown. */
@@ -1252,13 +1333,17 @@ export class Runtime extends Service implements SourceHost {
       })
     const rebased = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base: result.base } : undefined }
     const review = await captureReview(this.ctx.subprocess, rebased, this.stopped.signal)
+    const stale = await this.noteFreshness(rebased, review)
     const changesAfter = await patchFingerprint(this.ctx.subprocess, directory, result.base, this.stopped.signal)
     const at = now()
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
       if (!current) return
       if (current.execution) current.execution = { ...current.execution, base: result.base }
-      if (review) current.review = review
+      if (review) {
+        current.review = review
+        this.applyNoteFreshness(current, review, stale)
+      }
       current.rebased = { at, ...result, via: origin }
       // Upstream commits changed the tree the check ran on, so it waits for a fresh pass.
       delete current.checks
@@ -1367,11 +1452,14 @@ export class Runtime extends Service implements SourceHost {
     try { review = await captureReview(ctx.subprocess, ticket, this.stopped.signal) }
     catch (error) { ctx.logger.warn('dsh-superagent: capturing the workspace review failed: %s', String(error)) }
     if (!stillEnded()) return
+    const stale = await this.noteFreshness(ticket, review)
+    if (!stillEnded()) return
     if (review) this.store.atomic(() => {
       const current = this.store.tickets.get(ticket.id)
       if (!current?.ended || current.ended.at !== ticket.ended?.at || current.merged || current.discarded
         || current.cleaned || current.execution?.base !== ticket.execution?.base) return
       current.review = review
+      this.applyNoteFreshness(current, review, stale)
       this.store.tickets.save(current)
     })
     // The configured checks run once per ending, so a merge can require their result instead of trusting the agent's report.
@@ -1461,7 +1549,9 @@ export class Runtime extends Service implements SourceHost {
       blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
       addNote: (id, input) => runtime.addNote(id, input), removeNote: (id, noteId) => runtime.removeNote(id, noteId),
       resolveNote: (id, noteId, resolved) => runtime.resolveNote(id, noteId, resolved),
+      resolveAllNotes: (id, resolved) => runtime.resolveAllNotes(id, resolved),
       replyToNote: (id, noteId, text) => runtime.replyToNote(id, noteId, text),
+      handbackTicket: (id, input) => runtime.handbackTicket(id, input),
       reviewTicket: (id, decision, note) => runtime.reviewTicket(id, decision, note),
       notifications: () => runtime.notifications(), readNotification: id => runtime.readNotification(id),
       readAllNotifications: () => runtime.readAllNotifications(),

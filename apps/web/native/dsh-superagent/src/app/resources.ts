@@ -2,7 +2,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
-import { UserError, key, latestReport, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
+import { UserError, key, latestReport, noteOutdated, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
 import { batchOf, inputMessage, triggerMessage, workerSessionId } from '../executor/dsh.ts'
 import { readGithub } from '../sources/github-read.ts'
 import { feishuReferences, feishuRead } from '../sources/feishu-read.ts'
@@ -21,22 +21,23 @@ import type { Settings } from './settings.ts'
 import { KV } from '../kv.ts'
 import type { Store } from './store.ts'
 import type { TextCache } from './cache.ts'
+import type { DiffFile } from './review.ts'
 
 /** Resource descriptors exposed via orchestrator_read, marking which resources worker sessions may also read for their own ticket. */
 export const RESOURCES: readonly { name: string; holds: string; executor?: true }[] = [
-  { name: 'tickets', holds: 'ticket cards, newest first; a card\'s state is person/review after a ready report, person/blocked or person/failed after those reports, person/answer with a question, person/delivery when an input could not reach the worker, working or working/queued while it works, idle once the worker ended its turn without a report, else how the ticket ended' },
+  { name: 'tickets', holds: 'ticket cards, newest first, each with its state' },
   { name: 'triggers', holds: 'trigger cards with where each went, newest first' },
   { name: 'threads', holds: 'subscribed threads, newest activity first, with their labels, tickets, current assessment and polling errors' },
   { name: 'thread/<key>', holds: 'one thread: its label and link, its tickets and latest decisions, and its triggers, newest first', executor: true },
   { name: 'decisions', holds: 'decisions, newest first' },
   { name: 'decision/<id>', holds: 'one decision with its audit' },
-  { name: 'ticket/<id>', holds: 'a ticket\'s card, the trigger, decision and threads it is tied to, its latest assignments with the start of each '
-    + 'report, and its inputs, newest first', executor: true },
+  { name: 'ticket/<id>', holds: 'one ticket with its card, trigger, decision, threads, latest assignments and inputs', executor: true },
   { name: 'ticket/<id>/assignment', holds: 'its assignment text', executor: true },
   { name: 'ticket/<id>/assignments', holds: 'its assignments, newest first, with the start of each report', executor: true },
   { name: 'ticket/<id>/inputs', holds: 'its inputs, newest first', executor: true },
   { name: 'ticket/<id>/result', holds: 'its latest report', executor: true },
-  { name: 'ticket/<id>/diff', holds: 'the committed diff of its changes since its base, which the panel reads for View diff' },
+  { name: 'ticket/<id>/notes', holds: 'its review notes whole, newest first, with replies and state' },
+  { name: 'ticket/<id>/diff', holds: 'its committed diff since its base, with a per-file summary' },
   { name: 'ticket/<id>/report/<id>', holds: 'the report of one of its assignments', executor: true },
   { name: 'ticket/<id>/transcript', holds: 'its Executor Session\'s messages, newest first', executor: true },
   { name: 'ticket/<id>/message/<n>', holds: 'one message of that transcript', executor: true },
@@ -72,7 +73,7 @@ export interface ResourceHost {
   feishuPageSize(): number
   sourceLink(trigger: Trigger, signal?: AbortSignal): Promise<{ source_url?: string; source_url_read?: string }>
   /** The committed diff of one Ticket's changes, or why it cannot be read. */
-  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; error?: string }>
+  ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }>
 }
 export interface MainResourceHost extends ResourceHost {
   readonly sessions: Pick<Sessions, 'status' | 'modelRetry'>
@@ -300,10 +301,27 @@ const ROUTES: readonly Route[] = [
     } else if (part !== undefined) throw new Error('Unknown context resource')
     else if (section === 'assignment') body = ticket.execution?.assignment ?? ''
     else if (section === 'result') body = latestReport(ticket)?.summary ?? ''
-    else if (section === 'diff') {
+    else if (section === 'notes') {
+      main(read)
+      body = (ticket.notes ?? []).slice().reverse().map(note => {
+        const range = note.line ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''
+        const state = [note.resolved ? 'resolved' : 'open', noteOutdated(note, ticket.review?.head) ? 'outdated' : '',
+          note.sent ? `sent ${note.sent.at}` : ''].filter(Boolean).join(', ')
+        const replies = note.replies?.length ? `\n${note.replies.map(reply => `> ${reply.text}`).join('\n')}` : ''
+        return `## ${note.file}${range} · ${state}\n${note.text}${replies}`
+      }).join('\n\n') || 'No review notes'
+    } else if (section === 'diff') {
       main(read)
       const found = await host.ticketDiff(id)
-      body = found.error ?? (found.diff || 'No committed change')
+      if (found.error) body = found.error
+      else {
+        const additions = found.files.reduce((sum, file) => sum + file.additions, 0)
+        const deletions = found.files.reduce((sum, file) => sum + file.deletions, 0)
+        const summary = found.files.length
+          ? `files: ${found.files.length} (+${additions} -${deletions})\n${found.files.map(file =>
+            `${file.status} ${file.path} +${file.additions} -${file.deletions}`).join('\n')}\n\n` : ''
+        body = summary + (found.diff || 'No committed change')
+      }
     } else if (section === 'transcript') {
       body = (await transcript(host, id)).flatMap((event, index) => {
         const entry = transcriptEntry(event)

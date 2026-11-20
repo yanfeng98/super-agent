@@ -67,7 +67,10 @@ export interface Api {
     response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/remove': { response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/resolve': { body: { resolved: boolean }; response: { notes: TicketNote[] } }
+  'POST tickets/:id/notes/resolve': { body: { resolved: boolean }; response: { notes: TicketNote[] } }
   'POST tickets/:id/notes/:noteId/replies': { body: { text: string }; response: { notes: TicketNote[] } }
+  'POST tickets/:id/handback': { body: { text?: string; notes?: boolean; check?: boolean };
+    response: { ticket_id: string; resumed: boolean; sent: number } }
   'POST tickets/:id/cleanup': { response: { cleaned: true } }
   'POST tickets/:id/title': { body: { title: string }; response: { title: string } }
   'POST tickets/:id/tags': { body: { tags: string[] }; response: { tags: string[] } }

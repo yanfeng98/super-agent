@@ -97,6 +97,26 @@ it('reads a ticket\'s committed change from the main Session', async () => {
   expect(await read(`ticket/${ticket.id}/diff`)).toMatchObject({ resource: `ticket/${ticket.id}/diff` })
 })
 
+it('reads a ticket\'s review notes, its review summary, and the check it ended with', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    current.review = { capturedAt: '2026-09-10T00:00:00.000Z', head: 'abc123', commits: [], files: [], dirty: [] }
+    current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-09-10T00:00:00.000Z', output: 'one test failed' }
+    h.runtime.store.tickets.save(current)
+  })
+  h.runtime.addNote(ticket.id, { file: 'src/a.ts', line: 3, text: '改成可选' })
+  const details = await read(`ticket/${ticket.id}`) as { notes: { total: number; open: number; items: { file: string; line: number }[] };
+    review: { head: string }; checks: { ok: boolean; output: string } }
+  expect(details.notes).toMatchObject({ total: 1, open: 1, items: [{ file: 'src/a.ts', line: 3 }] })
+  expect(details.review).toMatchObject({ head: 'abc123' })
+  expect(details.checks).toMatchObject({ ok: false, output: 'one test failed' })
+  expect(await read(`ticket/${ticket.id}/notes`)).toMatchObject({ text: expect.stringContaining('## src/a.ts:3 · open') })
+  await expect(h.runTool(`worker-${ticket.id}`, 'orchestrator_read', { resource: `ticket/${ticket.id}/notes` }))
+    .rejects.toThrow('belongs to the main Session')
+})
+
 it('keeps the main Session\'s resources from an Executor Session, which lists only its own', async () => {
   const { ticket, sessionId } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   for (const resource of ['tickets', 'triggers', 'threads', 'decisions', 'settings', 'prompts', 'models']) {

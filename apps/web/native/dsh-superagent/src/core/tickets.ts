@@ -336,6 +336,8 @@ export class Tickets extends EnginePart {
     const at = this.now()
     note.replies = [...(note.replies ?? []), { id: key('note-reply', ticketId, noteId, at, String(note.replies?.length ?? 0)),
       text: next, at }]
+    // A reply is new input for the worker, so a note already handed over is due again.
+    delete note.sent
     ticket.updatedAt = at
     this.repo.tickets.save(ticket)
     return ticket
@@ -350,9 +352,59 @@ export class Tickets extends EnginePart {
     const note = ticket.notes?.find(item => item.id === noteId)
     if (!note) throw new UserError('unknownNote')
     if (resolved) note.resolved = { at: this.now() }
-    else delete note.resolved
+    else {
+      delete note.resolved
+      // A reopened note is a fresh request for the worker, not one already handed over.
+      delete note.sent
+    }
     ticket.updatedAt = this.now()
     this.repo.tickets.save(ticket)
+    return ticket
+  }
+  /**
+   * Marks review notes as handed to the worker, so the page can show it and a later hand-back does not repeat them.
+   * @returns The ticket with the notes marked.
+   * @throws UserError when the ticket is unknown.
+   */
+  markNotesSent(ticketId: string, ids: readonly string[]): Ticket {
+    const ticket = this.require(ticketId)
+    const wanted = new Set(ids)
+    let changed = false
+    for (const note of ticket.notes ?? []) {
+      if (!wanted.has(note.id) || note.sent) continue
+      note.sent = { at: this.now() }
+      changed = true
+    }
+    if (changed) {
+      ticket.updatedAt = this.now()
+      this.repo.tickets.save(ticket)
+    }
+    return ticket
+  }
+  /**
+   * Marks every review note resolved, or opens every resolved one again.
+   * @returns The ticket with the notes' new state.
+   * @throws UserError when the ticket is unknown.
+   */
+  resolveAllNotes(ticketId: string, resolved: boolean): Ticket {
+    const ticket = this.require(ticketId)
+    const at = this.now()
+    let changed = false
+    for (const note of ticket.notes ?? []) {
+      if (resolved && !note.resolved) {
+        note.resolved = { at }
+        changed = true
+      } else if (!resolved && note.resolved) {
+        delete note.resolved
+        // Reopening makes the note a fresh request, so it is due for the worker again.
+        delete note.sent
+        changed = true
+      }
+    }
+    if (changed) {
+      ticket.updatedAt = at
+      this.repo.tickets.save(ticket)
+    }
     return ticket
   }
   /**

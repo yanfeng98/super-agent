@@ -94,8 +94,13 @@ export interface HttpHost {
   removeNote(id: string, noteId: string): TicketNote[]
   /** Marks a review note resolved, or open again. */
   resolveNote(id: string, noteId: string, resolved: boolean): TicketNote[]
+  /** Marks every review note resolved, or opens every resolved one again. */
+  resolveAllNotes(id: string, resolved: boolean): TicketNote[]
   /** Adds a reply to a review note's discussion. */
   replyToNote(id: string, noteId: string, text: string): TicketNote[]
+  /** Hands a ticket back to its worker with text, its unsent notes, or its failing check. */
+  handbackTicket(id: string, input: { text?: string; notes?: boolean; check?: boolean }):
+    { ticket: Ticket; resumed: boolean; sent: number }
   /** Records a review of an ended ticket's changes. */
   reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket
   /** The newest panel notifications and the unread count. */
@@ -402,6 +407,23 @@ function routes(runtime: HttpHost): Routes {
       const { resolved } = z.object({ resolved: z.boolean() }).strict().parse(await body())
       try { return { notes: runtime.resolveNote(id, params.noteId, resolved) } }
       catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/notes/resolve': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const { resolved } = z.object({ resolved: z.boolean() }).strict().parse(await body())
+      try { return { notes: runtime.resolveAllNotes(id, resolved) } }
+      catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
+    },
+    'POST tickets/:id/handback': async ({ params, body }) => {
+      const id = ticket(params.id)
+      const input = z.object({ text: z.string().trim().min(1).max(20_000).optional(),
+        notes: z.boolean().default(false), check: z.boolean().default(false) }).strict().parse(await body() ?? {})
+      if (!input.text && !input.notes && !input.check) throw new RouteError(400, 'Name text, notes or check to hand back')
+      try {
+        const result = runtime.handbackTicket(id, { ...input.text ? { text: input.text } : {},
+          ...input.notes ? { notes: true } : {}, ...input.check ? { check: true } : {} })
+        return { ticket_id: id, resumed: result.resumed, sent: result.sent }
+      } catch (error) { throw new RouteError(400, error instanceof Error ? error.message : String(error)) }
     },
     'POST tickets/:id/automerge': async ({ params, body }) => {
       const id = ticket(params.id)

@@ -3,7 +3,7 @@ import { masterPrompt, workerPrompt } from '../src/app/context.ts'
 import { composePrompt, defaultPrompts } from '../src/app/prompts.ts'
 import { bundledSkills, promptFile } from '../src/app/skill-files.ts'
 import { TICKET_STATES, decisionCard, decisionDetails, ticketCard, ticketDetails, triggerCard, threadCard } from '../src/app/cards.ts'
-import { key, said, type Decision, type Thread, type Ticket, type Trigger } from '../src/core/index.ts'
+import { noteOutdated, key, said, type Decision, type Thread, type Ticket, type Trigger } from '../src/core/index.ts'
 
 /**
  * Built-in prompt and skill contract: target file (`skill <name>` for a bundled skill, `*` for both composed prompts),
@@ -140,6 +140,7 @@ it('shows a trigger and a ticket as cards with a short preview and references to
     state: 'person/review', strength: 'explicit', pr_number: 42, read: 'ticket/ticket-1', trigger_id: 'request-1', decision_id: 'd1',
     batch: [{ trigger_id: 'request-2', from: 'alice', at: trigger.at, preview: 'Also the flaky one.', read: 'trigger/request-2' }],
     threads, directory: '/worktrees/ticket-1', scope: mandate.scope, requested_by: 'alice', inputs: { items: [] },
+    notes: { total: 0, open: 0, items: [], read: 'ticket/ticket-1/notes' },
     assignments: { items: [{ id: 'a1', state: 'running', at: '2026-09-09T00:00:00Z', report: { state: 'ready', at: '', preview: expect.stringMatching(/^The focused/),
       chars: SUMMARY.length, read: 'ticket/ticket-1/report/a1' } }] },
     assignment: 'ticket/ticket-1/assignment', result: 'ticket/ticket-1/result', transcript: 'ticket/ticket-1/transcript' })
@@ -195,4 +196,14 @@ it('keeps what a model reads in a preview as written: code, angle brackets and l
   const text = 'Fix `Map<string, T>` typing, see [the issue](https://github.com/acme/widgets/issues/7)\n\n  **now**'
   expect(triggerCard({ ...trigger,
     text }).preview).toBe('Fix `Map<string, T>` typing, see [the issue](https://github.com/acme/widgets/issues/7) **now**')
+})
+it('marks a note outdated only when its checked lines changed, or when no check exists', () => {
+  const head = 'b'.repeat(40)
+  // A note written on the current head is current.
+  expect(noteOutdated({ commit: head }, head)).toBe(false)
+  // A note checked against this head is current even though its commit is older.
+  expect(noteOutdated({ commit: 'a'.repeat(40), checkedHead: head }, head)).toBe(false)
+  // A note whose lines changed is outdated, and an unchecked older note falls back to the whole-head comparison.
+  expect(noteOutdated({ commit: 'a'.repeat(40), stale: { at: '1', head } }, head)).toBe(true)
+  expect(noteOutdated({ commit: 'a'.repeat(40) }, head)).toBe(true)
 })

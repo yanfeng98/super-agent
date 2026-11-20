@@ -261,6 +261,20 @@ export class Engine {
     return this.repo.atomic(() => this.tickets.resolveNote(ticketId, noteId, resolved))
   }
   /**
+   * Marks review notes as handed to the worker.
+   * @returns The ticket with the notes marked.
+   */
+  markNotesSent(ticketId: string, ids: readonly string[]): Ticket {
+    return this.repo.atomic(() => this.tickets.markNotesSent(ticketId, ids))
+  }
+  /**
+   * Marks every review note resolved, or opens every resolved one again.
+   * @returns The ticket with the notes' new state.
+   */
+  resolveAllNotes(ticketId: string, resolved: boolean): Ticket {
+    return this.repo.atomic(() => this.tickets.resolveAllNotes(ticketId, resolved))
+  }
+  /**
    * Links or unlinks two tickets on each other's page.
    * @returns The ticket that was linked or unlinked.
    */

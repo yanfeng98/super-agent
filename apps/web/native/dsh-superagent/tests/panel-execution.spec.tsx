@@ -259,9 +259,10 @@ it('adds a line-anchored review note and sends the notes to the executor as one 
   expect(server.requests.find(request => request.path === 'tickets/t1/notes')).toMatchObject({ method: 'POST',
     body: { file: 'src/b.ts', line: 4, endLine: 9, text: '补个测试' } })
   await click(zh.noteSend)
-  const followup = server.requests.filter(request => request.path === 'local/followups').at(-1)
-  expect(followup?.body).toMatchObject({ thread: 'local:r1' })
-  expect(String((followup?.body as { text?: string }).text)).toContain('src/a.ts:12-20: 改成可选')
+  const handback = server.requests.filter(request => request.path === 'tickets/t1/handback').at(-1)
+  expect(handback?.body).toMatchObject({ notes: true })
+  // The notes were handed over, so the page says so and does not offer the same notes again.
+  expect(text()).toContain(zh.noteSent)
   await click(zh.noteReply)
   await type(field<HTMLInputElement>(zh.noteReply), '已经处理')
   await click(zh.noteReplySend)

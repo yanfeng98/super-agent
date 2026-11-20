@@ -421,6 +421,23 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
       ? { ...note, resolved: resolved ? { at: '2026-11-18T00:00:00Z' } : undefined } : note)
     return { notes: detail.notes }
   } },
+  'POST tickets/:id/notes/resolve': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const resolved = (body as { resolved: boolean }).resolved
+    detail.notes = (detail.notes ?? []).map(note => ({ ...note,
+      resolved: resolved ? { at: '2026-11-18T00:00:00Z' } : undefined }))
+    return { notes: detail.notes }
+  } },
+  'POST tickets/:id/handback': { body: true, answer: ({ params, body }) => {
+    const detail = server.ticketDetails[params.id]
+    if (!detail) return refuse(404, 'Ticket not found')
+    const input = body as { text?: string; notes?: boolean; check?: boolean }
+    const unsent = input.notes ? (detail.notes ?? []).filter(note => !note.resolved && !note.sent) : []
+    detail.notes = (detail.notes ?? []).map(note => unsent.some(item => item.id === note.id)
+      ? { ...note, sent: { at: '2026-11-18T00:00:00Z' } } : note)
+    return { ticket_id: params.id, resumed: true, sent: unsent.length }
+  } },
   'POST tickets/:id/review': { body: true, answer: ({ params, body }) => {
     const detail = server.ticketDetails[params.id]
     if (!detail) return refuse(404, 'Ticket not found')
