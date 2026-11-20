@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import SkillRegistry, { type SkillCandidate, type SkillProvider, type SkillProviderObservation } from '@deepseek-ai/dsh-skill'
-import * as SkillMattpocock from '@deepseek-ai/dsh-skill-engineering'
+import * as SkillEngineering from '@deepseek-ai/dsh-skill-engineering'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -85,7 +85,7 @@ describe('bundled engineering workflow skills', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)
-      await ctx.plugin(SkillMattpocock)
+      await ctx.plugin(SkillEngineering)
       const catalog = await ctx.skills.list()
       expect(catalog.map(skill => skill.name)).toEqual([...names])
       for (const skill of catalog) {
@@ -117,7 +117,7 @@ describe('bundled engineering workflow skills', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)
-      const fiber = await ctx.plugin(SkillMattpocock)
+      const fiber = await ctx.plugin(SkillEngineering)
       for (const name of names) {
         const loaded = await ctx.skills.get(name)
         expect(loaded?.content).toBe(await bodyOf(join(assets, name, 'SKILL.md')))
@@ -148,7 +148,7 @@ describe('bundled engineering workflow skills', () => {
       ctx.loader.builtins.include = Include
       const modules = new Map<string, unknown>([
         ['@deepseek-ai/dsh-skill', SkillRegistry],
-        ['@deepseek-ai/dsh-skill-engineering', SkillMattpocock],
+        ['@deepseek-ai/dsh-skill-engineering', SkillEngineering],
       ])
       ctx.loader.internal = {
         version: 'v2',
@@ -178,7 +178,7 @@ describe('bundled engineering workflow skills', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)
-      expect(() => { SkillMattpocock.apply(ctx, { assetRoot: 'assets' }) }).toThrow('absolute directory')
+      expect(() => { SkillEngineering.apply(ctx, { assetRoot: 'assets' }) }).toThrow('absolute directory')
       expect(await ctx.skills.list()).toEqual([])
     } finally { await ctx.fiber.dispose() }
   })
@@ -190,7 +190,7 @@ describe('bundled engineering workflow skills', () => {
       const warnings = captureWarnings(ctx)
       await ctx.plugin(SkillRegistry)
       const registerProvider = vi.spyOn(ctx.skills, 'registerProvider')
-      const fiber = await ctx.plugin(SkillMattpocock, { assetRoot: root })
+      const fiber = await ctx.plugin(SkillEngineering, { assetRoot: root })
       const provider: SkillProvider = registerProvider.mock.calls[0]![0]({ signal: new AbortController().signal, invalidate: () => {} })
       const original = await readFile(skill, 'utf8')
       const remaining = names.filter(name => name !== 'tdd')
@@ -247,7 +247,7 @@ describe('bundled engineering workflow skills', () => {
       const registerProvider = vi.spyOn(ctx.skills, 'registerProvider')
       const raw = await readFile(skill, 'utf8')
       await writeFile(skill, raw.replace('disable-model-invocation: true\n', 'user-invocable: false\n'))
-      const fiber = await ctx.plugin(SkillMattpocock, { assetRoot: root })
+      const fiber = await ctx.plugin(SkillEngineering, { assetRoot: root })
       const provider: SkillProvider = registerProvider.mock.calls[0]![0]({ signal: new AbortController().signal, invalidate: () => {} })
       const listed = await observe(provider)
       expect(listed.candidates.find(entry => entry.name === 'implement')?.invocation)
@@ -272,7 +272,7 @@ describe('bundled engineering workflow skills', () => {
     try {
       const warnings = captureWarnings(ctx)
       await ctx.plugin(SkillRegistry)
-      await ctx.plugin(SkillMattpocock, { assetRoot: root })
+      await ctx.plugin(SkillEngineering, { assetRoot: root })
       vi.mocked(readFile).mockRejectedValueOnce(new Error('locked by another process'))
       const observed = await ctx.skills.snapshot()
       expect(observed.complete).toBe(false)
@@ -292,7 +292,7 @@ describe('bundled engineering workflow skills', () => {
       await ctx.plugin(SkillRegistry)
       const registerProvider = vi.spyOn(ctx.skills, 'registerProvider')
       await rm(skill)
-      await ctx.plugin(SkillMattpocock, { assetRoot: root })
+      await ctx.plugin(SkillEngineering, { assetRoot: root })
       const provider: SkillProvider = registerProvider.mock.calls[0]![0]({ signal: new AbortController().signal, invalidate: () => {} })
       await expect(provider.list({ signal: AbortSignal.abort() })).rejects.toMatchObject({ name: 'AbortError' })
     } finally {

@@ -321,7 +321,7 @@
     - id: skill-filesystem
       name: '@deepseek-ai/dsh-skill-filesystem'
 
-    # Bundled engineering workflow skills ship with every base-backed profile.
+    # Built-in engineering workflow skills ship with every base-backed profile.
     - id: skill-engineering
       name: '@deepseek-ai/dsh-skill-engineering'
 
