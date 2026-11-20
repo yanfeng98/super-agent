@@ -225,8 +225,12 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     the head, and `retryMerges` clears the failure from the chat tool or `POST merge-queue/retry`. `TicketNote.endLine`
     lets a review note cover a range, checked in `Tickets.addNote` and shown with the notes sent to the worker.
     `Runtime.revertTicket` now deletes `merged` after recording the revert, so a corrected Ticket can merge again; the page
-    shows the revert only while nothing merged after it. `tests/merge.spec.ts`, `tests/core-engine.spec.ts`,
-    `tests/chat-tools.spec.ts` and `tests/panel-execution.spec.tsx` cover them.
+    shows the revert only while nothing merged after it, and a record that still holds both (written before that change) is
+    refused a second revert. Re-queueing a Ticket replaces its entry, which clears the failure, and a failed entry whose
+    Ticket was merged, discarded or cleaned elsewhere is dropped while an open one keeps waiting. The notes route keeps its
+    `UserError` code, so the panel words `invalidNoteRange` in the interface language. `tests/merge.spec.ts`,
+    `tests/core-engine.spec.ts`, `tests/chat-tools.spec.ts`, `tests/http.spec.ts` and `tests/panel-execution.spec.tsx` cover
+    them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
