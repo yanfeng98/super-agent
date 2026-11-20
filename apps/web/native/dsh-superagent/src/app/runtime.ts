@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, liveTicket, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
+import { Engine, key, latestAssignment, latestReport, liveTicket, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
   type TicketCheck, type TicketCheckRun, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
@@ -37,7 +37,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { newestFirst, threadFacts, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, staleNoteIds, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { pullEndNotices } from '../sources/github-pull.ts'
@@ -232,7 +232,7 @@ export class Runtime extends Service implements SourceHost {
         queueMerges: (ids, options) => runtime.queueMerges(ids, options),
         dequeueMerges: ids => runtime.dequeueMerges(ids), retryMerges: ids => runtime.retryMerges(ids),
         pendingMerges: () => runtime.pendingMerges(),
-        blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
+        blockTicket: (id, reference, blocked, start) => runtime.blockTicket(id, reference, blocked, start),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -564,14 +564,14 @@ export class Runtime extends Service implements SourceHost {
       }
       const endedAt = current.ended.at
       const review = await captureReview(this.ctx.subprocess, current, this.stopped.signal)
-      const stale = await this.noteFreshness(current, review)
+      const anchors = await this.noteFreshness(current, review)
       const saved = this.store.atomic(() => {
         const latest = this.store.tickets.get(id)
         // A Ticket that ended again meanwhile owns a newer review, which this capture must not overwrite.
         if (!latest?.ended || latest.merged || latest.ended.at !== endedAt) return false
         if (review) {
           latest.review = review
-          this.applyNoteFreshness(latest, review, stale)
+          this.applyNoteFreshness(latest, review, anchors)
         }
         // The check ran on the tree the review described, so it waits for a fresh run on this one.
         delete latest.checks
@@ -601,7 +601,11 @@ export class Runtime extends Service implements SourceHost {
         throw new Error(`The configured workspace check failed (exit ${check.exitCode ?? 'unknown'}); fix it before merging.${output ? `\n${output}` : ''}`)
       }
     }
-    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal, strategy, current.execution?.target)
+    // A squash or merge commit carries what the Ticket says it did, as a pull request's title and body would.
+    const number = this.store.tickets.number(current.id)
+    const message = [current.title, latestReport(current)?.summary.trim(),
+      `${number ? `Ticket ${number}` : `Ticket ${current.id}`}`].filter(Boolean).join('\n\n').slice(0, 4_000)
+    const result = await mergeWorkspace(this.ctx.subprocess, directory, this.stopped.signal, strategy, current.execution?.target, message)
     const at = now()
     this.store.atomic(() => {
       const latest = this.store.tickets.get(id)
@@ -1173,8 +1177,8 @@ export class Runtime extends Service implements SourceHost {
     const check = ticket.checks
     return check && !check.ok && (!ticket.ended || check.at >= ticket.ended.at) ? check : undefined
   }
-  /** Records which notes still describe the current lines after a review capture, so the page marks only those outdated. */
-  private applyNoteFreshness(ticket: Ticket, review: TicketReview, stale: Map<string, boolean> | undefined): void {
+  /** Moves each note's anchor to the current lines after a review capture, marking a note stale when its own lines changed. */
+  private applyNoteFreshness(ticket: Ticket, review: TicketReview, anchors: Map<string, NoteAnchor> | undefined): void {
     if (!review.head) return
     for (const note of ticket.notes ?? []) {
       if (!note.commit) continue
@@ -1183,19 +1187,27 @@ export class Runtime extends Service implements SourceHost {
         delete note.stale
         continue
       }
-      const changed = stale?.get(note.id)
-      if (changed === undefined) continue
+      const anchor = anchors?.get(note.id)
+      if (!anchor) continue
       note.checkedHead = review.head
-      if (changed) note.stale = { at: review.capturedAt, head: review.head }
-      else delete note.stale
+      if (anchor.stale) {
+        note.stale = { at: review.capturedAt, head: review.head }
+        continue
+      }
+      delete note.stale
+      note.commit = review.head
+      if (anchor.line === undefined) delete note.line
+      else note.line = anchor.line
+      if (anchor.endLine === undefined) delete note.endLine
+      else note.endLine = anchor.endLine
     }
   }
-  /** Computes note freshness against a captured review, leaving notes unchecked when git cannot answer. */
-  private async noteFreshness(ticket: Ticket, review: TicketReview | undefined): Promise<Map<string, boolean> | undefined> {
+  /** Moves note anchors against a captured review, leaving notes unchecked when git cannot answer. */
+  private async noteFreshness(ticket: Ticket, review: TicketReview | undefined): Promise<Map<string, NoteAnchor> | undefined> {
     if (!review) return undefined
-    try { return await staleNoteIds(this.ctx.subprocess, ticket, review, this.stopped.signal) }
+    try { return await remapNoteAnchors(this.ctx.subprocess, ticket, review, this.stopped.signal) }
     catch (error) {
-      this.ctx.logger.warn('dsh-superagent: checking review-note freshness failed: %s', String(error))
+      this.ctx.logger.warn('dsh-superagent: moving review-note anchors failed: %s', String(error))
       return undefined
     }
   }
@@ -1229,6 +1241,17 @@ export class Runtime extends Service implements SourceHost {
     })
     return ticket
   }
+  /** Starts pending first Assignments whose start dependencies have all merged. */
+  private startWaiting(): void {
+    for (const ticket of this.store.tickets.open()) {
+      if (!ticket.startAfter?.length) continue
+      if (ticket.assignments.some(item => item.startedAt)) continue
+      if (ticket.startAfter.some(id => !this.store.tickets.get(id)?.merged)) continue
+      const assignment = latestAssignment(ticket)
+      if (assignment?.state !== 'pending') continue
+      this.executor.start(ticket, assignment)
+    }
+  }
   /**
    * Links or unlinks another ticket, named by its id or `T-000N`, on both tickets' pages.
    * @returns The changed ticket's related tickets with their numbers and titles.
@@ -1250,15 +1273,18 @@ export class Runtime extends Service implements SourceHost {
    * @returns The blocked ticket's blockers, with their titles and display numbers.
    * @throws when either ticket is unknown, they are the same, or the dependency would close a cycle.
    */
-  blockTicket(id: string, reference: string, blocked: boolean):
-    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] } {
+  blockTicket(id: string, reference: string, blocked: boolean, start = false):
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; start: boolean }[] } {
     const ticketId = this.ticketReference(id), target = this.ticketReference(reference)
     if (!ticketId || !target) throw new Error('Unknown ticket')
-    const ticket = this.engine.blockTicket(ticketId, target, blocked)
+    const ticket = this.engine.blockTicket(ticketId, target, blocked, start)
+    // A dependency set after its blocker already merged does not hold the first Assignment back.
+    this.startWaiting()
     return { ticket_id: ticket.id, blocked_by: (ticket.blockedBy ?? []).flatMap(value => {
       const other = this.store.tickets.get(value)
       const number = this.store.tickets.number(value)
-      return other ? [{ id: value, title: other.title, merged: !!other.merged, ...number ? { number } : {} }] : []
+      return other ? [{ id: value, title: other.title, merged: !!other.merged, start: (ticket.startAfter ?? []).includes(value),
+        ...number ? { number } : {} }] : []
     }) }
   }
   /** Resolves a ticket id or display number (`T-0001`) to its id. */
@@ -1333,7 +1359,7 @@ export class Runtime extends Service implements SourceHost {
       })
     const rebased = { ...ticket, execution: ticket.execution ? { ...ticket.execution, base: result.base } : undefined }
     const review = await captureReview(this.ctx.subprocess, rebased, this.stopped.signal)
-    const stale = await this.noteFreshness(rebased, review)
+    const anchors = await this.noteFreshness(rebased, review)
     const changesAfter = await patchFingerprint(this.ctx.subprocess, directory, result.base, this.stopped.signal)
     const at = now()
     this.store.atomic(() => {
@@ -1342,7 +1368,7 @@ export class Runtime extends Service implements SourceHost {
       if (current.execution) current.execution = { ...current.execution, base: result.base }
       if (review) {
         current.review = review
-        this.applyNoteFreshness(current, review, stale)
+        this.applyNoteFreshness(current, review, anchors)
       }
       current.rebased = { at, ...result, via: origin }
       // Upstream commits changed the tree the check ran on, so it waits for a fresh pass.
@@ -1452,14 +1478,14 @@ export class Runtime extends Service implements SourceHost {
     try { review = await captureReview(ctx.subprocess, ticket, this.stopped.signal) }
     catch (error) { ctx.logger.warn('dsh-superagent: capturing the workspace review failed: %s', String(error)) }
     if (!stillEnded()) return
-    const stale = await this.noteFreshness(ticket, review)
+    const anchors = await this.noteFreshness(ticket, review)
     if (!stillEnded()) return
     if (review) this.store.atomic(() => {
       const current = this.store.tickets.get(ticket.id)
       if (!current?.ended || current.ended.at !== ticket.ended?.at || current.merged || current.discarded
         || current.cleaned || current.execution?.base !== ticket.execution?.base) return
       current.review = review
-      this.applyNoteFreshness(current, review, stale)
+      this.applyNoteFreshness(current, review, anchors)
       this.store.tickets.save(current)
     })
     // The configured checks run once per ending, so a merge can require their result instead of trusting the agent's report.
@@ -1546,7 +1572,7 @@ export class Runtime extends Service implements SourceHost {
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
       cancelAutoMerge: id => runtime.cancelAutoMerge(id),
       linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),
-      blockTicket: (id, reference, blocked) => runtime.blockTicket(id, reference, blocked),
+      blockTicket: (id, reference, blocked, start) => runtime.blockTicket(id, reference, blocked, start),
       addNote: (id, input) => runtime.addNote(id, input), removeNote: (id, noteId) => runtime.removeNote(id, noteId),
       resolveNote: (id, noteId, resolved) => runtime.resolveNote(id, noteId, resolved),
       resolveAllNotes: (id, resolved) => runtime.resolveAllNotes(id, resolved),

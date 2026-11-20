@@ -1853,6 +1853,30 @@ it('resolves every review note at once', async () => {
   expect(runtime.resolveAllNotes(ticket.id, false).every(note => !note.resolved)).toBe(true)
 })
 
+it('holds a first Assignment until its start dependency merges, then starts it', async () => {
+  const { ticket: blocker } = await acceptedTicket(feishu('1', '@bot 先做 A'))
+  const { ticket: dependent } = await acceptedTicket(feishu('2', '@bot 再做 B'))
+  const enqueue = vi.spyOn(runtime.effects, 'enqueue')
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(dependent.id)!
+    current.startAfter = [blocker.id]
+    current.assignments = current.assignments.map(item => ({ ...item, state: 'pending', startedAt: undefined }))
+    runtime.store.tickets.save(current)
+  })
+  enqueue.mockClear()
+  const assignment = runtime.store.tickets.get(dependent.id)!.assignments[0]!
+  runtime.executor.start(runtime.store.tickets.get(dependent.id)!, assignment)
+  expect(enqueue).not.toHaveBeenCalled()
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(blocker.id)!
+    current.merged = { at: '2026-09-10T00:00:00.000Z', branch: 'agent/a', target: 'main' }
+    runtime.store.tickets.save(current)
+  })
+  // Recording the dependency again after its blocker merged starts the waiting Assignment.
+  runtime.blockTicket(dependent.id, blocker.id, true, true)
+  expect(enqueue).toHaveBeenCalledWith('launch', assignment.id, { ticketId: dependent.id, assignmentId: assignment.id })
+})
+
 it('keeps earlier check runs in the ticket history', async () => {
   const { ticket } = await acceptedTicket()
   const settings = runtime.store.settings()

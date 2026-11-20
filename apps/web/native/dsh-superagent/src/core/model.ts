@@ -328,6 +328,8 @@ export interface Ticket {
   related?: string[]
   /** Tickets whose branch must merge first; while one is not merged, this ticket does not merge. */
   blockedBy?: string[]
+  /** Tickets whose branch must merge first before this ticket's first Assignment starts; always a subset of `blockedBy`. */
+  startAfter?: string[]
   /** A person's notes on files and lines of this ticket's changes, kept until they send them to the Executor. */
   notes?: TicketNote[]
   /** Set when the request asked to wait for a person's approval before its first Assignment runs. */

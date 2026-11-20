@@ -157,7 +157,8 @@ export function ticketDetail(host: ViewHost, id: string) {
     }),
     blockedBy: (ticket.blockedBy ?? []).flatMap(id => {
       const other = store.tickets.get(id)
-      return other ? [{ id, number: view.number(other.id), title: other.title, merged: !!other.merged }] : []
+      return other ? [{ id, number: view.number(other.id), title: other.title, merged: !!other.merged,
+        start: (ticket.startAfter ?? []).includes(id) }] : []
     }),
     ...checks ? { checks } : {},
     ...ticket.reviewed ? { reviewed: ticket.reviewed } : {},

@@ -165,6 +165,7 @@ const TEXT = {
   blockedByHint: ['这些工单合并之后，本工单才能合并。', 'This ticket merges only after these tickets have merged.'],
   blockedByPlaceholder: ['工单编号或 ID', 'Ticket number or id'],
   blockedByAdd: ['添加', 'Add'],
+  blockerStart: ['开工前等待', 'Wait before starting'],
   blockerMerged: ['已合并', 'Merged'],
   blockerWaiting: ['尚未合并', 'Not merged yet'],
   relatedTitle: ['关联工单', 'Related Tickets'],

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, staleNoteIds, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, remapNoteAnchors, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -130,8 +130,8 @@ describe('merge and discard', () => {
     git('worktree', 'add', '-q', '-b', 'agent/q', worktree)
     writeFileSync(join(worktree, 'q.txt'), 'squashed\n')
     gitAt(worktree, 'add', 'q.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
-    await mergeWorkspace(subprocess(), worktree, signal, 'squash')
-    expect(git('log', '--oneline', '-1')).toMatch(/Squash merge agent\/q/)
+    await mergeWorkspace(subprocess(), worktree, signal, 'squash', undefined, 'Fix the thing\n\nWhat changed')
+    expect(git('log', '-1', '--format=%B')).toBe('Fix the thing\n\nWhat changed')
     // One parent: the squash commit, not the ticket branch's commit.
     expect(git('rev-list', '--parents', '-n1', 'HEAD').split(' ')).toHaveLength(2)
     expect(readFileSync(join(repo, 'q.txt'), 'utf8')).toBe('squashed\n')
@@ -258,9 +258,9 @@ describe('merge and discard', () => {
     git('worktree', 'add', '-q', '-b', 'agent/m', worktree)
     writeFileSync(join(worktree, 'm.txt'), 'merged\n')
     gitAt(worktree, 'add', 'm.txt'); gitAt(worktree, 'commit', '-q', '-m', 'ticket work')
-    await mergeWorkspace(subprocess(), worktree, signal, 'merge')
+    await mergeWorkspace(subprocess(), worktree, signal, 'merge', undefined, 'Fix the thing\n\nWhat changed')
     expect(git('rev-list', '--parents', '-n1', 'HEAD').split(' ')).toHaveLength(3)
-    expect(git('log', '--oneline', '-1')).toMatch(/Merge branch 'agent\/m'/)
+    expect(git('log', '-1', '--format=%B')).toBe('Fix the thing\n\nWhat changed')
   })
   it('names the rebase when the repository moved past the ticket branch, then rebases so the merge can fast-forward', async () => {
     base()
@@ -389,8 +389,8 @@ describe('merge and discard', () => {
   })
 })
 
-describe('staleNoteIds', () => {
-  it('marks a note stale only when the lines it covers changed, not when the branch merely moved', async () => {
+describe('remapNoteAnchors', () => {
+  it('moves a note with the code, and marks it stale only when its own lines changed', async () => {
     git('init', '-q')
     writeFileSync(join(repo, 'a.txt'), Array.from({ length: 10 }, (_, index) => `line ${index + 1}`).join('\n') + '\n')
     writeFileSync(join(repo, 'b.txt'), 'same\n')
@@ -398,24 +398,32 @@ describe('staleNoteIds', () => {
     git('add', '.')
     git('commit', '-q', '-m', 'base')
     const base = git('rev-parse', 'HEAD')
-    writeFileSync(join(repo, 'a.txt'), Array.from({ length: 10 }, (_, index) => index === 2 ? 'line 3 changed' : `line ${index + 1}`).join('\n') + '\n')
+    // Delete line 2, change line 6, and insert two lines after line 8: notes before and after each hunk move differently.
+    writeFileSync(join(repo, 'a.txt'), ['line 1', 'line 3', 'line 4', 'line 5', 'line 6 changed', 'line 7', 'line 8',
+      'inserted A', 'inserted B', 'line 9', 'line 10'].join('\n') + '\n')
     writeFileSync(join(repo, 'bin.dat'), Buffer.from([0, 1, 3]))
     git('add', 'a.txt', 'bin.dat')
-    git('commit', '-q', '-m', 'change line 3')
+    git('commit', '-q', '-m', 'change')
     const head = git('rev-parse', 'HEAD')
     const notes = [
-      { id: 'n1', file: 'a.txt', line: 3, text: '改成可选', at: '', commit: base },
-      { id: 'n2', file: 'a.txt', line: 8, text: '这里补测试', at: '', commit: base },
-      { id: 'n3', file: 'b.txt', line: 1, text: '保持不变', at: '', commit: base },
-      { id: 'n4', file: 'a.txt', text: '整个文件', at: '', commit: base },
-      { id: 'n5', file: 'bin.dat', line: 1, text: '二进制', at: '', commit: base },
+      { id: 'changed', file: 'a.txt', line: 6, text: '这一行改了', at: '', commit: base },
+      { id: 'after', file: 'a.txt', line: 9, text: '这行没变', at: '', commit: base },
+      { id: 'range', file: 'a.txt', line: 9, endLine: 10, text: '两行没变', at: '', commit: base },
+      { id: 'inside', file: 'a.txt', line: 5, endLine: 7, text: '中间改了', at: '', commit: base },
+      { id: 'file', file: 'a.txt', text: '整个文件', at: '', commit: base },
+      { id: 'other', file: 'b.txt', line: 1, text: '别的文件', at: '', commit: base },
+      { id: 'binary', file: 'bin.dat', line: 1, text: '二进制', at: '', commit: base },
     ]
-    const result = await staleNoteIds(subprocess(), { ...ticket(base), notes } as Ticket,
+    const result = await remapNoteAnchors(subprocess(), { ...ticket(base), notes } as Ticket,
       { capturedAt: '2026-01-01T00:00:00.000Z', head, commits: [], files: [], dirty: [] }, signal)
-    expect(result.get('n1')).toBe(true)
-    expect(result.get('n2')).toBe(false)
-    expect(result.get('n3')).toBe(false)
-    expect(result.get('n4')).toBe(true)
-    expect(result.get('n5')).toBe(true)
+    // The deleted line 2 shifts everything after it by one; the insertion after line 8 adds two more.
+    expect(result.get('after')).toEqual({ stale: false, line: 10 })
+    expect(result.get('range')).toEqual({ stale: false, line: 10, endLine: 11 })
+    expect(result.get('other')).toEqual({ stale: false, line: 1 })
+    // The changed line and the range that contains it are stale; a file-level note is stale once any line changed.
+    expect(result.get('changed')).toMatchObject({ stale: true })
+    expect(result.get('inside')).toMatchObject({ stale: true })
+    expect(result.get('file')).toMatchObject({ stale: true })
+    expect(result.get('binary')).toMatchObject({ stale: true })
   })
 })

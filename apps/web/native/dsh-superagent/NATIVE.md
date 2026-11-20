@@ -260,10 +260,20 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     and **Hand the failure to the worker** use the same path, and **Resolve all** resolves every open note. `ticket/<id>`
     now carries the review summary, the notes with their state, the check and its output, the per-check results and the
     merge error; `ticket/<id>/notes` reads the notes whole, and the diff resource's header summarizes each changed file.
-    `staleNoteIds` diffs a note's commit to the review head with `--unified=0` and marks only the notes whose own lines
-    changed, so the page no longer marks every note whenever the branch moves. `tests/core-engine.spec.ts`,
+    `remapNoteAnchors` diffs a note's commit to the review head with `--unified=0`, moves the note's line and range with the
+    code, and marks only the notes whose own lines changed, so the page no longer marks every note whenever the branch
+    moves. `tests/core-engine.spec.ts`,
     `tests/runtime.spec.ts`, `tests/chat-tools.spec.ts`, `tests/tools.spec.ts`, `tests/review.spec.ts`,
     `tests/cards.spec.ts` and `tests/panel-execution.spec.tsx` cover them.
+
+25. **Note anchors that follow the code, start dependencies, and merge messages.** `remapNoteAnchors` maps a note's old
+    line and range through the diff hunks to the current head, so the panel anchors it on the line the code now occupies;
+    a hunk that replaces or deletes the covered lines marks the note **Changes moved** and keeps it out of the inline diff.
+    `Ticket.startAfter` records a dependency that holds the first Assignment: `orchestrator_ticket_dependency` and the
+    ticket page's **Wait before starting** checkbox set it, the Executor does not launch while a blocker is unmerged, and
+    the merge that lands the last blocker starts the waiting Assignment. `mergeWorkspace` takes a message, and a squash or
+    merge commit carries the Ticket's title, the worker's report summary, and the Ticket number. `tests/core-engine.spec.ts`,
+    `tests/runtime.spec.ts`, `tests/merge.spec.ts`, `tests/review.spec.ts` and `tests/panel-execution.spec.tsx` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

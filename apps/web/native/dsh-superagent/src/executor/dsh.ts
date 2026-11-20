@@ -275,7 +275,11 @@ export class DshExecutor implements Executor {
   /** Enqueues a `launch` effect for an accepted or resumed assignment; launches start in queue order as worker slots free up. */
   start(ticket: Ticket, assignment: Assignment): void {
     // A held ticket waits for a person's approval; approve() calls start again once the hold is gone.
-    if (this.host.store.tickets.get(ticket.id)?.hold) return
+    const current = this.host.store.tickets.get(ticket.id)
+    if (current?.hold) return
+    // A first Assignment waits until the Tickets it must follow have merged; a merge starts it again.
+    if (current?.startAfter?.length && !current.assignments.some(item => item.startedAt)
+      && current.startAfter.some(id => !this.host.store.tickets.get(id)?.merged)) return
     this.host.effects.enqueue('launch', assignment.id, { ticketId: ticket.id, assignmentId: assignment.id })
   }
   /** Enqueues a `delivery` effect to steer pending inputs into `ticket`'s running worker session. */
