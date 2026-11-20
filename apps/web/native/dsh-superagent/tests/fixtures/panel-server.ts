@@ -293,7 +293,8 @@ type Query<K extends keyof Api> = Api[K] extends { query?: infer Q } ? keyof Non
 type Body<K extends keyof Api> = Api[K] extends { body: infer B } ? B : undefined
 interface Request<K extends keyof Api> { params: RouteParams<K>; query: Partial<Record<Query<K>, string>>; body: Body<K> }
 type Answer<K extends keyof Api> = ApiResponse<K> | Refusal
-type Route<K extends keyof Api> = { query?: readonly Query<K>[]; body?: true; answer: (request: Request<K>) => Answer<K> | Promise<Answer<K>> }
+type Route<K extends keyof Api> = { query?: readonly Query<K>[]; answer: (request: Request<K>) => Answer<K> | Promise<Answer<K>> }
+  & ('body' extends keyof Api[K] ? { body?: true } : { body?: never })
 const page = <T>(items: T[]) => ({ items, total: items.length, next_offset: null })
 const ticketOf = (id: string) =>
   [...server.tickets.open, ...server.person, ...server.tickets.ended].find(ticket => ticket.id === id) ?? server.ticketDetails[id]
