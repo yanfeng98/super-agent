@@ -72,6 +72,8 @@ pnpm dsh web
 | 后台 Web 服务 | `make web-bg` 在 tmux 会话 `dsh-web` 中启动 Web UI，日志写入 `/tmp/dsh-web.log`（权限 600，含 token），最多等待 45 秒以打印带 token 的 URL，未出现时提示查看日志；`make web-stop` 结束会话，会话不存在时幂等退出。 | [`Makefile`](Makefile) 的 `web-bg`/`web-stop`；[开发指南](docs/development.zh.md)。 |
 | 提供商登录入口 | 模型设置页对「没有密钥可填」且 Host 提供登录流程的路由（当前为 `openai-codex`）显示登录按钮而不是密钥框：弹窗逐条显示流程通知（要打开的页面、设备码），回答问题（如浏览器登录 / 设备码二选一），凭据写入本地凭据存储后该路由立即可用。每个凭据 key 同时只运行一次登录；关闭弹窗即撤回，刷新页面会接回仍在运行的那次，Host 已不持有的尝试报告为「已结束」并可重试；登录刚确认时取消不会把成功显示成取消。 | [`AuthorizationController`](packages/api/settings-controller/src/authorization.ts)（`authorization` Remote namespace）、[`sign-in.ts`](packages/client/ui-settings-models/src/client/sign-in.ts)、[`ProviderSignIn.tsx`](packages/client/ui-settings-models/src/client/ProviderSignIn.tsx)；[用户指南](docs/user/guide/providers.zh.md)、[包契约](packages/client/ui-settings-models/README.zh.md)、[日志](logs/00035-接通提供商登录入口.md) |
 
+| 内置工程工作流技能 | 每个以 base 为基础的 profile 自带 27 个工程工作流技能：11 个由模型按任务加载，16 个通过输入框的 `/` 菜单选择；项目或用户目录里的同名技能优先覆盖；需要关闭时在 profile patch 里禁用 `skill-engineering` 行。技能文本取自上游 `mattpocock/skills` 的 `main`（MIT），并套用本仓库的 `skill` 工具名与「开新会话」措辞。 | 新包 [`skill-engineering`](packages/skill/skill-engineering/README.zh.md)（随 `dsh-base` 挂载）：[用户指南](docs/user/guide/engineering-skills.zh.md)、[子系统页](docs/subsystems/skills.zh.md)、[日志 00088](logs/00088-内置工程工作流技能.md)。 |
+
 ### 移除或收紧的能力
 
 | 项目 | 变化 | 影响与替代 |
