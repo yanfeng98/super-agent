@@ -688,3 +688,50 @@ it('refuses to revert a merge that a revert already undid', async () => {
   })
   await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/already reverted/)
 })
+
+it('drops a failed queue entry whose Ticket moved on before a retry', async () => {
+  const { ticket: blocked } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  ended(blocked.id)
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  h.runtime.queueMerges([blocked.id], {})
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.mergeQueue().items).toHaveLength(1)
+  // A person merges it from somewhere else, so a retry could never land; the entry leaves instead of keeping its reason.
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(blocked.id)!
+    current.merged = { at: '2026-11-19T00:00:00.000Z', branch: 'agent/t', target: 'main' }
+    h.runtime.store.tickets.save(current)
+  })
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.mergeQueue().items).toHaveLength(0)
+})
+
+it('keeps a failed entry whose Ticket was resumed, and merges it once it ends again', async () => {
+  const { ticket: blocked } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  const { ticket: blocker } = await h.acceptedTicket(feishu('2', '@bot 先做这个'))
+  ended(blocked.id)
+  h.runtime.blockTicket(blocked.id, blocker.id, true)
+  h.runtime.queueMerges([blocked.id], {})
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.mergeQueue().items).toHaveLength(1)
+  // A conflict handback reopens the Ticket, which can end again, so the entry is not stale.
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(blocked.id)!
+    delete current.ended
+    h.runtime.store.tickets.save(current)
+  })
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.mergeQueue().items).toHaveLength(1)
+  // Once it ends again and the blocker is gone, a retry merges it.
+  h.runtime.blockTicket(blocked.id, blocker.id, false)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(blocked.id)!
+    current.ended = { at: new Date().toISOString(), by: 'executor', outcome: 'completed' }
+    h.runtime.store.tickets.save(current)
+  })
+  h.runtime.retryMerges([blocked.id])
+  await h.runtime.runMergeQueue()
+  expect(h.runtime.store.tickets.get(blocked.id)?.merged).toBeDefined()
+  expect(h.runtime.mergeQueue().items).toHaveLength(0)
+})

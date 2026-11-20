@@ -393,9 +393,12 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   } },
   'POST tickets/:id/notes': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
-    const input = body as { file: string; line?: number; text: string }
-    return { notes: [{ id: 'n1', file: input.file, ...input.line ? { line: input.line } : {}, text: input.text,
-      at: '2026-11-18T00:00:00Z' }] }
+    const input = body as { file: string; line?: number; endLine?: number; text: string }
+    // A range needs a start line, as the host's own note check says.
+    if (input.endLine !== undefined && input.line === undefined) return refuse(400,
+      'A note range needs a start line, and its end cannot come before it', { code: 'invalidNoteRange', values: {} })
+    return { notes: [{ id: 'n1', file: input.file, ...input.line ? { line: input.line } : {},
+      ...input.endLine ? { endLine: input.endLine } : {}, text: input.text, at: '2026-11-18T00:00:00Z' }] }
   } },
   'POST tickets/:id/notes/:noteId/remove': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
