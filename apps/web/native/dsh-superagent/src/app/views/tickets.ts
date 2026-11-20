@@ -1,5 +1,5 @@
 /** Ticket list, ticket detail, mandate basis formatting, and executor load views. */
-import { liveTicket, threadKey, ticketStage, type AcceptMode, type ActionOrigin, type AdmissionCell, type MandateBasis,
+import { liveTicket, noteOutdated, threadKey, ticketStage, type AcceptMode, type ActionOrigin, type AdmissionCell, type MandateBasis,
   type Ticket, type TicketStage } from '../../core/index.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
 import type { Store } from '../store.ts'
@@ -146,9 +146,9 @@ export function ticketDetail(host: ViewHost, id: string) {
     rebase, cleanup, check, reviewDecision, revert, push, dequeue: queuePosition !== undefined },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
-    // A note keeps the commit it was written on, so the panel can say when the changes it described have moved.
+    // A note keeps the commit it was written on, so the panel can say when the lines it described have moved.
     notes: (ticket.notes ?? []).map(note => ({ ...note,
-      outdated: !!note.commit && !!ticket.review?.head && note.commit !== ticket.review.head })),
+      outdated: noteOutdated(note, ticket.review?.head) })),
     ...ticket.autoMerge ? { autoMerge: ticket.autoMerge } : {},
     ...request ? { request } : {},
     related: (ticket.related ?? []).flatMap(id => {

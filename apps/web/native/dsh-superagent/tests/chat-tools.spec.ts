@@ -39,6 +39,32 @@ it('records a request from the main Session as a local ticket and carries the pe
   expect(h.relays(h.runtime.masterId).filter(item => item.kind === 'follow_up')).toEqual([])
 })
 
+it('hands review notes and a failing check back to the worker from the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  h.runtime.addNote(ticket.id, { file: 'src/a.ts', line: 3, text: '改成可选' })
+  const handed = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: ticket.id, review: true }) as unknown as { reason: string; ticket: { ticket_id: string } }
+  expect(handed).toMatchObject({ reason: 'Handed the ticket back to its worker', ticket: { ticket_id: ticket.id } })
+  const updated = h.runtime.store.tickets.get(ticket.id)!
+  expect(updated.ended).toBeUndefined()
+  expect(updated.notes?.[0]?.sent?.at).toBeDefined()
+  expect(updated.inputs.at(-1)).toMatchObject({ kind: 'text', text: expect.stringContaining('src/a.ts:3: 改成可选') })
+
+  const { ticket: failing } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  await h.runTool(`worker-${failing.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(failing.id)!
+    current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at: current.ended!.at, output: 'one test failed' }
+    h.runtime.store.tickets.save(current)
+  })
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note', { ticket_id: failing.id, check: true })
+  expect(h.runtime.store.tickets.get(failing.id)!.inputs.at(-1)).toMatchObject({ kind: 'text',
+    text: expect.stringContaining('one test failed') })
+})
+
 it('merges an ended ticket through the main Session with the panel gates', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })

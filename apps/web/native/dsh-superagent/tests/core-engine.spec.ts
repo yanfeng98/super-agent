@@ -1681,6 +1681,27 @@ describe('review notes', () => {
     expect(replied.notes![0]!.replies).toEqual([expect.objectContaining({ text: '已处理' })])
     expect(() => h.engine.replyToNote(ticketId, noteId, '  ')).toThrow(UserError)
   })
+  it('marks notes sent once, makes a replied or reopened note due again, and resolves them all', () => {
+    const h = harness()
+    const ticketId = accepted(h).ticketId!
+    const noteId = h.engine.addNote(ticketId, { file: 'src/a.ts', line: 2, text: '改成可选' }).notes![0]!.id
+    const sent = h.engine.markNotesSent(ticketId, [noteId]).notes![0]!
+    expect(sent.sent?.at).toBeDefined()
+    // Sending the same note again keeps the first hand-over time.
+    expect(h.engine.markNotesSent(ticketId, [noteId]).notes![0]!.sent?.at).toBe(sent.sent?.at)
+    // A reply is new input for the worker, so the note is due again.
+    expect(h.engine.replyToNote(ticketId, noteId, '还没改').notes![0]!.sent).toBeUndefined()
+    h.engine.markNotesSent(ticketId, [noteId])
+    // Reopening a resolved note also makes it due again.
+    h.engine.resolveNote(ticketId, noteId, true)
+    expect(h.engine.resolveNote(ticketId, noteId, false).notes![0]!.sent).toBeUndefined()
+    h.engine.resolveAllNotes(ticketId, true)
+    expect(h.repo.tickets.get(ticketId)!.notes!.every(note => note.resolved)).toBe(true)
+    h.engine.resolveAllNotes(ticketId, false)
+    expect(h.repo.tickets.get(ticketId)!.notes!.every(note => !note.resolved)).toBe(true)
+    expect(() => h.engine.markNotesSent('missing', [noteId])).toThrow(UserError)
+    expect(() => h.engine.resolveAllNotes('missing', true)).toThrow(UserError)
+  })
 })
 describe('review decisions', () => {
   it('reviews an ended ticket and refuses an open or unknown one', () => {

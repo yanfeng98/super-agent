@@ -1,5 +1,5 @@
 /** Compact, bounded model-facing projections of triggers, tickets, threads, and decisions; full texts stay behind readable resources. */
-import { latestReport, reasonText, threadKey, ticketStage, type Decision, type Mandate, type Thread, type Ticket, type TicketInput,
+import { latestReport, noteOutdated, reasonText, threadKey, ticketStage, type Decision, type Mandate, type Thread, type Ticket, type TicketInput,
   type Trigger, type TriggerDisposition } from '../core/index.ts'
 import { pullOf } from '../sources/github-pull.ts'
 import { batchLine, inputResource } from '../executor/dsh.ts'
@@ -61,11 +61,32 @@ export interface TicketThread { thread: string; context?: true; bound?: true }
 export function ticketDetails(ticket: Ticket, threads: TicketThread[], batch: readonly Trigger[], worker = false) {
   // Drop card preview because the latest report's preview is already shown on the first assignment entry.
   const { preview: _preview, ...card } = ticketCard(ticket)
+  const review = ticket.review
+  // A check from before the current ending belongs to work that was resumed and must not be shown as this ending's.
+  const checks = ticket.checks && (!ticket.ended || ticket.checks.at >= ticket.ended.at) ? ticket.checks : undefined
+  const notes = ticket.notes ?? []
+  const shown = notes.slice(-10).reverse()
   return { ...card, trigger_id: ticket.origin.triggerId, ...batch.length ? { batch: batch.map(batchLine) } : {},
     ...worker ? {} : { decision_id: ticket.decisionId }, threads, directory: ticket.execution?.directory,
     scope: ticket.mandate.scope, requested_by: ticket.mandate.actor.id,
     assignments: newestPage(ticket.assignments, 0, ASSIGNMENTS, item => assignmentLine(ticket, item), `ticket/${ticket.id}/assignments`),
     inputs: newestPage(ticket.inputs, 0, INPUTS, input => inputLine(ticket, input, worker), `ticket/${ticket.id}/inputs`),
+    ...review ? { review: { ...review.branch ? { branch: review.branch } : {}, ...review.base ? { base: review.base } : {},
+      ...review.head ? { head: review.head } : {}, commits: review.commits.length, files: review.files.length,
+      dirty: review.dirty.length, ...review.stat ? { stat: review.stat } : {}, ...review.error ? { error: review.error } : {} } } : {},
+    ...ticket.reviewed ? { reviewed: { decision: ticket.reviewed.decision, at: ticket.reviewed.at,
+      ...ticket.reviewed.by ? { by: ticket.reviewed.by } : {}, ...ticket.reviewed.note ? { note: ticket.reviewed.note } : {} } } : {},
+    ...worker ? {} : { notes: { total: notes.length, open: notes.filter(note => !note.resolved).length,
+      items: shown.map(note => ({ id: note.id, file: note.file, ...note.line ? { line: note.line } : {},
+        ...note.endLine ? { endLine: note.endLine } : {}, text: preview(note.text), chars: note.text.length,
+        resolved: !!note.resolved, outdated: noteOutdated(note, review?.head), ...note.sent ? { sent: note.sent.at } : {},
+        replies: note.replies?.length ?? 0 })),
+      ...notes.length > shown.length ? { more: notes.length - shown.length } : {}, read: `ticket/${ticket.id}/notes` } },
+    ...checks ? { checks } : {},
+    ...ticket.checkRuns?.length ? { checkRuns: ticket.checkRuns.map(run => ({ name: run.name, ok: run.ok, at: run.at,
+      exitCode: run.exitCode, truncated: !!run.truncated })) } : {},
+    ...ticket.targetCheck ? { targetCheck: ticket.targetCheck } : {},
+    ...ticket.mergeError ? { mergeError: ticket.mergeError } : {},
     assignment: `ticket/${ticket.id}/assignment`, result: `ticket/${ticket.id}/result`, transcript: `ticket/${ticket.id}/transcript` }
 }
 

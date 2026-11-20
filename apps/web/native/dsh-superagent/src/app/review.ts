@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { basename, dirname } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
-import type { MergeStrategy, Ticket, TicketReview } from '../core/index.ts'
+import type { MergeStrategy, Ticket, TicketNote, TicketReview } from '../core/index.ts'
 import { CliError } from '../infra/commands.ts'
 import { runAsWorker } from '../infra/environment.ts'
 
@@ -137,6 +137,83 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
     ...(stat ? { stat } : {}) }
 }
 
+/** One file a diff changes, with the old-line ranges it touches, or `all` when the file's lines no longer anchor. */
+interface ChangedFile { path: string; oldPath?: string; ranges: [number, number][] | 'all' }
+/** Reads the old-line ranges a unified diff changes, for deciding whether a review note still describes the code. */
+function changedFiles(diff: string): ChangedFile[] {
+  const files: ChangedFile[] = []
+  for (const block of diff.split(/^diff --git /m).slice(1)) {
+    const text = `diff --git ${block}`
+    const plus = /^\+\+\+ b\/(.+)$/m.exec(text)?.[1]
+    const minus = /^--- a\/(.+)$/m.exec(text)?.[1]
+    const from = /^rename from (.+)$/m.exec(text)?.[1]
+    const to = /^rename to (.+)$/m.exec(text)?.[1]
+    const pair = /^diff --git a\/(.+) b\/(.+)$/m.exec(text)
+    const path = plus ?? to ?? minus ?? from ?? pair?.[2] ?? ''
+    if (!path) continue
+    const oldPath = from && from !== path ? from : undefined
+    // A file that was added, deleted, renamed, or is binary has no stable old line for a note to keep.
+    if (/^new file mode /m.test(text) || /^deleted file mode /m.test(text) || from || /^Binary files /m.test(text)) {
+      files.push({ path, oldPath, ranges: 'all' })
+      continue
+    }
+    const ranges: [number, number][] = []
+    for (const match of text.matchAll(/^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@/gm)) {
+      const start = Number(match[1])
+      const count = match[2] === undefined ? 1 : Number(match[2])
+      if (count > 0) ranges.push([start, start + count - 1])
+    }
+    files.push({ path, oldPath, ranges })
+  }
+  return files
+}
+/**
+ * Finds the review notes whose lines changed after they were written, so the page can mark only those outdated instead of
+ * every note whenever the branch moves.
+ * @param ticket - The ticket whose notes are checked.
+ * @param review - The current review, whose head the notes are compared against.
+ * @returns A map from note id to whether it is stale; a note absent from the map could not be checked.
+ */
+export async function staleNoteIds(subprocess: SubprocessRuntime, ticket: Ticket, review: TicketReview | undefined,
+  signal: AbortSignal): Promise<Map<string, boolean>> {
+  const directory = ticket.execution?.directory
+  const head = review?.head
+  if (!directory || !head) return new Map()
+  const byCommit = new Map<string, TicketNote[]>()
+  for (const note of ticket.notes ?? []) {
+    if (!note.commit || note.commit === head) continue
+    const group = byCommit.get(note.commit) ?? []
+    group.push(note)
+    byCommit.set(note.commit, group)
+  }
+  const result = new Map<string, boolean>()
+  for (const [commit, group] of byCommit) {
+    const files = [...new Set(group.map(note => note.file))]
+    const diff = await run(subprocess, directory, ['diff', '--no-color', '--unified=0', '-M', `${commit}..${head}`, '--', ...files], signal)
+    // A failed diff leaves these notes unchecked; the page then falls back to the whole-head comparison.
+    if (diff === undefined) continue
+    const changed = changedFiles(diff)
+    for (const note of group) {
+      const file = changed.find(item => item.path === note.file || item.oldPath === note.file)
+      if (!file) {
+        result.set(note.id, false)
+        continue
+      }
+      if (file.ranges === 'all') {
+        result.set(note.id, true)
+        continue
+      }
+      // A file-level note is stale once any content line changed, not when only its mode did.
+      if (note.line === undefined) {
+        result.set(note.id, file.ranges.length > 0)
+        continue
+      }
+      const end = note.endLine ?? note.line
+      result.set(note.id, file.ranges.some(([start, stop]) => start <= end && stop >= note.line!))
+    }
+  }
+  return result
+}
 /** How a merge moves the target branch: fast-forward only, a squashed commit, or a merge commit. */
 export type { MergeStrategy }
 /**

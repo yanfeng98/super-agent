@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, staleNoteIds, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -386,5 +386,36 @@ describe('merge and discard', () => {
     expect(existsSync(worktree)).toBe(false)
     expect(() => git('show-ref', '--verify', '--quiet', 'refs/heads/agent/discard')).toThrow()
     await expect(discardWorkspace(subprocess(), repo, signal)).rejects.toThrow(/repository itself/)
+  })
+})
+
+describe('staleNoteIds', () => {
+  it('marks a note stale only when the lines it covers changed, not when the branch merely moved', async () => {
+    git('init', '-q')
+    writeFileSync(join(repo, 'a.txt'), Array.from({ length: 10 }, (_, index) => `line ${index + 1}`).join('\n') + '\n')
+    writeFileSync(join(repo, 'b.txt'), 'same\n')
+    writeFileSync(join(repo, 'bin.dat'), Buffer.from([0, 1, 2]))
+    git('add', '.')
+    git('commit', '-q', '-m', 'base')
+    const base = git('rev-parse', 'HEAD')
+    writeFileSync(join(repo, 'a.txt'), Array.from({ length: 10 }, (_, index) => index === 2 ? 'line 3 changed' : `line ${index + 1}`).join('\n') + '\n')
+    writeFileSync(join(repo, 'bin.dat'), Buffer.from([0, 1, 3]))
+    git('add', 'a.txt', 'bin.dat')
+    git('commit', '-q', '-m', 'change line 3')
+    const head = git('rev-parse', 'HEAD')
+    const notes = [
+      { id: 'n1', file: 'a.txt', line: 3, text: '改成可选', at: '', commit: base },
+      { id: 'n2', file: 'a.txt', line: 8, text: '这里补测试', at: '', commit: base },
+      { id: 'n3', file: 'b.txt', line: 1, text: '保持不变', at: '', commit: base },
+      { id: 'n4', file: 'a.txt', text: '整个文件', at: '', commit: base },
+      { id: 'n5', file: 'bin.dat', line: 1, text: '二进制', at: '', commit: base },
+    ]
+    const result = await staleNoteIds(subprocess(), { ...ticket(base), notes } as Ticket,
+      { capturedAt: '2026-01-01T00:00:00.000Z', head, commits: [], files: [], dirty: [] }, signal)
+    expect(result.get('n1')).toBe(true)
+    expect(result.get('n2')).toBe(false)
+    expect(result.get('n3')).toBe(false)
+    expect(result.get('n4')).toBe(true)
+    expect(result.get('n5')).toBe(true)
   })
 })

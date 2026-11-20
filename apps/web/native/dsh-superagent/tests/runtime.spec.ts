@@ -1802,6 +1802,57 @@ it('refuses to merge a ticket while a review note is open', async () => {
   await expect(runtime.mergeTicket(ticket.id)).rejects.not.toThrow(/still open/)
 })
 
+it('hands unsent review notes back to the worker and resumes an ended ticket', async () => {
+  const { ticket } = await acceptedTicket()
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    current.notes = [
+      { id: 'n1', file: 'src/a.ts', line: 3, endLine: 4, text: '改成可选', at: '2026-09-10T00:01:00.000Z', commit: 'abc' },
+      { id: 'n2', file: 'src/b.ts', text: '补测试', at: '2026-09-10T00:02:00.000Z', resolved: { at: '2026-09-10T00:03:00.000Z' } },
+    ]
+    runtime.store.tickets.save(current)
+  })
+  expect(runtime.handbackTicket(ticket.id, { notes: true })).toMatchObject({ resumed: true, sent: 1 })
+  const updated = runtime.store.tickets.get(ticket.id)!
+  expect(updated.ended).toBeUndefined()
+  expect(updated.notes?.find(note => note.id === 'n1')?.sent?.at).toBeDefined()
+  expect(updated.notes?.find(note => note.id === 'n2')?.sent).toBeUndefined()
+  expect(updated.inputs.at(-1)).toMatchObject({ kind: 'text', text: expect.stringContaining('src/a.ts:3-4: 改成可选') })
+  // The note was handed over once, so there is nothing left to send.
+  expect(() => runtime.handbackTicket(ticket.id, { notes: true })).toThrow(/No unsent review notes/)
+})
+
+it('hands a failing check back to the worker with its output', async () => {
+  const { ticket } = await acceptedTicket()
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    current.checks = { command: 'pnpm test', ok: false, exitCode: 1, at: '2026-09-10T00:00:00.000Z', output: 'one test failed' }
+    runtime.store.tickets.save(current)
+  })
+  expect(runtime.handbackTicket(ticket.id, { check: true })).toMatchObject({ resumed: true, sent: 0 })
+  expect(runtime.store.tickets.get(ticket.id)!.inputs.at(-1)).toMatchObject({ kind: 'text',
+    text: expect.stringContaining('one test failed') })
+  // A passing check is not something the worker can fix.
+  const { ticket: passing } = await acceptedTicket(feishu('2', '@bot 再修一个'))
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(passing.id)!
+    current.ended = { at: '2026-09-10T00:00:00.000Z', by: 'executor', outcome: 'completed' }
+    current.checks = { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-09-10T00:00:00.000Z', output: 'passed' }
+    runtime.store.tickets.save(current)
+  })
+  expect(() => runtime.handbackTicket(passing.id, { check: true })).toThrow(/no failing check/)
+})
+
+it('resolves every review note at once', async () => {
+  const { ticket } = await acceptedTicket()
+  runtime.addNote(ticket.id, { file: 'src/a.ts', text: 'one' })
+  runtime.addNote(ticket.id, { file: 'src/b.ts', text: 'two' })
+  expect(runtime.resolveAllNotes(ticket.id, true).every(note => note.resolved)).toBe(true)
+  expect(runtime.resolveAllNotes(ticket.id, false).every(note => !note.resolved)).toBe(true)
+})
+
 it('keeps earlier check runs in the ticket history', async () => {
   const { ticket } = await acceptedTicket()
   const settings = runtime.store.settings()

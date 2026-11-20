@@ -366,13 +366,22 @@ export function TicketPage({ id }: { id: string }) {
     noteTextRef.current?.focus()
   }
   const sendNotes = async () => {
-    if (!localThread) return
-    const range = (note: typeof notes[number]) => note.line ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''
-    const text = `${t('noteMessage')}\n\n${notes.filter(note => !note.resolved).map(note => `- ${note.file}${range(note)}: ${note.text}`).join('\n')}`
     setNotesBusy(true)
-    try { await after(call('POST local/followups', { body: { thread: localThread.key, text } })) }
+    try { await after(call('POST tickets/:id/handback', { id, body: { notes: true } })) }
     catch (failure) { notify(errorText(failure)) }
     finally { setNotesBusy(false) }
+  }
+  const resolveAllNotes = async (resolved: boolean) => {
+    setNotesBusy(true)
+    try { await after(call('POST tickets/:id/notes/resolve', { id, body: { resolved } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setNotesBusy(false) }
+  }
+  const handbackCheck = async () => {
+    setCheckBusy(true)
+    try { await after(call('POST tickets/:id/handback', { id, body: { check: true } })) }
+    catch (failure) { notify(errorText(failure)) }
+    finally { setCheckBusy(false) }
   }
   return <>
     <PageHead title={data.title}>
@@ -499,12 +508,16 @@ export function TicketPage({ id }: { id: string }) {
       </div>}
       {data.reviewed?.note && <Hint>{data.reviewed.note}</Hint>}
       <div className="dt-form">
-        {notes.some(note => !note.resolved) && <Hint>{t('notesUnresolved', { count: notes.filter(note => !note.resolved).length })}</Hint>}
+        {notes.some(note => !note.resolved) && <div className="dt-row-buttons">
+          <Hint>{t('notesUnresolved', { count: notes.filter(note => !note.resolved).length })}</Hint>
+          <Button variant="outline" size="sm" disabled={notesBusy} onClick={() => resolveAllNotes(true)}>{t('noteResolveAll')}</Button>
+        </div>}
         {notes.length > 0 && <ul className="dt-list">{notes.map(note => <li className="dt-row" key={note.id}>
           <div className="dt-row-main">
             <div className="dt-row-meta"><span className="dt-mono">{note.file}{note.line
               ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''}</span><When at={note.at} />
               {note.outdated && <Tag tone="warning">{t('noteOutdated')}</Tag>}
+              {note.sent && <Tag tone="info">{t('noteSent')}</Tag>}
               {note.resolved && <Tag tone="success">{t('noteResolvedTag')}</Tag>}</div>
             <div className="dt-row-quote">{note.text}</div>
             {note.replies?.map(reply => <div className="dt-row-quote" key={reply.id}>
@@ -543,7 +556,7 @@ export function TicketPage({ id }: { id: string }) {
             onChange={event => setNoteText(event.target.value)} />
           <div className="dt-row-buttons">
             <Button variant="outline" type="submit" disabled={notesBusy || !noteFile.trim() || !noteText.trim()}>{t('noteAdd')}</Button>
-            {localThread && notes.some(note => !note.resolved)
+            {notes.some(note => !note.resolved && !note.sent)
               && <Button variant="primary" disabled={notesBusy} onClick={sendNotes}>{t('noteSend')}</Button>}
           </div>
         </form>
@@ -595,6 +608,8 @@ export function TicketPage({ id }: { id: string }) {
       </Details>}
       {data.actions.check && <div className="dt-row-actions">
         <Button variant="outline" size="sm" disabled={checkBusy} onClick={runCheck}>{t('checksRun')}</Button>
+        {data.checks && !data.checks.ok && <Button variant="outline" size="sm" disabled={checkBusy}
+          onClick={handbackCheck}>{t('checkHandback')}</Button>}
       </div>}
     </Section>}
     {data.mergeError && <Hint>{t('mergeErrorHint', { error: data.mergeError.error })}</Hint>}

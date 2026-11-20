@@ -469,6 +469,15 @@ export async function recordReview(ticket: Pick<Ticket, 'channels'>, reviewed: {
       ...(reviewed.via ? [`- via: ${reviewed.via}`] : [])])
 }
 /**
+ * Appends a hand-back to the worker to the ticket's archive, with the text the worker received.
+ * @param ticket - The ticket handed back.
+ * @param handback - When, the text sent, and the interface that asked.
+ */
+export async function recordHandback(ticket: Pick<Ticket, 'channels'>, handback: { at: string; text: string; via?: ActionOrigin }): Promise<void> {
+  await appendLifecycle(ticket, `<!-- dsh-superagent:handback:${handback.at} -->`, `${handback.at} · 交回 / Handback`,
+    ['- status: handed-back', ...(handback.via ? [`- via: ${handback.via}`] : []), '', handback.text])
+}
+/**
  * Appends the merge of a ticket's branch into the repository to its archive.
  * @param ticket - The ticket whose branch was merged.
  * @param merged - When, which branch, the branch it moved, the commit it left, and the interface that asked.

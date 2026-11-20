@@ -457,10 +457,29 @@ export interface TicketNote {
   at: string
   /** The commit the ticket's changes were at when the note was written, so the panel can mark it outdated once they move. */
   commit?: string
+  /** When a person handed the note to the worker, so the page can say so and not send it twice. */
+  sent?: { at: string }
+  /** The commit at which the note's lines were last checked for changes; absent when that check never ran. */
+  checkedHead?: string
+  /** Set when the lines the note covers changed after it was written, so the page can mark it outdated. */
+  stale?: { at: string; head: string }
   /** When a person marked the note resolved; an open note keeps its ticket from merging. */
   resolved?: { at: string }
   /** Replies in the note's discussion, oldest first. */
   replies?: TicketNoteReply[]
+}
+/**
+ * Whether a note's lines changed after it was written: its recorded check, or, for a note checked before that record
+ * existed, any movement of the head it was written on.
+ * @param note - The review note.
+ * @param head - The ticket's current review head, if it has one.
+ * @returns True when the note may no longer describe the current lines.
+ */
+export const noteOutdated = (note: Pick<TicketNote, 'commit' | 'checkedHead' | 'stale'>, head?: string): boolean => {
+  if (note.stale) return true
+  if (!note.commit || !head) return false
+  if (note.checkedHead === head) return false
+  return note.commit !== head
 }
 /** One file git reports as changed or uncommitted, with its short status (`M`, `A`, `D`, `??`). */
 export interface ReviewFile { status: string; path: string }

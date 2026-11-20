@@ -33,6 +33,9 @@ export interface MainToolsHost {
   localRequest(input: LocalRequest): Promise<LocalRequestResult>
   /** Sends a person's answer to a local ticket's Thread, where its worker reads it as an Input. */
   localFollowup(input: LocalFollowup, options?: { mainSession?: boolean }): Promise<LocalFollowupResult>
+  /** Hands a ticket back to its worker with text, its unsent review notes, or its failing check, resuming it when ended. */
+  handbackTicket(id: string, input: { text?: string; notes?: boolean; check?: boolean }, origin?: 'chat' | 'panel'):
+    { ticket: Ticket; resumed: boolean; sent: number }
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
   mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean; push?: boolean }):
     Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true;
@@ -206,14 +209,19 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_note',
-      description: 'Tell a ticket\'s worker a fact from other work, such as what another ticket found; it grants no authority.',
+      description: 'Tell a ticket\'s worker a fact, or hand an ended ticket back to work on its unsent review notes or failing check; it grants no authority.',
       schema: z.object({
         ticket_id: z.string(),
-        text: z.string().trim().min(1).refine(text => wordCount(text) <= IM_WORDS, `At most ${IM_WORDS} words`),
-      }).strict(),
+        text: z.string().trim().min(1).refine(text => wordCount(text) <= IM_WORDS, `At most ${IM_WORDS} words`).optional()
+          .describe('A fact or instruction in the person\'s words.'),
+        review: z.boolean().default(false).describe('Send the unsent review notes.'),
+        check: z.boolean().default(false).describe('Send the failing check.'),
+      }).strict().refine(args => !!args.text || args.review || args.check, 'text, review or check is required'),
       execute: async args => {
-        host.engine.note(args.ticket_id, args.text)
-        return routed(host, { reason: 'Noted for the worker', ticketId: args.ticket_id })
+        const result = host.handbackTicket(args.ticket_id, { ...(args.text ? { text: args.text } : {}),
+          ...(args.review ? { notes: true } : {}), ...(args.check ? { check: true } : {}) }, 'chat')
+        return routed(host, { reason: result.resumed ? 'Handed the ticket back to its worker' : 'Noted for the worker',
+          ticketId: args.ticket_id })
       },
     }),
     tool({
