@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { z } from 'zod'
 import { UserError, followupOwners, key, reasonText, type Decision, type DecisionKind, type EngineForMainSession, type EngineForPeople,
-  type Ticket, type TicketCheck } from '../../core/index.ts'
+  type Ticket, type TicketCheck, type TicketNote } from '../../core/index.ts'
 import { IM_WORDS, NOTE_WORDS, wordCount } from '../../infra/text.ts'
 import { AssessmentSchema, EvalReadSchema, WorktreeNameSchema, type MasterAssessor } from '../assessment.ts'
 import { ticketCard } from '../cards.ts'
@@ -36,6 +36,17 @@ export interface MainToolsHost {
   /** Hands a ticket back to its worker with text, its unsent review notes, or its failing check, resuming it when ended. */
   handbackTicket(id: string, input: { text?: string; notes?: boolean; check?: boolean }, origin?: 'chat' | 'panel'):
     { ticket: Ticket; resumed: boolean; sent: number }
+  /** The id a person's ticket reference names, such as `T-0007`. */
+  ticketId(reference: string): string
+  /** Stops a live ticket, or with `discard` removes an ended ticket's worktree, on the person's explicit instruction. */
+  stopTicket(id: string, options?: { discard?: boolean; reason?: string }):
+    Promise<{ ticket: Ticket; stopped: boolean; discarded: boolean }>
+  /** Records a person's review decision on an ended ticket's changes. */
+  reviewTicket(id: string, decision: 'approved' | 'changes-requested', note?: string): Ticket
+  /** Marks every review note resolved, or opens every resolved one again. */
+  resolveNotes(id: string, resolved: boolean): TicketNote[]
+  /** Runs the configured check in an ended ticket's worktree. */
+  checkTicket(id: string): Promise<TicketCheck>
   /** Merges an ended Ticket branch into the repository's checked-out branch, with the panel's review, check and CI gates. */
   mergeTicket(id: string, strategy?: MergeStrategy, options?: { cleanup?: boolean; push?: boolean }):
     Promise<{ branch: string; target: string; head?: string; rebased?: true; recaptured?: true; cleaned?: true; pushed?: true;
@@ -49,7 +60,7 @@ export interface MainToolsHost {
   retryMerges(ids: readonly string[]): { retried: number; queue: { ticket_id: string; position: number }[] }
   /** The merge queue and the ended Tickets still waiting for a merge or a person's decision. */
   pendingMerges(): { queue: MergeQueueView;
-    waiting: { ticket_id: string; title: string; needs: string; reason?: string; blocked_by?: string[] }[] }
+    waiting: { ticket_id: string; title: string; outcome: string; needs: string; reason?: string; blocked_by?: string[] }[] }
   /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
   /** Undoes a merged Ticket's merge with a reverting commit on the branch it landed. */
@@ -84,7 +95,7 @@ const RouteItemSchema = z.object({
   ticket_id: z.string().nullish().describe('attach and stop: the ticket.'),
   title: z.string().nullish().describe('accept: a short label of at most 200 characters describing the original request; no added requirements or implementation advice.'),
   worktree_name: z.string().nullish().describe(`accept: ${WorktreeNameSchema.description ?? ''}`),
-  acknowledgement: z.string().nullish().describe(`accept: one brief sentence of at most ${IM_WORDS} words naming the concrete change and intended result in the source language. It is posted as a reply to the original source on acceptance, so do not quote the source; quote an earlier proposal briefly only when the trigger merely confirms it and the sentence does not already state it. No generic I will handle it.`),
+  acknowledgement: z.string().nullish().describe(`accept: one brief sentence of at most ${IM_WORDS} words naming the concrete change and intended result in the source language; it is posted as a reply on acceptance, so do not quote the source. Quote an earlier proposal only when the trigger confirms it. No generic I will handle it.`),
   note: z.string().nullish().describe(`accept and attach: ${RoutingNoteSchema.description ?? ''}`),
   reason: z.string().nullish().describe('ignore and stop: why, at most 500 characters; an ignore needs it.'),
 }).strict()
@@ -225,6 +236,47 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       },
     }),
     tool({
+      name: 'orchestrator_ticket_review',
+      description: 'Approve an ended ticket\'s changes, or resolve its open review notes; an approval is what Require review approval waits for.',
+      schema: z.object({
+        ticket_id: z.string().describe('Ticket id or T-0007.'),
+        approve: z.boolean().default(false).describe('Approve the ending changes.'),
+        resolve: z.boolean().default(false).describe('Resolve every open review note.'),
+      }).strict().refine(args => args.approve || args.resolve, 'approve or resolve is required'),
+      execute: async args => {
+        const id = host.ticketId(args.ticket_id)
+        if (args.approve) host.reviewTicket(id, 'approved')
+        if (args.resolve) host.resolveNotes(id, true)
+        const ticket = host.store.tickets.get(id)
+        return { approved: args.approve, resolved: args.resolve, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_abandon',
+      description: 'Stop a live ticket on the person\'s explicit instruction; with discard, also remove the worktree and branch of a ticket that has ended.',
+      schema: z.object({
+        ticket_id: z.string().describe('Ticket id or T-0007.'),
+        discard: z.boolean().default(false).describe('Remove its worktree and branch once ended.'),
+        reason: z.string().trim().max(500).optional().describe('Why, in the person\'s words.'),
+      }).strict(),
+      execute: async args => {
+        const { ticket, ...rest } = await host.stopTicket(host.ticketId(args.ticket_id),
+          { ...(args.discard ? { discard: true } : {}), ...(args.reason ? { reason: args.reason } : {}) })
+        return { ...rest, ticket: ticketCard(ticket) }
+      },
+    }),
+    tool({
+      name: 'orchestrator_ticket_check',
+      description: 'Run the configured check in an ended ticket\'s worktree again, such as after a flaky failure; a merge already runs it when it has not passed.',
+      schema: z.object({ ticket_id: z.string().describe('The ended Ticket, by id or display number such as T-0007.') }).strict(),
+      execute: async args => {
+        const id = host.ticketId(args.ticket_id)
+        const check = await host.checkTicket(id)
+        const ticket = host.store.tickets.get(id)
+        return { check, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
+      },
+    }),
+    tool({
       name: 'orchestrator_request',
       description: 'Record the person\'s explicit request here as a local Ticket request instead of doing it yourself; its Trigger is assessed and its candidate arrives separately.',
       schema: z.object({
@@ -255,12 +307,12 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_merge',
-      description: 'Merge one ended Ticket\'s branch into the checked-out branch on the person\'s explicit request, with the panel\'s gates; it rebases a branch the repository moved past and hands a conflict to its worker, runs the configured check when it has not passed, merges locally, runs that check on the merged branch, and removes the worktree or pushes upstream when asked. Several Tickets go through orchestrator_merge_queue.',
+      description: 'Merge one ended Ticket\'s branch into the checked-out branch on the person\'s explicit request, with the panel\'s gates: it rebases when the repository moved, runs the configured check when it has not passed, and hands a conflict to its worker. Several Tickets go through orchestrator_merge_queue.',
       schema: z.object({
-        ticket_id: z.string().min(1).describe('The ended Ticket to merge, by id or display number such as T-0007.'),
+        ticket_id: z.string().min(1).describe('The ended Ticket, by id or T-0007.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
-        cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging, as the ticket page does.'),
-        push: z.boolean().optional().describe('Push the merged branch to the upstream its repository names, when the person asked to push too.'),
+        cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging.'),
+        push: z.boolean().optional().describe('Push the merged branch to its upstream, when the person asked.'),
       }).strict(),
       execute: async args => {
         const result = await host.mergeTicket(args.ticket_id, args.strategy,
@@ -271,14 +323,14 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_merge_queue',
-      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place and is retried once its gate opens. Cancel queued Tickets with cancel, or retry a failed one with retry. With no ticket_ids it reports what is queued and waiting.',
+      description: 'Queue ended Tickets to merge one after another: the host merges them in the order given, reports each result here, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place until its gate opens. With no ticket_ids it reports the queue and the Tickets waiting.',
       schema: z.object({
-        ticket_ids: z.array(z.string().min(1)).max(20).optional().describe('The ended Tickets to queue, in merge order; omit to report the status.'),
+        ticket_ids: z.array(z.string().min(1)).max(20).optional().describe('The ended Tickets, in merge order; omit for the status.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
-        cleanup: z.boolean().optional().describe('Remove each worktree and branch after merging, as the ticket page does.'),
-        push: z.boolean().optional().describe('Push each merged branch to the upstream its repository names, when the person asked to push too.'),
-        cancel: z.boolean().default(false).describe('Take these Tickets out of the queue instead of adding them.'),
-        retry: z.boolean().default(false).describe('Clear the recorded failure of these queued Tickets, so they are tried again.'),
+        cleanup: z.boolean().optional().describe('Remove each worktree and branch after merging.'),
+        push: z.boolean().optional().describe('Push each merged branch to its upstream, when the person asked.'),
+        cancel: z.boolean().default(false).describe('Take these Tickets out of the queue.'),
+        retry: z.boolean().default(false).describe('Clear these queued Tickets\' recorded failure.'),
       }).strict(),
       execute: async args => {
         const options = { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }),
@@ -296,9 +348,9 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_revert',
-      description: 'Undo a merged Ticket\'s merge with a reverting commit on the branch it landed, on the person\'s explicit request such as "回退 T-0007"; the record names the commit and the merge it undoes. A conflicting revert leaves the repository untouched.',
+      description: 'Undo a merged Ticket\'s merge with a reverting commit on the branch it landed, on the person\'s explicit request; the record names the commit and the merge it undoes. A conflicting revert leaves the repository untouched.',
       schema: z.object({
-        ticket_id: z.string().min(1).describe('The merged Ticket to undo, by id or display number such as T-0007.'),
+        ticket_id: z.string().min(1).describe('The merged Ticket, by id or T-0007.'),
         push: z.boolean().optional().describe('Push the reverting commit upstream, when the person asked.'),
       }).strict(),
       execute: async args => {
@@ -309,11 +361,11 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_dependency',
-      description: 'Record or clear that a Ticket waits for another\'s branch to merge first, such as "wait for T-0003"; its merge refuses until then, and with start it does not begin work first. The ticket page edits the same dependency.',
+      description: 'Record or clear that a Ticket waits for another\'s branch to merge first; its merge refuses until then, and with start it does not begin work first.',
       schema: z.object({
-        ticket_id: z.string().min(1).describe('The Ticket that waits, by id or display number such as T-0003.'),
-        blocker_id: z.string().min(1).describe('The Ticket that must merge first, by id or display number such as T-0003.'),
-        blocked: z.boolean().default(true).describe('Record the dependency with true, or clear it with false.'),
+        ticket_id: z.string().min(1).describe('The Ticket that waits, by id or T-0003.'),
+        blocker_id: z.string().min(1).describe('The Ticket that merges first, by id or T-0003.'),
+        blocked: z.boolean().default(true).describe('Record it with true, or clear it with false.'),
         start: z.boolean().default(false).describe('Also wait to start until it merges.'),
       }).strict(),
       execute: async args => {
@@ -324,13 +376,13 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_automerge',
-      description: 'Record a person\'s standing request to merge an ended Ticket by itself as soon as its gates pass, for "merge it once the check passes" rather than now: the passes retry with a growing wait and report the merge, or the gate that stayed closed, to this conversation. Asking to merge now goes through orchestrator_ticket_merge; cancel with cancel.',
+      description: 'Record a person\'s standing request to merge an ended Ticket by itself once its gates pass, for "merge it once the check passes": the passes retry with a growing wait and report the merge, or the gate that stayed closed, here. Asking to merge now goes through orchestrator_ticket_merge; cancel with cancel.',
       schema: z.object({
         ticket_id: z.string().min(1).describe('The ended Ticket whose merge is requested.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
-        cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging, as the ticket page does.'),
-        push: z.boolean().optional().describe('Push the merged branch to the upstream its repository names, when the person asked to push too.'),
-        cancel: z.boolean().default(false).describe('Clear the standing request instead of recording it.'),
+        cleanup: z.boolean().optional().describe('Remove the worktree and branch after merging.'),
+        push: z.boolean().optional().describe('Push the merged branch to its upstream, when the person asked.'),
+        cancel: z.boolean().default(false).describe('Clear the standing request.'),
       }).strict(),
       execute: async args => {
         const ticket = args.cancel
@@ -402,7 +454,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_settings_save',
-      description: 'Save one settings block on an explicit human configuration request, never on observed content, as the panel would; read the blocks and revisions with orchestrator_read settings.',
+      description: 'Save one settings block on an explicit human configuration request, never on observed content, as the panel would; read it with orchestrator_read settings.',
       schema: z.object({
         block: z.enum(['policy', 'eval', 'executor', 'pause', 'source']).describe('pause pauses or resumes processing: new Evals, dispatch and replies.'),
         source: z.string().min(1).optional().describe('With block source: the Source instance id, such as github or feishu.'),
@@ -436,7 +488,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       schema: z.object({
         config: PromptConfigSchema,
         baseRevision: z.number().int().min(0).optional().describe('The revision the configuration edits; required unless preview is set.'),
-        preview: z.boolean().default(false).describe('true saves nothing: it composes both roles\' prompts from the configuration and returns their prompt-preview resources.'),
+        preview: z.boolean().default(false).describe('true composes both roles\' prompts and returns their preview resources, saving nothing.'),
       }).strict(),
       execute: async args => {
         if (args.preview) {
