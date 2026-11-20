@@ -206,4 +206,7 @@ it('marks a note outdated only when its checked lines changed, or when no check 
   // A note whose lines changed is outdated, and an unchecked older note falls back to the whole-head comparison.
   expect(noteOutdated({ commit: 'a'.repeat(40), stale: { at: '1', head } }, head)).toBe(true)
   expect(noteOutdated({ commit: 'a'.repeat(40) }, head)).toBe(true)
+  // Without a current review head an anchored note cannot be trusted; a note with no commit is not anchored.
+  expect(noteOutdated({ commit: 'a'.repeat(40) }, undefined)).toBe(true)
+  expect(noteOutdated({}, undefined)).toBe(false)
 })

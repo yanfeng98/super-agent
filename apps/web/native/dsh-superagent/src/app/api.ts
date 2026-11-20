@@ -60,7 +60,7 @@ export interface Api {
   'POST tickets/:id/check': { response: { checks: TicketCheck } }
   'POST tickets/:id/automerge': { body: { cancel: boolean }; response: { auto_merge: boolean } }
   'POST tickets/:id/blockers': { body: { ticket: string; blocked: boolean; start?: boolean };
-    response: { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; start: boolean }[] } }
+    response: { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; discarded: boolean; start: boolean }[] } }
   'POST tickets/:id/related': { body: { ticket: string; linked: boolean };
     response: { related: { id: string; number?: number; title: string }[] } }
   'POST tickets/:id/notes': { body: { file: string; line?: number; endLine?: number; text: string };

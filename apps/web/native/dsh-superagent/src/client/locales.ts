@@ -167,6 +167,7 @@ const TEXT = {
   blockedByAdd: ['添加', 'Add'],
   blockerStart: ['开工前等待', 'Wait before starting'],
   blockerMerged: ['已合并', 'Merged'],
+  blockerDiscarded: ['已丢弃', 'Discarded'],
   blockerWaiting: ['尚未合并', 'Not merged yet'],
   relatedTitle: ['关联工单', 'Related Tickets'],
   relatedHint: ['把相关的工单互相链接起来，例如前置工作或依赖；两侧页面都会列出，但不影响执行。',

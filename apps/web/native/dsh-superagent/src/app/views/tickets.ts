@@ -146,7 +146,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     rebase, cleanup, check, reviewDecision, revert, push, dequeue: queuePosition !== undefined },
     ...local?.address.file ? { archive: local.address.file } : {},
     history,
-    // A note keeps the commit it was written on, so the panel can say when the lines it described have moved.
+    // A note's line is anchored to a commit, so the panel can say when the lines it described have moved.
     notes: (ticket.notes ?? []).map(note => ({ ...note,
       outdated: noteOutdated(note, ticket.review?.head) })),
     ...ticket.autoMerge ? { autoMerge: ticket.autoMerge } : {},
@@ -157,8 +157,9 @@ export function ticketDetail(host: ViewHost, id: string) {
     }),
     blockedBy: (ticket.blockedBy ?? []).flatMap(id => {
       const other = store.tickets.get(id)
+      const waitingToStart = !ticket.assignments.some(item => item.startedAt)
       return other ? [{ id, number: view.number(other.id), title: other.title, merged: !!other.merged,
-        start: (ticket.startAfter ?? []).includes(id) }] : []
+        discarded: !!other.discarded, start: waitingToStart && (ticket.startAfter ?? []).includes(id) }] : []
     }),
     ...checks ? { checks } : {},
     ...ticket.reviewed ? { reviewed: ticket.reviewed } : {},

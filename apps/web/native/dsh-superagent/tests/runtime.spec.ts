@@ -1857,6 +1857,8 @@ it('holds a first Assignment until its start dependency merges, then starts it',
   const { ticket: blocker } = await acceptedTicket(feishu('1', '@bot 先做 A'))
   const { ticket: dependent } = await acceptedTicket(feishu('2', '@bot 再做 B'))
   const enqueue = vi.spyOn(runtime.effects, 'enqueue')
+  // A Ticket that already began cannot be held back by a start dependency.
+  expect(() => runtime.blockTicket(dependent.id, blocker.id, true, true)).toThrow(/already started/)
   runtime.store.atomic(() => {
     const current = runtime.store.tickets.get(dependent.id)!
     current.startAfter = [blocker.id]
@@ -1875,6 +1877,22 @@ it('holds a first Assignment until its start dependency merges, then starts it',
   // Recording the dependency again after its blocker merged starts the waiting Assignment.
   runtime.blockTicket(dependent.id, blocker.id, true, true)
   expect(enqueue).toHaveBeenCalledWith('launch', assignment.id, { ticketId: dependent.id, assignmentId: assignment.id })
+})
+
+it('holds a launch queued before its start dependency was recorded', async () => {
+  const { ticket: blocker } = await acceptedTicket(feishu('1', '@bot 先做 A'))
+  const { ticket: dependent } = await acceptedTicket(feishu('2', '@bot 再做 B'))
+  const assignment = dependent.assignments[0]!
+  runtime.store.atomic(() => {
+    const current = runtime.store.tickets.get(dependent.id)!
+    current.startAfter = [blocker.id]
+    current.assignments = [{ ...assignment, state: 'pending', startedAt: undefined }]
+    runtime.store.tickets.save(current)
+  })
+  // The launch was queued before the dependency was recorded, so the handler must check again.
+  runtime.effects.enqueue('launch', assignment.id, { ticketId: dependent.id, assignmentId: assignment.id })
+  await runtime.effects.drain()
+  expect(runtime.store.tickets.get(dependent.id)!.assignments[0]!.state).toBe('pending')
 })
 
 it('keeps earlier check runs in the ticket history', async () => {

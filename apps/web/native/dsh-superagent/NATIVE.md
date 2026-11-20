@@ -269,11 +269,14 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 25. **Note anchors that follow the code, start dependencies, and merge messages.** `remapNoteAnchors` maps a note's old
     line and range through the diff hunks to the current head, so the panel anchors it on the line the code now occupies;
     a hunk that replaces or deletes the covered lines marks the note **Changes moved** and keeps it out of the inline diff.
-    `Ticket.startAfter` records a dependency that holds the first Assignment: `orchestrator_ticket_dependency` and the
-    ticket page's **Wait before starting** checkbox set it, the Executor does not launch while a blocker is unmerged, and
-    the merge that lands the last blocker starts the waiting Assignment. `mergeWorkspace` takes a message, and a squash or
-    merge commit carries the Ticket's title, the worker's report summary, and the Ticket number. `tests/core-engine.spec.ts`,
-    `tests/runtime.spec.ts`, `tests/merge.spec.ts`, `tests/review.spec.ts` and `tests/panel-execution.spec.tsx` cover them.
+    `remapNoteAnchors` reads the whole diff rather than only the notes' paths, so a rename is seen; the panel draws a note
+    inline only while its commit is the current review head. `Ticket.startAfter` records a dependency that holds the first
+    Assignment: `orchestrator_ticket_dependency` and the ticket page's **Wait before starting** checkbox set it, the
+    Executor does not launch while a blocker is unmerged, and the merge that lands the last blocker starts the waiting
+    Assignment; a start dependency is refused once the Ticket started or ended, and a discarded blocker is marked
+    **Discarded**. `mergeWorkspace` takes a message, and a squash or merge commit carries the Ticket's title, the worker's
+    report summary, and the Ticket number. `tests/core-engine.spec.ts`, `tests/runtime.spec.ts`, `tests/merge.spec.ts`,
+    `tests/review.spec.ts` and `tests/panel-execution.spec.tsx` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

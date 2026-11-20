@@ -681,6 +681,8 @@ export class Runtime extends Service implements SourceHost {
         }
       }
     }
+    // The merge that lands the last blocker starts the Tickets that were waiting to begin on it.
+    this.startWaiting()
     let cleaned: true | undefined
     if (options.cleanup) {
       try {
@@ -1274,17 +1276,24 @@ export class Runtime extends Service implements SourceHost {
    * @throws when either ticket is unknown, they are the same, or the dependency would close a cycle.
    */
   blockTicket(id: string, reference: string, blocked: boolean, start = false):
-    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; start: boolean }[] } {
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; discarded: boolean; start: boolean }[] } {
     const ticketId = this.ticketReference(id), target = this.ticketReference(reference)
     if (!ticketId || !target) throw new Error('Unknown ticket')
+    const current = this.store.tickets.get(ticketId)
+    if (blocked && start) {
+      if (current && !liveTicket(current)) throw new Error('Only an open Ticket can wait to start')
+      if (current?.assignments.some(item => item.startedAt)) {
+        throw new Error('The Ticket already started; a start dependency cannot hold it now')
+      }
+    }
     const ticket = this.engine.blockTicket(ticketId, target, blocked, start)
     // A dependency set after its blocker already merged does not hold the first Assignment back.
     this.startWaiting()
     return { ticket_id: ticket.id, blocked_by: (ticket.blockedBy ?? []).flatMap(value => {
       const other = this.store.tickets.get(value)
       const number = this.store.tickets.number(value)
-      return other ? [{ id: value, title: other.title, merged: !!other.merged, start: (ticket.startAfter ?? []).includes(value),
-        ...number ? { number } : {} }] : []
+      return other ? [{ id: value, title: other.title, merged: !!other.merged, discarded: !!other.discarded,
+        start: (ticket.startAfter ?? []).includes(value), ...number ? { number } : {} }] : []
     }) }
   }
   /** Resolves a ticket id or display number (`T-0001`) to its id. */

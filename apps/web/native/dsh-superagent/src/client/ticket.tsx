@@ -24,8 +24,8 @@ function writeViewed(key: string, paths: Set<string>): void {
   catch (error) { /* A browser that blocks storage keeps the marks for this page only. */ }
 }
 /** One file of the review diff: what changed, the reviewed mark, and its lines once it is opened. */
-function DiffFileLine({ file, viewed, onViewed, notes, onComment }: { file: DiffFile; viewed: boolean; onViewed: () => void;
-  notes: TicketPageView['notes']; onComment: (file: string, line: number) => void }) {
+function DiffFileLine({ file, viewed, onViewed, notes, onComment, head }: { file: DiffFile; viewed: boolean; onViewed: () => void;
+  notes: TicketPageView['notes']; onComment: (file: string, line: number) => void; head?: string }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   return <li className="dt-row">
@@ -37,20 +37,21 @@ function DiffFileLine({ file, viewed, onViewed, notes, onComment }: { file: Diff
         <Tag tone="outline">{t(`diffStatus.${file.status}`)}</Tag>
         <span className="dt-mono">+{file.additions} −{file.deletions}</span>
       </div>
-      {open && <DiffPatch file={file} notes={notes} onComment={onComment} />}
+      {open && <DiffPatch file={file} notes={notes} onComment={onComment} head={head} />}
     </div>
   </li>
 }
 /** Longest patch drawn row by row; a larger one stays a single block, which is cheaper than thousands of rows. */
 const MAX_LINE_DIFF = 2000
 /** One file's patch as rows, each offering a comment anchored on its line, with the notes already written on it. */
-function DiffPatch({ file, notes, onComment }: { file: DiffFile; notes: TicketPageView['notes'];
-  onComment: (file: string, line: number) => void }) {
+function DiffPatch({ file, notes, onComment, head }: { file: DiffFile; notes: TicketPageView['notes'];
+  onComment: (file: string, line: number) => void; head?: string }) {
   const { t } = usePanel()
   const rows = patchLines(file.patch)
   if (rows.length > MAX_LINE_DIFF) return <pre className="dt-workspace-diff">{file.patch}</pre>
   // A note whose own lines changed no longer anchors here; it stays in the list with its moved mark.
-  const written = notes.filter(note => note.file === file.path && note.line !== undefined && !note.outdated)
+  const written = notes.filter(note => note.file === file.path && note.line !== undefined && !note.outdated
+    && (!note.commit || note.commit === head))
   return <div className="dt-diff">
     {rows.map((row, index) => <div className="dt-diff-row" key={index}>
       <div className={`dt-diff-line dt-diff-${row.kind}`}>
@@ -251,7 +252,7 @@ export function TicketPage({ id }: { id: string }) {
   const addBlocker = async (event: FormEvent) => {
     event.preventDefault()
     if (!blockerRef.trim()) return
-    await block(blockerRef.trim(), true, blockerStart)
+    await block(blockerRef.trim(), true, canHoldStart && blockerStart)
     setBlockerRef('')
     setBlockerStart(false)
   }
@@ -311,6 +312,9 @@ export function TicketPage({ id }: { id: string }) {
   // Only the Ticket's own local Thread takes a reply; a context-only Thread belongs to another Ticket.
   const localThread = data.threads.find(thread => thread.source === 'local' && !thread.context)
   const notes = data.notes
+  const started = data.assignments.some(item => item.startedAt)
+  // A start dependency only holds an open Ticket that has not begun its first Assignment.
+  const canHoldStart = !data.ended && !started
   const addNote = async (event: FormEvent) => {
     event.preventDefault()
     setNotesBusy(true)
@@ -497,7 +501,8 @@ export function TicketPage({ id }: { id: string }) {
         ? <>
           <p className="dt-hint">{t('diffFileCount', { count: diff.files.length })}</p>
           <ul className="dt-list">{diff.files.map(file => <DiffFileLine key={file.path} file={file} notes={notes}
-            viewed={viewedFiles.has(file.path)} onViewed={() => toggleViewed(file.path)} onComment={commentOnLine} />)}</ul>
+            viewed={viewedFiles.has(file.path)} onViewed={() => toggleViewed(file.path)} onComment={commentOnLine}
+            head={data.review?.head} />)}</ul>
         </>
         : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
@@ -709,7 +714,7 @@ export function TicketPage({ id }: { id: string }) {
             ? <span className="dt-ticket-number">{ticketRef(item.number)}</span> : null}
             <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: item.id })}>{item.title}</button>
           </div>
-            <div className="dt-row-meta">{item.merged ? t('blockerMerged') : t('blockerWaiting')}
+            <div className="dt-row-meta">{item.merged ? t('blockerMerged') : item.discarded ? t('blockerDiscarded') : t('blockerWaiting')}
               {item.start && <Tag tone="info">{t('blockerStart')}</Tag>}</div>
           </div>
           <div className="dt-row-actions"><Button variant="ghost" size="sm" disabled={blockerBusy}
@@ -719,7 +724,7 @@ export function TicketPage({ id }: { id: string }) {
           <div className="dt-row-meta">
             <Input className="dt-mono" value={blockerRef} placeholder={t('blockedByPlaceholder')} aria-label={t('blockedByPlaceholder')}
               onChange={event => setBlockerRef(event.target.value)} />
-            <label className="dt-field-inline"><input type="checkbox" checked={blockerStart} aria-label={t('blockerStart')}
+            <label className="dt-field-inline"><input type="checkbox" checked={canHoldStart && blockerStart} aria-label={t('blockerStart')} disabled={!canHoldStart}
               onChange={event => setBlockerStart(event.target.checked)} /><span>{t('blockerStart')}</span></label>
             <Button variant="outline" type="submit" disabled={!blockerRef.trim() || blockerBusy}>{t('blockedByAdd')}</Button>
           </div>
