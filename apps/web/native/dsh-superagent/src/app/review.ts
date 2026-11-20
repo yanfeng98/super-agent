@@ -33,7 +33,8 @@ const DIFF_LIMIT = 200_000
 /** Cap each list so a large change set stays readable and bounded in the ticket record. */
 const LIMIT = 50
 const run = async (subprocess: SubprocessRuntime, directory: string, args: string[], signal: AbortSignal): Promise<string | undefined> =>
-  runAsWorker(subprocess, ['git', ...args], directory, AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
+  runAsWorker(subprocess, ['git', '-c', 'core.quotePath=false', ...args], directory,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
     .then(output => output.trim()).catch(() => undefined)
 
 /** Reads the current commit of a workspace; undefined when it is not a git repository or git is unavailable. */
@@ -60,7 +61,7 @@ export async function workingBase(subprocess: SubprocessRuntime, ticket: Ticket,
  */
 export async function workspaceDiff(subprocess: SubprocessRuntime, directory: string, base: string, signal: AbortSignal):
   Promise<{ diff: string; truncated: boolean; files: DiffFile[] }> {
-  const output = await runAsWorker(subprocess, ['git', 'diff', '--no-color', '--unified=3', `${base}..HEAD`], directory,
+  const output = await runAsWorker(subprocess, ['git', '-c', 'core.quotePath=false', 'diff', '--no-color', '--unified=3', `${base}..HEAD`], directory,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]))
   const truncated = output.length > DIFF_LIMIT
   const diff = truncated ? output.slice(0, DIFF_LIMIT) : output
@@ -202,8 +203,8 @@ export async function remapNoteAnchors(subprocess: SubprocessRuntime, ticket: Ti
   }
   const result = new Map<string, NoteAnchor>()
   for (const [commit, group] of byCommit) {
-    const files = [...new Set(group.map(note => note.file))]
-    const diff = await run(subprocess, directory, ['diff', '--no-color', '--unified=0', '-M', `${commit}..${head}`, '--', ...files], signal)
+    // The whole diff, not only the notes' paths: a pathspec would hide a rename that moved a note's file.
+    const diff = await run(subprocess, directory, ['diff', '--no-color', '--unified=0', '-M', `${commit}..${head}`], signal)
     // A failed diff leaves these notes unchecked; the page then falls back to the whole-head comparison.
     if (diff === undefined) continue
     const changed = changedFiles(diff)
@@ -308,6 +309,7 @@ export async function targetContained(subprocess: SubprocessRuntime, directory: 
  * merge commit. The ticket branch must contain the repository's commit, so the merge cannot conflict.
  * @param strategy - The merge form to use; `ff` refuses when the repository moved.
  * @param expectedTarget - The branch recorded when the Ticket started; the merge refuses when the repository is on another.
+ * @param message - The commit message for a squash or merge commit; omitted, the default is used.
  * @throws when the workspace is not a linked worktree, the repository is dirty, on another branch than `expectedTarget`,
  * the ticket branch is checked out there, the ticket branch does not contain the repository's commit, or git cannot complete
  * the merge.

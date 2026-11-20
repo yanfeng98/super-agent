@@ -261,7 +261,9 @@ export class Tickets extends EnginePart {
     return ticket
   }
   /**
-   * Records or clears that a ticket waits for another ticket's branch to merge first.
+   * Records or clears that a ticket waits for another ticket's branch to merge first, and optionally that it also waits
+   * to begin its first Assignment until then.
+   * @param start - Whether the dependency also holds the first Assignment until the other merges.
    * @returns The blocked ticket after the change.
    * @throws UserError when either ticket is unknown, they are the same, or the dependency would close a cycle.
    */

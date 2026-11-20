@@ -457,7 +457,7 @@ export interface TicketNote {
   endLine?: number
   text: string
   at: string
-  /** The commit the ticket's changes were at when the note was written, so the panel can mark it outdated once they move. */
+  /** The commit the note's line is anchored to; a later review moves it with the code, and a changed line marks the note stale. */
   commit?: string
   /** When a person handed the note to the worker, so the page can say so and not send it twice. */
   sent?: { at: string }
@@ -479,7 +479,9 @@ export interface TicketNote {
  */
 export const noteOutdated = (note: Pick<TicketNote, 'commit' | 'checkedHead' | 'stale'>, head?: string): boolean => {
   if (note.stale) return true
-  if (!note.commit || !head) return false
+  if (!note.commit) return false
+  // An anchored note with no current review head cannot be trusted to describe the lines now.
+  if (!head) return true
   if (note.checkedHead === head) return false
   return note.commit !== head
 }

@@ -59,7 +59,7 @@ export interface MainToolsHost {
   cancelAutoMerge(id: string): Ticket
   /** Records or clears that one Ticket's branch must merge before another's, and whether it also waits to start. */
   blockTicket(id: string, reference: string, blocked: boolean, start?: boolean):
-    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; start: boolean }[] }
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; discarded: boolean; start: boolean }[] }
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>

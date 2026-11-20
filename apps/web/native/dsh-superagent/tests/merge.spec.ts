@@ -61,6 +61,22 @@ const configureCheck = (command: string): void => {
   h.runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, check: command } })
 }
 
+it('starts a Ticket whose start dependency just merged', async () => {
+  const { ticket: blocker } = await h.acceptedTicket(feishu('1', '@bot 先做 A'))
+  const { ticket: dependent } = await h.acceptedTicket(feishu('2', '@bot 再做 B'))
+  ended(blocker.id)
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(dependent.id)!
+    current.startAfter = [blocker.id]
+    current.assignments = current.assignments.map(item => ({ ...item, state: 'pending', startedAt: undefined }))
+    h.runtime.store.tickets.save(current)
+  })
+  const enqueue = vi.spyOn(h.runtime.effects, 'enqueue')
+  await h.runtime.mergeTicket(blocker.id)
+  const assignment = h.runtime.store.tickets.get(dependent.id)!.assignments[0]!
+  expect(enqueue).toHaveBeenCalledWith('launch', assignment.id, { ticketId: dependent.id, assignmentId: assignment.id })
+})
+
 it('rebases a branch the repository moved past, runs the configured check, and merges', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)

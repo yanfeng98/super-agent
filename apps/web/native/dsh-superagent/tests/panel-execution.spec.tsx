@@ -224,7 +224,7 @@ it('links and unlinks related Tickets from a Ticket page', async () => {
 it('blocks a ticket on another ticket\'s merge from its page', async () => {
   at({ page: 'execution', id: 't1' })
   server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
-    blockedBy: [{ id: 't2', number: 2, title: '前置工单', merged: false, start: false }] }
+    blockedBy: [{ id: 't2', number: 2, title: '前置工单', merged: false, discarded: false, start: false }], assignments: [] }
   await mount()
   await click(zh.blockedByTitle)
   expect(text()).toContain('T-0002')

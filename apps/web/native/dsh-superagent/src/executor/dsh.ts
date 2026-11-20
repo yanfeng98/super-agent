@@ -277,10 +277,13 @@ export class DshExecutor implements Executor {
     // A held ticket waits for a person's approval; approve() calls start again once the hold is gone.
     const current = this.host.store.tickets.get(ticket.id)
     if (current?.hold) return
-    // A first Assignment waits until the Tickets it must follow have merged; a merge starts it again.
-    if (current?.startAfter?.length && !current.assignments.some(item => item.startedAt)
-      && current.startAfter.some(id => !this.host.store.tickets.get(id)?.merged)) return
+    if (current && this.startBlocked(current)) return
     this.host.effects.enqueue('launch', assignment.id, { ticketId: ticket.id, assignmentId: assignment.id })
+  }
+  /** Whether a first Assignment waits for a start dependency that has not merged. */
+  private startBlocked(ticket: Ticket): boolean {
+    return !!ticket.startAfter?.length && !ticket.assignments.some(item => item.startedAt)
+      && ticket.startAfter.some(id => !this.host.store.tickets.get(id)?.merged)
   }
   /** Enqueues a `delivery` effect to steer pending inputs into `ticket`'s running worker session. */
   deliver(ticket: Ticket, _assignment: Assignment): void { this.host.effects.enqueue('delivery', ticket.id, { ticketId: ticket.id }) }
@@ -289,6 +292,8 @@ export class DshExecutor implements Executor {
     const ticket = this.host.store.tickets.get(ticketId)
     const assignment = ticket && latestAssignment(ticket)
     if (!ticket || !liveTicket(ticket) || assignment?.id !== assignmentId || assignment.state !== 'pending') return
+    // The dependency may have been recorded after this launch was queued.
+    if (this.startBlocked(ticket)) return
     this.slots.reserve(ticketId, 'launch')
     try { await this.launch(ticket, assignment); this.transient.delete(`launch:${assignmentId}`) }
     catch (error) {

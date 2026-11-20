@@ -395,6 +395,8 @@ describe('remapNoteAnchors', () => {
     writeFileSync(join(repo, 'a.txt'), Array.from({ length: 10 }, (_, index) => `line ${index + 1}`).join('\n') + '\n')
     writeFileSync(join(repo, 'b.txt'), 'same\n')
     writeFileSync(join(repo, 'bin.dat'), Buffer.from([0, 1, 2]))
+    writeFileSync(join(repo, 'r.txt'), 'rename me\n')
+    writeFileSync(join(repo, '中文.txt'), 'old\n')
     git('add', '.')
     git('commit', '-q', '-m', 'base')
     const base = git('rev-parse', 'HEAD')
@@ -402,7 +404,9 @@ describe('remapNoteAnchors', () => {
     writeFileSync(join(repo, 'a.txt'), ['line 1', 'line 3', 'line 4', 'line 5', 'line 6 changed', 'line 7', 'line 8',
       'inserted A', 'inserted B', 'line 9', 'line 10'].join('\n') + '\n')
     writeFileSync(join(repo, 'bin.dat'), Buffer.from([0, 1, 3]))
-    git('add', 'a.txt', 'bin.dat')
+    writeFileSync(join(repo, '中文.txt'), 'new\n')
+    git('mv', 'r.txt', 's.txt')
+    git('add', '-A')
     git('commit', '-q', '-m', 'change')
     const head = git('rev-parse', 'HEAD')
     const notes = [
@@ -413,6 +417,8 @@ describe('remapNoteAnchors', () => {
       { id: 'file', file: 'a.txt', text: '整个文件', at: '', commit: base },
       { id: 'other', file: 'b.txt', line: 1, text: '别的文件', at: '', commit: base },
       { id: 'binary', file: 'bin.dat', line: 1, text: '二进制', at: '', commit: base },
+      { id: 'renamed', file: 'r.txt', line: 1, text: '被改名', at: '', commit: base },
+      { id: 'unicode', file: '中文.txt', line: 1, text: '中文文件', at: '', commit: base },
     ]
     const result = await remapNoteAnchors(subprocess(), { ...ticket(base), notes } as Ticket,
       { capturedAt: '2026-01-01T00:00:00.000Z', head, commits: [], files: [], dirty: [] }, signal)
@@ -425,5 +431,7 @@ describe('remapNoteAnchors', () => {
     expect(result.get('inside')).toMatchObject({ stale: true })
     expect(result.get('file')).toMatchObject({ stale: true })
     expect(result.get('binary')).toMatchObject({ stale: true })
+    expect(result.get('renamed')).toMatchObject({ stale: true })
+    expect(result.get('unicode')).toMatchObject({ stale: true })
   })
 })
