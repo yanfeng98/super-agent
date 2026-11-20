@@ -2,7 +2,7 @@
 
 [English](engineering-skills.md) | 中文
 
-每个以 base 为基础的 profile 都自带 27 个工程工作流技能，因此新建会话即可使用，无需安装插件或复制文件。插件页面把该组件列为 **工程工作流技能**，技能文本来自上游 [mattpocock/skills](https://github.com/mattpocock/skills) 项目。
+每个以 base 为基础的 profile 都自带 27 个工程工作流技能，因此新建会话即可使用，无需安装插件或复制文件。该组件随 base 组合一起发布，插件元数据里的名称是 **工程工作流技能**；技能文本来自上游 [mattpocock/skills](https://github.com/mattpocock/skills) 项目。
 
 ## 内置内容
 

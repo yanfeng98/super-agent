@@ -27,7 +27,7 @@ Status: implemented
 - **失败报告。** 缺失（`ENOENT`/`ENOTDIR`）或无效的技能会从完整目录中省略，只报告一次；加载会先使目录失效再返回 `undefined`。其他任何读取错误都会让发现不完整，并从加载中抛出。
 - **优先级。** 本地发现注册到更近的 preset 层，因此同名的本地技能胜出；随包排名只决定同一层内的顺序。于是项目里或用户目录里已有的 `tdd` 无需配置即可覆盖随包版本。
 - **针对本 Harness 的改编。** 随包正文点名 `skill` 工具，去掉 Codex 的 `agents/openai.yaml` 与插件清单，并把 `/clear` 改为开新会话（Harness 有 `/compact` 但没有 `/clear`）。机器标识符、名称、斜杠命令、标签、路径与模板字段名都保持上游原样。
-- **呈现。** `locale/*.json` 提供八种 UI 语言下的插件页标题与描述；`docs/user/guide/engineering-skills.md` 面向用户说明调用方式、主流程、仓库配置与覆盖方法。
+- **呈现。** `locale/*.json` 提供八种 UI 语言下的组件标题与描述，供插件清单使用；`docs/user/guide/engineering-skills.md` 面向用户说明调用方式、主流程、仓库配置与覆盖方法。
 - **来源。** 资源来自 `mattpocock/skills` 的 `main` 分支提交 `abeeaf9`（v1.3.2）；`yanfeng98/nano-mattpocock-skills` 的 `main` 与该分支逐字节一致。`assets/LICENSE` 保留上游的 MIT 声明。重新同步的步骤由包的 README 负责。
 
 ## 考虑过的替代方案

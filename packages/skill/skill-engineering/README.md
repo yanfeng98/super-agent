@@ -1,5 +1,5 @@
 ---
-description: "The built-in engineering workflow skills: shipped catalog entries, invocation split, plugin-page metadata, and the asset root maintainers update."
+description: "The built-in engineering workflow skills: shipped catalog entries, invocation split, plugin metadata, and the asset root maintainers update."
 kind: "package-reference"
 ---
 
@@ -106,7 +106,7 @@ The eleven model-invoked entries add their descriptions to the session catalog; 
 
 These limits define what the bundled provider does not do. They are current package constraints, not a task backlog.
 
-- **English only** — the skill text is the upstream English corpus; the plugin-page metadata is localized, but the catalog and bodies are not, so a localized catalog needs a local override.
+- **English only** — the skill text is the upstream English corpus; the plugin metadata is localized, but the catalog and bodies are not, so a localized catalog needs a local override.
 - **Manual synchronization** — upstream changes arrive by copying the promoted buckets, re-applying the adaptation below, and updating the fixed name list; no build step tracks the upstream repository.
 - **No per-skill configuration** — the provider exposes one asset root and always publishes the packaged set; deployments that want a subset author their own provider.
 - **The skills assume a workspace** — engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker; `setup-matt-pocock-skills` writes that configuration, and without it the skills ask for it.
@@ -124,6 +124,6 @@ The package is part of this repository; its skill text is synced from [`mattpoco
 3. Update `SKILL_NAMES` in `src/index.ts`; the drift test compares it with the asset directories.
 4. Run the package tests and the package README gates.
 
-`assets/LICENSE` carries the upstream MIT notice, and `locale/*.json` supplies the plugin-page title and description in each UI language.
+`assets/LICENSE` carries the upstream MIT notice, and `locale/*.json` supplies the component title and description in each UI language for plugin inventories.
 
 </details>
