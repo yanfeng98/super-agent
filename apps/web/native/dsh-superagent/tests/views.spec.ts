@@ -357,9 +357,20 @@ it('offers merge, discard and rebase only on an ended ticket with a review branc
   const merged = { ...ended, merged: { at, branch: 'agent/t1', target: 'main', root: '/repo' } }
   store.tickets.save(merged)
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ revert: true })
+  // A merge made without a push offers one, which a successful push removes.
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ push: true })
+  store.tickets.save({ ...merged, merged: { ...merged.merged!, push: { at, ok: true } } })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ push: false })
   store.tickets.save({ ...merged, reverted: { at: '2999-01-01T00:00:00.000Z', commit: 'c'.repeat(40), target: 'main',
     merge: 'b'.repeat(40) } })
   expect(ticketDetail(host, 't1')!.actions).toMatchObject({ revert: false })
+  // A revert keeps its own push action, which the record answers after the worktree is gone.
+  store.tickets.save({ ...merged, reverted: { at: '2999-01-01T00:00:00.000Z', commit: 'c'.repeat(40), target: 'main',
+    merge: 'b'.repeat(40), root: '/repo' } })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ push: true })
+  store.tickets.save({ ...merged, reverted: { at: '2999-01-01T00:00:00.000Z', commit: 'c'.repeat(40), target: 'main',
+    merge: 'b'.repeat(40), root: '/repo', push: { at, ok: true } } })
+  expect(ticketDetail(host, 't1')!.actions).toMatchObject({ push: false })
 })
 
 it('offers a check run on an ended ticket with a workspace when a check command is configured, and shows the result', () => {

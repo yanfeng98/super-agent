@@ -422,6 +422,36 @@ it('undoes a recorded merge on the branch it moved, and records the reverting co
   await expect(h.runtime.revertTicket(ticket.id)).rejects.toThrow(/Only a merged ticket/)
 })
 
+it('pushes the reverting commit when the person asked for both, and keeps a failed push for a retry', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
+  await h.runtime.mergeTicket(ticket.id)
+  expect(await h.runtime.revertTicket(ticket.id, 'panel', { push: true }))
+    .toEqual({ ticket_id: ticket.id, branch: 'agent/t', target: 'main', commit: 'undo-sha', pushed: true })
+  expect(pushWorkspace).toHaveBeenCalledWith(expect.anything(), '/repo', expect.anything(), 'main')
+  // The revert keeps the repository and the remote's answer, so a failed push is retried after the worktree is gone.
+  expect(h.runtime.store.tickets.get(ticket.id)?.reverted).toMatchObject({ root: '/repo', push: { ok: true, via: 'panel' } })
+  await h.runtime.mergeTicket(ticket.id)
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  expect(await h.runtime.revertTicket(ticket.id, 'panel', { push: true }))
+    .toMatchObject({ pushError: 'fatal: no upstream branch' })
+  expect(h.runtime.store.tickets.get(ticket.id)?.reverted)
+    .toMatchObject({ push: { ok: false, error: 'fatal: no upstream branch' } })
+})
+
+it('pushes a revert from the panel after the worktree is gone', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
+  await h.runtime.mergeTicket(ticket.id)
+  await h.runtime.revertTicket(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)?.reverted?.push).toBeUndefined()
+  expect(await h.runtime.pushTicket('T-0001')).toEqual({ ticket_id: ticket.id, pushed: true })
+  expect(pushWorkspace).toHaveBeenLastCalledWith(expect.anything(), '/repo', expect.anything(), 'main')
+  expect(h.runtime.store.tickets.get(ticket.id)?.reverted?.push).toMatchObject({ ok: true, via: 'panel' })
+})
+
 it('reports a conflicting revert without changing the branch, and refuses a ticket without a merge', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)
@@ -625,7 +655,7 @@ it('retries a push that failed on the branch the merge moved, and records the an
   expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: false })
   expect(h.runtime.notifications().items.filter(item => item.kind === 'push')).toHaveLength(2)
   const { ticket: open } = await h.acceptedTicket(feishu('2', '@bot 还没合'))
-  await expect(h.runtime.pushTicket(open.id)).rejects.toThrow(/Only a merged ticket/)
+  await expect(h.runtime.pushTicket(open.id)).rejects.toThrow(/Only a merged or reverted ticket/)
 })
 
 it('pauses the queue when the check on the merged target fails, leaving the rest waiting', async () => {

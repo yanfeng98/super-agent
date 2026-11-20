@@ -1,8 +1,9 @@
 /** Ticket detail page: stage and actions, Mandate details, undelivered/delivered Inputs, subscribed Threads, and Assignments. */
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { DiffFile } from '../app/review.ts'
 import { ApiError, usePoll, type TicketPageView } from './api.ts'
 import { Button, DisclosureRow, Dot, Icon, Input, Modal, Tag, type IconName } from './controls.tsx'
+import { patchLines } from './diff.ts'
 import { decisionMark, reportDot, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
@@ -22,8 +23,9 @@ function writeViewed(key: string, paths: Set<string>): void {
   try { localStorage.setItem(key, JSON.stringify([...paths])) }
   catch (error) { /* A browser that blocks storage keeps the marks for this page only. */ }
 }
-/** One file of the review diff: what changed, the reviewed mark, and the patch when it is opened. */
-function DiffFileLine({ file, viewed, onViewed }: { file: DiffFile; viewed: boolean; onViewed: () => void }) {
+/** One file of the review diff: what changed, the reviewed mark, and its lines once it is opened. */
+function DiffFileLine({ file, viewed, onViewed, notes, onComment }: { file: DiffFile; viewed: boolean; onViewed: () => void;
+  notes: TicketPageView['notes']; onComment: (file: string, line: number) => void }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   return <li className="dt-row">
@@ -35,9 +37,34 @@ function DiffFileLine({ file, viewed, onViewed }: { file: DiffFile; viewed: bool
         <Tag tone="outline">{t(`diffStatus.${file.status}`)}</Tag>
         <span className="dt-mono">+{file.additions} −{file.deletions}</span>
       </div>
-      {open && <pre className="dt-workspace-diff">{file.patch}</pre>}
+      {open && <DiffPatch file={file} notes={notes} onComment={onComment} />}
     </div>
   </li>
+}
+/** Longest patch drawn row by row; a larger one stays a single block, which is cheaper than thousands of rows. */
+const MAX_LINE_DIFF = 2000
+/** One file's patch as rows, each offering a comment anchored on its line, with the notes already written on it. */
+function DiffPatch({ file, notes, onComment }: { file: DiffFile; notes: TicketPageView['notes'];
+  onComment: (file: string, line: number) => void }) {
+  const { t } = usePanel()
+  const rows = patchLines(file.patch)
+  if (rows.length > MAX_LINE_DIFF) return <pre className="dt-workspace-diff">{file.patch}</pre>
+  const written = notes.filter(note => note.file === file.path && note.line !== undefined)
+  return <div className="dt-diff">
+    {rows.map((row, index) => <div className="dt-diff-row" key={index}>
+      <div className={`dt-diff-line dt-diff-${row.kind}`}>
+        <span className="dt-diff-no">{row.newLine ?? row.oldLine ?? ''}</span>
+        <span className="dt-diff-text">{row.text || ' '}</span>
+        {row.newLine !== undefined && row.kind !== 'meta' && row.kind !== 'hunk'
+          && <button type="button" className="dt-diff-comment" title={t('diffComment')} aria-label={t('diffComment')}
+            onClick={() => row.newLine && onComment(file.path, row.newLine)}>＋</button>}
+      </div>
+      {written.filter(note => note.line === row.newLine).map(note =>
+        <div className={`dt-diff-note${note.resolved ? ' dt-diff-note-resolved' : ''}`} key={note.id}>
+          <span className="dt-hint dt-mono">{note.file}:{note.line}{note.endLine ? `-${note.endLine}` : ''}</span> {note.text}
+        </div>)}
+    </div>)}
+  </div>
 }
 type Input = TicketPageView['inputs'][number]
 function InputLine({ input, earlier = [] }: { input: Input; earlier?: { id: string; at: string; preview: string }[] }) {
@@ -172,9 +199,11 @@ export function TicketPage({ id }: { id: string }) {
   const [noteLine, setNoteLine] = useState('')
   const [noteEndLine, setNoteEndLine] = useState('')
   const [noteText, setNoteText] = useState('')
+  const noteTextRef = useRef<HTMLTextAreaElement>(null)
   const [notesBusy, setNotesBusy] = useState(false)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [mergeStrategy, setMergeStrategy] = useState<'ff' | 'squash' | 'merge'>('ff')
+  const [mergePush, setMergePush] = useState(false)
   const [replyNoteId, setReplyNoteId] = useState<string>()
   const [replyDraft, setReplyDraft] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)
@@ -329,6 +358,13 @@ export function TicketPage({ id }: { id: string }) {
     catch (failure) { notify(errorText(failure)) }
     finally { setNotesBusy(false) }
   }
+  /** Starts a note on a diff line, so the person writes it where they read it. */
+  const commentOnLine = (file: string, line: number): void => {
+    setNoteFile(file)
+    setNoteLine(String(line))
+    setNoteEndLine('')
+    noteTextRef.current?.focus()
+  }
   const sendNotes = async () => {
     if (!localThread) return
     const range = (note: typeof notes[number]) => note.line ? `:${note.line}${note.endLine ? `-${note.endLine}` : ''}` : ''
@@ -448,8 +484,8 @@ export function TicketPage({ id }: { id: string }) {
       {diff && !diff.error && (diff.files.length
         ? <>
           <p className="dt-hint">{t('diffFileCount', { count: diff.files.length })}</p>
-          <ul className="dt-list">{diff.files.map(file => <DiffFileLine key={file.path} file={file}
-            viewed={viewedFiles.has(file.path)} onViewed={() => toggleViewed(file.path)} />)}</ul>
+          <ul className="dt-list">{diff.files.map(file => <DiffFileLine key={file.path} file={file} notes={notes}
+            viewed={viewedFiles.has(file.path)} onViewed={() => toggleViewed(file.path)} onComment={commentOnLine} />)}</ul>
         </>
         : <Hint>{t('reviewDiffEmpty')}</Hint>)}
       {diff?.truncated && <Hint>{t('reviewDiffTruncated')}</Hint>}
@@ -503,7 +539,8 @@ export function TicketPage({ id }: { id: string }) {
               aria-label={t('noteEndLinePlaceholder')} onChange={event => setNoteEndLine(event.target.value)} />
           </div>
           <textarea className="dt-textarea" rows={2} maxLength={2000} value={noteText} placeholder={t('noteTextPlaceholder')}
-            aria-label={t('noteTextPlaceholder')} onChange={event => setNoteText(event.target.value)} />
+            aria-label={t('noteTextPlaceholder')} ref={noteTextRef}
+            onChange={event => setNoteText(event.target.value)} />
           <div className="dt-row-buttons">
             <Button variant="outline" type="submit" disabled={notesBusy || !noteFile.trim() || !noteText.trim()}>{t('noteAdd')}</Button>
             {localThread && notes.some(note => !note.resolved)
@@ -522,9 +559,12 @@ export function TicketPage({ id }: { id: string }) {
               <option value="squash">{t('merge.squash')}</option>
               <option value="merge">{t('merge.merge')}</option>
             </select></label>
+          <label className="dt-field-inline"><input type="checkbox" checked={mergePush} aria-label={t('mergePush')}
+            onChange={event => setMergePush(event.target.checked)} /><span className="dt-hint">{t('mergePush')}</span></label>
           <ConfirmButton variant="outline" icon="decision" label={t('ticketMerge')} title={t('mergeTitle')}
             message={t('mergeConfirm', { title: data.title })}
-            onConfirm={() => after(call('POST tickets/:id/merge', { id, query: { strategy: mergeStrategy } }))} />
+            onConfirm={() => after(call('POST tickets/:id/merge', { id, query: { strategy: mergeStrategy },
+              body: { push: mergePush } }))} />
         </>}
         {data.actions.discard && <ConfirmButton variant="outline" icon="trash" label={t('ticketDiscard')} title={t('discardTitle')}
           message={t('discardConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/discard', { id }))} />}
@@ -562,7 +602,8 @@ export function TicketPage({ id }: { id: string }) {
     {data.merged?.head && <Hint>{t('mergedCommit', { commit: data.merged.head.slice(0, 8) })}</Hint>}
     {data.merged?.push && <Hint>{data.merged.push.ok ? t('pushOk') : t('pushFailed', { error: data.merged.push.error ?? '' })}</Hint>}
     {data.actions.push && <div className="dt-row-actions">
-      <Button variant="outline" size="sm" onClick={() => after(call('POST tickets/:id/push', { id }))}>{t('pushRetry')}</Button>
+      <Button variant="outline" size="sm" onClick={() => after(call('POST tickets/:id/push', { id }))}>
+        {t(data.merged?.push?.ok === false || data.reverted?.push?.ok === false ? 'pushRetry' : 'pushNow')}</Button>
     </div>}
     {data.queuePosition !== undefined && <div className="dt-form">
       <Hint>{t('queuePosition', { position: data.queuePosition })}</Hint>
@@ -579,6 +620,7 @@ export function TicketPage({ id }: { id: string }) {
       </div>
     </div>}
     {data.reverted && <Hint>{t('revertedHint')}</Hint>}
+    {data.reverted?.push && <Hint>{data.reverted.push.ok ? t('pushOk') : t('pushFailed', { error: data.reverted.push.error ?? '' })}</Hint>}
     {(data.actions.cleanup || data.actions.revert) && <div className="dt-row-actions">
       {data.actions.revert && <ConfirmButton variant="outline" icon="refresh" label={t('ticketRevert')} title={t('revertTitle')}
         message={t('revertConfirm', { title: data.title })} onConfirm={() => after(call('POST tickets/:id/revert', { id }))} />}

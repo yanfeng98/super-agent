@@ -125,8 +125,11 @@ it('undoes a merged ticket from the main Session', async () => {
     commit: 'c'.repeat(40) })
   const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_revert', { ticket_id: 'T-0001' }) as unknown as
     { commit: string; ticket: { ticket_id: string } }
-  expect(revert).toHaveBeenCalledWith('T-0001')
+  expect(revert).toHaveBeenCalledWith('T-0001', 'chat', {})
   expect(result).toMatchObject({ commit: 'c'.repeat(40), ticket: { ticket_id: ticket.id } })
+  // A person who also asks to push gets the reverting commit sent to the upstream.
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_revert', { ticket_id: 'T-0001', push: true })
+  expect(revert).toHaveBeenLastCalledWith('T-0001', 'chat', { push: true })
 })
 
 it('records a standing merge request from the main Session, and cancels it', async () => {

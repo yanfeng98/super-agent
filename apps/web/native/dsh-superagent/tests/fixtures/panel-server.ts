@@ -293,8 +293,7 @@ type Query<K extends keyof Api> = Api[K] extends { query?: infer Q } ? keyof Non
 type Body<K extends keyof Api> = Api[K] extends { body: infer B } ? B : undefined
 interface Request<K extends keyof Api> { params: RouteParams<K>; query: Partial<Record<Query<K>, string>>; body: Body<K> }
 type Answer<K extends keyof Api> = ApiResponse<K> | Refusal
-type Route<K extends keyof Api> = { query?: readonly Query<K>[]; answer: (request: Request<K>) => Answer<K> | Promise<Answer<K>> }
-  & (Api[K] extends { body: unknown } ? { body: true } : { body?: never })
+type Route<K extends keyof Api> = { query?: readonly Query<K>[]; body?: true; answer: (request: Request<K>) => Answer<K> | Promise<Answer<K>> }
 const page = <T>(items: T[]) => ({ items, total: items.length, next_offset: null })
 const ticketOf = (id: string) =>
   [...server.tickets.open, ...server.person, ...server.tickets.ended].find(ticket => ticket.id === id) ?? server.ticketDetails[id]
@@ -375,7 +374,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
       files: [{ path: 'src/a.ts', status: 'modified' as const, additions: 1, deletions: 1,
         patch: 'diff --git a/src/a.ts b/src/a.ts\n-old\n+new' }] }
   } },
-  'POST tickets/:id/merge': { query: ['strategy'], answer: ({ params }) => {
+  'POST tickets/:id/merge': { query: ['strategy'], body: true, answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { merged: true, branch: 'agent/t', target: 'main' }
   } },
@@ -459,7 +458,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   } },
   'POST tickets/:id/revert': { answer: ({ params }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
-    return { branch: 'agent/t1', target: 'main', commit: 'a'.repeat(40) }
+    return { ticket_id: params.id, branch: 'agent/t1', target: 'main', commit: 'a'.repeat(40) }
   } },
   'POST tickets/:id/blockers': { body: true, answer: ({ params }) => ({ ticket_id: params.id, blocked_by: [] }) },
   'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {

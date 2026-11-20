@@ -241,6 +241,15 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     (`MergeFailureCode`), and a drain retries it once that gate opens (`recoverableMerges`), such as a dependency that merged
     or a review that was approved, while the page says so. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts` and
     `tests/panel-execution.spec.tsx` cover them.
+23. **Pushing what a merge or a revert moved, and a comment on a diff line.** A merge made from the panel takes `push`
+    (the ticket page's **Push after merging**), and `Runtime.pushTicket` completes a merge or a revert that was never pushed
+    or whose push failed: `TicketRevert` keeps `root` and `push`, so `POST tickets/<id>/push` and the page's **Push** work
+    after the worktree is gone. `Runtime.revertTicket` pushes the reverting commit when asked and records a failed push
+    without undoing the revert, `orchestrator_ticket_revert` takes `push` and records `via: chat` like the other tools, and
+    the archive keeps the push section either way. The review diff is drawn line by line (`src/client/diff.ts`): each line of
+    the file after the change offers a comment that fills the note's file and line, and existing notes render under the line
+    they anchor on, while a removed line has none. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/views.spec.ts`,
+    `tests/panel-execution.spec.tsx` and `tests/diff-lines.spec.ts` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
