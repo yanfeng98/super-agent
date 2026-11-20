@@ -947,7 +947,9 @@ export class Runtime extends Service implements SourceHost {
     const target = merged?.target ?? reverted?.target
     const record: PushTarget | undefined = merged ? { merge: merged.at } : reverted ? { revert: reverted.commit } : undefined
     const directory = merged?.root ?? reverted?.root ?? ticket?.execution?.directory
-    if (!ticket || !target || !record || !directory) throw new Error('Only a merged or reverted ticket can be pushed')
+    if (!ticket || !target || !record) throw new Error('Only a merged or reverted ticket can be pushed')
+    // A merged ticket normally records the repository its merge moved; an old record without one needs git by hand.
+    if (!directory) throw new Error('The repository the merge or revert moved is unknown; push it with git in the repository')
     const at = now()
     const label = this.ticketLabel(ticket)
     try {
