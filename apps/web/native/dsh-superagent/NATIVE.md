@@ -248,8 +248,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     without undoing the revert, `orchestrator_ticket_revert` takes `push` and records `via: chat` like the other tools, and
     the archive keeps the push section either way. The review diff is drawn line by line (`src/client/diff.ts`): each line of
     the file after the change offers a comment that fills the note's file and line, and existing notes render under the line
-    they anchor on, while a removed line has none. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/views.spec.ts`,
-    `tests/panel-execution.spec.tsx` and `tests/diff-lines.spec.ts` cover them.
+    they anchor on, while a removed line has none. `patchLines` treats `---`/`+++` as file headers only before the first hunk,
+    so a changed line whose content starts with `--` or `++` keeps its line, and a push records its answer on the merge
+    timestamp or revert commit it acted on. `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/views.spec.ts`,
+    `tests/panel-execution.spec.tsx`, `tests/review.spec.ts` and `tests/diff-lines.spec.ts` cover them.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
