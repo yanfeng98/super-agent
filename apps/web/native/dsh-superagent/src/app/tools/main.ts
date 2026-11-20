@@ -13,6 +13,7 @@ import type { Sessions } from '../sessions.ts'
 import type { Settings } from '../settings.ts'
 import type { Store } from '../store.ts'
 import type { MergeStrategy } from '../review.ts'
+import type { MergeQueueView } from '../merge-queue.ts'
 import type { LocalFollowup, LocalFollowupResult, LocalRequest, LocalRequestResult } from '../../sources/local.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
 
@@ -43,6 +44,9 @@ export interface MainToolsHost {
   dequeueMerges(ids: readonly string[]): { removed: number; queue: { ticket_id: string; position: number }[] }
   /** Clears the recorded failure of queued Tickets, so the next pass tries them again. */
   retryMerges(ids: readonly string[]): { retried: number; queue: { ticket_id: string; position: number }[] }
+  /** The merge queue and the ended Tickets still waiting for a merge or a person's decision. */
+  pendingMerges(): { queue: MergeQueueView;
+    waiting: { ticket_id: string; title: string; needs: string; reason?: string; blocked_by?: string[] }[] }
   /** Records a person's standing request to merge a Ticket once its gates pass, which the passes carry out. */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket
   /** Undoes a merged Ticket's merge with a reverting commit on the branch it landed. */
@@ -258,9 +262,9 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_merge_queue',
-      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place and its reason. Cancel queued Tickets with cancel, or retry a failed one with retry.',
+      description: 'Queue ended Tickets to merge one after another on the person\'s request, such as "merge T-0003 and T-0005": the host merges them in the order given, reports each result to this conversation, keeps the queue across a restart, and leaves the rest to run when one fails or hands its conflict to its worker; a failed entry keeps its place and is retried once its gate opens. Cancel queued Tickets with cancel, or retry a failed one with retry. With no ticket_ids it reports what is queued and what still waits.',
       schema: z.object({
-        ticket_ids: z.array(z.string().min(1)).min(1).max(20).describe('The ended Tickets to queue, in merge order, by id or number.'),
+        ticket_ids: z.array(z.string().min(1)).max(20).optional().describe('The ended Tickets to queue, in merge order; omit to report the status.'),
         strategy: z.enum(['ff', 'squash', 'merge']).default('ff').describe('Fast-forward by default; squash or merge commit on request.'),
         cleanup: z.boolean().optional().describe('Remove each worktree and branch after merging, as the ticket page does.'),
         push: z.boolean().optional().describe('Push each merged branch to the upstream its repository names, when the person asked to push too.'),
@@ -270,9 +274,15 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       execute: async args => {
         const options = { ...(args.cleanup === undefined ? {} : { cleanup: args.cleanup }),
           ...(args.push === undefined ? {} : { push: args.push }) }
-        if (args.cancel) return { cancelled: true as const, ...host.dequeueMerges(args.ticket_ids) }
-        if (args.retry) return { cancelled: false as const, ...host.retryMerges(args.ticket_ids) }
-        return { cancelled: false as const, ...host.queueMerges(args.ticket_ids, options) }
+        const ids = args.ticket_ids ?? []
+        if (!ids.length) {
+          // The status report is read-only, so it never takes the cancel or retry branch by accident.
+          if (args.cancel || args.retry) throw new Error('Name the Tickets to cancel or retry')
+          return { cancelled: false as const, status: host.pendingMerges() }
+        }
+        if (args.cancel) return { cancelled: true as const, ...host.dequeueMerges(ids) }
+        if (args.retry) return { cancelled: false as const, ...host.retryMerges(ids) }
+        return { cancelled: false as const, ...host.queueMerges(ids, options) }
       },
     }),
     tool({

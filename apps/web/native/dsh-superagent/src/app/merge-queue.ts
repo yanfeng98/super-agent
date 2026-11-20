@@ -3,6 +3,9 @@ import type { MergeStrategy } from '../core/index.ts'
 import { KV } from '../kv.ts'
 import type { Store } from './store.ts'
 
+/** Why a queued merge did not land: a gate another Ticket or the person opens, or one that needs new work. */
+export type MergeFailureCode = 'dependency' | 'review' | 'notes' | 'other'
+
 /** One Ticket waiting for its turn; the options travel with it so a restart merges it the way the person asked. */
 export interface QueuedMerge {
   ticketId: string
@@ -10,8 +13,11 @@ export interface QueuedMerge {
   strategy?: MergeStrategy
   cleanup?: boolean
   push?: boolean
-  /** Why its last attempt did not merge; an entry with an error waits for a retry instead of running again. */
-  error?: { at: string; message: string }
+  /**
+   * Why its last attempt did not merge; an entry with an error waits for a retry instead of running again. `code` names the
+   * gate, so a drain can retry an entry whose dependency merged or whose review was approved on its own.
+   */
+  error?: { at: string; message: string; code?: MergeFailureCode }
 }
 
 /** The queue as the store holds it, oldest first. */
@@ -37,13 +43,31 @@ export function enqueueMerges(store: Store, entries: readonly QueuedMerge[]): Qu
 }
 
 /** Records why an entry did not merge, keeping it in the queue for a retry or a removal. */
-export function markMergeFailed(store: Store, ticketId: string, message: string): void {
+export function markMergeFailed(store: Store, ticketId: string, message: string, code: MergeFailureCode = 'other'): void {
   store.atomic(() => {
     const queue = queuedMerges(store)
     const at = queue.findIndex(item => item.ticketId === ticketId)
     if (at < 0) return
-    queue[at] = { ...queue[at]!, error: { at: new Date().toISOString(), message: message.slice(0, 1000) } }
+    queue[at] = { ...queue[at]!, error: { at: new Date().toISOString(), message: message.slice(0, 1000), code } }
     store.set(KV.runtime.mergeQueue, queue)
+  })
+}
+
+/**
+ * The failed entries whose gate has opened since, such as a dependency that merged or a review that was approved, so a
+ * drain tries them again without the person asking.
+ * @returns The Tickets to retry, in queue order.
+ */
+export function recoverableMerges(store: Store): string[] {
+  return queuedMerges(store).flatMap(entry => {
+    const code = entry.error?.code
+    if (!code || code === 'other') return []
+    const ticket = store.tickets.get(entry.ticketId)
+    if (!ticket?.ended || ticket.merged || ticket.discarded || ticket.cleaned) return []
+    const open = code === 'dependency' ? (ticket.blockedBy ?? []).every(id => store.tickets.get(id)?.merged)
+      : code === 'review' ? ticket.reviewed?.decision === 'approved'
+      : !(ticket.notes ?? []).some(note => !note.resolved)
+    return open ? [entry.ticketId] : []
   })
 }
 
@@ -105,7 +129,7 @@ export function setMergeQueuePaused(store: Store, paused: boolean): boolean {
 export interface MergeQueueView {
   paused: boolean
   items: { ticket_id: string; number?: number; title: string; position: number; strategy?: MergeStrategy;
-    error?: { at: string; message: string } }[]
+    error?: { at: string; message: string; code?: MergeFailureCode } }[]
 }
 /**
  * Reads the queue for the panel, leaving out an entry whose Ticket no longer exists.

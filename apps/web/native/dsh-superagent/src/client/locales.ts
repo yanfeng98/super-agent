@@ -130,6 +130,7 @@ const TEXT = {
   queueCancel: ['移出队列', 'Leave the queue'],
   queueRetry: ['重试', 'Retry'],
   queueFailed: ['上次未合并：{error}', 'Last attempt did not merge: {error}'],
+  queueAutoRetry: ['依赖合并或评审通过后会自动重试。', 'Retried by itself once its dependency merges or its review is approved.'],
   pushRetry: ['重试推送', 'Retry push'],
   targetCheckTitle: ['合并后目标检查', 'Check on the target after merging'],
   targetCheckHint: ['合并落库后在目标分支上运行配置的检查命令，确认合并结果仍然通过；失败时这次合并可以直接回退。', 'The configured check run on the target branch after the merge, which says whether the merged tree still passes; a failure means the merge can be undone.'],

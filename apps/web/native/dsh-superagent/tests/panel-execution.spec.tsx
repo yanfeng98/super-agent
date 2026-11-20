@@ -71,7 +71,7 @@ it('words a refused note range in the interface language by its code', async () 
 
 it('shows the merge queue with its pause and takes a Ticket out of it', async () => {
   server.mergeQueue = { paused: true, items: [{ ticket_id: 't1', number: 1, title: '修复回归', position: 1,
-    error: { at: '2026-11-18T00:00:00Z', message: 'Blocked by T-0009; merge it first' } },
+    error: { at: '2026-11-18T00:00:00Z', message: 'Blocked by T-0009; merge it first', code: 'dependency' } },
     { ticket_id: 't2', number: 2, title: '另一个工单', position: 2, strategy: 'squash' }] }
   await mount()
   await click(zh['tab.execution'])
@@ -80,8 +80,9 @@ it('shows the merge queue with its pause and takes a Ticket out of it', async ()
   expect(text()).toContain(zh.mergeQueuePaused)
   expect(text()).toContain('T-0001 修复回归')
   expect(text()).toContain('squash')
-  // A failed entry says why and is retried on its own.
+  // A failed entry says why, is retried on its own once its dependency lands, and can still be retried by hand.
   expect(text()).toContain('上次未合并：Blocked by T-0009; merge it first')
+  expect(text()).toContain(zh.queueAutoRetry)
   await click(zh.queueRetry)
   expect(server.requests.find(request => request.path === 'merge-queue/retry')).toMatchObject({ method: 'POST',
     body: { ticket_ids: ['t1'] } })
