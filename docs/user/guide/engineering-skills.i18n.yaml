@@ -3,7 +3,7 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/guide/engineering-skills.md
 /use-the-built-in-engineering-skills:
-  en: 172e5fd69546afdc
+  en: c652307ce7aea5d5
   zh: ce87ba548ca07b23
 /use-the-built-in-engineering-skills/what-ships:
   en: d1d2dca68fcd6702
