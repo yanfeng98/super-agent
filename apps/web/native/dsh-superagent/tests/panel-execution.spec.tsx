@@ -55,6 +55,20 @@ it('lists Tickets under Execution by who they wait on, with the Executor state a
   expect(server.settings).toMatchObject({ paused: true, executor: { maxWorkers: 4 } })
 })
 
+it('words a refused note range in the interface language by its code', async () => {
+  at({ page: 'execution', id: 't1' })
+  server.ticketDetails.t1 = { ...server.ticketDetails.t1!,
+    review: { capturedAt: '2026-11-18T00:00:00Z', branch: 'agent/t1', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [],
+      files: [], dirty: [] } }
+  await mount()
+  await type(field<HTMLInputElement>(zh.noteFilePlaceholder), 'src/a.ts')
+  // An end line without a start is refused by the host, and the panel localizes the code it gets back.
+  await type(field<HTMLInputElement>(zh.noteEndLinePlaceholder), '9')
+  await type(field<HTMLTextAreaElement>(zh.noteTextPlaceholder), '缺起点')
+  await click(zh.noteAdd)
+  expect(document.querySelector('.dt-toast')?.textContent).toBe(zh['userError.invalidNoteRange'])
+})
+
 it('shows the merge queue with its pause and takes a Ticket out of it', async () => {
   server.mergeQueue = { paused: true, items: [{ ticket_id: 't1', number: 1, title: '修复回归', position: 1,
     error: { at: '2026-11-18T00:00:00Z', message: 'Blocked by T-0009; merge it first' } },

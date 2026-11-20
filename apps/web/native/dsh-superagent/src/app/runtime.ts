@@ -799,12 +799,26 @@ export class Runtime extends Service implements SourceHost {
   async runMergeQueue(): Promise<void> {
     if (this.queueMerging) return this.queueMerging
     if (this.paused() || this.closing() || !this.setup.configured() || mergeQueuePaused(this.store)) return
+    this.pruneMergeQueue()
     if (!nextQueuedMerge(this.store)) return
     const task = this.drainMergeQueue()
       .catch((error: unknown) => { this.ctx.logger.warn('dsh-superagent: a queued merge failed: %s', String(error)) })
       .finally(() => { this.queueMerging = undefined; this.passes.request() })
     this.queueMerging = task
     return task
+  }
+  /**
+   * Drops failed entries whose Ticket moved on, such as one a person merged from the chat while it waited: a retry could
+   * never merge it, and the entry would otherwise keep its stale reason forever.
+   */
+  private pruneMergeQueue(): void {
+    const stale = queuedMerges(this.store).filter(item => {
+      if (!item.error) return false
+      const ticket = this.store.tickets.get(item.ticketId)
+      // An open Ticket may end again, such as one resumed to resolve a conflict, so its entry keeps waiting.
+      return !ticket || !!ticket.merged || !!ticket.discarded || !!ticket.cleaned
+    })
+    if (stale.length) dequeueMerges(this.store, stale.map(item => item.ticketId))
   }
   /** Merges the whole queue in order, one Ticket at a time, until it is empty or the deployment stops taking work. */
   private async drainMergeQueue(): Promise<void> {
