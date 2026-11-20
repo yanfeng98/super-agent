@@ -506,19 +506,19 @@ Nothing deletes old records yet, so these grow without bound: the `trigger`, `di
 
 ### Main Session tools
 
-The main Session has 24 tools: 23 application tools and `orchestrator_read`.
+The main Session has 25 tools: 24 application tools and `orchestrator_read`.
 
 | Purpose | Tools |
 | --- | --- |
 | Read and route | `orchestrator_read`, `orchestrator_route` |
-| Manage Tickets | `orchestrator_ticket_retry`, `orchestrator_ticket_request_status`, `orchestrator_ticket_note`, `orchestrator_ticket_review`, `orchestrator_ticket_abandon`, `orchestrator_ticket_check` |
+| Manage Tickets | `orchestrator_ticket_retry`, `orchestrator_ticket_request_status`, `orchestrator_ticket_note`, `orchestrator_ticket_review`, `orchestrator_ticket_abandon`, `orchestrator_ticket_check`, `orchestrator_ticket_finish` |
 | Local Tickets and merge | `orchestrator_request`, `orchestrator_answer`, `orchestrator_ticket_merge`, `orchestrator_merge_queue`, `orchestrator_ticket_revert`, `orchestrator_ticket_automerge`, `orchestrator_ticket_dependency` |
 | Re-evaluate | `orchestrator_trigger_requeue` |
 | Assess proactive work | `orchestrator_eval`, `orchestrator_eval_read`, `orchestrator_eval_decide` |
 | Communicate and unsubscribe | `orchestrator_reply`, `orchestrator_thread_unsubscribe` |
 | Configure | `orchestrator_settings_save`, `orchestrator_policy_sync`, `orchestrator_prompts_save` |
 
-`orchestrator_route` accepts 1–20 decisions in order. Each accept, attach, stop or ignore runs as a separate Engine command. It also permits ignoring an inferred candidate directly from its card. `orchestrator_ticket_note` sends a fact as context, not authority; with `review` or `check` it hands the unsent notes or the failing check to the worker and resumes an ended Ticket. `orchestrator_ticket_review` approves an ended Ticket's changes or resolves every open note, `orchestrator_ticket_abandon` stops a live Ticket, withdraws its queued or standing merge, and with `discard` removes an ended one's worktree, and `orchestrator_ticket_check` reruns the configured check; each takes an id or a display number such as `T-0007`.
+`orchestrator_route` accepts 1–20 decisions in order. Each accept, attach, stop or ignore runs as a separate Engine command. It also permits ignoring an inferred candidate directly from its card. `orchestrator_ticket_note` sends a fact as context, not authority, or records a review note anchored to a file and line; with `review` or `check` it hands the unsent notes or the failing check to the worker and resumes an ended Ticket. `orchestrator_ticket_review` approves or rejects an ended Ticket's changes, with an optional sentence, or resolves every open note; `orchestrator_ticket_abandon` stops a live Ticket, withdraws its queued or standing merge, and with `discard` removes an ended one's worktree; `orchestrator_ticket_check` reruns the configured check; `orchestrator_ticket_finish` retries a failed push or removes a merged worktree; and `orchestrator_merge_queue` with `paused` holds or releases the queue; each takes an id or a display number such as `T-0007`.
 
 Settings saves select `policy`, `eval`, `executor`, `pause`, or `source`; the last also names its Source id. A prompt save with `preview: true` composes text without saving.
 
