@@ -65,6 +65,56 @@ it('hands review notes and a failing check back to the worker from the main Sess
     text: expect.stringContaining('one test failed') })
 })
 
+it('stops a live ticket from the main Session, and discards an ended one when asked', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 停一下'))
+  const stopped = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_abandon', { ticket_id: ticket.id }) as unknown as
+    { stopped: boolean; discarded: boolean; ticket: { ticket_id: string } }
+  expect(stopped).toMatchObject({ stopped: true, discarded: false, ticket: { ticket_id: ticket.id } })
+  expect(h.runtime.store.tickets.get(ticket.id)?.ended).toMatchObject({ by: 'human', outcome: 'stopped' })
+
+  const { ticket: endedTicket } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  await h.runTool(`worker-${endedTicket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  const discard = vi.spyOn(h.runtime, 'discardTicket').mockResolvedValue(undefined)
+  const discarded = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_abandon',
+    { ticket_id: 'T-0002', discard: true }) as unknown as { stopped: boolean; discarded: boolean }
+  expect(discard).toHaveBeenCalledWith(endedTicket.id)
+  expect(discarded).toMatchObject({ stopped: false, discarded: true })
+
+  const { ticket: live } = await h.acceptedTicket(feishu('3', '@bot 又不做了'))
+  const both = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_abandon',
+    { ticket_id: live.id, discard: true, reason: '不做了' }) as unknown as { stopped: boolean; discarded: boolean }
+  expect(both).toMatchObject({ stopped: true, discarded: true })
+  expect(discard).toHaveBeenLastCalledWith(live.id)
+  expect(h.runtime.store.tickets.get(live.id)?.ended).toMatchObject({ reason: '不做了' })
+})
+
+it('records an approval and resolves open notes from the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  h.runtime.addNote(ticket.id, { file: 'src/a.ts', line: 3, text: '改成可选' })
+  const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_review',
+    { ticket_id: 'T-0001', approve: true, resolve: true }) as unknown as
+    { approved: boolean; resolved: boolean; ticket: { ticket_id: string } }
+  expect(result).toMatchObject({ approved: true, resolved: true, ticket: { ticket_id: ticket.id } })
+  const reviewed = h.runtime.store.tickets.get(ticket.id)!
+  expect(reviewed.reviewed).toMatchObject({ decision: 'approved', via: 'chat' })
+  expect(reviewed.notes?.every(note => note.resolved)).toBe(true)
+})
+
+it('reruns the configured check from the main Session', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  await h.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  await h.runtime.idle()
+  const check = vi.spyOn(h.runtime, 'checkTicket').mockResolvedValue(
+    { command: 'pnpm test', ok: true, exitCode: 0, at: '2026-11-19T00:02:00.000Z', output: 'ok' })
+  const result = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_check', { ticket_id: 'T-0001' }) as unknown as
+    { check: { ok: boolean }; ticket: { ticket_id: string } }
+  expect(check).toHaveBeenCalledWith(ticket.id)
+  expect(result).toMatchObject({ check: { ok: true }, ticket: { ticket_id: ticket.id } })
+})
+
 it('merges an ended ticket through the main Session with the panel gates', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   const merge = vi.spyOn(h.runtime, 'mergeTicket').mockResolvedValue({ branch: 'agent/t', target: 'main' })
@@ -137,11 +187,21 @@ it('reports the merge queue and the tickets waiting for a merge or a review', as
     items: [{ ticket_id: queuedTicket.id, position: 1 }] } } })
   expect(reported.status.waiting).toHaveLength(2)
   expect(reported.status.waiting).toEqual(expect.arrayContaining([
-    expect.objectContaining({ ticket_id: 'T-0002', needs: 'merge' }),
+    expect.objectContaining({ ticket_id: 'T-0002', needs: 'merge', outcome: 'completed' }),
     expect.objectContaining({ ticket_id: 'T-0003', needs: 'dependency', reason: expect.stringMatching(/Blocked by/) }),
   ]))
   // Cancelling or retrying still needs the Tickets it acts on.
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_merge_queue', { cancel: true })).rejects.toThrow(/Name the Tickets/)
+  h.runtime.pauseMergeQueue(false)
+})
+
+it('reports the outcome of a stopped ticket in the waiting list', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 停一下'))
+  h.runtime.engine.stopTicket(ticket.id)
+  h.runtime.pauseMergeQueue(true)
+  const reported = await h.runTool(h.runtime.masterId, 'orchestrator_merge_queue', {}) as unknown as
+    { status: { waiting: { ticket_id: string; needs: string; outcome: string }[] } }
+  expect(reported.status.waiting).toContainEqual(expect.objectContaining({ ticket_id: 'T-0001', needs: 'merge', outcome: 'stopped' }))
   h.runtime.pauseMergeQueue(false)
 })
 

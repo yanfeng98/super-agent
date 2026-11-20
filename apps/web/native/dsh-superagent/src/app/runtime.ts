@@ -232,6 +232,11 @@ export class Runtime extends Service implements SourceHost {
         queueMerges: (ids, options) => runtime.queueMerges(ids, options),
         dequeueMerges: ids => runtime.dequeueMerges(ids), retryMerges: ids => runtime.retryMerges(ids),
         pendingMerges: () => runtime.pendingMerges(),
+        ticketId: reference => runtime.ticketId(reference),
+        stopTicket: (id, options) => runtime.stopTicket(id, options),
+        reviewTicket: (id, decision, note) => runtime.reviewTicket(id, decision, note, 'chat'),
+        resolveNotes: (id, resolved) => runtime.resolveAllNotes(id, resolved),
+        checkTicket: id => runtime.checkTicket(id),
         blockTicket: (id, reference, blocked, start) => runtime.blockTicket(id, reference, blocked, start),
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
@@ -920,9 +925,9 @@ export class Runtime extends Service implements SourceHost {
   /**
    * The queue and the ended Tickets that are not queued but still wait for a merge or a person's decision, so the main
    * Session can answer what is left instead of the person opening the panel.
-   * @returns The queue in order and up to twenty waiting Tickets, newest first, each with the gate it waits on.
+   * @returns The queue in order and up to twenty waiting Tickets, newest first, each with its ending outcome and the gate it waits on.
    */
-  pendingMerges(): { queue: MergeQueueView; waiting: { ticket_id: string; title: string; needs: string; reason?: string;
+  pendingMerges(): { queue: MergeQueueView; waiting: { ticket_id: string; title: string; outcome: string; needs: string; reason?: string;
     blocked_by?: string[] }[] } {
     const queued = new Set(queuedMerges(this.store).map(entry => entry.ticketId))
     const waiting = this.store.tickets.list()
@@ -931,7 +936,7 @@ export class Runtime extends Service implements SourceHost {
       .slice(0, 20)
       .map(ticket => {
         const gate = this.mergeGate(ticket)
-        return { ticket_id: this.ticketLabel(ticket), title: ticket.title, needs: gate.code,
+        return { ticket_id: this.ticketLabel(ticket), title: ticket.title, outcome: ticket.ended!.outcome, needs: gate.code,
           ...gate.code === 'merge' ? {} : { reason: gate.message },
           ...ticket.blockedBy?.length ? { blocked_by: ticket.blockedBy.map(id => this.ticketLabel({ id })) } : {} }
       })
@@ -1296,6 +1301,12 @@ export class Runtime extends Service implements SourceHost {
         start: (ticket.startAfter ?? []).includes(value), ...number ? { number } : {} }] : []
     }) }
   }
+  /**
+   * The id a person's ticket reference names, such as `T-0007`.
+   * @param reference - The ticket id or display number.
+   * @returns The ticket id, or the trimmed reference when no ticket has it.
+   */
+  ticketId(reference: string): string { return this.ticketReference(reference) ?? reference.trim() }
   /** Resolves a ticket id or display number (`T-0001`) to its id. */
   private ticketReference(reference: string): string | undefined {
     const value = reference.trim()
@@ -1430,6 +1441,25 @@ export class Runtime extends Service implements SourceHost {
     })
     try { await recordCleanup(ticket, at, origin) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a workspace cleanup in the archive failed: %s', String(error)) }
+  }
+  /**
+   * Stops a live ticket on the person's explicit instruction, and with `discard` removes the worktree and branch of a ticket
+   * that has ended. A live ticket stops first, which cancels its worker.
+   * @returns The ticket after the change, whether it stopped, and whether it discarded the worktree.
+   * @throws when the ticket is unknown, merged, already discarded or cleaned, or its worktree cannot be removed.
+   */
+  async stopTicket(id: string, options: { discard?: boolean; reason?: string } = {}):
+    Promise<{ ticket: Ticket; stopped: boolean; discarded: boolean }> {
+    const ticketId = this.ticketReference(id) ?? id
+    const ticket = this.store.tickets.get(ticketId)
+    if (!ticket) throw new Error('Unknown ticket')
+    if (ticket.merged) throw new Error('The ticket branch was already merged; its work is in the target branch')
+    if (ticket.discarded) throw new Error('The ticket worktree was already discarded')
+    if (ticket.cleaned) throw new Error('The ticket worktree was already cleaned')
+    const stopped = !ticket.ended
+    if (stopped) this.engine.stopTicket(ticketId, options.reason)
+    if (options.discard) await this.discardTicket(ticketId)
+    return { ticket: this.store.tickets.get(ticketId)!, stopped, discarded: !!options.discard }
   }
   /**
    * Removes an ended ticket's linked worktree and branch, then records the discard on the ticket and in its archive.
