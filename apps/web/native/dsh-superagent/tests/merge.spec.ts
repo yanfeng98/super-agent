@@ -76,6 +76,10 @@ it('rebases a branch the repository moved past, runs the configured check, and m
   expect(order(rebase)).toBeLessThan(order(check))
   expect(order(check)).toBeLessThan(order(vi.mocked(mergeWorkspace)))
   expect(h.runtime.store.tickets.get(ticket.id)?.merged).toMatchObject({ branch: 'agent/t', target: 'main' })
+  // A squash or merge commit carries the Ticket's title and number, not only the branch name.
+  const message = vi.mocked(mergeWorkspace).mock.calls.at(-1)?.[5]
+  expect(message).toContain(h.runtime.store.tickets.get(ticket.id)!.title)
+  expect(message).toContain(`Ticket ${h.runtime.store.tickets.number(ticket.id)}`)
 })
 
 it('reports a failed check and does not merge the rebased branch', async () => {

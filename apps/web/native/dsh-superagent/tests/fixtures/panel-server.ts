@@ -478,7 +478,12 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     return { ticket_id: params.id, branch: 'agent/t1', target: 'main', commit: 'a'.repeat(40) }
   } },
-  'POST tickets/:id/blockers': { body: true, answer: ({ params }) => ({ ticket_id: params.id, blocked_by: [] }) },
+  'POST tickets/:id/blockers': { body: true, answer: ({ params, body }) => {
+    if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
+    const input = body as { ticket: string; blocked: boolean; start?: boolean }
+    return { ticket_id: params.id, blocked_by: input.blocked
+      ? [{ id: 't2', number: 2, title: '前置工单', merged: false, start: !!input.start }] : [] }
+  } },
   'POST tickets/:id/related': { body: true, answer: ({ params, body }) => {
     if (!ticketOf(params.id)) return refuse(404, 'Ticket not found')
     const input = body as { ticket?: unknown; linked?: unknown }

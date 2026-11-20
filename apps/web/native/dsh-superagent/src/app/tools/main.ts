@@ -57,9 +57,9 @@ export interface MainToolsHost {
     pushed?: true; pushError?: string }>
   /** Clears a person's standing merge request. */
   cancelAutoMerge(id: string): Ticket
-  /** Records or clears that one Ticket's branch must merge before another's. */
-  blockTicket(id: string, reference: string, blocked: boolean):
-    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean }[] }
+  /** Records or clears that one Ticket's branch must merge before another's, and whether it also waits to start. */
+  blockTicket(id: string, reference: string, blocked: boolean, start?: boolean):
+    { ticket_id: string; blocked_by: { id: string; number?: number; title: string; merged: boolean; start: boolean }[] }
   /** Schedules a pass to carry out work queued by an Engine command (such as an Eval or ticket resume). */
   requestPass(): void
   sendReplies(): Promise<void>
@@ -209,7 +209,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_note',
-      description: 'Tell a ticket\'s worker a fact, or hand an ended ticket back to work on its unsent review notes or failing check; it grants no authority.',
+      description: 'Tell a worker a fact, or hand an ended ticket back on its unsent notes or failing check; it grants no authority.',
       schema: z.object({
         ticket_id: z.string(),
         text: z.string().trim().min(1).refine(text => wordCount(text) <= IM_WORDS, `At most ${IM_WORDS} words`).optional()
@@ -309,14 +309,15 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_ticket_dependency',
-      description: 'Record or clear that a Ticket waits for another Ticket\'s branch to merge first, on the person\'s instruction such as "wait for T-0003"; its merge refuses until the other has merged. The ticket page shows and edits the same dependency.',
+      description: 'Record or clear that a Ticket waits for another\'s branch to merge first, such as "wait for T-0003"; its merge refuses until then, and with start it does not begin work first. The ticket page edits the same dependency.',
       schema: z.object({
         ticket_id: z.string().min(1).describe('The Ticket that waits, by id or display number such as T-0003.'),
         blocker_id: z.string().min(1).describe('The Ticket that must merge first, by id or display number such as T-0003.'),
         blocked: z.boolean().default(true).describe('Record the dependency with true, or clear it with false.'),
+        start: z.boolean().default(false).describe('Also wait to start until it merges.'),
       }).strict(),
       execute: async args => {
-        const result = host.blockTicket(args.ticket_id, args.blocker_id, args.blocked)
+        const result = host.blockTicket(args.ticket_id, args.blocker_id, args.blocked, args.start)
         const ticket = host.store.tickets.get(result.ticket_id)
         return { ...result, ...(ticket ? { ticket: ticketCard(ticket) } : {}) }
       },

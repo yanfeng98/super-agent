@@ -25,7 +25,7 @@ import type { DiffFile } from './review.ts'
 
 /** Resource descriptors exposed via orchestrator_read, marking which resources worker sessions may also read for their own ticket. */
 export const RESOURCES: readonly { name: string; holds: string; executor?: true }[] = [
-  { name: 'tickets', holds: 'ticket cards, newest first, each with its state' },
+  { name: 'tickets', holds: 'ticket cards, newest first' },
   { name: 'triggers', holds: 'trigger cards with where each went, newest first' },
   { name: 'threads', holds: 'subscribed threads, newest activity first, with their labels, tickets, current assessment and polling errors' },
   { name: 'thread/<key>', holds: 'one thread: its label and link, its tickets and latest decisions, and its triggers, newest first', executor: true },
@@ -36,7 +36,7 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'ticket/<id>/assignments', holds: 'its assignments, newest first, with the start of each report', executor: true },
   { name: 'ticket/<id>/inputs', holds: 'its inputs, newest first', executor: true },
   { name: 'ticket/<id>/result', holds: 'its latest report', executor: true },
-  { name: 'ticket/<id>/notes', holds: 'its review notes whole, newest first, with replies and state' },
+  { name: 'ticket/<id>/notes', holds: 'its review notes with replies and state' },
   { name: 'ticket/<id>/diff', holds: 'its committed diff since its base, with a per-file summary' },
   { name: 'ticket/<id>/report/<id>', holds: 'the report of one of its assignments', executor: true },
   { name: 'ticket/<id>/transcript', holds: 'its Executor Session\'s messages, newest first', executor: true },
@@ -268,7 +268,7 @@ const ROUTES: readonly Route[] = [
       // Another Ticket's id and title stay out of a worker's copy, which never shows tickets it cannot read.
       const blocked = ticketId ? [] : (ticket.blockedBy ?? []).flatMap(value => {
         const other = host.store.tickets.get(value)
-        return other ? [{ id: value, title: other.title, merged: !!other.merged }] : []
+        return other ? [{ id: value, title: other.title, merged: !!other.merged, start: (ticket.startAfter ?? []).includes(value) }] : []
       })
       return { ...ticketDetails(ticket, threads, batchOf(host, ticket), !!ticketId), ...blocked.length ? { blocked_by: blocked } : {}, ...retry }
     }

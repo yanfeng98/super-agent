@@ -265,11 +265,12 @@ export class Tickets extends EnginePart {
    * @returns The blocked ticket after the change.
    * @throws UserError when either ticket is unknown, they are the same, or the dependency would close a cycle.
    */
-  block(ticketId: string, otherId: string, blocked: boolean): Ticket {
+  block(ticketId: string, otherId: string, blocked: boolean, start = false): Ticket {
     if (ticketId === otherId) throw new UserError('selfBlock')
     const ticket = this.require(ticketId)
     this.require(otherId)
     const ids = new Set(ticket.blockedBy ?? [])
+    const starts = new Set(ticket.startAfter ?? [])
     if (blocked) {
       // A cycle would keep both tickets from ever merging, so it is refused instead of recorded.
       const seen = new Set<string>()
@@ -282,9 +283,16 @@ export class Tickets extends EnginePart {
         open.push(...this.repo.tickets.get(current)?.blockedBy ?? [])
       }
       ids.add(otherId)
-    } else ids.delete(otherId)
+      if (start) starts.add(otherId)
+      else starts.delete(otherId)
+    } else {
+      ids.delete(otherId)
+      starts.delete(otherId)
+    }
     if (ids.size) ticket.blockedBy = [...ids]
     else delete ticket.blockedBy
+    if (starts.size) ticket.startAfter = [...starts]
+    else delete ticket.startAfter
     ticket.updatedAt = this.now()
     this.repo.tickets.save(ticket)
     return ticket

@@ -49,7 +49,8 @@ function DiffPatch({ file, notes, onComment }: { file: DiffFile; notes: TicketPa
   const { t } = usePanel()
   const rows = patchLines(file.patch)
   if (rows.length > MAX_LINE_DIFF) return <pre className="dt-workspace-diff">{file.patch}</pre>
-  const written = notes.filter(note => note.file === file.path && note.line !== undefined)
+  // A note whose own lines changed no longer anchors here; it stays in the list with its moved mark.
+  const written = notes.filter(note => note.file === file.path && note.line !== undefined && !note.outdated)
   return <div className="dt-diff">
     {rows.map((row, index) => <div className="dt-diff-row" key={index}>
       <div className={`dt-diff-line dt-diff-${row.kind}`}>
@@ -194,6 +195,7 @@ export function TicketPage({ id }: { id: string }) {
   const [relatedRef, setRelatedRef] = useState('')
   const [relatedBusy, setRelatedBusy] = useState(false)
   const [blockerRef, setBlockerRef] = useState('')
+  const [blockerStart, setBlockerStart] = useState(false)
   const [blockerBusy, setBlockerBusy] = useState(false)
   const [noteFile, setNoteFile] = useState('')
   const [noteLine, setNoteLine] = useState('')
@@ -240,17 +242,18 @@ export function TicketPage({ id }: { id: string }) {
     await relate(relatedRef.trim(), true)
     setRelatedRef('')
   }
-  const block = async (reference: string, blocked: boolean) => {
+  const block = async (reference: string, blocked: boolean, start = false) => {
     setBlockerBusy(true)
-    try { await after(call('POST tickets/:id/blockers', { id, body: { ticket: reference, blocked } })) }
+    try { await after(call('POST tickets/:id/blockers', { id, body: { ticket: reference, blocked, start } })) }
     catch (failure) { notify(errorText(failure)) }
     finally { setBlockerBusy(false) }
   }
   const addBlocker = async (event: FormEvent) => {
     event.preventDefault()
     if (!blockerRef.trim()) return
-    await block(blockerRef.trim(), true)
+    await block(blockerRef.trim(), true, blockerStart)
     setBlockerRef('')
+    setBlockerStart(false)
   }
   const runCheck = async () => {
     setCheckBusy(true)
@@ -706,7 +709,8 @@ export function TicketPage({ id }: { id: string }) {
             ? <span className="dt-ticket-number">{ticketRef(item.number)}</span> : null}
             <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: item.id })}>{item.title}</button>
           </div>
-            <div className="dt-row-meta">{item.merged ? t('blockerMerged') : t('blockerWaiting')}</div>
+            <div className="dt-row-meta">{item.merged ? t('blockerMerged') : t('blockerWaiting')}
+              {item.start && <Tag tone="info">{t('blockerStart')}</Tag>}</div>
           </div>
           <div className="dt-row-actions"><Button variant="ghost" size="sm" disabled={blockerBusy}
             onClick={() => block(item.id, false)}>{t('remove')}</Button></div>
@@ -715,6 +719,8 @@ export function TicketPage({ id }: { id: string }) {
           <div className="dt-row-meta">
             <Input className="dt-mono" value={blockerRef} placeholder={t('blockedByPlaceholder')} aria-label={t('blockedByPlaceholder')}
               onChange={event => setBlockerRef(event.target.value)} />
+            <label className="dt-field-inline"><input type="checkbox" checked={blockerStart} aria-label={t('blockerStart')}
+              onChange={event => setBlockerStart(event.target.checked)} /><span>{t('blockerStart')}</span></label>
             <Button variant="outline" type="submit" disabled={!blockerRef.trim() || blockerBusy}>{t('blockedByAdd')}</Button>
           </div>
         </form>

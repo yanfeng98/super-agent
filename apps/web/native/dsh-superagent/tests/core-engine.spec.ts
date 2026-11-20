@@ -1662,6 +1662,23 @@ describe('ticket labels', () => {
     expect(() => h.engine.setTags(ticketId, ['x'.repeat(25)])).toThrow(UserError)
   })
 })
+describe('dependencies', () => {
+  it('records a merge dependency, optionally holding the first Assignment, and clears both together', () => {
+    const h = harness()
+    const dependent = accepted(h, '2', 't2').ticketId!
+    const blocker = accepted(h, '3', 't3').ticketId!
+    const waiting = h.engine.blockTicket(dependent, blocker, true, true)
+    expect(waiting.blockedBy).toEqual([blocker])
+    expect(waiting.startAfter).toEqual([blocker])
+    // Keeping the merge gate but not the start gate drops only the start entry.
+    const mergeOnly = h.engine.blockTicket(dependent, blocker, true, false)
+    expect(mergeOnly.blockedBy).toEqual([blocker])
+    expect(mergeOnly.startAfter).toBeUndefined()
+    const cleared = h.engine.blockTicket(dependent, blocker, false)
+    expect(cleared.blockedBy).toBeUndefined()
+    expect(cleared.startAfter).toBeUndefined()
+  })
+})
 describe('review notes', () => {
   it('marks a note resolved and open again, and refuses an unknown note', () => {
     const h = harness()

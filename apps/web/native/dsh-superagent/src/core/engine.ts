@@ -285,8 +285,8 @@ export class Engine {
    * Records or clears that a ticket waits for another ticket's branch to merge first.
    * @returns The blocked ticket after the change.
    */
-  blockTicket(ticketId: string, otherId: string, blocked: boolean): Ticket {
-    return this.repo.atomic(() => this.tickets.block(ticketId, otherId, blocked))
+  blockTicket(ticketId: string, otherId: string, blocked: boolean, start = false): Ticket {
+    return this.repo.atomic(() => this.tickets.block(ticketId, otherId, blocked, start))
   }
 
   // The Executor

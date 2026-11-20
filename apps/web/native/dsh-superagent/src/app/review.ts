@@ -137,9 +137,11 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
     ...(stat ? { stat } : {}) }
 }
 
-/** One file a diff changes, with the old-line ranges it touches, or `all` when the file's lines no longer anchor. */
-interface ChangedFile { path: string; oldPath?: string; ranges: [number, number][] | 'all' }
-/** Reads the old-line ranges a unified diff changes, for deciding whether a review note still describes the code. */
+/** One hunk of a unified diff, in old and new line numbers, for moving a note's anchor with the code. */
+interface DiffHunk { oldStart: number; oldCount: number; newStart: number; newCount: number }
+/** One file a diff changes: its hunks, or `all` when the file's lines no longer anchor. */
+interface ChangedFile { path: string; oldPath?: string; hunks: DiffHunk[] | 'all' }
+/** Reads the old and new line ranges a unified diff changes, for moving a review note's anchor. */
 function changedFiles(diff: string): ChangedFile[] {
   const files: ChangedFile[] = []
   for (const block of diff.split(/^diff --git /m).slice(1)) {
@@ -154,28 +156,40 @@ function changedFiles(diff: string): ChangedFile[] {
     const oldPath = from && from !== path ? from : undefined
     // A file that was added, deleted, renamed, or is binary has no stable old line for a note to keep.
     if (/^new file mode /m.test(text) || /^deleted file mode /m.test(text) || from || /^Binary files /m.test(text)) {
-      files.push({ path, oldPath, ranges: 'all' })
+      files.push({ path, oldPath, hunks: 'all' })
       continue
     }
-    const ranges: [number, number][] = []
-    for (const match of text.matchAll(/^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@/gm)) {
-      const start = Number(match[1])
-      const count = match[2] === undefined ? 1 : Number(match[2])
-      if (count > 0) ranges.push([start, start + count - 1])
+    const hunks: DiffHunk[] = []
+    for (const match of text.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
+      hunks.push({ oldStart: Number(match[1]), oldCount: match[2] === undefined ? 1 : Number(match[2]),
+        newStart: Number(match[3]), newCount: match[4] === undefined ? 1 : Number(match[4]) })
     }
-    files.push({ path, oldPath, ranges })
+    files.push({ path, oldPath, hunks })
   }
   return files
 }
+/** Where a note's line now sits after the hunks before it, or that the line itself changed. */
+function remapLine(hunks: readonly DiffHunk[], line: number): { line: number; stale: boolean } {
+  let shift = 0
+  for (const hunk of hunks) {
+    const oldEnd = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart + hunk.oldCount - 1
+    // A hunk that covers the line replaced or deleted it; the note no longer describes code.
+    if (hunk.oldCount > 0 && line >= hunk.oldStart && line <= oldEnd) return { line, stale: true }
+    if (line > oldEnd) shift += hunk.newCount - hunk.oldCount
+  }
+  return { line: line + shift, stale: false }
+}
+/** Where a note's anchor now sits: the moved line and range, or that the code it covered changed. */
+export interface NoteAnchor { stale: boolean; line?: number; endLine?: number }
 /**
- * Finds the review notes whose lines changed after they were written, so the page can mark only those outdated instead of
- * every note whenever the branch moves.
+ * Moves each review note's line and range through the commits since it was written, so the page anchors it on the line
+ * the code now occupies; a note whose own line was replaced or deleted is stale instead.
  * @param ticket - The ticket whose notes are checked.
  * @param review - The current review, whose head the notes are compared against.
- * @returns A map from note id to whether it is stale; a note absent from the map could not be checked.
+ * @returns A map from note id to its anchor; a note absent from the map could not be checked.
  */
-export async function staleNoteIds(subprocess: SubprocessRuntime, ticket: Ticket, review: TicketReview | undefined,
-  signal: AbortSignal): Promise<Map<string, boolean>> {
+export async function remapNoteAnchors(subprocess: SubprocessRuntime, ticket: Ticket, review: TicketReview | undefined,
+  signal: AbortSignal): Promise<Map<string, NoteAnchor>> {
   const directory = ticket.execution?.directory
   const head = review?.head
   if (!directory || !head) return new Map()
@@ -186,7 +200,7 @@ export async function staleNoteIds(subprocess: SubprocessRuntime, ticket: Ticket
     group.push(note)
     byCommit.set(note.commit, group)
   }
-  const result = new Map<string, boolean>()
+  const result = new Map<string, NoteAnchor>()
   for (const [commit, group] of byCommit) {
     const files = [...new Set(group.map(note => note.file))]
     const diff = await run(subprocess, directory, ['diff', '--no-color', '--unified=0', '-M', `${commit}..${head}`, '--', ...files], signal)
@@ -194,22 +208,32 @@ export async function staleNoteIds(subprocess: SubprocessRuntime, ticket: Ticket
     if (diff === undefined) continue
     const changed = changedFiles(diff)
     for (const note of group) {
+      const keep = { ...note.line === undefined ? {} : { line: note.line }, ...note.endLine === undefined ? {} : { endLine: note.endLine } }
       const file = changed.find(item => item.path === note.file || item.oldPath === note.file)
       if (!file) {
-        result.set(note.id, false)
+        result.set(note.id, { stale: false, ...keep })
         continue
       }
-      if (file.ranges === 'all') {
-        result.set(note.id, true)
+      if (file.hunks === 'all') {
+        result.set(note.id, { stale: true, ...keep })
         continue
       }
       // A file-level note is stale once any content line changed, not when only its mode did.
       if (note.line === undefined) {
-        result.set(note.id, file.ranges.length > 0)
+        result.set(note.id, { stale: file.hunks.length > 0 })
         continue
       }
       const end = note.endLine ?? note.line
-      result.set(note.id, file.ranges.some(([start, stop]) => start <= end && stop >= note.line!))
+      const start = remapLine(file.hunks, note.line)
+      const stop = remapLine(file.hunks, end)
+      // A hunk inside the range replaced or deleted lines the note covers even when neither endpoint moved.
+      const inside = file.hunks.some(hunk => hunk.oldCount > 0
+        && hunk.oldStart <= end && hunk.oldStart + hunk.oldCount - 1 >= note.line!)
+      if (start.stale || stop.stale || inside) {
+        result.set(note.id, { stale: true, ...keep })
+      } else {
+        result.set(note.id, { stale: false, line: start.line, ...note.endLine === undefined ? {} : { endLine: stop.line } })
+      }
     }
   }
   return result
@@ -291,7 +315,7 @@ export async function targetContained(subprocess: SubprocessRuntime, directory: 
  * and the repository root.
  */
 export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
-  strategy: MergeStrategy = 'ff', expectedTarget?: string):
+  strategy: MergeStrategy = 'ff', expectedTarget?: string, message?: string):
   Promise<{ branch: string; target: string; head?: string; base?: string; root: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
   if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
@@ -312,7 +336,7 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   if (strategy === 'ff') {
     await run(['merge', '--ff-only', repo.branch])
   } else if (strategy === 'merge') {
-    try { await run(['merge', '--no-ff', '--no-edit', repo.branch]) }
+    try { await run(['merge', '--no-ff', ...message ? ['-m', message] : ['--no-edit'], repo.branch]) }
     catch (error) {
       // A merge commit that cannot be made (such as a missing identity) must not leave the repository mid-merge.
       await run(['merge', '--abort']).catch(() => undefined)
@@ -321,7 +345,7 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   } else {
     try {
       await run(['merge', '--squash', repo.branch])
-      await run(['commit', '-m', `Squash merge ${repo.branch}`])
+      await run(['commit', '-m', message ?? `Squash merge ${repo.branch}`])
     } catch (error) {
       // Leave no staged squash or conflict state behind when the squash cannot be completed.
       await run(['reset', '--hard', 'HEAD']).catch(() => undefined)
