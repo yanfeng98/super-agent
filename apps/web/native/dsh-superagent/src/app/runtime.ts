@@ -108,6 +108,8 @@ export class Runtime extends Service implements SourceHost {
   private readonly merging = new Set<string>()
   /** Tickets whose revert is running, so a second request cannot revert the same merge twice. */
   private readonly reverting = new Set<string>()
+  /** Ending captures still running, so a discard does not remove the worktree a capture reads. */
+  private readonly finishing = new Map<string, Promise<void>>()
   /** Operations that move a repository run one at a time, so two merges never share the git index of one checkout. */
   private repoLock: Promise<unknown> = Promise.resolve()
   /** The auto-merge attempt in flight, so passes do not start a second one over the same repository. */
@@ -198,9 +200,11 @@ export class Runtime extends Service implements SourceHost {
           }
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
           if (ended) this.store.afterCommit(() => {
-            void this.finishTicket(ended, ctx).catch((error: unknown) => {
+            const task = this.finishTicket(ended, ctx).catch((error: unknown) => {
               ctx.logger.warn('dsh-superagent: completing the ending of ticket %s failed: %s', ended.id, String(error))
             })
+            this.finishing.set(ended.id, task)
+            void task.finally(() => { if (this.finishing.get(ended.id) === task) this.finishing.delete(ended.id) })
           })
           if (event.type === 'ticket.reopened') {
             const reopened = store.tickets.get(event.data.ticketId)
@@ -513,6 +517,10 @@ export class Runtime extends Service implements SourceHost {
     if (!ticket.ended) throw new Error('Only an ended ticket can be merged')
     if (ticket.discarded) throw new Error('The ticket worktree was discarded')
     if (ticket.merged) throw new Error('The ticket branch was already merged')
+    // A person's stop withdraws standing and queued merges; only an explicit request merges the work afterwards.
+    if (origin === 'auto' && ticket.ended.by === 'human') {
+      throw new Error('A person stopped this ticket; merge it explicitly if you still want its work')
+    }
     // A ticket that waits on another branch merges only once that branch has landed, so order is a recorded fact rather
     // than something the person has to remember.
     const waiting = (ticket.blockedBy ?? []).filter(value => !this.store.tickets.get(value)?.merged)
@@ -784,7 +792,11 @@ export class Runtime extends Service implements SourceHost {
    * @throws when the ticket is unknown, still open, or already merged, discarded, or cleaned.
    */
   autoMergeTicket(id: string, options: { strategy?: MergeStrategy; cleanup?: boolean; push?: boolean }): Ticket {
-    const ticket = this.engine.autoMerge(this.ticketReference(id) ?? id, options)
+    const ticketId = this.ticketReference(id) ?? id
+    if (this.store.tickets.get(ticketId)?.ended?.by === 'human') {
+      throw new Error('A person stopped this ticket; merge it explicitly')
+    }
+    const ticket = this.engine.autoMerge(ticketId, options)
     this.passes.request()
     return ticket
   }
@@ -810,6 +822,7 @@ export class Runtime extends Service implements SourceHost {
       if (!ticket.ended || ticket.merged || ticket.discarded || ticket.cleaned) {
         throw new Error(`${id} cannot be queued: only an ended Ticket that is not merged, discarded or cleaned merges`)
       }
+      if (ticket.ended.by === 'human') throw new Error(`${id} cannot be queued: a person stopped it; merge it explicitly`)
       entries.push({ ticketId, at, ...options })
     }
     const queue = enqueueMerges(this.store, entries)
@@ -1443,8 +1456,8 @@ export class Runtime extends Service implements SourceHost {
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a workspace cleanup in the archive failed: %s', String(error)) }
   }
   /**
-   * Stops a live ticket on the person's explicit instruction, and with `discard` removes the worktree and branch of a ticket
-   * that has ended. A live ticket stops first, which cancels its worker.
+   * Stops a live ticket on the person's explicit instruction and withdraws its queued or standing merge, which a stop also
+   * does for an ended ticket; with `discard` it removes the worktree and branch of a ticket that has ended.
    * @returns The ticket after the change, whether it stopped, and whether it discarded the worktree.
    * @throws when the ticket is unknown, merged, already discarded or cleaned, or its worktree cannot be removed.
    */
@@ -1457,7 +1470,10 @@ export class Runtime extends Service implements SourceHost {
     if (ticket.discarded) throw new Error('The ticket worktree was already discarded')
     if (ticket.cleaned) throw new Error('The ticket worktree was already cleaned')
     const stopped = !ticket.ended
-    if (stopped) this.engine.stopTicket(ticketId, options.reason)
+    // `Tickets.stop` ends a live Ticket and clears a standing merge request; an ended Ticket keeps its ending and loses
+    // only the request, so the same call withdraws both kinds of merge.
+    this.engine.stopTicket(ticketId, options.reason)
+    this.dequeueMerges([ticketId])
     if (options.discard) await this.discardTicket(ticketId)
     return { ticket: this.store.tickets.get(ticketId)!, stopped, discarded: !!options.discard }
   }
@@ -1466,17 +1482,23 @@ export class Runtime extends Service implements SourceHost {
    * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.
    */
   async discardTicket(id: string): Promise<void> {
-    const ticket = this.store.tickets.get(id)
+    const ticketId = this.ticketReference(id) ?? id
+    const ticket = this.store.tickets.get(ticketId)
     if (!ticket) throw new Error('Unknown ticket')
     if (!ticket.ended) throw new Error('Only an ended ticket can be discarded')
     if (ticket.merged) throw new Error('The ticket branch was merged; discarding it now would delete the merged branch')
     if (ticket.discarded) throw new Error('The ticket worktree was already discarded')
+    if (this.merging.has(ticketId) || this.reverting.has(ticketId)) {
+      throw new Error('A merge or revert of this ticket is running; discard it after that finishes')
+    }
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
+    // An ending capture reads the worktree; wait for it before removing what it reads.
+    await this.finishing.get(ticketId)
     await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
     const at = now()
     this.store.atomic(() => {
-      const current = this.store.tickets.get(id)
+      const current = this.store.tickets.get(ticketId)
       if (!current) return
       // A discarded ticket has no branch left to merge, so a standing merge request goes with it.
       delete current.autoMerge

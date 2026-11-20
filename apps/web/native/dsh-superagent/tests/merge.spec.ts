@@ -160,6 +160,19 @@ it('keeps the plain conflict report for a stopped ticket, which takes no new wor
   expect(h.runtime.store.tickets.get(ticket.id)?.ended?.by).toBe('human')
 })
 
+it('refuses to queue or stand a merge of a stopped ticket, which only an explicit request merges', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  h.runtime.store.atomic(() => {
+    const current = h.runtime.store.tickets.get(ticket.id)!
+    current.ended = { at: '2026-11-19T00:00:00.000Z', by: 'human', outcome: 'stopped' }
+    h.runtime.store.tickets.save(current)
+  })
+  expect(() => h.runtime.queueMerges([ticket.id], {})).toThrow(/stopped/)
+  expect(() => h.runtime.autoMergeTicket(ticket.id, {})).toThrow(/stopped/)
+  await expect(h.runtime.mergeTicket(ticket.id, 'ff', {}, 'auto')).rejects.toThrow(/stopped/)
+  expect(mergeWorkspace).not.toHaveBeenCalled()
+})
+
 it('pushes the merged branch when the person asked for a push, and reports a push it cannot make', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)

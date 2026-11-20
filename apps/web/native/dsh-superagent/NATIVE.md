@@ -279,16 +279,17 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `tests/review.spec.ts` and `tests/panel-execution.spec.tsx` cover them.
 
 26. **Stopping, approving and rechecking a Ticket from the chat.** `orchestrator_ticket_abandon` stops a live
-    Ticket through `Tickets.stop`, which ends its Assignment and withdraws a standing merge request, and with
-    `discard` removes the ended Ticket's worktree and branch through `discardWorkspace`. `orchestrator_ticket_review`
+    Ticket through `Tickets.stop`, which ends its Assignment and withdraws a standing merge request, removes the Ticket
+    from the merge queue, and with `discard` removes the ended Ticket's worktree and branch through `discardWorkspace`. `orchestrator_ticket_review`
     records an approval through `reviewTicket` with origin `chat`, which is what `executor.requireReview` waits for,
     or resolves every open note through `resolveAllNotes`, which is what an open note blocks the merge on.
     `orchestrator_ticket_check` reruns the configured checks through `checkTicket`, so a flaky failure no longer needs
-    a new Assignment or the ticket page. The three tools resolve an id or a display number such as `T-0007` through
+    a new Assignment or the ticket page. A stopped Ticket cannot be queued or given a standing merge request; an
+    explicit merge still runs, because a person's stop withdraws the standing requests, not the work. The three tools resolve an id or a display number such as `T-0007` through
     `Runtime.ticketId`; `pendingMerges` now carries `ended.outcome`, so a stopped or failed Ticket is not read as
     ready to merge. `tests/chat-tools.spec.ts` covers the tools, the reference resolution and the waiting list; the
     orchestrator model-surface budget moved from 64,700 to 65,500 after trimming existing descriptions, measured
-    65,372 characters.
+    65,390 characters.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
