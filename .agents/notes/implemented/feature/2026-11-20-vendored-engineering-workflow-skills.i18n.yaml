@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-20-vendored-engineering-workflow-skills.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-20-vendored-engineering-workflow-skills.md
+/agent-note-vendored-engineering-workflow-skills:
+  en: 22338fc649ddab15
+  zh: be0f7601cf473990
+/agent-note-vendored-engineering-workflow-skills/problem:
+  en: 3461d18483096849
+  zh: 02e84a36ac971a8c
+/agent-note-vendored-engineering-workflow-skills/decision:
+  en: e7911de381a38a61
+  zh: 45bca031596acad3
+/agent-note-vendored-engineering-workflow-skills/alternatives-considered:
+  en: 114256dbb9c18c55
+  zh: 28ce8452dd949515
+/agent-note-vendored-engineering-workflow-skills/consequences:
+  en: 3e5dd76c0d54decc
+  zh: 6d34dd5f72f091cb
+/agent-note-vendored-engineering-workflow-skills/testing:
+  en: c5f803485f05fb06
+  zh: 594a16228922ee98

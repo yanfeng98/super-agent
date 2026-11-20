@@ -69,3 +69,7 @@
 - insert:
     - id: query-spill-verification-path
       name: ./resolve-spill-command.mjs
+
+# The authored spill layout pins message order; a bundled skill catalog would shift it.
+- id: skill-mattpocock
+  disabled: true

@@ -60,8 +60,6 @@ export const Config: z<Config> = z.object({
 
 /** Cordis plugin identity. */
 export const name = 'skill-mattpocock'
-/** Registry used by the bundled provider. */
-export const inject = ['skills']
 
 /** One parsed skill: catalog metadata plus the instruction body. */
 interface ParsedSkill {
@@ -132,7 +130,7 @@ function booleanField(data: object, key: string): boolean | undefined {
  * Skill files are read during catalog discovery and loading, and each distinct failure is reported once. A missing
  * or invalid skill is omitted from a complete catalog, and its failed load returns `undefined` and invalidates the
  * catalog. Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.
- * @param ctx - Context carrying the skill registry.
+ * @param ctx - Context whose skill registry receives the provider once the service is available.
  * @param config - Resolved configuration; `assetRoot` falls back to the packaged assets.
  * @throws When `assetRoot` is not absolute.
  */
@@ -169,36 +167,41 @@ export function apply(ctx: Context, config: Config): void {
     return { kind: 'failed', error, persistent }
   }
 
-  ctx.skills.registerProvider(control => ({
-    name: PROVIDER_NAME,
-    async list(options) {
-      const reads = await Promise.all(SKILL_NAMES.map(async skillName => ({ skillName, read: await readSkill(skillName, options.signal) })))
-      const candidates: SkillCandidate[] = []
-      for (const { skillName, read } of reads) {
-        if (read.kind === 'failed') continue
-        const directory = join(assetRoot, skillName)
-        candidates.push({
-          name: skillName,
-          description: read.skill.description,
-          invocation: read.skill.invocation,
-          provider: PROVIDER_NAME,
-          source: 'bundled',
-          rank: BUNDLED_SKILL_RANK,
-          resourceBase: { kind: 'directory', path: directory.split(sep).join('/') },
-          locator: join(directory, 'SKILL.md'),
-        })
-      }
-      return { candidates, complete: reads.every(({ read }) => read.kind === 'loaded' || read.persistent) }
-    },
-    async get(candidate, options) {
-      const { rank: _rank, locator: _locator, ...summary } = candidate
-      const read = await readSkill(candidate.name, options.signal)
-      if (read.kind === 'failed') {
-        if (!read.persistent) throw read.error
-        control.invalidate()
-        return undefined
-      }
-      return { ...summary, content: read.skill.content }
-    },
-  }))
+  // A composition that removes the skill registry keeps this row idle instead of reporting a pending injection.
+  ctx.inject(['skills'], (scope) => {
+    scope.skills.registerProvider(control => ({
+      name: PROVIDER_NAME,
+      async list(options) {
+        const reads = await Promise.all(SKILL_NAMES.map(async skillName => ({
+          skillName, read: await readSkill(skillName, options.signal),
+        })))
+        const candidates: SkillCandidate[] = []
+        for (const { skillName, read } of reads) {
+          if (read.kind === 'failed') continue
+          const directory = join(assetRoot, skillName)
+          candidates.push({
+            name: skillName,
+            description: read.skill.description,
+            invocation: read.skill.invocation,
+            provider: PROVIDER_NAME,
+            source: 'bundled',
+            rank: BUNDLED_SKILL_RANK,
+            resourceBase: { kind: 'directory', path: directory.split(sep).join('/') },
+            locator: join(directory, 'SKILL.md'),
+          })
+        }
+        return { candidates, complete: reads.every(({ read }) => read.kind === 'loaded' || read.persistent) }
+      },
+      async get(candidate, options) {
+        const { rank: _rank, locator: _locator, ...summary } = candidate
+        const read = await readSkill(candidate.name, options.signal)
+        if (read.kind === 'failed') {
+          if (!read.persistent) throw read.error
+          control.invalidate()
+          return undefined
+        }
+        return { ...summary, content: read.skill.content }
+      },
+    }))
+  })
 }
