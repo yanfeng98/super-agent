@@ -31,3 +31,16 @@ it('keeps a hunk header and a no-newline marker out of the line numbers', () => 
     { kind: 'meta', text: '\\ No newline at end of file' },
   ])
 })
+
+it('reads a changed line that starts with a diff marker as content, not as a file header', () => {
+  const patch = ['--- a/doc.md', '+++ b/doc.md', '@@ -1,2 +1,2 @@', '---', '+++', ' keep'].join('\n')
+  expect(patchLines(patch)).toEqual([
+    { kind: 'meta', text: '--- a/doc.md' },
+    { kind: 'meta', text: '+++ b/doc.md' },
+    { kind: 'hunk', text: '@@ -1,2 +1,2 @@' },
+    // Inside a hunk the marker is the line's content: a removed `--` and an added `++`.
+    { kind: 'del', text: '---', oldLine: 1 },
+    { kind: 'add', text: '+++', newLine: 1 },
+    { kind: 'context', text: ' keep', oldLine: 2, newLine: 2 },
+  ])
+})

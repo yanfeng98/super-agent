@@ -22,15 +22,18 @@ export function patchLines(patch: string): PatchLine[] {
   const rows: PatchLine[] = []
   let oldNo = 0
   let newNo = 0
+  let inHunk = false
   for (const text of patch.split('\n')) {
     const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(text)
     if (hunk) {
       oldNo = Number(hunk[1]) - 1
       newNo = Number(hunk[2]) - 1
+      inHunk = true
       rows.push({ kind: 'hunk', text })
       continue
     }
-    if (text.startsWith('---') || text.startsWith('+++') || META.test(text)) {
+    // A file header appears only before the first hunk; inside one, `---` or `+++` is the content of a removed or added line.
+    if (!inHunk && (text.startsWith('---') || text.startsWith('+++') || META.test(text))) {
       rows.push({ kind: 'meta', text })
       continue
     }

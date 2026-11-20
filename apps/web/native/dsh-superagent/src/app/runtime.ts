@@ -68,6 +68,8 @@ const CI_NOTICE_INTERVAL_MS = 15_000
 const CHECK_REUSE_MS = 10 * 60_000
 /** What keeps an ended Ticket from merging, as a standing request and the chat's status report read it. */
 type MergeGate = { code: 'merge' } | { code: 'dependency' | 'review' | 'notes'; message: string; counts: boolean }
+/** The merge or revert a push acted on, so an outcome written after another action cannot land on the wrong record. */
+type PushTarget = { merge: string } | { revert: string }
 
 /**
  * Composition root of dsh-superagent that connects `Store`, `Setup`, `Engine`, `SourceRegistry`, `Effects`, `Outbox`, `Passes`, `Sessions`, `Settings`, `Prompts`, `DshExecutor`, and `MasterAssessor`.
@@ -621,12 +623,7 @@ export class Runtime extends Service implements SourceHost {
         outcome = { at: pushedAt, ok: false, error: pushError, via: origin }
       }
       // The merge stands either way, so the remote's answer is recorded where the panel and the archive both keep it.
-      this.store.atomic(() => {
-        const latest = this.store.tickets.get(id)
-        if (!latest?.merged) return
-        latest.merged.push = outcome
-        this.store.tickets.save(latest)
-      })
+      this.savePush(id, outcome, { merge: at })
       try { await recordPush(this.store.tickets.get(id) ?? current, outcome) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
     }
@@ -736,7 +733,7 @@ export class Runtime extends Service implements SourceHost {
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a revert in the archive failed: %s', String(error)) }
       const current = this.store.tickets.get(ticketId) ?? ticket
       this.ticketNotice(current, 'reverted', `Reverted the merge of ${merged.branch} into ${merged.target} with ${result.head}`)
-      const pushed = options.push ? await this.pushAfterRevert(current, directory, result.target, origin) : undefined
+      const pushed = options.push ? await this.pushAfterRevert(current, directory, result.target, result.head, origin) : undefined
       return { ticket_id: ticketId, branch: merged.branch, target: result.target, commit: result.head,
         ...pushed?.pushed ? { pushed: true as const } : {}, ...pushed?.pushError ? { pushError: pushed.pushError } : {} }
     } finally { this.reverting.delete(ticketId) }
@@ -745,20 +742,20 @@ export class Runtime extends Service implements SourceHost {
    * Pushes the branch a revert moved, recording the remote's answer on the revert; a failure leaves the revert in place and
    * tells the person, since undoing the revert would need the merge again.
    */
-  private async pushAfterRevert(ticket: Ticket, directory: string, target: string, origin: ActionOrigin):
+  private async pushAfterRevert(ticket: Ticket, directory: string, target: string, commit: string, origin: ActionOrigin):
     Promise<{ pushed?: true; pushError?: string }> {
     const at = now()
     const label = this.ticketLabel(ticket)
     try {
       await this.serialized(() => pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal, target))
-      this.savePush(ticket.id, { at, ok: true, via: origin })
+      this.savePush(ticket.id, { at, ok: true, via: origin }, { revert: commit })
       try { await recordPush(ticket, { at, ok: true, via: origin }) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
       this.ticketNotice(ticket, 'push', `Pushed the revert of ${label} to the upstream its repository names`)
       return { pushed: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this.savePush(ticket.id, { at, ok: false, error: message, via: origin })
+      this.savePush(ticket.id, { at, ok: false, error: message, via: origin }, { revert: commit })
       try { await recordPush(ticket, { at, ok: false, error: message, via: origin }) }
       catch (failure) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(failure)) }
       this.ticketNotice(ticket, 'push', `Pushing the revert of ${label} failed: ${message}`)
@@ -948,33 +945,40 @@ export class Runtime extends Service implements SourceHost {
     const reverted = ticket?.reverted && (!ticket.merged || ticket.reverted.at > ticket.merged.at) ? ticket.reverted : undefined
     const merged = reverted ? undefined : ticket?.merged
     const target = merged?.target ?? reverted?.target
+    const record: PushTarget | undefined = merged ? { merge: merged.at } : reverted ? { revert: reverted.commit } : undefined
     const directory = merged?.root ?? reverted?.root ?? ticket?.execution?.directory
-    if (!ticket || !target || !directory) throw new Error('Only a merged or reverted ticket can be pushed')
+    if (!ticket || !target || !record || !directory) throw new Error('Only a merged or reverted ticket can be pushed')
     const at = now()
     const label = this.ticketLabel(ticket)
     try {
       await this.serialized(() => pushWorkspace(this.ctx.subprocess, directory, this.stopped.signal, target))
-      this.savePush(ticketId, { at, ok: true, via: origin })
+      this.savePush(ticketId, { at, ok: true, via: origin }, record)
       try { await recordPush(ticket, { at, ok: true, via: origin }) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
       this.ticketNotice(ticket, 'push', `Pushed ${label} to the upstream its repository names`)
       return { ticket_id: ticketId, pushed: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this.savePush(ticketId, { at, ok: false, error: message, via: origin })
+      this.savePush(ticketId, { at, ok: false, error: message, via: origin }, record)
       try { await recordPush(ticket, { at, ok: false, error: message, via: origin }) }
       catch (failure) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(failure)) }
       this.ticketNotice(ticket, 'push', `Pushing ${label} failed again: ${message}`)
       throw error
     }
   }
-  /** Records the remote's answer on the ticket's merge or revert, which a later retry replaces. */
-  private savePush(ticketId: string, outcome: { at: string; ok: boolean; error?: string; via?: ActionOrigin }): void {
+  /** Records the remote's answer on the merge or revert the push acted on, which a later retry replaces. */
+  private savePush(ticketId: string, outcome: { at: string; ok: boolean; error?: string; via?: ActionOrigin },
+    target: PushTarget): void {
     this.store.atomic(() => {
       const current = this.store.tickets.get(ticketId)
-      if (current?.merged) current.merged.push = outcome
-      else if (current?.reverted) current.reverted.push = outcome
-      else return
+      if (!current) return
+      if ('merge' in target) {
+        if (current.merged?.at !== target.merge) return
+        current.merged.push = outcome
+      } else {
+        if (current.reverted?.commit !== target.revert) return
+        current.reverted.push = outcome
+      }
       this.store.tickets.save(current)
     })
   }
