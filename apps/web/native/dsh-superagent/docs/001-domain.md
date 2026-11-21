@@ -77,7 +77,7 @@ A reference list of the terms this and the later documents use, with their Chine
 | Term | 中文 | Meaning |
 | --- | --- | --- |
 | Agent | 智能体 | The automated team member dsh-superagent runs, acting on Sources through identities such as a GitHub account and a Feishu bot |
-| Main Session | 主 Session | The DSH Session that evaluates Triggers, accepts and dispatches Tickets, and replies; `orchestrator` in code and prompts. On an explicit request in its own conversation it records a local request, sends a person's answer to a local Ticket, merges an ended Ticket with the panel's gates, stops or discards a Ticket, approves its changes or resolves its notes, and reruns its check |
+| Main Session | 主 Session | The DSH Session that evaluates Triggers, accepts and dispatches Tickets, and replies; `orchestrator` in code and prompts. On an explicit request in its own conversation it records a local request, sends a person's answer to a local Ticket, merges an ended Ticket with the panel's gates, stops or discards a Ticket, records an anchored note, approves or rejects its changes, resolves its notes, reruns its check, retries a failed push, cleans up a merged worktree, and pauses or releases the merge queue |
 | Executor Session | 执行器 Session | The DSH Session an Executor runs for one Ticket; `worker` in code and prompts |
 | Source | 来源 | A stream of events: a kind that a plugin provides, plus one instance configuration |
 | Trigger | 触发 | One immutable event from a Source |
