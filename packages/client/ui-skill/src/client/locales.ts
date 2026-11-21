@@ -13,10 +13,11 @@ export const zh = {
   'row.instructions': '说明',
   'row.inspect': '查看',
   'menu.userOnly': '仅用户',
-  'menu.sourceBuiltin': '内置技能',
-  'menu.sourceProject': '项目技能',
-  'menu.sourceUser': '用户技能',
-  'menu.sourceCustom': '自定义目录',
+  'menu.sourceBuiltin': '内置',
+  'menu.sourceProject': '项目',
+  'menu.sourceUser': '用户',
+  'menu.sourceCustom': '自定义',
+  'menu.sourcePlugin': '插件',
 } satisfies Record<string, string>
 
 /** The skill namespace key union. */
@@ -32,10 +33,11 @@ export const en = {
   'row.instructions': 'Instructions',
   'row.inspect': 'Inspect',
   'menu.userOnly': 'user-only',
-  'menu.sourceBuiltin': 'Built-in skills',
-  'menu.sourceProject': 'Project skills',
-  'menu.sourceUser': 'User skills',
-  'menu.sourceCustom': 'Custom directory',
+  'menu.sourceBuiltin': 'Built-in',
+  'menu.sourceProject': 'Project',
+  'menu.sourceUser': 'User',
+  'menu.sourceCustom': 'Custom',
+  'menu.sourcePlugin': 'Plugin',
 } satisfies Record<SkillKey, string>
 
 /** Japanese copy, checked against the English keys. */
@@ -48,10 +50,11 @@ export const ja = {
   'row.instructions': '手順',
   'row.inspect': '詳細を確認',
   'menu.userOnly': 'ユーザー専用',
-  'menu.sourceBuiltin': '組み込みスキル',
-  'menu.sourceProject': 'プロジェクトスキル',
-  'menu.sourceUser': 'ユーザースキル',
-  'menu.sourceCustom': 'カスタムディレクトリ',
+  'menu.sourceBuiltin': '組み込み',
+  'menu.sourceProject': 'プロジェクト',
+  'menu.sourceUser': 'ユーザー',
+  'menu.sourceCustom': 'カスタム',
+  'menu.sourcePlugin': 'プラグイン',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -64,10 +67,11 @@ export const es = {
   'row.instructions': 'Instrucciones',
   'row.inspect': 'inspeccionar',
   'menu.userOnly': 'solo usuario',
-  'menu.sourceBuiltin': 'Habilidades integradas',
-  'menu.sourceProject': 'Habilidades del proyecto',
-  'menu.sourceUser': 'Habilidades del usuario',
-  'menu.sourceCustom': 'Directorio personalizado',
+  'menu.sourceBuiltin': 'Integradas',
+  'menu.sourceProject': 'Proyecto',
+  'menu.sourceUser': 'Usuario',
+  'menu.sourceCustom': 'Personalizado',
+  'menu.sourcePlugin': 'Plugin',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -80,10 +84,11 @@ export const fr = {
   'row.instructions': 'Instructions',
   'row.inspect': 'Inspecter',
   'menu.userOnly': 'utilisateur uniquement',
-  'menu.sourceBuiltin': 'Compétences intégrées',
-  'menu.sourceProject': 'Compétences du projet',
-  'menu.sourceUser': 'Compétences de l’utilisateur',
-  'menu.sourceCustom': 'Répertoire personnalisé',
+  'menu.sourceBuiltin': 'Intégrées',
+  'menu.sourceProject': 'Projet',
+  'menu.sourceUser': 'Utilisateur',
+  'menu.sourceCustom': 'Personnalisé',
+  'menu.sourcePlugin': 'Extension',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -96,10 +101,11 @@ export const de = {
   'row.instructions': 'Anweisungen',
   'row.inspect': 'Inspizieren',
   'menu.userOnly': 'Nur für Benutzer',
-  'menu.sourceBuiltin': 'Integrierte Fähigkeiten',
-  'menu.sourceProject': 'Projektfähigkeiten',
-  'menu.sourceUser': 'Benutzerfähigkeiten',
-  'menu.sourceCustom': 'Benutzerdefiniertes Verzeichnis',
+  'menu.sourceBuiltin': 'Integriert',
+  'menu.sourceProject': 'Projekt',
+  'menu.sourceUser': 'Benutzer',
+  'menu.sourceCustom': 'Benutzerdefiniert',
+  'menu.sourcePlugin': 'Plugin',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -112,10 +118,11 @@ export const ru = {
   'row.instructions': 'Инструкции',
   'row.inspect': 'Осмотреть',
   'menu.userOnly': 'только для пользователей',
-  'menu.sourceBuiltin': 'Встроенные навыки',
-  'menu.sourceProject': 'Навыки проекта',
-  'menu.sourceUser': 'Навыки пользователя',
-  'menu.sourceCustom': 'Пользовательский каталог',
+  'menu.sourceBuiltin': 'Встроенные',
+  'menu.sourceProject': 'Проект',
+  'menu.sourceUser': 'Пользователь',
+  'menu.sourceCustom': 'Особый',
+  'menu.sourcePlugin': 'Плагин',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -128,8 +135,9 @@ export const pt = {
   'row.instructions': 'Instruções',
   'row.inspect': 'Inspecionar',
   'menu.userOnly': 'somente usuário',
-  'menu.sourceBuiltin': 'Habilidades integradas',
-  'menu.sourceProject': 'Habilidades do projeto',
-  'menu.sourceUser': 'Habilidades do usuário',
-  'menu.sourceCustom': 'Diretório personalizado',
+  'menu.sourceBuiltin': 'Integradas',
+  'menu.sourceProject': 'Projeto',
+  'menu.sourceUser': 'Usuário',
+  'menu.sourceCustom': 'Personalizado',
+  'menu.sourcePlugin': 'Plugin',
 } satisfies Record<keyof typeof en, string>

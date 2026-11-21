@@ -74,33 +74,48 @@ interface SkillSection {
   readonly title: string
 }
 
-/** Group ranks: shipped text first, then the nearer layers a workspace adds. */
+/** Group ranks: shipped text first, then plugin text, then the nearer layers a workspace adds. */
 const SECTION_RANK = {
   builtin: 0,
-  project: 1,
-  user: 2,
-  custom: 3,
-  other: 4,
+  plugin: 1,
+  project: 2,
+  user: 3,
+  custom: 4,
+  other: 5,
 } as const
 
+/** Discovery roots under the project and user labels, so the heading names the directory. */
+const ROOT_LABELS: Readonly<Record<string, string>> = {
+  'project-dsh': '.dsh/skills',
+  'project-agents': '.agents/skills',
+  'user-dsh': '~/.dsh/skills',
+  'user-agents': '~/.agents/skills',
+}
+
 /**
- * Group one catalog entry by where its instructions came from.
+ * Group one catalog entry by where its instructions came from: the class of
+ * origin, followed by the source when one is nameable.
  * @param skill - catalog entry being rendered.
  * @param t - the client dictionary bound to the skill namespace.
  * @returns the group rank and its heading.
  */
 function sectionOf(skill: SkillEntry, t: (key: SkillKey) => string): SkillSection {
-  if (skill.upstream !== undefined) return { rank: SECTION_RANK.builtin, title: skill.upstream }
+  const heading = (label: string, source?: string): string =>
+    source === undefined ? label : `${label} · ${source}`
+  if (skill.upstream !== undefined) {
+    return { rank: SECTION_RANK.builtin, title: heading(t('menu.sourceBuiltin'), skill.upstream) }
+  }
   switch (skill.source) {
     case 'bundled':
-    case 'runtime':
       return { rank: SECTION_RANK.builtin, title: t('menu.sourceBuiltin') }
+    case 'runtime':
+      return { rank: SECTION_RANK.plugin, title: t('menu.sourcePlugin') }
     case 'project-dsh':
     case 'project-agents':
-      return { rank: SECTION_RANK.project, title: t('menu.sourceProject') }
+      return { rank: SECTION_RANK.project, title: heading(t('menu.sourceProject'), ROOT_LABELS[skill.source]) }
     case 'user-dsh':
     case 'user-agents':
-      return { rank: SECTION_RANK.user, title: t('menu.sourceUser') }
+      return { rank: SECTION_RANK.user, title: heading(t('menu.sourceUser'), ROOT_LABELS[skill.source]) }
     case 'custom':
       return { rank: SECTION_RANK.custom, title: t('menu.sourceCustom') }
     // SkillSource is merge-extensible: a provider outside the known roots
