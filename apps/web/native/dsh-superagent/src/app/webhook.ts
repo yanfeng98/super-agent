@@ -5,7 +5,7 @@ export type WebhookPayload =
   | { event: 'attention'; at: string; ticket: WebhookTicket; question: string }
   | { event: 'ended'; at: string; ticket: WebhookTicket; outcome: string; reason: string }
   /** A merge event, a check result or a push, stated in one sentence. */
-  | { event: 'merged' | 'reverted' | 'review' | 'ci' | 'automerge' | 'check' | 'push'; at: string; ticket: WebhookTicket; text: string }
+  | { event: 'merged' | 'reverted' | 'review' | 'automerge' | 'check' | 'push'; at: string; ticket: WebhookTicket; text: string }
 /**
  * POSTs a notification as JSON, with a short timeout.
  * @throws when the webhook answers outside 2xx or the request fails.

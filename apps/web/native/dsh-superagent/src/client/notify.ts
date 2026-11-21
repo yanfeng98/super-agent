@@ -32,7 +32,7 @@ export function notificationFor(previous: string | undefined, ticket: Watched): 
   return { title: dict.notifyAttention, body: stage ? `${ticket.title} · ${stage}` : ticket.title }
 }
 /** The kinds the inbox records that the ticket poller cannot see, because the Ticket itself does not move. */
-const MERGE_EVENTS = new Set(['merged', 'reverted', 'ci', 'automerge', 'check', 'push'])
+const MERGE_EVENTS = new Set(['merged', 'reverted', 'automerge', 'check', 'push'])
 /** One panel notification as the desktop watcher reads it. */
 export interface InboxItem { id: string; kind: string; title: string; text: string }
 /**
