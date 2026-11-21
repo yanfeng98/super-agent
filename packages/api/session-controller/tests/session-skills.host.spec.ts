@@ -75,6 +75,12 @@ describe('SessionSkillCatalog', () => {
         invocation: { modelInvocable: true, userInvocable: false },
         source: 'project-agents',
       },
+      {
+        name: 'legacy',
+        description: 'No attribution recorded.',
+        invocation: { modelInvocable: true, userInvocable: true },
+        source: 'custom',
+      },
     ]))
     ctx.provide('skills', { list } as never)
     const catalog = new SessionSkillCatalog(ctx)
@@ -88,6 +94,11 @@ describe('SessionSkillCatalog', () => {
         modelInvocable: true,
         source: 'project-agents',
         owner: 'skill-filesystem',
+      }, {
+        name: 'legacy',
+        description: 'No attribution recorded.',
+        modelInvocable: true,
+        source: 'custom',
       }],
     })
     expect(observeSession).toHaveBeenCalledWith(sessionId)
