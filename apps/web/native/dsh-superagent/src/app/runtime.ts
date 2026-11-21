@@ -1616,7 +1616,7 @@ export class Runtime extends Service implements SourceHost {
       if (this.store.get<{ kind?: string }>(name)?.kind === 'ci') this.store.delete(name)
     }
     // Read cursors and block revisions are removed even when a partial cleanup already dropped the settings.
-    for (const prefix of ['github-', 'thread-since:github:']) for (const name of this.store.keys(prefix)) this.store.delete(name)
+    for (const prefix of ['github-', 'thread-since:github:', 'thread-since:github-issue:']) for (const name of this.store.keys(prefix)) this.store.delete(name)
     for (const id of removed) {
       this.store.delete(KV.settings.block(`source:${id}`))
       this.store.delete(KV.sources.labels(id))
