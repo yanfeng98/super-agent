@@ -1,0 +1,77 @@
+<!doctype html>
+<!-- The share image (docs/assets/hero.png). Edit, then run `node scripts/hero.mjs` to render it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rust-anything</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --card: #111317;
+    --line: #262a31;
+    --text: #f2f2f2;
+    --muted: #b9bdc4;
+    --dim: #8b9099;
+    --accent: #e8892f;
+    --green: #3fb950;
+    --badge-key: #4b5058;
+    --link: #58a6ff;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { background: var(--bg); }
+  body { width: 1600px; padding: 40px; font-family: "Inter", sans-serif; color: var(--text); }
+  .card {
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 36px;
+    padding: 64px 80px 56px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .icon {
+    width: 196px; height: 196px; border-radius: 40px;
+    background: #15181d;
+    display: grid; place-items: center;
+  }
+  h1 {
+    font-family: "Inter Display", "Inter", sans-serif;
+    font-weight: 600; font-size: 84px; letter-spacing: -1.5px;
+    margin-top: 36px; line-height: 1;
+  }
+  hr { width: 82%; border: 0; border-top: 1.5px solid var(--line); margin: 34px 0 30px; }
+  .tagline { font-size: 31px; font-style: italic; color: var(--text); font-weight: 400; }
+  .sub { font-size: 26px; font-style: italic; color: var(--muted); margin-top: 14px; }
+  .badges { display: flex; gap: 14px; margin-top: 36px; }
+  .badge { display: flex; font-size: 19px; border-radius: 5px; overflow: hidden; line-height: 1; }
+  .badge span { padding: 8px 12px 9px; }
+  .badge .k { background: var(--badge-key); color: #fff; }
+  .badge .v { background: var(--accent); color: #fff; }
+  .badge .v.ok { background: var(--green); }
+  .stats { font-size: 28px; margin-top: 38px; color: var(--text); font-weight: 450; }
+  .stats b { font-weight: 600; color: #fff; }
+  .link { font-size: 24px; margin-top: 22px; color: var(--muted); }
+  .link a { color: var(--link); text-decoration: underline; text-underline-offset: 4px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon" aria-hidden="true">
+      <!-- The rust-anything crab: Ferris-style (drawn for this project), its mouth a </> tag. -->
+      <svg width="184" height="184" viewBox="0 0 200 200"><defs><linearGradient id="shell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8f45"/><stop offset="1" stop-color="#e04d0d"/></linearGradient></defs><g transform="translate(0,-8)"><path d="M52,124 L34,130 L26,146" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M58,132 L44,142 L40,158" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M68,138 L58,152 L58,168" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M148,124 L166,130 L174,146" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M142,132 L156,142 L160,158" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M132,138 L142,152 L142,168" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M48,112 C38,104 34,92 37,80" stroke="#e85d14" stroke-width="9" stroke-linecap="round" fill="none"/><path d="M152,112 C162,104 166,92 163,80" stroke="#e85d14" stroke-width="9" stroke-linecap="round" fill="none"/><g transform="translate(42,82) scale(1.3,1.3)"><path d="M0,0 C-15,-3 -22,-18 -15,-31 L-4,-20 L-1,-35 C12,-31 16,-14 7,-3 Z" fill="url(#shell)"/></g><g transform="translate(158,82) scale(-1.3,1.3)"><path d="M0,0 C-15,-3 -22,-18 -15,-31 L-4,-20 L-1,-35 C12,-31 16,-14 7,-3 Z" fill="url(#shell)"/></g><path d="M38.0,120.4 L38.0,105.0 Q50.4,81.4 62.8,91.6 Q75.2,71.4 87.6,84.8 Q100.0,68.0 112.4,84.8 Q124.8,71.4 137.2,91.6 Q149.6,81.4 162.0,105.0 L162.0,120.4 C164.0,159.6 36.0,159.6 38.0,120.4 Z" fill="url(#shell)"/><circle cx="83" cy="99" r="11" fill="#fff"/><circle cx="117" cy="99" r="11" fill="#fff"/><circle cx="85" cy="100" r="6" fill="#111"/><circle cx="115" cy="100" r="6" fill="#111"/><g stroke="#3a1606" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M86,121 L77,129 L86,137"/><path d="M104,118 L96,140"/><path d="M114,121 L123,129 L114,137"/></g></g></svg>
+    </div>
+    <h1>rust-anything</h1>
+    <hr>
+    <p class="tagline">Rewrite your whole app in Rust. Keep it working the whole way.</p>
+    <p class="sub">CLIs, servers and libraries, piece by piece, checked against the original at every step.</p>
+    <div class="badges">
+      <div class="badge"><span class="k">version</span><span class="v">1.3.0</span></div>
+      <div class="badge"><span class="k">languages</span><span class="v">6 + 2 preview</span></div>
+      <div class="badge"><span class="k">works with</span><span class="v">4 agents</span></div>
+      <div class="badge"><span class="k">tests</span><span class="v ok">passing</span></div>
+      <div class="badge"><span class="k">license</span><span class="v">MIT</span></div>
+      <div class="badge"><span class="k">stars</span><span class="v">★ 1.1k</span></div>
+    </div>
+    <p class="stats">up to <b>20x</b> faster · <b>38,251</b> recorded cases replayed · <b>0</b> mismatches · one command</p>
+    <p class="link"><a>github.com/erkamyaman/rust-anything</a> · by Erkam Yaman · TypeScript, Python, C, Go, Ruby, Java, PHP and C# · cargo install rust-anything</p>
+  </div>
+</body>
+</html>

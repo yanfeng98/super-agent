@@ -583,7 +583,7 @@ describe('gate graph validation', () => {
 
     expect(scripts['check:ci:windows-observational-ready']).toBe('tsx scripts/run-gates.ts ci-windows-observational-ready')
     expect(scripts).not.toHaveProperty('check:ci:windows-observational')
-    const completeOnly = new Set(['build', 'windows-site', 'native-system', 'coverage', 'coverage-exempt-heavy'])
+    const completeOnly = new Set(['build', 'windows-site', 'native-system', 'rust-anything', 'coverage', 'coverage-exempt-heavy'])
     const shared = complete.filter(gate => !completeOnly.has(gate.id))
     expect(ready.map(gate => gate.id).sort()).toEqual([...shared.map(gate => gate.id), 'docs-site-build'].sort())
     expect(ready.some(gate => gate.id === 'build')).toBe(false)
@@ -718,21 +718,22 @@ describe('gate graph validation', () => {
     }
     expect(scripts['check:ci:unit']).toBe('tsx scripts/run-gates.ts ci-unit')
 
-    // The aggregate is the `test` package script's two segments, in order,
-    // so a step added to one cannot silently leave the other. The lane sets
+    // The aggregate is the `test` package script's three segments, in order,
+    // so a step added to one cannot silently leave the others. The lane sets
     // DSH_COVERAGE_TEST_TIMEOUT_MS; vitest.config.ts reads it per inline
     // project (coverageTestTimeoutOptions), so the gate passes no budget flag.
-    const [nativeBuild, unitRun, ...rest] = (scripts.test ?? '').split(' && ')
+    const [nativeBuild, rustBuild, unitRun, ...rest] = (scripts.test ?? '').split(' && ')
     expect(rest).toEqual([])
     for (const budget of ['15000', undefined]) {
       const gates = withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', budget, () =>
         withPnpmEntrypoint(() => gatesForMode('ci-unit')))
-      expect(gates.map(gate => gate.id)).toEqual(['native-system', 'unit'])
+      expect(gates.map(gate => gate.id)).toEqual(['native-system', 'rust-anything', 'unit'])
       expect(gates[0]).toMatchObject({ displayCommand: nativeBuild })
-      expect(gates[1]?.displayCommand).toBe(`pnpm exec ${unitRun}`)
-      expect(gates[1]).toMatchObject({
+      expect(gates[1]).toMatchObject({ displayCommand: rustBuild })
+      expect(gates[2]?.displayCommand).toBe(`pnpm exec ${unitRun}`)
+      expect(gates[2]).toMatchObject({
         label: 'test',
-        needs: ['native-system'],
+        needs: ['native-system', 'rust-anything'],
         streamOutput: true,
         args: ['/private/pnpm.cjs', 'exec', 'vitest', 'run'],
       })

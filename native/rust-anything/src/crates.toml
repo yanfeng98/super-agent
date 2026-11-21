@@ -1,0 +1,952 @@
+# Rust crates for the libraries each source language's code imports. `analyze` reports the
+# first entry that matches: `names` match exactly, `prefixes` match the start of the name.
+# A library missing here is reported as `unknown`, never guessed. fit: good (a maintained crate
+# does the same job), partial (the common case; check the rest), none (keep it in the source
+# language).
+
+[[ts]]
+names = ["yaml", "js-yaml"]
+crates = "saphyr, serde_yaml_ng"
+fit = "partial"
+note = "Parsing is covered. No crate rewrites YAML while keeping comments and layout."
+
+[[ts]]
+names = ["json5"]
+crates = "json5"
+fit = "good"
+
+[[ts]]
+names = ["jsonc-parser"]
+crates = "jsonc-parser"
+fit = "good"
+note = "dprint's crate, with a CST for edits."
+
+[[ts]]
+names = ["oxc-parser", "@babel/parser", "acorn", "espree"]
+crates = "oxc"
+fit = "good"
+note = "oxc-parser is already a binding of the Rust crate."
+
+[[ts]]
+names = ["typescript"]
+crates = "oxc"
+fit = "partial"
+note = "Parsing is covered. Type checking has no Rust equivalent."
+
+[[ts]]
+names = ["valibot", "zod", "yup", "superstruct"]
+crates = "serde, garde"
+fit = "partial"
+note = "Schemas become types plus validation; error messages will differ."
+
+[[ts]]
+names = ["ajv"]
+crates = "jsonschema"
+fit = "good"
+
+[[ts]]
+names = ["picomatch", "minimatch", "micromatch"]
+crates = "globset"
+fit = "good"
+note = "Check brace and extglob edge cases."
+
+[[ts]]
+names = ["tinyglobby", "fast-glob", "globby", "glob"]
+crates = "ignore, globset"
+fit = "good"
+
+[[ts]]
+names = ["ignore"]
+crates = "ignore"
+fit = "good"
+
+[[ts]]
+names = ["chokidar"]
+crates = "notify"
+fit = "good"
+
+[[ts]]
+names = ["cac", "commander", "yargs", "minimist", "citty"]
+crates = "clap"
+fit = "good"
+
+[[ts]]
+names = ["vscode-languageserver"]
+crates = "tower-lsp-server"
+fit = "good"
+
+[[ts]]
+names = ["vscode-languageserver-textdocument"]
+crates = "lsp-textdocument"
+fit = "partial"
+note = "LSP positions are UTF-16 by default."
+
+[[ts]]
+names = ["vscode-jsonrpc"]
+crates = "lsp-server, jsonrpsee"
+fit = "partial"
+
+[[ts]]
+names = ["jiti", "tsx", "esbuild-register", "unconfig", "c12"]
+crates = "-"
+fit = "none"
+note = "Loads TS/JS config or plugins at runtime. Keep loading in JS and pass data to Rust."
+
+[[ts]]
+names = ["@vue/compiler-sfc", "@vue/compiler-dom"]
+crates = "-"
+fit = "none"
+note = "No Rust Vue compiler. Keep SFC parsing in JS or split blocks before the bridge."
+
+[[ts]]
+names = ["svelte"]
+crates = "-"
+fit = "none"
+note = "The Svelte compiler is JS only. Keep it in JS."
+
+[[ts]]
+names = ["semver"]
+crates = "node-semver"
+fit = "good"
+note = "Use node-semver, not semver: npm range syntax differs from Cargo's."
+
+[[ts]]
+names = ["pathe", "upath"]
+crates = "std::path, camino"
+fit = "good"
+note = "Normalize to `/` separators."
+
+[[ts]]
+names = ["picocolors", "chalk", "kleur", "colorette"]
+crates = "owo-colors, anstream"
+fit = "good"
+
+[[ts]]
+names = ["ws"]
+crates = "tokio-tungstenite"
+fit = "good"
+
+[[ts]]
+names = ["express", "fastify", "h3", "hono", "koa"]
+crates = "axum"
+fit = "partial"
+note = "Middleware ports by hand."
+
+[[ts]]
+names = ["fast-xml-parser", "xml2js", "sax"]
+crates = "quick-xml"
+fit = "good"
+
+[[ts]]
+names = ["smol-toml", "toml", "@iarna/toml"]
+crates = "toml"
+fit = "good"
+
+[[ts]]
+names = ["dotenv"]
+crates = "dotenvy"
+fit = "good"
+
+[[ts]]
+names = ["uuid", "nanoid"]
+crates = "uuid, nanoid"
+fit = "good"
+
+[[ts]]
+names = ["dayjs", "date-fns", "luxon", "moment"]
+crates = "jiff"
+fit = "good"
+
+[[ts]]
+names = ["diff", "jsdiff"]
+crates = "similar"
+fit = "good"
+
+[[ts]]
+names = ["lru-cache", "quick-lru"]
+crates = "lru"
+fit = "good"
+
+[[ts]]
+names = ["p-limit", "p-queue"]
+crates = "tokio::sync::Semaphore"
+fit = "good"
+
+[[ts]]
+names = ["ofetch", "axios", "node-fetch", "undici", "ky"]
+crates = "reqwest"
+fit = "good"
+
+[[ts]]
+names = ["pino", "debug", "consola", "winston"]
+crates = "tracing"
+fit = "good"
+
+[[ts]]
+names = ["lodash", "lodash-es", "es-toolkit", "radash"]
+crates = "std, itertools"
+fit = "good"
+
+[[ts]]
+names = ["fuse.js"]
+crates = "nucleo, fuzzy-matcher"
+fit = "partial"
+note = "Scores and ranking order differ."
+
+[[ts]]
+names = ["magic-string"]
+crates = "string_wizard"
+fit = "partial"
+note = "Check source map output."
+
+[[ts]]
+names = ["devframe", "vite", "nuxt", "@nuxt/kit", "vitepress"]
+crates = "-"
+fit = "none"
+note = "Dev server or UI framework: keep in JS."
+
+[[ts]]
+names = ["fluent-ffmpeg", "ffmpeg-static", "@ffmpeg/ffmpeg", "@ffmpeg/core"]
+crates = "ffmpeg-next"
+fit = "partial"
+note = "Binds the C libraries. For pure Rust, remade-ffmpeg covers a subset of codecs (and has an ffmpeg-compatible CLI): check its codec table."
+
+[[ts]]
+names = ["@discordjs/opus", "opusscript"]
+crates = "opus"
+fit = "good"
+note = "Binds libopus. For pure Rust, rusty-opus implements RFC 6716 (encoder and decoder)."
+
+[[ts]]
+names = ["lamejs"]
+crates = "rusty_mp3"
+fit = "partial"
+note = "Pure-Rust MP3 encoder and decoder; young, so test it on your files. symphonia decodes MP3 if you only need to read."
+
+[[python]]
+names = ["requests", "httpx", "urllib3", "aiohttp"]
+crates = "reqwest"
+fit = "good"
+
+[[python]]
+names = ["numpy"]
+crates = "ndarray"
+fit = "partial"
+note = "Broadcasting and dtype rules differ; check numerics."
+
+[[python]]
+names = ["pandas"]
+crates = "polars"
+fit = "partial"
+note = "Different API; port by behavior, not by call."
+
+[[python]]
+names = ["pyyaml", "yaml", "ruamel-yaml"]
+crates = "serde_yaml_ng, saphyr"
+fit = "partial"
+note = "Round-tripping comments is not covered."
+
+[[python]]
+names = ["regex"]
+crates = "fancy-regex"
+fit = "partial"
+note = "Python `regex` features beyond fancy-regex need checks."
+
+[[python]]
+names = ["click", "typer", "docopt"]
+crates = "clap"
+fit = "good"
+
+[[python]]
+names = ["toml", "tomli", "tomli-w"]
+crates = "toml"
+fit = "good"
+
+[[python]]
+names = ["pydantic", "attrs", "marshmallow"]
+crates = "serde, garde"
+fit = "partial"
+note = "Validation errors will differ."
+
+[[python]]
+names = ["jinja2"]
+crates = "minijinja"
+fit = "good"
+note = "Same template language, by Jinja's author."
+
+[[python]]
+names = ["lxml", "beautifulsoup4", "bs4"]
+crates = "quick-xml, scraper"
+fit = "partial"
+
+[[python]]
+names = ["python-dateutil", "dateutil", "pendulum", "arrow"]
+crates = "jiff"
+fit = "good"
+
+[[python]]
+names = ["orjson", "ujson", "simplejson"]
+crates = "serde_json"
+fit = "good"
+
+[[python]]
+names = ["rich", "colorama", "termcolor"]
+crates = "owo-colors, anstream"
+fit = "good"
+
+[[python]]
+names = ["tqdm"]
+crates = "indicatif"
+fit = "good"
+
+[[python]]
+names = ["cryptography", "pycryptodome"]
+crates = "ring, RustCrypto crates"
+fit = "partial"
+
+[[python]]
+names = ["pillow", "pil"]
+crates = "image"
+fit = "partial"
+
+[[python]]
+names = ["sqlalchemy", "psycopg2", "psycopg"]
+crates = "sqlx"
+fit = "partial"
+note = "ORM layers port by hand."
+
+[[python]]
+names = ["django", "flask", "fastapi", "starlette"]
+crates = "-"
+fit = "none"
+note = "Web framework: keep the app in Python."
+
+[[python]]
+names = ["pytest", "hypothesis", "mypy"]
+crates = "-"
+fit = "none"
+note = "Tooling, not runtime."
+
+[[python]]
+names = ["av", "ffmpeg-python", "ffmpeg", "imageio-ffmpeg"]
+crates = "ffmpeg-next"
+fit = "partial"
+note = "Binds the C libraries. For pure Rust, remade-ffmpeg covers a subset of codecs (and has an ffmpeg-compatible CLI): check its codec table."
+
+[[python]]
+names = ["opuslib"]
+crates = "opus"
+fit = "good"
+note = "Binds libopus. For pure Rust, rusty-opus implements RFC 6716 (encoder and decoder)."
+
+[[c]]
+names = ["<zlib.h>"]
+crates = "flate2"
+fit = "good"
+
+[[c]]
+names = ["<openssl/ssl.h>", "<openssl/evp.h>"]
+crates = "rustls, ring"
+fit = "partial"
+
+[[c]]
+names = ["<sqlite3.h>"]
+crates = "rusqlite"
+fit = "good"
+
+[[c]]
+names = ["<curl/curl.h>"]
+crates = "reqwest, ureq"
+fit = "good"
+
+[[c]]
+names = ["<pcre.h>", "<pcre2.h>", "<regex.h>"]
+crates = "regex, fancy-regex"
+fit = "partial"
+note = "Syntax differs."
+
+[[c]]
+names = ["<pthread.h>"]
+crates = "std::thread"
+fit = "good"
+
+[[c]]
+names = ["<sys/socket.h>", "<netinet/in.h>", "<arpa/inet.h>", "<netdb.h>"]
+crates = "std::net, socket2"
+fit = "good"
+note = "std covers TCP and UDP; socket2 for raw socket options."
+
+[[c]]
+names = ["<unistd.h>", "<fcntl.h>", "<sys/stat.h>", "<sys/types.h>", "<dirent.h>"]
+crates = "std::fs, std::process, libc"
+fit = "good"
+
+[[c]]
+names = ["<sys/wait.h>"]
+crates = "std::process"
+fit = "good"
+
+[[c]]
+names = ["<poll.h>", "<sys/select.h>", "<sys/epoll.h>", "<sys/event.h>"]
+crates = "mio, tokio"
+fit = "good"
+
+[[c]]
+names = ["<getopt.h>"]
+crates = "clap"
+fit = "good"
+
+[[c]]
+names = ["<dlfcn.h>"]
+crates = "libloading"
+fit = "good"
+
+[[c]]
+names = ["<sys/mman.h>"]
+crates = "memmap2"
+fit = "good"
+
+[[c]]
+names = ["<syslog.h>"]
+crates = "syslog, tracing"
+fit = "partial"
+
+[[c]]
+names = ["<iconv.h>"]
+crates = "encoding_rs"
+fit = "good"
+
+[[c]]
+names = ["<math.h>", "<string.h>", "<stdlib.h>", "<stdio.h>", "<ctype.h>", "<stdint.h>", "<stdbool.h>", "<stddef.h>", "<limits.h>", "<errno.h>", "<assert.h>"]
+crates = "std"
+fit = "good"
+
+[[c]]
+prefixes = ["<libavcodec/", "<libavformat/", "<libavutil/", "<libswscale/", "<libswresample/", "<libavfilter/"]
+crates = "ffmpeg-next"
+fit = "partial"
+note = "Binds the same C libraries with a safe Rust API, so the libav* calls map to it closely. For pure Rust, remade-ffmpeg covers a subset of codecs, with its own API."
+
+[[c]]
+names = ["<opus.h>", "<opus/opus.h>"]
+crates = "opus"
+fit = "good"
+note = "Binds libopus. For pure Rust, rusty-opus implements RFC 6716 (encoder and decoder)."
+
+[[c]]
+names = ["<lame/lame.h>", "<lame.h>"]
+crates = "rusty_mp3"
+fit = "partial"
+note = "Pure-Rust MP3 encoder and decoder; young, so test it on your files. symphonia decodes MP3 if you only need to read."
+
+[[go]]
+names = ["github.com/spf13/cobra", "github.com/urfave/cli", "github.com/urfave/cli/v2"]
+crates = "clap"
+fit = "good"
+
+[[go]]
+names = ["github.com/spf13/viper"]
+crates = "config, figment"
+fit = "partial"
+
+[[go]]
+names = ["github.com/sirupsen/logrus", "go.uber.org/zap", "github.com/rs/zerolog"]
+crates = "tracing"
+fit = "good"
+
+[[go]]
+names = ["github.com/stretchr/testify"]
+crates = "std test, pretty_assertions"
+fit = "good"
+
+[[go]]
+names = ["github.com/google/uuid"]
+crates = "uuid"
+fit = "good"
+
+[[go]]
+names = ["github.com/gorilla/mux", "github.com/gin-gonic/gin", "github.com/labstack/echo/v4"]
+crates = "axum"
+fit = "partial"
+note = "routing and middleware differ"
+
+[[go]]
+names = ["gopkg.in/yaml.v3", "gopkg.in/yaml.v2", "sigs.k8s.io/yaml"]
+crates = "serde_yaml_ng"
+fit = "good"
+
+[[go]]
+names = ["github.com/BurntSushi/toml", "github.com/pelletier/go-toml/v2"]
+crates = "toml"
+fit = "good"
+
+[[go]]
+names = ["golang.org/x/text"]
+crates = "unicode-normalization, icu"
+fit = "partial"
+
+[[go]]
+names = ["golang.org/x/sync"]
+crates = "tokio, rayon"
+fit = "partial"
+
+[[go]]
+names = ["github.com/jackc/pgx/v5", "github.com/lib/pq"]
+crates = "sqlx, tokio-postgres"
+fit = "good"
+
+[[go]]
+names = ["github.com/mattn/go-sqlite3"]
+crates = "rusqlite"
+fit = "good"
+
+[[go]]
+names = ["github.com/prometheus/client_golang"]
+crates = "prometheus"
+fit = "good"
+
+[[go]]
+names = ["google.golang.org/grpc"]
+crates = "tonic"
+fit = "good"
+
+[[go]]
+names = ["google.golang.org/protobuf", "github.com/golang/protobuf"]
+crates = "prost"
+fit = "good"
+
+[[go]]
+names = ["github.com/dlclark/regexp2"]
+crates = "fancy-regex"
+fit = "good"
+
+[[go]]
+names = ["github.com/u2takey/ffmpeg-go", "github.com/asticode/go-astiav", "github.com/giorgisio/goav"]
+crates = "ffmpeg-next"
+fit = "partial"
+note = "Binds the C libraries. For pure Rust, remade-ffmpeg covers a subset of codecs (and has an ffmpeg-compatible CLI): check its codec table."
+
+[[ruby]]
+names = ["rails", "sinatra", "roda", "hanami"]
+crates = "axum"
+fit = "none"
+note = "a web framework is an application rewrite, not a port"
+
+[[ruby]]
+names = ["activesupport"]
+crates = "chrono, heck, inflector"
+fit = "partial"
+note = "core extensions have no single counterpart"
+
+[[ruby]]
+names = ["activerecord", "sequel"]
+crates = "sqlx, diesel"
+fit = "partial"
+note = "an ORM's dynamic queries need redesign"
+
+[[ruby]]
+names = ["nokogiri"]
+crates = "scraper, quick-xml"
+fit = "partial"
+
+[[ruby]]
+names = ["json", "oj", "multi_json"]
+crates = "serde_json"
+fit = "good"
+
+[[ruby]]
+names = ["httparty", "faraday", "rest-client", "http"]
+crates = "reqwest"
+fit = "good"
+
+[[ruby]]
+names = ["thor", "optparse", "slop"]
+crates = "clap"
+fit = "good"
+
+[[ruby]]
+names = ["rspec", "minitest", "test-unit"]
+crates = "std test"
+fit = "good"
+
+[[ruby]]
+names = ["rake"]
+crates = "cargo-make, just"
+fit = "partial"
+
+[[ruby]]
+names = ["redis"]
+crates = "redis"
+fit = "good"
+
+[[ruby]]
+names = ["pg"]
+crates = "tokio-postgres, sqlx"
+fit = "good"
+
+[[ruby]]
+names = ["sqlite3"]
+crates = "rusqlite"
+fit = "good"
+
+[[ruby]]
+names = ["dry-types", "dry-struct"]
+crates = "serde"
+fit = "partial"
+
+[[ruby]]
+names = ["nanoid"]
+crates = "nanoid"
+fit = "good"
+
+[[ruby]]
+names = ["tzinfo"]
+crates = "chrono-tz"
+fit = "good"
+
+[[ruby]]
+names = ["i18n"]
+crates = "rust-i18n, fluent"
+fit = "partial"
+
+[[ruby]]
+names = ["kramdown", "redcarpet", "commonmarker"]
+crates = "pulldown-cmark, comrak"
+fit = "good"
+
+[[ruby]]
+names = ["rouge"]
+crates = "syntect"
+fit = "partial"
+
+[[ruby]]
+names = ["zeitwerk", "bootsnap"]
+crates = "(none)"
+fit = "none"
+note = "Ruby loading machinery: drop it"
+
+[[java]]
+prefixes = ["com.google.guava", "com.google.common"]
+crates = "std, itertools, indexmap"
+fit = "partial"
+note = "Guava spans many crates"
+
+[[java]]
+prefixes = ["org.apache.commons"]
+crates = "std, itertools"
+fit = "partial"
+
+[[java]]
+prefixes = ["com.fasterxml.jackson", "com.google.gson", "com.google.code.gson"]
+crates = "serde_json"
+fit = "good"
+
+[[java]]
+prefixes = ["org.slf4j", "ch.qos.logback", "org.apache.logging"]
+crates = "tracing"
+fit = "good"
+
+[[java]]
+prefixes = ["org.junit", "junit", "org.assertj"]
+crates = "std test"
+fit = "good"
+
+[[java]]
+prefixes = ["org.springframework"]
+crates = "axum"
+fit = "none"
+note = "a framework is an application rewrite, not a port"
+
+[[java]]
+prefixes = ["org.projectlombok", "lombok"]
+crates = "derive macros"
+fit = "good"
+note = "Lombok's generated code becomes derives"
+
+[[java]]
+prefixes = ["com.squareup.okhttp3", "org.apache.httpcomponents"]
+crates = "reqwest"
+fit = "good"
+
+[[java]]
+prefixes = ["org.yaml"]
+crates = "serde_yaml_ng"
+fit = "good"
+
+[[java]]
+prefixes = ["info.picocli", "com.beust"]
+crates = "clap"
+fit = "good"
+
+[[java]]
+prefixes = ["org.postgresql"]
+crates = "tokio-postgres, sqlx"
+fit = "good"
+
+[[java]]
+prefixes = ["org.xerial"]
+crates = "rusqlite"
+fit = "good"
+
+[[java]]
+prefixes = ["com.ibm.icu"]
+crates = "icu"
+fit = "partial"
+
+[[java]]
+prefixes = ["org.bytedeco.ffmpeg", "org.bytedeco.javacv", "net.bramp.ffmpeg"]
+crates = "ffmpeg-next"
+fit = "partial"
+note = "Binds the C libraries; JavaCV's OpenCV side is not covered. For pure Rust, remade-ffmpeg covers a subset of codecs: check its codec table."
+
+[[php]]
+names = ["laravel/framework", "slim/slim", "symfony/framework-bundle", "laminas/laminas-mvc", "cakephp/cakephp", "yiisoft/yii2"]
+crates = "axum"
+fit = "none"
+note = "a web framework is an application rewrite, not a port"
+
+[[php]]
+names = ["symfony/http-foundation", "psr/http-message", "nyholm/psr7", "guzzlehttp/psr7"]
+crates = "http, axum"
+fit = "partial"
+
+[[php]]
+names = ["symfony/console"]
+crates = "clap"
+fit = "good"
+
+[[php]]
+names = ["symfony/yaml"]
+crates = "serde_yaml"
+fit = "good"
+
+[[php]]
+names = ["symfony/process"]
+crates = "std::process"
+fit = "good"
+
+[[php]]
+names = ["symfony/finder"]
+crates = "walkdir, globset"
+fit = "good"
+
+[[php]]
+names = ["symfony/string"]
+crates = "unicode-segmentation, heck"
+fit = "partial"
+
+[[php]]
+names = ["guzzlehttp/guzzle"]
+crates = "reqwest"
+fit = "good"
+
+[[php]]
+names = ["monolog/monolog", "psr/log"]
+crates = "tracing, log"
+fit = "good"
+
+[[php]]
+names = ["doctrine/orm", "illuminate/database"]
+crates = "sqlx, diesel, sea-orm"
+fit = "partial"
+note = "an ORM's dynamic queries need redesign"
+
+[[php]]
+names = ["doctrine/dbal"]
+crates = "sqlx"
+fit = "good"
+
+[[php]]
+names = ["nesbot/carbon"]
+crates = "chrono, jiff"
+fit = "good"
+
+[[php]]
+names = ["ramsey/uuid"]
+crates = "uuid"
+fit = "good"
+
+[[php]]
+names = ["league/commonmark", "erusev/parsedown"]
+crates = "pulldown-cmark, comrak"
+fit = "good"
+
+[[php]]
+names = ["twig/twig"]
+crates = "minijinja, tera"
+fit = "partial"
+note = "template syntax differs"
+
+[[php]]
+names = ["league/csv"]
+crates = "csv"
+fit = "good"
+
+[[php]]
+names = ["league/flysystem"]
+crates = "object_store, opendal"
+fit = "partial"
+
+[[php]]
+names = ["vlucas/phpdotenv"]
+crates = "dotenvy"
+fit = "good"
+
+[[php]]
+names = ["firebase/php-jwt", "lcobucci/jwt"]
+crates = "jsonwebtoken"
+fit = "good"
+
+[[php]]
+names = ["predis/predis"]
+crates = "redis"
+fit = "good"
+
+[[php]]
+names = ["phpunit/phpunit", "pestphp/pest"]
+crates = "std test"
+fit = "good"
+
+[[php]]
+names = ["respect/validation"]
+crates = "validator, garde"
+fit = "partial"
+
+[[php]]
+names = ["brick/math"]
+crates = "num-bigint, rust_decimal"
+fit = "good"
+
+[[php]]
+names = ["composer/composer"]
+crates = "(none)"
+fit = "none"
+note = "PHP's package manager: drop it"
+
+[[csharp]]
+prefixes = ["Newtonsoft.Json", "System.Text.Json"]
+crates = "serde_json"
+fit = "good"
+
+[[csharp]]
+prefixes = ["Serilog", "NLog", "log4net", "Microsoft.Extensions.Logging"]
+crates = "tracing"
+fit = "good"
+
+[[csharp]]
+prefixes = ["xunit", "NUnit", "MSTest", "FluentAssertions", "Microsoft.NET.Test.Sdk"]
+crates = "std test"
+fit = "good"
+
+[[csharp]]
+prefixes = ["Microsoft.AspNetCore"]
+crates = "axum"
+fit = "none"
+note = "a framework is an application rewrite, not a port"
+
+[[csharp]]
+prefixes = ["Microsoft.EntityFrameworkCore"]
+crates = "sqlx, diesel"
+fit = "partial"
+note = "no change tracking; queries become SQL"
+
+[[csharp]]
+prefixes = ["Dapper"]
+crates = "sqlx"
+fit = "good"
+
+[[csharp]]
+prefixes = ["Npgsql"]
+crates = "tokio-postgres, sqlx"
+fit = "good"
+
+[[csharp]]
+prefixes = ["Microsoft.Data.Sqlite", "System.Data.SQLite"]
+crates = "rusqlite"
+fit = "good"
+
+[[csharp]]
+prefixes = ["CsvHelper"]
+crates = "csv"
+fit = "good"
+
+[[csharp]]
+prefixes = ["YamlDotNet"]
+crates = "serde_yaml_ng"
+fit = "good"
+
+[[csharp]]
+prefixes = ["System.CommandLine", "CommandLineParser", "Spectre.Console.Cli"]
+crates = "clap"
+fit = "good"
+
+[[csharp]]
+prefixes = ["RestSharp", "Flurl"]
+crates = "reqwest"
+fit = "good"
+
+[[csharp]]
+prefixes = ["Polly"]
+crates = "backon"
+fit = "partial"
+note = "retries; no circuit breakers"
+
+[[csharp]]
+prefixes = ["NodaTime"]
+crates = "jiff, chrono"
+fit = "good"
+
+[[csharp]]
+prefixes = ["Humanizer"]
+crates = ""
+fit = "none"
+note = "reimplement what the app uses"
+
+[[csharp]]
+prefixes = ["AutoMapper"]
+crates = "From impls"
+fit = "good"
+note = "mappings become From"
+
+[[csharp]]
+prefixes = ["MediatR", "Microsoft.Extensions.DependencyInjection"]
+crates = ""
+fit = "none"
+note = "plain function calls and constructors replace the container"
+
+[[csharp]]
+prefixes = ["BouncyCastle", "Portable.BouncyCastle"]
+crates = "RustCrypto crates"
+fit = "partial"
+
+[[csharp]]
+prefixes = ["Microsoft.Extensions.Configuration"]
+crates = "config, figment"
+fit = "good"
+
+[[kotlin]]
+prefixes = ["kotlinx.serialization"]
+crates = "serde, serde_json"
+fit = "good"
+note = "Kotlinx serialization maps to serde"
+
+[[kotlin]]
+prefixes = ["kotlinx.coroutines", "kotlinx.coroutines."]
+crates = "tokio, rayon"
+fit = "partial"
+note = "suspend functions stay in Kotlin in phase 1"
+
+[[kotlin]]
+prefixes = ["com.fasterxml.jackson", "com.google.gson", "com.google.code.gson", "org.json"]
+crates = "serde_json"
+fit = "good"
+
+[[kotlin]]
+prefixes = ["org.slf4j", "ch.qos.logback"]
+crates = "tracing"
+fit = "good"
+
+[[kotlin]]
+prefixes = ["io.ktor", "com.squareup.okhttp3"]
+crates = "axum, reqwest"
+fit = "partial"

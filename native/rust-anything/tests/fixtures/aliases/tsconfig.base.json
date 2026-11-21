@@ -1,0 +1,9 @@
+{
+  // Shared options, with comments and a trailing comma, as tsconfig allows.
+  "compilerOptions": {
+    "paths": {
+      "~/*": ["./*"],
+      "@lib/*": ["./lib/*"],
+    },
+  },
+}

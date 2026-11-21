@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Native source and public packages maintained with DeepSeek Harness. The [`system/` workspace](system/README.md) owns the Landlock launcher and POSIX flock binding, their platform packages, and the [release procedure](system/docs/release.md).
+Native source and public packages maintained with DeepSeek Harness. The [`system/` workspace](system/README.md) owns the Landlock launcher and POSIX flock binding, their platform packages, and the [release procedure](system/docs/release.md). The [`rust-anything/` subtree](rust-anything/NATIVE.md) is the source-vendored porting CLI whose MCP server the Web `standard` preset mounts; `pnpm run build` compiles it here.
 
 ## Workspace and release boundary
 

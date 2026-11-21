@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- The README race: typing a query into x18n's search over 50,000 keys, TS on the left, the
+     rust-anything batch on the right. The numbers are real: per-keystroke medians of 21 runs on 4
+     cores, results checked identical (scripts: demo/x18n-search/bench.ts). Render with
+     node scripts/gifs.mjs race -->
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #0b0d10; }
+  .frame { width: 1100px; padding: 26px 28px 22px; box-sizing: border-box; background: #0b0d10; font-family: Inter, sans-serif; color: #e9ebee; }
+  .cols { display: flex; gap: 22px; }
+  .panel { flex: 1; background: #111317; border: 1.5px solid #262a31; border-radius: 16px; padding: 20px 22px 18px; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .name { font-size: 20px; font-weight: 600; }
+  .tag { font-size: 14px; color: #8b9099; }
+  .box { margin-top: 14px; border: 1.5px solid #30353d; border-radius: 10px; padding: 11px 14px; font: 18px "JetBrains Mono", monospace; background: #0d0f12; height: 24px; }
+  .cur { display: inline-block; width: 2px; height: 20px; background: #e9ebee; vertical-align: -3px; margin-left: 1px; }
+  .stat { margin-top: 14px; font-size: 16px; color: #b9bdc4; height: 22px; }
+  .stat b { color: #fff; font-weight: 600; }
+  .ms { font: 600 30px "JetBrains Mono", monospace; margin-top: 4px; height: 40px; }
+  .ts .ms { color: #e9ebee; } .rs .ms { color: #ff8a3d; }
+  .list { margin-top: 10px; height: 140px; font: 14.5px "JetBrains Mono", monospace; color: #8b9099; line-height: 1.75; overflow: hidden; }
+  .total { margin-top: 12px; font-size: 14px; color: #8b9099; }
+  .bar { margin-top: 7px; height: 14px; background: #1b1e24; border-radius: 7px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 7px; }
+  .ts .fill { background: #8b9099; } .rs .fill { background: #ff8a3d; }
+  .foot { margin-top: 16px; text-align: center; font-size: 17px; color: #b9bdc4; height: 26px; }
+  .foot b { color: #ff8a3d; }
+</style></head><body><div class="frame" id="f"></div>
+<script>
+const rows = [{"q": "u", "hits": 29462, "ts": 12.35, "rust": 0.461, "top": ["user.save.dashboard.tooltip.user4", "user.save.app5", "user.user.user.tooltip.dashboard9", "user.dashboard.dashboard.app10", "user.user.save.app20"]}, {"q": "us", "hits": 29462, "ts": 12.92, "rust": 1.24, "top": ["user.save.dashboard.tooltip.user4", "user.save.app5", "user.user.user.tooltip.dashboard9", "user.dashboard.dashboard.app10", "user.user.save.app20"]}, {"q": "use", "hits": 29462, "ts": 13.13, "rust": 1.149, "top": ["user.save.dashboard.tooltip.user4", "user.save.app5", "user.user.user.tooltip.dashboard9", "user.dashboard.dashboard.app10", "user.user.save.app20"]}, {"q": "user", "hits": 29462, "ts": 14.12, "rust": 1.068, "top": ["user.save.dashboard.tooltip.user4", "user.save.app5", "user.user.user.tooltip.dashboard9", "user.dashboard.dashboard.app10", "user.user.save.app20"]}, {"q": "user.", "hits": 24237, "ts": 11.4, "rust": 0.903, "top": ["user.save.dashboard.tooltip.user4", "user.save.app5", "user.user.user.tooltip.dashboard9", "user.dashboard.dashboard.app10", "user.user.save.app20"]}, {"q": "user.p", "hits": 15507, "ts": 11.39, "rust": 1.005, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}, {"q": "user.pr", "hits": 5314, "ts": 13.84, "rust": 0.697, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}, {"q": "user.pro", "hits": 985, "ts": 13.2, "rust": 0.305, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}, {"q": "user.prof", "hits": 69, "ts": 8.56, "rust": 0.022, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}, {"q": "user.profi", "hits": 69, "ts": 11.14, "rust": 0.012, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}, {"q": "user.profil", "hits": 69, "ts": 10.55, "rust": 0.01, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}, {"q": "user.profile", "hits": 69, "ts": 10.53, "rust": 0.008, "top": ["tooltip.user.profile2203", "app.app.user.profile2779", "tooltip.user.profile4288", "app.app.user.profile4864", "tooltip.user.profile6373"]}]
+const full = 'user.profile'
+const totalTs = rows.reduce((s, r) => s + r.ts, 0)
+const fmt = ms => ms < 0.1 ? ms.toFixed(3) : ms < 1 ? ms.toFixed(2) : ms.toFixed(1)
+const per = 7, intro = 10, hold = 50
+window.frameCount = intro + rows.length * per + hold
+function panel(cls, name, tag, typed, row, total, msKey) {
+  const ms = row ? fmt(row[msKey]) + ' ms' : ''
+  const stat = row ? '<b>' + row.hits.toLocaleString('en-US') + '</b> matches · this keystroke' : 'type to search 50,000 keys'
+  const list = row ? row.top.slice(0, 5).map(k => k.replace(/^(.{34}).+/, '$1…')).join('<br>') : ''
+  const width = Math.max(0.6, 100 * total / totalTs)
+  return '<div class="panel ' + cls + '"><div class="head"><span class="name">' + name + '</span><span class="tag">' + tag + '</span></div>' +
+    '<div class="box">' + typed + '<span class="cur"></span></div>' +
+    '<div class="stat">' + stat + '</div><div class="ms">' + ms + '</div><div class="list">' + list + '</div>' +
+    '<div class="total">time spent searching: <b style="color:#e9ebee">' + fmt(total) + ' ms</b></div>' +
+    '<div class="bar"><div class="fill" style="width:' + width + '%"></div></div></div>'
+}
+window.render = i => {
+  const k = Math.max(0, Math.min(rows.length, Math.floor((i - intro) / per) + 1))
+  const row = k ? rows[k - 1] : null
+  const typed = full.slice(0, k)
+  const tsTotal = rows.slice(0, k).reduce((s, r) => s + r.ts, 0)
+  const rsTotal = rows.slice(0, k).reduce((s, r) => s + r.rust, 0)
+  const done = k === rows.length && i >= intro + rows.length * per
+  const foot = done
+    ? 'Same results at every keystroke. Whole query: TS ' + fmt(tsTotal) + ' ms, Rust ' + fmt(rsTotal) + ' ms: <b>' + Math.round(tsTotal / rsTotal) + 'x faster</b>'
+    : "x18n’s sidebar search · 50,000 keys · measured per keystroke"
+  document.getElementById('f').innerHTML = '<div class="cols">' +
+    panel('ts', 'TypeScript', 'today', typed, row, tsTotal, 'ts') +
+    panel('rs', 'rust-anything', 'Rust batch, 4 cores', typed, row, rsTotal, 'rust') +
+    '</div><div class="foot">' + foot + '</div>'
+}
+render(0)
+</script></body></html>

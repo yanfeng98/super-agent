@@ -1,0 +1,4 @@
+[project]
+name = "textkit"
+version = "0.1.0"
+dependencies = ["regex>=2024.1", "requests"]

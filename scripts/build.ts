@@ -96,6 +96,9 @@ export function buildGates(
   const gates: Gate[] = []
   if (scope === 'complete' || scope === 'artifacts') {
     gates.push(pnpmGate('native', 'native addon', ['run', 'build:native-system'], [], env))
+    // The rust-anything MCP server compiles from its vendored crate; the
+    // staged executable is what the Web standard preset spawns at runtime.
+    gates.push(pnpmGate('rust-anything', 'rust-anything CLI', ['run', 'build:rust-anything'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push(libraryGate(step, step.id === 'host-src' ? ['native', ...step.needs] : step.needs, env))
     }

@@ -30,7 +30,7 @@ kind: "package-group"
 | [`mcp-client/`](mcp-client/README.zh.md) | 连接一台 MCP 服务器，暴露其工具与指令，并提供其资源操作 |
 | [`mcp-manager/`](mcp-manager/README.zh.md) | 管理设置驱动的 mcp-client 实例编队：运行时增改启停删、状态、重启、探测 |
 | [`mcp-resources/`](mcp-resources/README.zh.md) | 通过显式选择服务器的共享工具发现和读取资源 |
-| [`rust-anything/`](rust-anything/README.zh.md) | 挂载 rust-anything MCP server，CLI 来自本包自己的 npm 依赖 |
+| [`rust-anything/`](rust-anything/README.zh.md) | 挂载 rust-anything MCP server，CLI 由 `native/rust-anything` 的 vendored 源码编译 |
 
 -----
 

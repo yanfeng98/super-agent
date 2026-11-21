@@ -7,13 +7,17 @@ const root = resolve(import.meta.dirname, '..')
 
 const artifactGraph = {
   'native': [],
+  // Native CLI, IM panel, and proactive-agent builds precede the Web shell.
+  'rust-anything': [],
   'host-typert': [],
   'host-src': ['native', 'host-typert'],
   'host-bundle': ['host-src'],
   'desktop-bundle': ['host-bundle'],
   'client-src': ['desktop-bundle'],
   'client-bundle': ['client-src'],
-  'web': ['client-bundle'],
+  'dsh-im': [],
+  'superagent': [],
+  'web': ['client-bundle', 'dsh-im', 'superagent'],
 }
 
 function graph(gates: ReturnType<typeof buildGates>): Record<string, string[] | undefined> {

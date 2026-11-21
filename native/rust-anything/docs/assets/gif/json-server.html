@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- json-server, a whole Node server, against its pure Rust binary. Measured on an Apple M4
+     (docs/real-world.md#json-server): idle memory 74 MB and 3.5 MB, start to first response
+     79 to 85 ms and 8 to 10 ms; 514/514 recorded HTTP cases match. Render with node scripts/gifs.mjs json-server -->
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #0b0d10; }
+  .frame { width: 1100px; padding: 26px 28px 22px; box-sizing: border-box; background: #0b0d10; font-family: Inter, -apple-system, sans-serif; color: #e9ebee; }
+  .title { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 18px; }
+  .title span { color: #ff8a3d; }
+  .row { background: #111317; border: 1.5px solid #262a31; border-radius: 16px; padding: 18px 22px; margin-bottom: 14px; }
+  .label { font-size: 17px; font-weight: 700; margin-bottom: 12px; }
+  .line { display: flex; align-items: center; gap: 14px; margin-top: 8px; height: 28px; }
+  .who { width: 150px; font-size: 15px; color: #b9bdc4; }
+  .track { flex: 1; height: 22px; background: #1b1e24; border-radius: 6px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 6px; }
+  .js .fill { background: #8b9099; } .rs .fill { background: #ff8a3d; }
+  .val { width: 170px; text-align: right; font: 700 20px "JetBrains Mono", Menlo, monospace; }
+  .js .val { color: #e9ebee; } .rs .val { color: #ff8a3d; }
+  .foot { margin-top: 6px; text-align: center; font-size: 19px; color: #b9bdc4; height: 28px; }
+  .foot b { color: #63c3a7; }
+</style></head><body><div class="frame" id="f"></div>
+<script>
+const rows = [
+  { label: 'Memory at idle', js: [74, '74 MB'], rs: [3.5, '3.5 MB'], max: 74 },
+  { label: 'Start to first response', js: [82, '79–85 ms'], rs: [9, '8–10 ms'], max: 82 },
+]
+const grow = 24, gap = 10, hold = 55
+window.frameCount = rows.length * (grow + gap) + hold
+const ease = x => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3)
+function line(cls, who, [v, text], max, p) {
+  return '<div class="line ' + cls + '"><span class="who">' + who + '</span><div class="track"><div class="fill" style="width:' +
+    (100 * v / max * ease(p)) + '%"></div></div><span class="val">' + (p >= 1 ? text : '') + '</span></div>'
+}
+window.render = i => {
+  let html = '<div class="title">json-server, a whole Node server, ported to one Rust binary with <span>rust-anything</span></div>'
+  rows.forEach((r, k) => {
+    const p = (i - k * (grow + gap)) / grow
+    html += '<div class="row"><div class="label">' + r.label + '</div>' +
+      line('js', 'Node', r.js, r.max, p) + line('rs', 'Rust binary', r.rs, r.max, p) + '</div>'
+  })
+  const done = i >= rows.length * (grow + gap)
+  html += '<div class="foot">' + (done ? '<b>514/514</b> recorded HTTP cases match the Node server' : '') + '</div>'
+  document.getElementById('f').innerHTML = html
+}
+render(0)
+</script></body></html>

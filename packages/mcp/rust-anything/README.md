@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Connect an agent to [rust-anything](https://github.com/erkamyaman/rust-anything): a migration harness that records what the original code does, checks every unit of the Rust rewrite against that recording, and refuses to call a port done until `gate` passes. The CLI ships inside this package's own `rust-anything` npm dependency, so a checkout that ran `pnpm install` needs no global install and no per-machine configuration. The Web bundle mounts it in its `standard` agent preset.
+Connect an agent to [rust-anything](https://github.com/erkamyaman/rust-anything): a migration harness that records what the original code does, checks every unit of the Rust rewrite against that recording, and refuses to call a port done until `gate` passes. The CLI is compiled from the crate vendored at [`native/rust-anything`](../../../native/rust-anything/NATIVE.md) by `pnpm run build`, so a checkout needs no global install, no published binary and no per-machine configuration. The Web bundle mounts it in its `standard` agent preset.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Mounted by the Web `standard` agent preset as row `mcp-rust-anything`; the tools
 
 | Field | Default | Meaning |
 |---|---|---|
-| `command` | bundled binary | Executable to run instead of `node_modules/rust-anything/binaries/<platform>-<arch>/rust-anything`; `RUST_ANYTHING_BIN` is the environment fallback. |
+| `command` | staged vendored build | Executable to run instead of `native/rust-anything/bin/rust-anything`, the path `pnpm run build` stages from the vendored crate; `RUST_ANYTHING_BIN` is the environment fallback. |
 | `toolLoading` | `eager` | `on-demand` lists the 16 tools in the system prompt and loads the ones an agent asks for. |
 | `toolCallTimeoutMs` | 15 minutes | `gate`, `build`, `bench` and `app record` compile crates and replay corpora, so the MCP default of 60 s is short. |
 | `startupTimeoutMs` | 20 s | Budget for the stdio probe, connection and initial tool sync. |
@@ -45,7 +45,7 @@ The CLI runs as an ordinary child process: it writes `rust/<unit>-rs` crates int
 <details>
 <summary>Developer reference: resolution and mounting</summary>
 
-`bundledBinary(platform, arch)` resolves `rust-anything/package.json` from this package's own `import.meta.url` through `createRequire`, then joins `binaries/<platform>-<arch>/rust-anything[.exe]`. `resolveCommand` prefers an explicit `command`, then `RUST_ANYTHING_BIN`, then that path. `apply` mounts one `@deepseek-ai/dsh-mcp-client` instance with `serverName: 'rust-anything'`, `args: ['mcp']` and the configured timeouts. That client is a peer dependency: the host composition provides the instance, so a published install never carries a second copy of the plugin.
+`vendoredBinary(platform)` returns `native/rust-anything/bin/rust-anything[.exe]`, resolved from this package's own `import.meta.url`; [`scripts/build-rust-anything.ts`](../../../scripts/build-rust-anything.ts) compiles the vendored crate and stages that file, and `pnpm run build` runs it as the `rust-anything CLI` gate. `resolveCommand` prefers an explicit `command`, then `RUST_ANYTHING_BIN`, then that path. `apply` mounts one `@deepseek-ai/dsh-mcp-client` instance with `serverName: 'rust-anything'`, `args: ['mcp']` and the configured timeouts. That client is a peer dependency: the host composition provides the instance, so a published install never carries a second copy of the plugin.
 
 </details>
 
@@ -81,7 +81,9 @@ Mounting happens before the first turn and does not change mid-session, so it do
 <a id="known-limitations-and-deferred-work"></a>
 
 - The plugin mounts inside an agent preset, so each agent using it starts its own server process.
-- The npm dependency carries binaries for `linux-x64`, `linux-arm64`, `darwin-arm64`, `darwin-x64` and `win32-x64` only; another platform needs an explicit `command`.
+- The executable is a repository build artifact: run `pnpm run build` (or `pnpm run build:rust-anything`) before launching Web, and run it again after changing the vendored crate. Nothing is downloaded from npm, so this package serves this checkout only, not a published install.
+- Packaged runtimes cannot ship it: the executable lives outside every package, so the Desktop app and the Python SDK executable stage the plugin without its CLI and expose no rust-anything tools. Shipping them needs per-platform staging, as `native/system` does for its launcher.
+- Building needs Rust 1.97: `native/rust-anything/rust-toolchain.toml` pins that channel and rustup installs it on demand. A missing cargo fails the build with an actionable error.
 - Generated crates declare `rust-version = "1.97"`. An older default toolchain fails at build time; `rust-anything doctor` reports it.
 - Upstream 2.1.0 fails `build`, `diff`, `gate` and `bench` on a **relative** crate path (its `run` helper re-parents the child to a temp directory while passing a relative `--manifest-path`). Pass absolute paths; the skill says so.
 - The tool executes the code it records and writes crates into the repository. Treat a run as code execution with the agent's full environment.
@@ -91,6 +93,6 @@ Mounting happens before the first turn and does not change mid-session, so it do
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-`tests/mount.spec.ts` connects to the real bundled binary: it asserts the platform binary path, the three command-resolution branches, the full eager tool set and the single on-demand loader. A broken dependency, an unsupported platform, or a renamed tool fails the suite instead of degrading silently at runtime.
+`tests/mount.spec.ts` connects to the executable `pnpm run build:rust-anything` stages: it asserts the staged path, the three command-resolution branches, the full eager tool set and the single on-demand loader. A missing build, a renamed tool or a broken transport fails the suite instead of degrading silently at runtime; `pnpm run test` builds the binary first.
 
 </details>

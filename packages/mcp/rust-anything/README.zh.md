@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-把 Agent 接到 [rust-anything](https://github.com/erkamyaman/rust-anything)：一个迁移夹具——先录制原代码的行为，再用这份录制逐个单元校验 Rust 重写，`gate` 不通过就不算完成。CLI 随本包自己的 `rust-anything` npm 依赖一起安装，执行过 `pnpm install` 的检出无需全局安装，也不需要按机器改配置。Web bundle 把它挂在 `standard` 这个 agent preset 上。
+把 Agent 接到 [rust-anything](https://github.com/erkamyaman/rust-anything)：一个迁移夹具——先录制原代码的行为，再用这份录制逐个单元校验 Rust 重写，`gate` 不通过就不算完成。CLI 由 `pnpm run build` 从 vendored 源码 [`native/rust-anything`](../../../native/rust-anything/NATIVE.md) 编译，检出无需全局安装、无需已发布的二进制、也不需要按机器改配置。Web bundle 把它挂在 `standard` 这个 agent preset 上。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `command` | 包内二进制 | 覆盖 `node_modules/rust-anything/binaries/<platform>-<arch>/rust-anything`；环境变量 `RUST_ANYTHING_BIN` 是次级回退。 |
+| `command` | 仓库内编译产物 | 覆盖 `native/rust-anything/bin/rust-anything`（`pnpm run build` 从 vendored crate 编译并暂存的位置）；环境变量 `RUST_ANYTHING_BIN` 是次级回退。 |
 | `toolLoading` | `eager` | 设为 `on-demand` 时 16 个工具只进系统提示目录，由 Agent 按需加载。 |
 | `toolCallTimeoutMs` | 15 分钟 | `gate`、`build`、`bench`、`app record` 会编译 crate 并回放语料，MCP 默认的 60 秒不够。 |
 | `startupTimeoutMs` | 20 秒 | stdio 探测、连接与首次工具同步的预算。 |
@@ -45,7 +45,7 @@ CLI 作为普通子进程运行：它会往仓库写 `rust/<unit>-rs` crate，�
 <details>
 <summary>开发者参考：解析与挂载</summary>
 
-`bundledBinary(platform, arch)` 通过 `createRequire` 从本包自己的 `import.meta.url` 解析 `rust-anything/package.json`，再拼出 `binaries/<platform>-<arch>/rust-anything[.exe]`；`resolveCommand` 依次取显式 `command`、`RUST_ANYTHING_BIN`、该路径；`apply` 用 `serverName: 'rust-anything'`、`args: ['mcp']` 和配置的超时挂载一个 `@deepseek-ai/dsh-mcp-client` 实例。该 client 是 peer 依赖：由宿主组合提供，发布安装不会带上第二份插件副本。
+`vendoredBinary(platform)` 从本包自己的 `import.meta.url` 解析出 `native/rust-anything/bin/rust-anything[.exe]`；[`scripts/build-rust-anything.ts`](../../../scripts/build-rust-anything.ts) 负责编译 vendored crate 并暂存该文件，`pnpm run build` 以 `rust-anything CLI` gate 调用它；`resolveCommand` 依次取显式 `command`、`RUST_ANYTHING_BIN`、该路径；`apply` 用 `serverName: 'rust-anything'`、`args: ['mcp']` 和配置的超时挂载一个 `@deepseek-ai/dsh-mcp-client` 实例。该 client 是 peer 依赖：由宿主组合提供，发布安装不会带上第二份插件副本。
 
 </details>
 
@@ -81,7 +81,9 @@ CLI 作为普通子进程运行：它会往仓库写 `rust/<unit>-rs` crate，�
 <a id="known-limitations-and-deferred-work"></a>
 
 - 插件挂在 agent preset 内，因此每个使用它的 agent 会启动自己的 server 进程。
-- npm 依赖只带 `linux-x64`、`linux-arm64`、`darwin-arm64`、`darwin-x64`、`win32-x64` 五个平台的二进制；其它平台需要显式 `command`。
+- 可执行文件是仓库构建产物：启动 Web 前先跑 `pnpm run build`（或 `pnpm run build:rust-anything`），改动 vendored crate 后需要重跑。它不从 npm 下载，因此本包只服务本检出，不适用于发布安装。
+- 打包运行时无法带上它：可执行文件在所有包目录之外，所以 Desktop 应用与 Python SDK 可执行文件只装了插件、没有 CLI，那里不会出现 rust-anything 工具。要让它们可用，需要像 `native/system` 那样按平台暂存二进制。
+- 编译需要 Rust 1.97：`native/rust-anything/rust-toolchain.toml` 固定该 channel，rustup 会在缺失时自动安装；没有 cargo 时构建会给出可操作的报错。
 - 生成的 crate 声明 `rust-version = "1.97"`，默认工具链更旧会在构建时失败；`rust-anything doctor` 会指出。
 - 上游 2.1.0 在**相对** crate 路径下 `build`、`diff`、`gate`、`bench` 会失败（`run` 把子进程切到临时目录，却传下相对 `--manifest-path`）。请传绝对路径；技能里已写明。
 - 工具会执行被录制的代码并往仓库写 crate，等同于以 Agent 的完整环境执行代码，请谨慎。
@@ -92,6 +94,6 @@ CLI 作为普通子进程运行：它会往仓库写 `rust/<unit>-rs` crate，�
 <details>
 <summary>维护者上下文——点击展开</summary>
 
-`tests/mount.spec.ts` 连接真实的内置二进制：断言平台二进制路径、三条命令解析分支、eager 下的完整工具集与 on-demand 下唯一的 loader。依赖缺失、平台不受支持或工具改名都会让测试失败，而不是在运行时静默降级。
+`tests/mount.spec.ts` 连接 `pnpm run build:rust-anything` 暂存的可执行文件：断言暂存路径、三条命令解析分支、eager 下的完整工具集与 on-demand 下唯一的 loader。未构建、工具改名或传输异常都会让测试失败，而不是在运行时静默降级；`pnpm run test` 会先构建该二进制。
 
 </details>
