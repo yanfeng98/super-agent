@@ -10,26 +10,26 @@ Eleven skills are model-invoked and appear in the Session skill catalog; the mod
 
 | Invocation | Skills |
 |---|---|
-| Model-invoked | `code-review`, `codebase-design`, `diagnosing-bugs`, `domain-modeling`, `grilling`, `pr`, `prototype`, `research`, `tdd`, `wizard`, `writing-for-agents` |
-| User-invoked | `ask-matt`, `grill-me`, `grill-with-docs`, `handoff`, `implement`, `implement-spec`, `improve-codebase-architecture`, `retro`, `setup-matt-pocock-skills`, `teach`, `to-questionnaire`, `to-spec`, `to-tickets`, `triage`, `wait-what`, `wayfinder` |
+| Model-invoked | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
+| User-invoked | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
 
 ## Invoke a skill
 
-Type `/` in the composer to list the user-invoked skills and insert one by name. Entries group by where they came from, so these 27 sit under `mattpocock/skills` next to headings for the project and user directories that supply other skills. `ask-matt` is the router: it recommends the skill or flow for your situation, so start there when you are unsure.
+Type `/` in the composer to list the user-invoked skills and insert one by name. Entries group by where they came from, so these 27 sit under `mattpocock/skills` next to headings for the project and user directories that supply other skills. `eng-ask-matt` is the router: it recommends the skill or flow for your situation, so start there when you are unsure.
 
 For a model-invoked skill, describe the task and the model loads the one that fits; name the skill explicitly when you want that one.
 
 ## The main flow
 
-The skills compose into a path from idea to shipped change: `grill-with-docs` sharpens the idea and records the domain language, `to-spec` and `to-tickets` turn it into work, `implement` drives `tdd` and closes with `code-review`, and `pr` and `retro` finish the change. `triage`, `diagnosing-bugs`, and `wayfinder` are on-ramps for incoming issues, hard bugs, and work too large for one Session.
+The skills compose into a path from idea to shipped change: `eng-grill-with-docs` sharpens the idea and records the domain language, `eng-to-spec` and `eng-to-tickets` turn it into work, `eng-implement` drives `eng-tdd` and closes with `eng-code-review`, and `eng-pr` and `eng-retro` finish the change. `eng-triage`, `eng-diagnosing-bugs`, and `eng-wayfinder` are on-ramps for incoming issues, hard bugs, and work too large for one Session.
 
 ## Repository configuration
 
-The engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker. Run `/setup-matt-pocock-skills` once per repository to record the tracker, triage labels, and documentation layout under `docs/agents/`.
+The engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker. Run `/eng-setup-matt-pocock-skills` once per repository to record the tracker, triage labels, and documentation layout under `docs/agents/`.
 
 ## Override or remove
 
-A skill with the same name in the project's `.dsh/skills` or `.agents/skills`, or in your user skill directories, replaces the built-in one. To remove the whole component from a profile, disable its row in that profile's patch:
+A skill with the same name in the project's `.dsh/skills` or `.agents/skills`, or in your user skill directories, replaces the shipped one. Because the shipped names carry the `eng-` prefix, a personal copy under the upstream name — `tdd`, say — sits beside `eng-tdd` instead of replacing it, and both stay reachable. To remove the whole component from a profile, disable its row in that profile's patch:
 
 ```yaml
 - id: skill-engineering

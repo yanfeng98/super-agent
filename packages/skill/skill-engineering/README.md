@@ -31,10 +31,12 @@ The base bundle inserts this provider, so every base-backed profile (`web`, `hea
 
 | Invocation | Skills |
 |---|---|
-| Model-invoked, listed in the session catalog | `code-review`, `codebase-design`, `diagnosing-bugs`, `domain-modeling`, `grilling`, `pr`, `prototype`, `research`, `tdd`, `wizard`, `writing-for-agents` |
-| User-invoked, reachable by typing `/` only | `ask-matt`, `grill-me`, `grill-with-docs`, `handoff`, `implement`, `implement-spec`, `improve-codebase-architecture`, `retro`, `setup-matt-pocock-skills`, `teach`, `to-questionnaire`, `to-spec`, `to-tickets`, `triage`, `wait-what`, `wayfinder` |
+| Model-invoked, listed in the session catalog | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
+| User-invoked, reachable by typing `/` only | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
 
-`ask-matt` is the router: it maps the user-invoked skills onto the main flow (`grill-with-docs` → `to-spec` → `to-tickets` → `implement` → `pr` → `retro`), the on-ramps (`triage`, `diagnosing-bugs`, `wayfinder`), and the vocabulary skills (`domain-modeling`, `codebase-design`). `setup-matt-pocock-skills` writes the per-repository issue-tracker, triage-label, and domain-doc configuration the engineering skills read.
+The shipped names carry an `eng-` prefix. A skill directory keeps its upstream name in a project or user root, so an unprefixed shipped copy would be replaced by that personal copy and the built-in would vanish from the `/` menu; the prefix keeps both addressable and lets the menu group the shipped set under `mattpocock/skills`.
+
+`eng-ask-matt` is the router: it maps the user-invoked skills onto the main flow (`eng-grill-with-docs` → `eng-to-spec` → `eng-to-tickets` → `eng-implement` → `eng-pr` → `eng-retro`), the on-ramps (`eng-triage`, `eng-diagnosing-bugs`, `eng-wayfinder`), and the vocabulary skills (`eng-domain-modeling`, `eng-codebase-design`). `eng-setup-matt-pocock-skills` writes the per-repository issue-tracker, triage-label, and domain-doc configuration the engineering skills read.
 
 A same-name skill from a nearer layer wins: a preset's local discovery (project `.dsh/skills`, project `.agents/skills`, the configured custom directory, or the user skill directories) supplies the catalog entry and body instead of this provider. Within one layer the bundled rank sorts last.
 
@@ -109,7 +111,7 @@ These limits define what the bundled provider does not do. They are current pack
 - **English only** — the skill text is the upstream English corpus; the plugin metadata is localized, but the catalog and bodies are not, so a localized catalog needs a local override.
 - **Manual synchronization** — upstream changes arrive by copying the promoted buckets, re-applying the adaptation below, and updating the fixed name list; no build step tracks the upstream repository.
 - **No per-skill configuration** — the provider exposes one asset root and always publishes the packaged set; deployments that want a subset author their own provider.
-- **The skills assume a workspace** — engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker; `setup-matt-pocock-skills` writes that configuration, and without it the skills ask for it.
+- **The skills assume a workspace** — engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker; `eng-setup-matt-pocock-skills` writes that configuration, and without it the skills ask for it.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -117,10 +119,10 @@ These limits define what the bundled provider does not do. They are current pack
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The package is part of this repository; its skill text is synced from [`mattpocock/skills`](https://github.com/mattpocock/skills), branch `main` at `abeeaf9` (v1.3.2), and the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors it byte for byte. To re-sync:
+The package is part of this repository; its skill text is synced from [`mattpocock/skills`](https://github.com/mattpocock/skills), branch `main` at `abeeaf9` (v1.3.2), and the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors the upstream text byte for byte. This package's copies differ by the `eng-` prefix and the adaptations below. To re-sync:
 
-1. Copy each promoted skill directory into `assets/`, excluding the Codex `agents/openai.yaml` files.
-2. Re-apply the Harness adaptations: name the `skill` tool, replace `/clear` with opening a new session (the Harness has `/compact` but no `/clear`), and drop installers, marketplace manifests, the bucket READMEs, and the Codex `agents/openai.yaml` files.
+1. Copy each promoted skill directory into `assets/` as `eng-<name>`, excluding the Codex `agents/openai.yaml` files, and set its frontmatter `name` to the same prefixed name.
+2. Re-apply the Harness adaptations: name the `skill` tool, replace `/clear` with opening a new session (the Harness has `/compact` but no `/clear`), rewrite every `/name` command and `skill` tool reference to the prefixed name, and drop installers, marketplace manifests, the bucket READMEs, and the Codex `agents/openai.yaml` files.
 3. Update `SKILL_NAMES` in `src/index.ts`; the drift test compares it with the asset directories.
 4. Run the package tests and the package README gates.
 

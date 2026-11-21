@@ -16,33 +16,33 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const assets = fileURLToPath(new URL('../assets/', import.meta.url))
 const names = [
-  'ask-matt',
-  'code-review',
-  'codebase-design',
-  'diagnosing-bugs',
-  'domain-modeling',
-  'grill-me',
-  'grill-with-docs',
-  'grilling',
-  'handoff',
-  'implement',
-  'implement-spec',
-  'improve-codebase-architecture',
-  'pr',
-  'prototype',
-  'research',
-  'retro',
-  'setup-matt-pocock-skills',
-  'tdd',
-  'teach',
-  'to-questionnaire',
-  'to-spec',
-  'to-tickets',
-  'triage',
-  'wait-what',
-  'wayfinder',
-  'wizard',
-  'writing-for-agents',
+  'eng-ask-matt',
+  'eng-code-review',
+  'eng-codebase-design',
+  'eng-diagnosing-bugs',
+  'eng-domain-modeling',
+  'eng-grill-me',
+  'eng-grill-with-docs',
+  'eng-grilling',
+  'eng-handoff',
+  'eng-implement',
+  'eng-implement-spec',
+  'eng-improve-codebase-architecture',
+  'eng-pr',
+  'eng-prototype',
+  'eng-research',
+  'eng-retro',
+  'eng-setup-matt-pocock-skills',
+  'eng-tdd',
+  'eng-teach',
+  'eng-to-questionnaire',
+  'eng-to-spec',
+  'eng-to-tickets',
+  'eng-triage',
+  'eng-wait-what',
+  'eng-wayfinder',
+  'eng-wizard',
+  'eng-writing-for-agents',
 ] as const
 
 /** Instruction body with the frontmatter block removed, as the provider reports it. */
@@ -99,11 +99,11 @@ describe('bundled engineering workflow skills', () => {
         expect(skill.resourceBase).toEqual({ kind: 'directory', path: join(assets, skill.name).split(sep).join('/') })
       }
       const policy = (name: string) => catalog.find(skill => skill.name === name)?.invocation
-      expect(policy('ask-matt')).toEqual({ modelInvocable: false, userInvocable: true })
-      expect(policy('implement')).toEqual({ modelInvocable: false, userInvocable: true })
-      expect(policy('grill-me')).toEqual({ modelInvocable: false, userInvocable: true })
-      expect(policy('tdd')).toEqual({ modelInvocable: true, userInvocable: true })
-      expect(policy('research')).toEqual({ modelInvocable: true, userInvocable: true })
+      expect(policy('eng-ask-matt')).toEqual({ modelInvocable: false, userInvocable: true })
+      expect(policy('eng-implement')).toEqual({ modelInvocable: false, userInvocable: true })
+      expect(policy('eng-grill-me')).toEqual({ modelInvocable: false, userInvocable: true })
+      expect(policy('eng-tdd')).toEqual({ modelInvocable: true, userInvocable: true })
+      expect(policy('eng-research')).toEqual({ modelInvocable: true, userInvocable: true })
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -127,7 +127,7 @@ describe('bundled engineering workflow skills', () => {
         expect(loaded?.content).toBe(await bodyOf(join(assets, name, 'SKILL.md')))
         expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: join(assets, name).split(sep).join('/') })
       }
-      expect((await ctx.skills.get('tdd'))?.content).toContain('[tests.md](tests.md)')
+      expect((await ctx.skills.get('eng-tdd'))?.content).toContain('[tests.md](tests.md)')
       await fiber.dispose()
       expect(await ctx.skills.list()).toEqual([])
     } finally { await ctx.fiber.dispose() }
@@ -169,9 +169,9 @@ describe('bundled engineering workflow skills', () => {
       await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
       await ctx.loader.await()
       expect((await ctx.skills.list()).map(skill => skill.name)).toEqual([...names])
-      expect((await ctx.skills.get('tdd'))?.resourceBase)
-        .toEqual({ kind: 'directory', path: join(external, 'tdd').split(sep).join('/') })
-      expect((await ctx.skills.get('tdd'))?.content).toBe(await bodyOf(join(external, 'tdd', 'SKILL.md')))
+      expect((await ctx.skills.get('eng-tdd'))?.resourceBase)
+        .toEqual({ kind: 'directory', path: join(external, 'eng-tdd').split(sep).join('/') })
+      expect((await ctx.skills.get('eng-tdd'))?.content).toBe(await bodyOf(join(external, 'eng-tdd', 'SKILL.md')))
     } finally {
       await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
@@ -188,7 +188,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('omits unreadable or invalid skills from a complete catalog and reports each failure once', async () => {
-    const { root, skill } = await relocatedAssets('dsh-engineering-invalid-', 'tdd')
+    const { root, skill } = await relocatedAssets('dsh-engineering-invalid-', 'eng-tdd')
     const ctx = new Context()
     try {
       const warnings = captureWarnings(ctx)
@@ -197,7 +197,7 @@ describe('bundled engineering workflow skills', () => {
       const fiber = await ctx.plugin(SkillEngineering, { assetRoot: root })
       const provider: SkillProvider = registerProvider.mock.calls[0]![0]({ signal: new AbortController().signal, invalidate: () => {} })
       const original = await readFile(skill, 'utf8')
-      const remaining = names.filter(name => name !== 'tdd')
+      const remaining = names.filter(name => name !== 'eng-tdd')
       const listed = async () => (await observe(provider)).candidates.map(entry => entry.name)
       const missing = async () => {
         const observed = await ctx.skills.snapshot()
@@ -206,9 +206,9 @@ describe('bundled engineering workflow skills', () => {
 
       await ctx.skills.list()
       await rm(skill)
-      expect(await ctx.skills.get('tdd')).toBeUndefined()
+      expect(await ctx.skills.get('eng-tdd')).toBeUndefined()
       expect(await missing()).toEqual({ complete: true, names: remaining })
-      expect(warnings).toEqual([expect.stringMatching(/^skill-engineering: skill "tdd" is unavailable: Error: ENOENT.*SKILL\.md/u)])
+      expect(warnings).toEqual([expect.stringMatching(/^skill-engineering: skill "eng-tdd" is unavailable: Error: ENOENT.*SKILL\.md/u)])
       await observe(provider)
       expect(warnings).toHaveLength(1)
 
@@ -216,12 +216,12 @@ describe('bundled engineering workflow skills', () => {
       expect(await listed()).toEqual([...names])
 
       const invalid: [content: string, failure: string][] = [
-        ['# Missing frontmatter\nname: tdd\n', 'has no YAML frontmatter'],
+        ['# Missing frontmatter\nname: eng-tdd\n', 'has no YAML frontmatter'],
         ['---\nnull\n---\n# Instructions\n', 'has no metadata'],
-        ['---\nname: other\ndescription: 描述\n---\n# Instructions\n', 'declares name "other", expected "tdd"'],
-        ['---\nname: tdd\n---\n# Instructions\n', 'has no description'],
-        ['---\nname: tdd\ndescription: 描述\ndisable-model-invocation: yes\n---\n# Instructions\n', 'must be a boolean'],
-        ['---\nname: tdd\ndescription: [unclosed\n---\n# Instructions\n', 'YAMLParseError'],
+        ['---\nname: other\ndescription: 描述\n---\n# Instructions\n', 'declares name "other", expected "eng-tdd"'],
+        ['---\nname: eng-tdd\n---\n# Instructions\n', 'has no description'],
+        ['---\nname: eng-tdd\ndescription: 描述\ndisable-model-invocation: yes\n---\n# Instructions\n', 'must be a boolean'],
+        ['---\nname: eng-tdd\ndescription: [unclosed\n---\n# Instructions\n', 'YAMLParseError'],
       ]
       for (const [content, failure] of invalid) {
         await writeFile(skill, content)
@@ -243,7 +243,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('reads extra invocation fields and rejects a load whose file became unreadable', async () => {
-    const { root, skill } = await relocatedAssets('dsh-engineering-policy-', 'implement')
+    const { root, skill } = await relocatedAssets('dsh-engineering-policy-', 'eng-implement')
     const ctx = new Context()
     try {
       const warnings = captureWarnings(ctx)
@@ -254,15 +254,15 @@ describe('bundled engineering workflow skills', () => {
       const fiber = await ctx.plugin(SkillEngineering, { assetRoot: root })
       const provider: SkillProvider = registerProvider.mock.calls[0]![0]({ signal: new AbortController().signal, invalidate: () => {} })
       const listed = await observe(provider)
-      expect(listed.candidates.find(entry => entry.name === 'implement')?.invocation)
+      expect(listed.candidates.find(entry => entry.name === 'eng-implement')?.invocation)
         .toEqual({ modelInvocable: true, userInvocable: false })
 
       await ctx.skills.list()
       await rm(skill)
       await mkdir(skill)
       expect((await observe(provider)).complete).toBe(false)
-      expect(warnings.at(-1)).toContain('skill "implement" is unavailable')
-      await expect(ctx.skills.get('implement')).rejects.toThrow()
+      expect(warnings.at(-1)).toContain('skill "eng-implement" is unavailable')
+      await expect(ctx.skills.get('eng-implement')).rejects.toThrow()
       await fiber.dispose()
     } finally {
       await ctx.fiber.dispose()
@@ -271,7 +271,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('treats a read failure without an error code as transient', async () => {
-    const { root } = await relocatedAssets('dsh-engineering-transient-', 'tdd')
+    const { root } = await relocatedAssets('dsh-engineering-transient-', 'eng-tdd')
     const ctx = new Context()
     try {
       const warnings = captureWarnings(ctx)
@@ -280,7 +280,7 @@ describe('bundled engineering workflow skills', () => {
       vi.mocked(readFile).mockRejectedValueOnce(new Error('locked by another process'))
       const observed = await ctx.skills.snapshot()
       expect(observed.complete).toBe(false)
-      expect(observed.skills.map(entry => entry.name)).toEqual(names.filter(entry => entry !== 'ask-matt'))
+      expect(observed.skills.map(entry => entry.name)).toEqual(names.filter(entry => entry !== 'eng-ask-matt'))
       expect(warnings.at(-1)).toContain('locked by another process')
       expect((await ctx.skills.snapshot()).complete).toBe(true)
     } finally {
@@ -290,7 +290,7 @@ describe('bundled engineering workflow skills', () => {
   })
 
   it('stops discovery when its signal aborts', async () => {
-    const { root, skill } = await relocatedAssets('dsh-engineering-abort-', 'tdd')
+    const { root, skill } = await relocatedAssets('dsh-engineering-abort-', 'eng-tdd')
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)

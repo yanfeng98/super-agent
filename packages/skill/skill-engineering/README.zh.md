@@ -31,10 +31,12 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 
 | 调用方式 | 技能 |
 |---|---|
-| 模型调用，列在会话目录中 | `code-review`、`codebase-design`、`diagnosing-bugs`、`domain-modeling`、`grilling`、`pr`、`prototype`、`research`、`tdd`、`wizard`、`writing-for-agents` |
-| 用户调用，只能输入 `/` 触达 | `ask-matt`、`grill-me`、`grill-with-docs`、`handoff`、`implement`、`implement-spec`、`improve-codebase-architecture`、`retro`、`setup-matt-pocock-skills`、`teach`、`to-questionnaire`、`to-spec`、`to-tickets`、`triage`、`wait-what`、`wayfinder` |
+| 模型调用，列在会话目录中 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
+| 用户调用，只能输入 `/` 触达 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
 
-`ask-matt` 是路由：它把用户调用的技能映射到主流程（`grill-with-docs` → `to-spec` → `to-tickets` → `implement` → `pr` → `retro`）、入口匝道（`triage`、`diagnosing-bugs`、`wayfinder`）与词汇技能（`domain-modeling`、`codebase-design`）。`setup-matt-pocock-skills` 写入工程技能读取的仓库级配置：问题跟踪器、分诊标签与领域文档布局。
+随包技能名都带 `eng-` 前缀。项目或用户目录里的技能保留上游原名，若随包副本不加前缀，就会被同名个人副本替换，内置技能从 `/` 菜单里消失；加前缀后两者都能被寻址，菜单也能把随包这一组归到 `mattpocock/skills` 之下。
+
+`eng-ask-matt` 是路由：它把用户调用的技能映射到主流程（`eng-grill-with-docs` → `eng-to-spec` → `eng-to-tickets` → `eng-implement` → `eng-pr` → `eng-retro`）、入口匝道（`eng-triage`、`eng-diagnosing-bugs`、`eng-wayfinder`）与词汇技能（`eng-domain-modeling`、`eng-codebase-design`）。`eng-setup-matt-pocock-skills` 写入工程技能读取的仓库级配置：问题跟踪器、分诊标签与领域文档布局。
 
 来自更近层的同名技能优先：某个 preset 的本地发现（项目的 `.dsh/skills`、项目的 `.agents/skills`、配置的自定义目录或用户技能目录）会取代该提供方提供的目录条目与正文。在同一层内，bundled 排名排在最后。
 
@@ -109,7 +111,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 - **只有英文** —— 技能文本是上游英文语料；插件元数据已本地化，但目录与正文没有，因此本地化目录需要本地覆盖。
 - **手动同步** —— 上游变更通过复制晋升桶、重新套用下面的改编步骤并更新固定名称列表进入本包；没有构建步骤跟踪上游仓库。
 - **没有按技能配置** —— 该提供方只暴露一个资源根目录，并且总是发布随包集合；想要子集的部署方应自己编写提供方。
-- **这些技能假设存在工作区** —— 工程技能会读取 `GLOSSARY.md`、ADR 与问题跟踪器；`setup-matt-pocock-skills` 写入这些配置，没有它时技能会要求运行它。
+- **这些技能假设存在工作区** —— 工程技能会读取 `GLOSSARY.md`、ADR 与问题跟踪器；`eng-setup-matt-pocock-skills` 写入这些配置，没有它时技能会要求运行它。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -117,10 +119,10 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 <details>
 <summary>维护者工作背景——点击展开</summary>
 
-该包是本仓库的一部分；技能文本同步自 [`mattpocock/skills`](https://github.com/mattpocock/skills)，分支 `main`，提交 `abeeaf9`（v1.3.2）；`yanfeng98/nano-mattpocock-skills` 的 `main` 与该分支逐字节一致。重新同步时：
+该包是本仓库的一部分；技能文本同步自 [`mattpocock/skills`](https://github.com/mattpocock/skills)，分支 `main`，提交 `abeeaf9`（v1.3.2）；`yanfeng98/nano-mattpocock-skills` 的 `main` 与上游文本逐字节一致；本包副本的差异只有 `eng-` 前缀与下面的改编。重新同步时：
 
-1. 把每个晋升技能目录复制进 `assets/`，排除 Codex 的 `agents/openai.yaml`。
-2. 重新套用 Harness 改编：把 `Skill tool` 改名为 `skill` 工具，把 `/clear` 改为开新会话（Harness 有 `/compact` 但没有 `/clear`），并去掉安装器、市场清单、桶 README 与 Codex 的 `agents/openai.yaml`。
+1. 把每个晋升技能目录以 `eng-<name>` 之名复制进 `assets/`，排除 Codex 的 `agents/openai.yaml`，并把 frontmatter 的 `name` 改成同一个带前缀的名字。
+2. 重新套用 Harness 改编：把 `Skill tool` 改名为 `skill` 工具，把 `/clear` 改为开新会话（Harness 有 `/compact` 但没有 `/clear`），把所有 `/名字` 命令与 `skill` 工具引用改成带前缀的名字，并去掉安装器、市场清单、桶 README 与 Codex 的 `agents/openai.yaml`。
 3. 更新 `src/index.ts` 里的 `SKILL_NAMES`；漂移测试会把该列表与资源目录比对。
 4. 运行该包的测试与包 README 门禁。
 
