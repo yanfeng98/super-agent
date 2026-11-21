@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-由 Web 的 `standard` agent preset 以 `mcp-rust-anything` 行挂载，该 preset 的 agent 直接拿到 `mcp__rust-anything__*` 工具，无需任何安装步骤。"把这个 CLI 改写成 Rust""把这个热点循环搬到 Rust""给 `src/parser/` 做迁移计划"这类任务会命中对应的[技能](../../../.agents/skills/rust-anything/SKILL.md)，按 `analyze`、`bridge`、`record`、写 `port.rs`、`build`、`diff`、`bench`、`gate`（整应用走 `app_*`）推进。
+由 Web 的 `standard` agent preset 以 `mcp-rust-anything` 行挂载，该 preset 的 agent 直接拿到 `mcp__rust-anything__*` 工具，无需任何安装步骤。"把这个 CLI 改写成 Rust""把这个热点循环搬到 Rust""给 `src/parser/` 做迁移计划"这类任务会命中对应的 [`dsh-rust-anything`](../../../.agents/skills/dsh-rust-anything/SKILL.md) 技能，按 `analyze`、`bridge`、`record`、写 `port.rs`、`build`、`diff`、`bench`、`gate`（整应用走 `app_*`）推进。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
