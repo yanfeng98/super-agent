@@ -350,8 +350,6 @@ export interface Ticket {
   merged?: TicketMerge
   /** When a person undid that merge with a reverting commit, and the merge it undoes. */
   reverted?: TicketRevert
-  /** The last failing check a followed thread reported, so the same failure is announced once. */
-  ciNotice?: { thread: string; value: string }
   /** Why the latest merge attempt did not land, kept after the chat that asked has scrolled away. */
   mergeError?: { at: string; error: string; via?: ActionOrigin }
   /** When a person discarded the ticket's worktree and branch. */

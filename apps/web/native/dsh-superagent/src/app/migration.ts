@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { isoTime, said, type AcceptMode, type AdmissionCell, type ChannelRef, type Decision, type Execution, type Follow, type MandateBasis,
   type Reason, type Thread, type Ticket, type TicketInput, type TriggerDisposition } from '../core/index.ts'
 import { feishuChatLink } from '../sources/feishu-channel.ts'
-import { SettingsSchema, policyVersion, type Settings, type SettingsOrigin } from '../policy.ts'
+import { SettingsSchema, policyVersion, type SettingsOrigin } from '../policy.ts'
 import { teamDefaults } from './context.ts'
 import { PromptConfigSchema, type PromptConfig, type PromptVersion } from './prompts.ts'
 import type { EffectKind, EffectPayloads } from './effects.ts'
@@ -63,8 +63,7 @@ export function migrateTo11(store: Store): void {
   }
   for (const name of DEAD_KEYS.flatMap(prefix => prefix.endsWith(':') ? store.keys(prefix) : [prefix])) store.delete(name)
   // Source read pages, prompt previews, and Feishu message links are now cached in memory instead of SQLite.
-  store.db.exec(`DELETE FROM kv WHERE key LIKE 'feishu-read:%' OR key LIKE 'github-read:%' OR key LIKE 'feishu-source-link:%'
-    OR key LIKE '%:prompt-preview/%'`)
+  store.db.exec(`DELETE FROM kv WHERE key LIKE 'feishu-read:%' OR key LIKE 'feishu-source-link:%' OR key LIKE '%:prompt-preview/%'`)
   queueEarlierWork(store)
   // Convert dropped-message prose reasons into reason codes localized by the panel.
   store.db.exec(`UPDATE outbox SET value = json_set(value, '$.dropped.reason', CASE value ->> '$.dropped.reason'
@@ -104,15 +103,13 @@ function triggerTimes(store: Store): void {
   }
 }
 /**
- * Obsolete KV keys and prefixes (ending in `:`) from removed Sources, earlier migrations,
- * and pre-schema-11 maintenance and subscription tracking.
+ * Obsolete KV keys and prefixes (ending in `:`) from earlier migrations, and pre-schema-11 maintenance and
+ * subscription tracking.
  */
-const DEAD_KEYS = ['github-object-state:', 'github-issue-eligibility:', 'github-auto-merge:', 'github-ended:', 'github-thread:',
-  'thread-since:github:', 'github-since', 'github-retry', 'github-stream:', 'github-branch-ci', 'github-ci:', 'github-cursor:',
-  'source-labels-at:', 'legacy-migrated-at', 'thread-times-backfilled', 'settings-before-9', 'answer-ready:', 'prompt-sections', 'prompt-settings-text',
-  'prompt-vocabulary', 'subscriptions', 'subscriptions-initialized', 'subscription-seen:', 'subscription-initialized:', 'subscription-since:',
-  'observation-since:', 'task-threads:', 'maintenance-recovery:', 'maintenance-progress-report-recovery:', 'maintenance-thread-followup:',
-  'master-recovery:', 'github-issue-candidates']
+const DEAD_KEYS = ['source-labels-at:', 'legacy-migrated-at', 'thread-times-backfilled', 'settings-before-9', 'answer-ready:', 'prompt-sections',
+  'prompt-settings-text', 'prompt-vocabulary', 'subscriptions', 'subscriptions-initialized', 'subscription-seen:', 'subscription-initialized:',
+  'subscription-since:', 'observation-since:', 'task-threads:', 'maintenance-recovery:', 'maintenance-progress-report-recovery:',
+  'maintenance-thread-followup:', 'master-recovery:']
 
 /**
  * Move legacy main-session queues into the unified effect queue in order (relays to steer, then notices for removed
@@ -157,8 +154,8 @@ function outboxReceipts(store: Store): void {
 }
 
 /**
- * Ensure the latest settings revision snapshot holds the current settings (saving a new revision if missing or if earlier
- * migration steps stripped a removed Source), then delete the standalone `settings` key.
+ * Ensure the latest settings revision snapshot holds the current settings (saving a new revision if missing), then
+ * delete the standalone `settings` key.
  */
 function settingsAsVersions(store: Store): void {
   const current = store.get<unknown>('settings')
@@ -176,29 +173,15 @@ function settingsAsVersions(store: Store): void {
 
 /** Settings save origin names recorded by versions before schema 11, mapped to current `SettingsOrigin` values. */
 const ORIGINS: Readonly<Record<string, SettingsOrigin>> = { web: 'panel', 'orchestrator-tool': 'tool', 'policy-sync': 'sync', 'member-sync': 'sync' }
-/** Source kinds removed from dsh-superagent. */
-const REMOVED_SOURCES: readonly string[] = ['github', 'github-issue']
-/** Drop a removed Source's instance and Policy part from settings. */
-function withoutRemovedSources(settings: Settings): Settings {
-  const sources = Object.fromEntries(Object.entries(settings.sources).filter(([id]) => !REMOVED_SOURCES.includes(id)))
-  const policySources = Object.fromEntries(Object.entries(settings.policy.sources).filter(([id]) => !REMOVED_SOURCES.includes(id)))
-  return { ...settings, sources, policy: { ...settings.policy, sources: policySources } }
-}
-/**
- * Upgrade current and historical settings records to the schema 11 structure: strip removed source kinds from active
- * settings while keeping them in historical revisions and mapping historical origin names.
- */
+/** Upgrade current and historical settings records to the schema 11 structure, mapping historical origin names. */
 function migrateSettingsRecords(store: Store): void {
   const stored = store.get<unknown>('settings')
-  if (stored !== undefined) {
-    const settings = SettingsSchema.parse(migrateSettings(stored))
-    store.set('settings', withoutRemovedSources(settings))
-  }
+  if (stored !== undefined) store.set('settings', SettingsSchema.parse(migrateSettings(stored)))
   // Preserve unparseable historical revisions as-is so a corrupt history entry does not block startup.
   for (const name of store.keys('settings-version:')) {
     const version = store.get<{ source: string; settings: unknown }>(name)!
     const settings = SettingsSchema.safeParse(migrateSettings(version.settings))
-    store.set(name, { ...version, source: ORIGINS[version.source] ?? version.source, ...settings.success ? { settings: withoutRemovedSources(settings.data) } : {} })
+    store.set(name, { ...version, source: ORIGINS[version.source] ?? version.source, ...settings.success ? { settings: settings.data } : {} })
   }
 }
 interface Member { name?: string; feishuId?: string }
@@ -250,7 +233,7 @@ function withoutRemovedFields(value: Stored): Stored {
 /** Prompt configuration shape saved before team sections existed, when all sections (including fixed ones) were editable. */
 const LegacyPromptConfigSchema = z.object({ shared: z.string(), orchestrator: z.string(), worker: z.string(), guides: z.record(z.string(), z.string()) })
 /** Guide names from legacy prompt configurations that are now fixed built-in prompt sections or skills. */
-const LEGACY_FIXED = new Set(['cli', 'subscriptions', 'replies', 'reviews', 'dispatch', 'work', 'feishu', 'github'])
+const LEGACY_FIXED = new Set(['cli', 'subscriptions', 'replies', 'reviews', 'dispatch', 'work', 'feishu'])
 /** Tool names used in saved prompts before the domain vocabulary rename, paired with what replaces them now. */
 const RENAMED_TOOLS: readonly (readonly [string, string])[] = [
   ['orchestrator_subscription_remove', 'orchestrator_thread_unsubscribe'], ['orchestrator_subscriptions', 'orchestrator_threads'],
@@ -280,7 +263,6 @@ function legacyText(value: string): string {
   return currentNames(result.replaceAll('reply_to_event_id', 'reply_to_trigger_id').replace(/\bevent_id\b/g, 'trigger_id').replace(/\btask_id\b/g, 'ticket_id')
     .replaceAll('related_tasks', 'related_tickets').replace(/(?<![\w/-])event\//g, 'trigger/').replace(/(?<![\w/-])task\//g, 'ticket/').replaceAll('<event-id>', '<trigger-id>')
     .replace(/\bguide\/([a-z][a-z0-9-]*)\b/g, (_match, name: string) => LEGACY_FIXED.has(name) ? `the ${name} section` : `skill dsh-superagent-${name}`))
-    .replace(/\bthe github section\b/g, 'the repository guidance').replace(/\bdsh-superagent-github\b/g, 'the repository guidance')
 }
 /**
  * Upgrade a stored prompt configuration to current sections, tool names, and skill references; legacy configurations take
@@ -341,15 +323,14 @@ export function basisOf(stored: unknown): MandateBasis {
   return { via: 'listed', ...common, ...addressed ? { addressed } : {}, ...old.observation === true ? { observation: mode ? { mode } : {} } : {}, ...authority }
 }
 /**
- * Upgrade a schema 10 ticket record to schema 11: extracts `origin`, `execution`, and `delivery` from `meta`, drops removed
- * Source channels, merges reported `answers`, marks human trigger inputs (`human: true`), and converts pending `reopen`
- * inputs into `text` inputs for the worker.
+ * Upgrade a schema 10 ticket record to schema 11: extracts `origin`, `execution`, and `delivery` from `meta`, merges
+ * reported `answers`, marks human trigger inputs (`human: true`), and converts pending `reopen` inputs into `text`
+ * inputs for the worker.
  */
 export function ticketOf(old: Stored, answers = new Map<string, string[]>(), human: (triggerId: string) => boolean = () => false): Ticket {
   const { meta: storedMeta, follows: storedFollows, ...rest } = old as Stored & { meta?: Stored; follows?: unknown }
   const ticket = rest as unknown as Ticket
-  const follows = Array.isArray(storedFollows)
-    ? (storedFollows as Follow[]).filter(follow => !follow.thread.startsWith('github:')) : []
+  const follows = Array.isArray(storedFollows) ? storedFollows as Follow[] : []
   const meta = storedMeta ?? {}
   const triggerId = text(meta.sourceTriggerId) ?? ''
   const triggerIds = Array.isArray(meta.triggerIds) ? meta.triggerIds as string[] : triggerId ? [triggerId] : []
@@ -371,7 +352,6 @@ export function ticketOf(old: Stored, answers = new Map<string, string[]>(), hum
     ...ended?.by === 'human' ? { undelivered: [] } : {},
     ...kept ? { execution: kept } : {}, ...delivery ? { delivery } : {},
     ...follows.length ? { follows } : {},
-    channels: ticket.channels.filter(channel => channel.source !== 'github' && channel.source !== 'github-issue'),
     ...reported.length ? { answers: reported } : {} }
 }
 /**

@@ -392,12 +392,11 @@ it('reads a ticket with the ids it is tied to, its reports by assignment, and it
   expect(JSON.parse((await read(`ticket/${ticket.id}/transcript`) as { text: string }).text)).toMatchObject({ read: `ticket/${ticket.id}/message/0` })
 })
 
-it('reads a trigger once with the message it replies to and the messages around it on its thread, without the CI runs', async () => {
+it('reads a trigger once with the message it replies to and the messages around it on its thread', async () => {
   const at = (minute: number) => `2026-10-06T00:0${minute}:00.000Z`
   const message = (id: string, minute: number, overrides: Record<string, unknown> = {}) => ({ ...feishu(id, `message ${id}`, { root_id: 'om_root', ...overrides }), at: at(minute) })
-  const ci = (id: string, minute: number) => ({ ...message(id, minute), human: false, text: '{"check":"build"}', meta: { ci: true } })
   const asked = message('asked', 1), replying = message('reply', 3, { parent_id: 'om_asked' })
-  for (const item of [message('root', 0, { root_id: undefined }), asked, ci('ci-1', 2), replying, ci('ci-2', 4), message('later', 5)]) h.runtime.store.triggers.save(item)
+  for (const item of [message('root', 0, { root_id: undefined }), asked, replying, message('later', 5)]) h.runtime.store.triggers.save(item)
   const page = await read(`trigger/${replying.id}`)
   expect(page).toMatchObject({ trigger_id: replying.id, replied_to: { trigger_id: asked.id, read: `trigger/${asked.id}` },
     around: { before: { trigger_id: asked.id }, after: { trigger_id: feishu('later', '').id } }, text: 'message reply' })

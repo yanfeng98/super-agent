@@ -306,12 +306,12 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     Feishu; `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
     reads only Thread context; `orchestrator_read` exposes `feishu/` originals and no `github/` resources; and the merge
     gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
-    containment, rebase, queue and the post-merge target check. The schema 11 migration drops GitHub settings and keys
-    from a schema 10 database, and a startup sweep drops the same data and strips GitHub channels and only `github:`
-    follows from old tickets, preserving a custom Source's `bindThread` bindings, when a database still holds them; a
-    database already at schema 11 needs no migration for this, and this code reads no GitHub data. The plugin locale
-    metadata no longer names GitHub. `tests/local.spec.ts`,
-    `tests/migration.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and `tests/merge.spec.ts` cover it.
+    containment, rebase, queue and the post-merge target check. No migration or startup cleanup handles GitHub records:
+    a database written by a GitHub-enabled build is not cleaned, so start with a new state directory if its old records
+    must not remain. The plugin locale metadata no longer names GitHub. The worker environment still keeps `gh`
+    unavailable and clears `GH_TOKEN`/`GITHUB_TOKEN`, so a worker cannot reach the operator's GitHub credentials.
+    `tests/local.spec.ts`, `tests/migration.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and
+    `tests/merge.spec.ts` cover the local behavior.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
