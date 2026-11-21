@@ -292,9 +292,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     65,390 characters.
 
 27. **Anchored notes, rejections, and the merge aftermath from the chat.** `orchestrator_ticket_note` takes `file` with
-    optional `line` and `end_line` and records a review note through `Engine.addNote` instead of sending a message, so a
-    comment made in the chat appears on the diff and blocks the merge like one made on the page; `review` still hands the
-    unsent notes over.
+    optional `line` and `end_line` and records a review note of up to 2,000 characters through `Engine.addNote` instead of
+    sending a message, so a comment made in the chat appears on the diff and blocks the merge like one made on the page; a
+    message without `file` keeps the 100-word limit, and `review` still hands the unsent notes over.
     `orchestrator_ticket_review` takes `changes` and `note`, recording a `changes-requested` decision that blocks merging
     until a later approval, and `orchestrator_ticket_finish` retries a failed push through `pushTicket` or removes a merged
     worktree through `cleanupTicket`. `orchestrator_merge_queue` takes `paused`, so a queue paused by a failed target check
