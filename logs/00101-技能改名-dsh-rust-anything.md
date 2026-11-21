@@ -45,7 +45,7 @@
 | 检查 | 结论 |
 |---|---|
 | `native/rust-anything/NATIVE.md` 的技能链接 | **失效**：仍指向 `.agents/skills/rust-anything/SKILL.md`。已改为 `dsh-rust-anything`。`verify-md-links` 没报，是因为它只扫 `README*.md`、`docs/**`、`packages/**`、`AGENTS.md`、`.agents/skills/**`（见 `scripts/verify-md-links.ts` 的 `PATTERNS`），`native/**` 与根目录非 README 的 `.md` 不在范围内，vendored 目录里的自写文档需要手工维持链接 |
-| `/` 菜单能否列出该技能 | 能。`packages/skill/skill-filesystem` 的 `parseInvocationPolicy` 只在显式 `user-invocable: false` 时关闭用户调用，本技能未写该字段；`packages/api/session-controller/src/skill-catalog.ts` 的 `list()` 只按 `isUserInvocable` 过滤，没有「仅内置」这类额外限制，所以 `.agents/skills` 下的项目技能同样进 `/` 列表 |
+| `/` 菜单能否列出该技能 | 能。`parseInvocationPolicy` 只在显式 `user-invocable: false` 时关闭用户调用，本技能未写该字段；`session-controller` 的 `list()` 只按 `isUserInvocable` 过滤，没有「仅内置」限制。另用真实插件组合（`SkillRegistry` + 指向 `.agents/skills` 的 `SkillFileSystem`）跑了一次临时断言：`list()` 含 `dsh-rust-anything`、不含 `rust-anything`，`get()` 返回 `{modelInvocable: true, userInvocable: true}`，断言文件用完即删 |
 | 是否出现两个同名技能 | 没有。改名后会话技能目录里只有 `dsh-rust-anything`，说明没有其它来源（内置或上游打包）再提供一份 `rust-anything`；否则旧名被本项目技能覆盖的现象会随改名暴露成两条 |
 | 提交形状 | 提交 `refactor(skills): prefix the rust-anything skill with dsh-` 把两份文件识别为纯重命名（`SKILL.md` 相似度 99%，只差 frontmatter 一行；`whole-app.md` 100%），其余 10 个文件是 7 处路径与措辞更新、2 份 `.i18n.yaml` 哈希重录和 1 份新日志 |
 | 日志自身的计数与扫描结论 | 第二轮：原写的「其余 9 个文件」在 amend 补入 `NATIVE.md` 后应为 10 个；「全仓库扫描只剩一处」漏掉了 `logs/00097` 里的历史记录。两处已改；英文指南那句插入语也改成 `to load it first` 并重录配对哈希 |
