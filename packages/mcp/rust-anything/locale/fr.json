@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "rust-anything",
+    "description": "Connecte le serveur MCP rust-anything pour qu'un agent porte le code vers Rust unité par unité, avec vérification à chaque étape."
+  }
+}
