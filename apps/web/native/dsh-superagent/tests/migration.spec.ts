@@ -51,14 +51,14 @@ it('writes a schema 10 database in its current shape once, so nothing reads an o
   const channel = { source: 'feishu', thread: 'feishu:oc_team:om_2', address: { chatId: 'oc_team', messageId: 'om_2' } }
   const ticket = {
     id: 't1', title: 'Fix', decisionId: 'd1', state: 'open', assignments: [], summary: '', createdAt: '1', updatedAt: '2',
-    channels: [channel],
+    channels: [channel], follows: [{ thread: 'github:7', own: true }, { thread: 'custom:9', own: false }],
     mandate: mandate({ chatId: 'oc_team', direct: false, member: 'ou_alice', mention: true }),
     inputs: [{ id: 'i1', kind: 'reopen', decisionId: 'd2', at: '3' }, { id: 'i2', kind: 'reopen', decisionId: 'd0', at: '0' },
       { id: 'i3', kind: 'trigger', triggerId: 'trig-2', at: '4' }, { id: 'i4', kind: 'trigger', triggerId: 'bot-1', at: '5' }], undelivered: ['i1'],
     meta: { sourceTriggerId: 'trig-1', triggerIds: ['trig-1', 'trig-2'], workspace: '/w/fix-1', name: 'fix-1', sessionId: 'worker-t1', assignment: 'Read trigger/trig-1.',
       deliveryError: 'offline', recovery: 2, scope: 'small' },
   }
-  const imported = { ...ticket, id: 't2', state: 'ended', channels: [], inputs: [], undelivered: [], mandate: mandate({ legacyAuthority: 'thread_followup', followup: true }),
+  const imported = { ...ticket, id: 't2', state: 'ended', channels: [], follows: [], inputs: [], undelivered: [], mandate: mandate({ legacyAuthority: 'thread_followup', followup: true }),
     meta: { sourceTriggerId: 'old', workspace: '/w/task-2', sessionId: 'worker-task-2', legacyPrompt: 'Read event/old' },
     ended: { at: '6', by: 'executor', reason: 'merged' } }
   // Ended with a person's message waiting, and with no execution or origin trigger.
@@ -125,7 +125,7 @@ it('writes a schema 10 database in its current shape once, so nothing reads an o
     origin: { triggerId: 'trig-1', triggerIds: ['trig-1', 'trig-2'] },
     execution: { name: 'fix-1', directory: '/w/fix-1', assignment: 'Read trigger/trig-1.' },
     delivery: { error: 'offline', at: '2' },
-    channels: [channel],
+    channels: [channel], follows: [{ thread: 'custom:9', own: false }],
     answers: ['trig-3'],
     mandate: { basis: { via: 'listed', source: 'feishu', scope: { chatId: 'oc_team', direct: false }, sender: 'ou_alice', addressed: 'mention' } },
   })
