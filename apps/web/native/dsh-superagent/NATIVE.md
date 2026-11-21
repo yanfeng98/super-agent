@@ -302,8 +302,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 
 28. **Removal of the GitHub Source and account integration.** The vendored copy no longer contains `src/sources/github*.ts`,
     the GitHub skill, the GitHub account and repository setup, the pull-request binding and its CI gate, or the GitHub
-    prompt text and UI. `Deployment` carries only `stateDir`; `SETUP_FIELDS` is empty; `stateView.accounts` has only
-    `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
+    prompt text and UI. `Deployment` carries only `stateDir` and the optional legacy Feishu bot; `SETUP_FIELDS` probes only
+    that legacy CLI; `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
     reads only Thread context; `orchestrator_read` exposes `feishu/` originals and no `github/` resources; and the merge
     gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
     containment, rebase, queue and the post-merge target check. No migration or startup cleanup handles GitHub records:
@@ -319,7 +319,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `FeishuBot` setup and `dsh-superagent-feishu` opt-in: the Source is mounted by default and stays idle until the
     handoff. Replies go through `replyChecked`, context through `historyChecked`, and the Source remains text-only
     (no images, bot-authored messages, member sync or old `lark-cli` resource reads). dsh-im owns the switch and the
-    `superagent`/`superagentActive` status; turning it off releases the consumer and restores normal IM chat.
+    `superagent`/`superagentActive` status; turning it off releases the consumer and restores normal IM chat. Each
+    Trigger records its source `botId` so a later Source bot change cannot route an old ticket through the new bot, and
+    `describeBot` carries the Feishu/Lark domain for chat links. The watcher polls the cheap `inboundStatus`; `describeBot`
+    runs only when registering. A dsh-im `botId` also skips the legacy lark-cli setup probe.
     `tests/feishu-im.spec.ts` covers the mapping, scope, policy, replies, history, the `feishu-im/` resource and consumer registration; dsh-im's
     `tests/bot-general-settings.test.mjs` and `tests/channels/feishu/multi-bot-controller.test.mjs` cover the switch.
 
