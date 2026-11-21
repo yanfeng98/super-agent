@@ -3,6 +3,7 @@
 - **日期**：2026-11-21
 - **背景**：用户确认只用本地工单，要求把 GitHub 那一套直接删掉，而不是仅关闭。目标是保留本地 Source、面板/聊天建单、本地合并、检查、队列、回退与清理，同时不再出现 GitHub Source、账号探测、PR 绑定、PR CI 门禁、GitHub 技能与相关提示词。
 - **范围**：`apps/web/native/dsh-superagent`（源码、提示词、技能、测试、文档、`cordis.patch.yml`、`package.json`）、`packages/bundle/web-app`（bundle patch 与测试）、`apps/web/tests/scaffold.ts`、根 `README.md`。
+- **最终状态**：本版本不含任何 GitHub Source、GitHub 专用迁移或启动清理；旧 stateDir 中的 GitHub 记录不会被解释或清理。
 
 ## 1. 变更
 
@@ -13,7 +14,7 @@
 | Worker 环境 | `writeEnvironment` 不再写 GitHub 凭据 helper、SSH 重写或 agent 账号；固定中性提交身份 `dsh-superagent <dsh-superagent@localhost>`。`gh` 仍是一个失败 shim，避免 worker 误用操作者本机的真实 `gh`；`GH_TOKEN`/`GITHUB_TOKEN` 仍被清除，作为凭据隔离而不是 GitHub 集成。 |
 | 合并门禁 | 移除绑定 PR 的 CI 检查、PR 关闭/合并通知、`orchestrator_report.pr_number`、PR 绑定与 `orchestrator_eval_read` 的仓库文件/目录读取；本地门禁保留：评审结论、`requireReview`、未解决备注、配置检查、依赖、目标包含、变基、队列、合并后目标检查。 |
 | 提示词与技能 | 主 Session、worker、work、dispatch、subscriptions、replies、cli、handoff、team/communication、team/delivery、team/scope 去掉 GitHub/PR/CI/自动合并/评审 bot 内容；内置技能只剩 Feishu；`skill/github` 与 `sourceSkills.github` 删除。 |
-| 面板与聊天 | 删除 GitHub 来源卡片、账号字段、PR 图标、GitHub 搜索提示与相关文案；`orchestrator_read` 不再暴露 `github/…`；`outcome.merged`/`closed` 仅作为旧数据标签保留，只对已删除 GitHub 来源的 ticket 排除，自定义 Source 的 ticket 仍可评审与合并。 |
+| 面板与聊天 | 删除 GitHub 来源卡片、账号字段、PR 图标、GitHub 搜索提示与相关文案；`orchestrator_read` 不再暴露 `github/…`；`outcome.merged`/`closed` 作为本地合并结果保留，所有 ticket 按当前状态展示。 |
 | 迁移与清理 | 无 GitHub 专用迁移或启动清理：schema 10→11 只处理其余结构变化；`ticketOf` 不再过滤 GitHub follows/channels；启动不再扫描旧 GitHub 数据。带 GitHub 记录的旧数据库不会被清理，需要新 stateDir。 |
 | 文档 | 插件 `README.md`、`SETUP.md`、`NATIVE.md`、`docs/000`–`008`、`examples` 与根 `README.md` 改为本地工单 + 可选 Feishu；`NATIVE.md` 新增第 28 条记录本次移除；`docs/007` 删除已不存在的 `pullEndNotices` 说明；插件 `locale/en.json`、`locale/zh.json` 的元数据也改为本地工单。 |
 
@@ -45,19 +46,12 @@
 - 通用 `Follow`/`ticket.follows`/`bindThread`/`threadClosed` 仍保留在 core，作为 Source 无关的线程订阅能力；GitHub 不再产生它们。`TicketOutcome` 的 `merged`/`closed` 也保留用于读取旧记录。
 - 并发会话当时正在修改 `.github/workflows/*` 与 `.gitignore`；这些不属于本次改动，也未纳入本次提交。
 - `tests/environment.spec.ts` 的样例 URL 已改为 `git.example.com`，只验证 worker 不继承操作者的全局 git 配置，不再出现 GitHub 字样。
-- 审计后补充：启动清理同时去掉旧 ticket 的 GitHub channels/follows 与 `github-issue` 设置，避免旧 ticket 等待一个已不存在的 Source；删除迁移里已无作用的 `prompt-settings-text` 早退。
-- 审计后补充（第二轮）：启动清理保留本地 `autoMerge`，只清 GitHub-bound ticket 的 standing merge；移除旧 GitHub 的 merge queue entry，并在队列清空时解除 pause；把发往已删除 Source 的 pending reply 标记为 dropped，避免永远重试。
-- 审计后补充（第三轮）：识别旧 GitHub ticket 时也看它的 origin Trigger 的 Source，因此即使绑定已被清过，队列里残留的旧 entry 仍会被移除；本地 ticket 的 origin 是 local/Feishu，不受影响。
-- 审计后补充（第四轮）：无条件清理 GitHub 读取游标、Policy block revision 与 source label，旧 CI 通知也删除；清理保存推进 policy block revision；旧 ticket 缺 origin/channels 时用可选链兜底。
-- 审计后补充（第五轮）：插件 `locale/en.json` 与 `locale/zh.json` 的元数据仍写着 GitHub，已改为本地工单 + 可选飞书；`verify-locale-metadata` 通过。
-- 审计后补充（第六轮）：`prompts/admission.md` 不再让 Eval 读取仓库文件；启动清理只删除 `github:` 前缀的 follows，保留自定义 Source 的 `bindThread` 绑定与 `merged`/`closed` outcome；Feishu 技能、迁移提示、搜索提示与相关注释去掉了 PR/Issue 残留；新增自定义 Source 与 legacy `guide/github` 的回归测试。
-- 审计后补充（第七轮）：删除已无生产者的 `ci` 通知 kind（Notification、Webhook、桌面通知与文案）；旧 CI 通知仍由启动清理删除。
-- 审计后补充（第八轮）：启动清理也删除 `thread-since:github-issue:` 游标，覆盖旧 `github-issue` 来源的残留读取位置。
+- 第 1–8 轮审计曾围绕 GitHub 迁移/启动清理补强；第九轮按用户要求将这些路径整体删除，最终代码不再包含迁移或启动清理，详见第 6 节。
 
 ## 5. 文档与日志同步
 
 - 插件文档 `README.md`、`SETUP.md`、`NATIVE.md`、`docs/000`–`008`、`examples` 已改为本地工单 + 可选 Feishu；根 `README.md` 的 Superagent 段落、bundle patch 测试与 `apps/web/tests/scaffold.ts` 同步移除 GitHub Source。
-- `docs/007` 删除了已删除的 `pullEndNotices`；`docs/005` 的通知列表只保留本地检查/合并事件；`docs/006` 写明本版本不读取也不清理 GitHub 记录。
+- `docs/007` 删除了已删除的 `pullEndNotices`；`docs/005` 的通知列表只保留本地检查/合并事件；`docs/006` 写明本版本没有 GitHub Source、不解释也不清理 GitHub 记录，并说明旧 stateDir 需要自行更换。
 - 插件 `locale/en.json`、`locale/zh.json` 的 `meta.description` 已不再写 GitHub；`pnpm run verify-locale-metadata` 通过。
 - `prompts/admission.md` 不再让 Eval 读取仓库文件；Feishu 技能、迁移提示、搜索提示与相关注释已去掉 PR/Issue/CI 残留。
 - 本文档原编号 00100 与并发会话的 `00100-文档同步-rust-anything使用指南.md`、`00101-技能改名-dsh-rust-anything.md`、`00102-改名收尾-文档与日志同步.md` 冲突，因此改为 00103。
@@ -71,5 +65,6 @@
 - `src/app/views/tickets.ts`：删除 `removedGitHubTicket()` 与仅对旧 GitHub ticket 隐藏 merged/closed 结果的条件；所有 ticket 按当前状态展示。
 - `src/core/model.ts`：删除 `Ticket.ciNotice`；`src/app/store-read.ts` 不再跳过 `meta.ci` 触发。
 - `src/deployment.ts`：删除 `github` 旧配置键的迁移提示，未知键仍会被拒绝。
-- 测试：删除旧 GitHub 迁移/启动清理测试，迁移 fixture 不再含 GitHub；通用 git 测试的 URL 改为 `git.example.com`。
+- 测试：删除旧 GitHub 迁移/启动清理测试，迁移 fixture 不再含 GitHub；新增“未知 Source 的 schema 10 数据库仍能打开并保留该 Source”的回归测试；通用 git 测试的 URL 改为 `git.example.com`。
+- 文档：`docs/006` 的迁移说明改为“没有 GitHub 专用步骤，保留 domain settings、keys、ticket channels 与 followed threads”；`commands.ts` 去掉过时的 `gh`/ETag 注释。
 - 保留的安全隔离：worker 的 `gh` 仍是失败 shim，`GH_TOKEN`/`GITHUB_TOKEN` 仍被清除，防止 worker 使用操作者本机的 GitHub 凭据。这不是集成代码。
