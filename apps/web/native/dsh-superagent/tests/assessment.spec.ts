@@ -1,40 +1,41 @@
 /** Main-session assessor per-eval state and context loading. */
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
+import { z } from 'zod'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { AssessmentSchema, EvalReadSchema, MasterAssessor, type AssessorHost } from '../src/app/assessment.ts'
 import { mainAdmissionPolicy } from '../src/app/context.ts'
 import { Engine, MemoryRepositories, type Executor, type Policy, type Trigger } from '../src/core/index.ts'
 import type { Commands } from '../src/infra/commands.ts'
 import { SettingsSchema } from '../src/policy.ts'
+import type { ContextMessage, SourceKind } from '../src/sources/kind.ts'
 import { testDeployment } from './fixtures/deployment.ts'
 import { deferred } from './fixtures/async.ts'
-import { githubKind } from '../src/sources/github.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 
-/** Assessor fixture backed by in-memory repositories and fake GitHub Issue and file reads. */
+/** The fixture Source's Thread: the request itself and the comments that follow it, named `m<index>`. */
+const fixtureMessages = (bodies: string[]): ContextMessage[] => [
+  { id: 'root', from: 'bob', at: '2026-09-09T00:00:00.000Z', text: 'Issue body' },
+  ...bodies.map((text, index) => ({ id: `m${index}`, from: 'bob', at: new Date(Date.UTC(2026, 8, 9, 0, 1, index)).toISOString(), text })),
+]
+/** The fixture Source: one Thread of prepared messages, read without a CLI. */
+const fixtureKind = (messages: ContextMessage[], before: () => Promise<void> | undefined): SourceKind => ({
+  kind: 'fixture', title: { zh: '题', en: 'Fixture' }, description: { zh: '', en: '' }, health: [],
+  schema: z.object({}).strict(), fields: [],
+  threadContext: {
+    messageId: trigger => String(trigger.meta.messageId ?? ''),
+    // The tests read only the Thread; a hold lets a read finish after its Eval was decided.
+    read: async () => { await before(); return { messages, body: { messages } } },
+  },
+})
+/** Assessor fixture backed by in-memory repositories and a fixture Source that serves the Thread's messages. */
 function setup(strength: 'explicit' | 'inferred' = 'inferred', bodies = Array.from({ length: 5 }, (_, i) => `comment ${i}`),
   threadContext?: AssessorHost['threadContext']) {
-  const comments = bodies.map((body, i) => ({ id: i, html_url: `https://github.com/acme/widgets/issues/1#c${i}`,
-    user: { login: 'bob' }, created_at: '2026-09-09T00:00:00Z', body }))
-  const gate = { issue: undefined as Promise<void> | undefined }
-  const commands = {
-    repository: 'acme/widgets', deployment: testDeployment(),
-    withSignal() { return commands },
-    gh: vi.fn(async (args: string[]) => {
-      await gate.issue
-      const number = Number(/issues\/(\d+)/.exec(args[1]!)?.[1])
-      return args[1]!.includes('/comments') ? comments : { id: 100 + number, number, state: 'open',
-        html_url: `https://github.com/acme/widgets/issues/${number}`,
-        user: { login: 'bob' }, created_at: '2026-09-09T00:00:00Z', title: 'Issue', body: 'body' }
-    }),
-    run: vi.fn(async () => 'export const value = 1\n'),
-    // A string first argument is a raw file path; otherwise validate the fake gh response against the schema.
-    api: vi.fn(async (schema: unknown, ...rest: string[]) => typeof schema === 'string' ? 'export const value = 1\n'
-      : (schema as { parse(value: unknown): unknown }).parse(await (commands as unknown as { gh(args: string[]): Promise<unknown> }).gh(['api', rest[0]!]))),
-  } as unknown as Commands
+  const gate = { hold: undefined as Promise<void> | undefined }
+  const kind = fixtureKind(fixtureMessages(bodies), () => gate.hold)
+  const commands = { withSignal() { return commands } } as unknown as Commands
   const repo = new MemoryRepositories()
   const sources = new SourceRegistry(() => SettingsSchema.parse({}))
-  sources.register(githubKind)
+  sources.register(kind)
   let engine!: Engine
   const host: AssessorHost = {
     get engine() { return engine }, commands, deployment: testDeployment(), settings: () => SettingsSchema.parse({}),
@@ -59,23 +60,23 @@ function setup(strength: 'explicit' | 'inferred' = 'inferred', bodies = Array.fr
   const size = () => kept.evals.size
   return { repo, engine, assessor, tools, size, gate }
 }
-const issue = (n: number): Trigger => ({ id: `issue-${n}`, source: 'github', threads: [{ source: 'github', id: String(n) }], actor: { source: 'github', id: 'bob' }, human: true,
-  at: new Date(Date.UTC(2026, 8, 9, 0, 0, n)).toISOString(), text: `issue ${n}`, url: `https://github.com/acme/widgets/issues/${n}`, meta: { number: n } })
+const issue = (n: number): Trigger => ({ id: `fixture-${n}`, source: 'fixture', threads: [{ source: 'fixture', id: String(n) }], actor: { source: 'fixture', id: 'bob' }, human: true,
+  at: new Date(Date.UTC(2026, 8, 9, 0, 0, n)).toISOString(), text: `issue ${n}`, url: `https://example.test/issues/${n}`, meta: { messageId: 'm0' } })
 const signal = new AbortController().signal
 
 it('keeps nothing for an Eval once it is decided, as for one that timed out', async () => {
   const s = setup()
   for (let n = 1; n <= 3; n++) {
     s.engine.receive(issue(n)); s.engine.evaluateDue()
-    await s.assessor.context(`issue-${n}`, signal)
-    await s.tools.orchestrator_eval_read!({ trigger_id: `issue-${n}`, resource: 'file', path: 'src/value.ts', offset: 0 }, signal)
+    await s.assessor.context(`fixture-${n}`, signal)
+    await s.tools.orchestrator_eval_read!({ trigger_id: `fixture-${n}`, resource: 'thread', offset: 0 }, signal)
     expect(s.size()).toBeGreaterThan(0)
-    s.engine.decide(`issue-${n}`, { kind: 'ignore', reason: 'not a request' })
+    s.engine.decide(`fixture-${n}`, { kind: 'ignore', reason: 'not a request' })
     expect(s.size()).toBe(0)
   }
   s.engine.receive(issue(9)); s.engine.evaluateDue()
-  await s.assessor.context('issue-9', signal)
-  const thread = s.repo.threads.get('github:9')!
+  await s.assessor.context('fixture-9', signal)
+  const thread = s.repo.threads.get('fixture:9')!
   s.repo.threads.save({ ...thread, expired: 2, evaluating: { ...thread.evaluating!, delivered: '2000-01-01T00:00:00.000Z', deadline: '2000-01-01T00:00:00.000Z' } })
   s.engine.evaluateDue()
   expect(s.size()).toBe(0)
@@ -84,10 +85,10 @@ it('keeps nothing for an Eval once it is decided, as for one that timed out', as
 it('keeps nothing from a context read that finishes after its Eval was decided', async () => {
   const s = setup()
   const hold = deferred()
-  s.gate.issue = hold.promise
+  s.gate.hold = hold.promise
   s.engine.receive(issue(1)); s.engine.evaluateDue()
-  const details = s.assessor.context('issue-1', signal)
-  s.engine.decide('issue-1', { kind: 'ignore', reason: 'not a request' })
+  const details = s.assessor.context('fixture-1', signal)
+  s.engine.decide('fixture-1', { kind: 'ignore', reason: 'not a request' })
   hold.resolve()
   await expect(details).rejects.toThrow('This assessment has finished')
   expect(s.size()).toBe(0)
@@ -96,9 +97,9 @@ it('keeps nothing from a context read that finishes after its Eval was decided',
 it('reads the context of a Trigger through its Source, and none for a Source that gives none', async () => {
   const s = setup()
   s.engine.receive(issue(1)); s.engine.evaluateDue()
-  const context = await s.assessor.context('issue-1', signal)
+  const context = await s.assessor.context('fixture-1', signal)
   expect(context.thread).toMatchObject({ complete: true, loaded_messages: 6, source_found: true })
-  const page = await s.tools.orchestrator_eval_read!({ trigger_id: 'issue-1', resource: 'thread', offset: 0 }, signal) as { text: string }
+  const page = await s.tools.orchestrator_eval_read!({ trigger_id: 'fixture-1', resource: 'thread', offset: 0 }, signal) as { text: string }
   expect(JSON.parse(page.text)).toMatchObject({ next_read: null,
     messages: expect.arrayContaining([expect.objectContaining({ text: 'comment 0' })]) })
   const other: Trigger = { ...issue(2), id: 'other-2', source: 'probe', threads: [{ source: 'probe', id: '2' }], actor: { source: 'probe',
@@ -115,10 +116,10 @@ it('routes an explicit candidate instead of assessing it: each eval tool names t
   const s = setup('explicit')
   s.engine.receive(issue(1)); s.engine.evaluateDue()
   const routed = 'orchestrator_route with its trigger_id and kind accept, attach, stop or ignore'
-  await expect(s.assessor.context('issue-1', signal)).rejects.toThrow(routed)
-  await expect(s.tools.orchestrator_eval_read!({ trigger_id: 'issue-1', resource: 'message', offset: 0 }, signal)).rejects.toThrow(routed)
+  await expect(s.assessor.context('fixture-1', signal)).rejects.toThrow(routed)
+  await expect(s.tools.orchestrator_eval_read!({ trigger_id: 'fixture-1', resource: 'message', offset: 0 }, signal)).rejects.toThrow(routed)
   const direction = { implementation_requested: false, target_basis: 'undetermined', requires_design_decision: false, evidence: 'chatter' }
-  const decision = { trigger_id: 'issue-1', decision: 'ignore', rule_assessments: [], direction, title: 't', scope: 's', reason: 'r' }
+  const decision = { trigger_id: 'fixture-1', decision: 'ignore', rule_assessments: [], direction, title: 't', scope: 's', reason: 'r' }
   await expect(s.tools.orchestrator_eval_decide!(decision, signal)).rejects.toThrow(routed)
 })
 
@@ -136,14 +137,14 @@ it('loads a window without the assessment instructions: the trigger once, cut me
   const bodies = Array.from({ length: 30 }, (_, i) => `comment ${i}: ${'the label reads oddly on the settings page. '.repeat(i % 4 === 0
     ? 40 : 3)}`)
   const s = setup('inferred', bodies)
-  const trigger = { ...issue(1), id: 'c15', text: bodies[15]!, url: 'https://github.com/acme/widgets/issues/1#c15', meta: { number: 1,
+  const trigger = { ...issue(1), id: 'c15', text: bodies[15]!, url: 'https://example.test/issues/1#c15', meta: { messageId: 'm15',
     kind: 'comment' } }
   s.engine.receive(trigger); s.engine.evaluateDue()
   const result = await s.assessor.context('c15', signal) as Record<string, unknown> & { thread: { messages: Record<string, unknown>[] } }
   expect(result).not.toHaveProperty('instructions')
   expect(result.text).toBe(bodies[15])
   const messages = new Map(result.thread.messages.map(message => [message.id as string, message]))
-  const at = (i: number) => messages.get(`https://github.com/acme/widgets/issues/1#c${i}`)!
+  const at = (i: number) => messages.get(`m${i}`)!
   // The trigger's own text is given once at top level; its two nearest neighbours keep more text than the rest of the window.
   expect(at(15)).toEqual({ id: expect.any(String), from: 'bob', at: expect.any(String), trigger: true })
   expect(at(16)).toMatchObject({ chars: bodies[16]!.length, text: `${bodies[16]!.slice(0, 1200)}…` })
@@ -174,10 +175,10 @@ it('lets the main Session read on from the cursor its loaded window ends with, a
   expect(result.thread.next_cursor).toBe('10')
   const more = await s.tools.orchestrator_eval_read!({ trigger_id: 'long', resource: 'thread', cursor: '10' }, signal)
   expect(JSON.stringify(more)).toContain('message 10')
-  const shorter = { trigger_id: 'issue-1' }
+  const shorter = { trigger_id: 'fixture-1' }
   expect(result.batch).toEqual([expect.objectContaining(shorter)])
   const s2 = setup('inferred', undefined, () => context)
   s2.engine.receive(long); s2.engine.receive({ ...issue(3), threads: issue(1).threads }); s2.engine.evaluateDue()
-  const other = await s2.assessor.context('issue-3', signal) as { batch: Record<string, unknown>[] }
+  const other = await s2.assessor.context('fixture-3', signal) as { batch: Record<string, unknown>[] }
   expect(other.batch).toEqual([expect.objectContaining({ trigger_id: 'long', chars: long.text.length, read: 'trigger/long' })])
 })

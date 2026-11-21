@@ -8,14 +8,13 @@ import { server, found } from './fixtures/panel-server.ts'
 
 usePanel()
 it('states why a filtered search result has no Thread instead of opening an empty one', async () => {
-  server.search = { items: [found('e9', '2026-09-20T00:00:00Z', { source: 'github', actor: { source: 'github', id: 'someone' },
-    preview: 'issue text', threads: ['github:7'],
-    filtered: 'source_disabled' })], threads: [] }
+  server.search = { items: [found('e9', '2026-09-20T00:00:00Z', { source: 'feishu', preview: 'message text',
+    threads: ['feishu:oc_1:om_root'], filtered: 'source_disabled' })], threads: [] }
   await mount()
-  await type(field<HTMLInputElement>(zh.searchLabel), 'issue')
+  await type(field<HTMLInputElement>(zh.searchLabel), 'message')
   await act(async () => { field<HTMLInputElement>(zh.searchLabel).closest('form')!.requestSubmit() }); await settle()
   expect(text()).toContain('被来源过滤：来源已停用')
-  expect(all('.dt-search-results button').some(button => button.textContent === 'issue text')).toBe(false)
+  expect(all('.dt-search-results button').some(button => button.textContent === 'message text')).toBe(false)
 })
 
 it('opens a search result older than the newest page around its Trigger', async () => {

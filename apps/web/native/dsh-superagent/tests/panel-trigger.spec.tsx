@@ -50,7 +50,7 @@ it('filters the Thread list by activity, and unsubscribes from a Thread page aft
 })
 
 it('folds consecutive automated messages from one sender on a Thread, showing the newest with its text', async () => {
-  const bot = (id: string, at: string) => trigger(id, at, { actor: { source: 'github', id: '' }, human: false,
+  const bot = (id: string, at: string) => trigger(id, at, { actor: { source: 'feishu', id: '' }, human: false,
     text: `CI of PR #42 at abc1234: 3 checks, 0 failed, ${id === 'b3' ? 0 : 1} running.`, preview: `CI ${id}` })
   server.threadPages = () => ({ ...threadSummary(), tickets: [], correlated: [], decisions: [], earlier: null, context: [],
     timeline: [bot('b1', '2026-09-23T00:00:00Z'), bot('b2', '2026-09-23T00:01:00Z'), trigger('h1', '2026-09-23T00:02:00Z'), bot('b3',

@@ -28,7 +28,7 @@ function harness({ allow = true, enabled = true } = {}) {
   }))
   const sources = new SourceRegistry(() => store.settings(), new HealthBoard())
   sources.register(localKind)
-  const deployment = testDeployment({ stateDir: dir, repository: '', github: { cli: '', login: '', noreply: '' } })
+  const deployment = testDeployment({ stateDir: dir, feishu: undefined })
   const candidates: Candidate[] = []
   const assessor: Assessor = { request: vi.fn(candidate => { candidates.push(candidate) }) }
   const executor: Executor = { start: vi.fn(async () => {}), deliver: vi.fn(async () => {}), stop: vi.fn(async () => {}) }

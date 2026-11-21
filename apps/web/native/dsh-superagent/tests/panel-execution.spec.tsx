@@ -23,15 +23,14 @@ it('shows unread notifications in the header and opens their Ticket', async () =
 })
 
 it('lists Tickets under Execution by who they wait on, with the Executor state and its pause as an action', async () => {
-  server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单', threads: [{ key: 'github:7',
-    source: 'github', title: '#7 x', facts: { number: { value: '#7' }, autoMerge: { label: { zh: '自动合并', en: 'Auto-merge' },
-      value: { zh: '已开启', en: 'on' } } } }] })]
+  server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单', threads: [{ key: 'feishu:oc_2:om_7',
+    source: 'feishu', title: '另一个群里的消息', facts: { chat: { value: '另一个群' } } }] })]
   await mount()
   await click(zh['tab.execution'])
   expect(document.querySelector('.dt-status-title')?.textContent).toBe(zh.statusTitle)
   expect(server.requests.some(request => request.path === 'tickets?state=open&limit=20')).toBe(true)
   expect(text()).toContain(zh.executorRunning)
-  expect(all('.dt-chip').map(chip => chip.textContent)).toContain('GitHub#7自动合并已开启')
+  expect(all('.dt-chip').map(chip => chip.textContent)).toContain('飞书另一个群')
   await click(zh.idleLabel)
   expect(server.requests.some(request => request.path === 'tickets?state=idle&limit=20')).toBe(true)
   expect(text()).toContain('执行器结束了当前回合')
@@ -190,10 +189,9 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
   expect(all('.dt-chip').map(chip => chip.textContent)).toContain('飞书团队群')
   await click(zh['term.channel'])
   expect(all('.dt-disclosure-body a').map(link => [link.textContent, link.getAttribute('href')])).toEqual([['飞书消息',
-    'https://applink.feishu.cn/client/chat/open?openChatId=oc_1'], ['GitHub #42', 'https://github.com/acme/widgets/issues/42']])
+    'https://applink.feishu.cn/client/chat/open?openChatId=oc_1']])
   await click(zh['term.environment'])
-  expect(all('.dt-disclosure-body .dt-table tr').map(row => row.textContent)).toEqual(['DSH_SUPERAGENT_DIR/w/t1',
-    'DSH_SUPERAGENT_GITHUB_NUMBER—'])
+  expect(all('.dt-disclosure-body .dt-table tr').map(row => row.textContent)).toEqual(['DSH_SUPERAGENT_DIR/w/t1'])
   await click(document.querySelector<HTMLElement>('.dt-trigger-link')!)
   expect(tab(zh['tab.trigger']).getAttribute('aria-selected')).toBe('true')
 })
@@ -378,9 +376,9 @@ it('reports a missing Ticket instead of rendering an empty page', async () => {
 it('links a question to its Channel, folds consecutive automated messages among Inputs, and shows field explanations in a hover tooltip',
   async () => {
   const ci = (id: string, at: string, failed: number) => ({ id, kind: 'trigger' as const, triggerId: `c${id}`, at, delivered: true,
-    trigger: { id: `c${id}`, actor: { source: 'github', id: '' }, human: false,
+    trigger: { id: `c${id}`, actor: { source: 'feishu', id: '' }, human: false,
       preview: `CI of PR #42 at abc1234: 10 checks, ${failed} failed, 0 running.`,
-      body: `CI of PR #42 at abc1234: 10 checks, ${failed} failed, 0 running.`, thread: 'github:42' } })
+      body: `CI of PR #42 at abc1234: 10 checks, ${failed} failed, 0 running.`, thread: 'feishu:oc_1:om_root' } })
   const t1 = server.ticketDetails.t1!
   server.ticketDetails.t1 = { ...t1, stage: 'person', action: 'answer', attention: { id: 'q1', question: '需要确认按钮颜色' }, inputs: [ci('i3',
     '2026-09-22T00:06:00Z', 1), ci('i2', '2026-09-22T00:05:00Z', 0)] }
@@ -406,12 +404,13 @@ it('links a question to its Channel, folds consecutive automated messages among 
 it('offers a Ticket awaiting review its review place and Session in the page head', async () => {
   const t1 = server.ticketDetails.t1!
   server.ticketDetails.t1 = { ...t1, stage: 'person', action: 'review', threads: [threadSummary(),
-    { ...threadSummary({ key: 'github:42', source: 'github', title: '#42 Fix login' }), url: 'https://github.com/acme/widgets/pull/42' }] }
+    { ...threadSummary({ key: 'feishu:oc_2:om_7', source: 'feishu', title: '#7 修登录' }),
+      url: 'https://applink.feishu.cn/client/chat/open?openChatId=oc_2' }] }
   at({ page: 'execution', id: 't1' })
   await mount()
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['stage.review'])
-  expect(all('.dt-page-head a').map(link => [link.textContent, link.getAttribute('href')])).toEqual([['打开 GitHub 原文',
-    'https://github.com/acme/widgets/pull/42']])
+  expect(all('.dt-page-head a').map(link => [link.textContent, link.getAttribute('href')])).toEqual([['打开 飞书 原文',
+    'https://applink.feishu.cn/client/chat/open?openChatId=oc_2']])
 })
 
 it('keeps what a person types in the Execution settings, converting it once on save', async () => {
@@ -472,7 +471,7 @@ it('gives a Ticket a bot\'s message started its basis, marks a Thread it follows
   server.ticketDetails.t1 = { ...t1, mandate: { ...t1.mandate, strength: 'inferred', basis: { via: 'bot', sender: '评审机器人',
     observation: { mode: 'auto' } } },
   basis: { facts: [{ name: 'sender', value: '评审机器人' }, { name: 'bot' }, { name: 'mode', value: 'auto' }], legacy: false },
-  threads: [threadSummary(), { ...threadSummary({ key: 'github:7', title: '#7 相关 Issue' }), context: true }],
+  threads: [threadSummary(), { ...threadSummary({ key: 'local:req7', source: 'local', title: '相关请求' }), context: true }],
   inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'e2', at: '2026-09-22T00:03:00Z', delivered: true, trigger: { id: 'e2',
     actor: { source: 'feishu', id: MEMBER, name: { zh: 'Alice', en: 'Alice' } }, human: true, preview: '顺便加一个页面',
     thread: 'feishu:oc_1:om_root',

@@ -36,7 +36,7 @@ Shutdown cancels turns, waits for passes, effects and agents, restores the proce
 
 | Part | Module | Does |
 | --- | --- | --- |
-| Setup | `src/app/setup.ts` | Resolves the repository and the accounts by probing their CLIs the way worker shells run them, writes and applies the workers' environment and command shims, and keeps the setup problems; Settings checks a changed account through it, and restarts through it, which runs setup again |
+| Setup | `src/app/setup.ts` | Resolves the optional Feishu bot by probing its CLI the way worker shells run it, writes and applies the workers' environment and command shims, and keeps the setup problems; Settings checks a changed bot through it, and restarts through it, which runs setup again |
 | Passes | `src/app/passes.ts` | One pass at a time, every two seconds and whenever a command asks: the due effects, then `Engine.evaluateDue`, the standing merge request and the merge queue; a Source's Trigger reaches the Engine through it |
 | Outbox | `src/app/outbox.ts` | The Engine's `Outbox` port, and the only writer of the receipts: `send` keeps a message's receipt and queues its `reply` effect in one transaction, and the effect's handler sends it through `SourceRegistry.send`; a message waits while its Source is off, and is dropped when the conversation is gone or not listened to |
 | Notices | `src/app/notices.ts` | Converts domain events and worker activity into main-Session messages. `eventNotice` handles domain notices; `reportRelay` forwards questions immediately, keeps ordinary progress on its Ticket, and relays other reports; `followupRelay` names the Tickets that own a human follow-up. Relays arriving during a turn are delivered together at its next step through the DeepSeek Harness inbox |
@@ -66,7 +66,7 @@ Callers receive only their role's `Pick` of the Engine: `EngineForSources`, `Eng
 | Role | Method | Effect |
 | --- | --- | --- |
 | Sources | `receive(trigger)` | Stores a Trigger once and answers `stored`, `duplicate`, or `filtered` when no Source receives it; fans it out to the Tickets subscribed to its Threads, where a person's message resumes an ended Ticket at once unless processing is paused, and queues it for Eval on its primary Thread, unless it is a person's message that reached a Ticket, which stays that Ticket's |
-| Sources | `bindThread(ticketId, thread, own)` | Makes an open Ticket follow one of the Source's Threads, such as a pull request's, `own` when the Ticket opened it; a closed Thread bound again is open again. The Threads' closes, not a `ready` Report, end the Ticket |
+| Sources | `bindThread(ticketId, thread, own)` | Makes an open Ticket follow one of the Source's Threads, `own` when the Ticket opened it; a closed Thread bound again is open again. A Source that binds a Thread makes its close, not a `ready` Report, end the Ticket |
 | Sources | `threadClosed(thread, outcome, at)` | A Thread closed: each open Ticket that follows it records the close, and ends once it is done with the Threads it follows (`followsDone`): no Thread it opened is open, or, when it opened none, every Thread it follows closed. It ends `merged` or `closed` as the latest of those closes did, unless work resumed after the close has not reported `ready`, or its Executor took up, by acknowledging or answering it, a person's follow-up it decides after its latest Report other than `progress`, or the end of its last turn; a `dropped` Report then ends it as the close did |
 | Main Session | `candidate(triggerId)` | The Eval that holds a Trigger, as its assessor sees it |
 | Main Session | `candidateDelivered(evalId)` | The Eval's candidate reached the main Session: its deadline counts from now |
@@ -116,7 +116,7 @@ The core's codes, such as `timeout`, `policyChanged`, `routed` and `startedTicke
 
 A Ticket keeps each fact once. It is open while it has no `ended`, which records when, by whom, why and with what outcome it ended; what it last said is its latest Assignment Report (`latestReport`); and its Executor Session is named after it (`workerSessionId` in `src/executor/dsh.ts`).
 
-Its fields are typed: `origin`, the admissible Trigger that gave its Eval's batch its strength and the batch itself (`triggerId`, `triggerIds`); `execution`, what the Executor chose (`name`, `directory` and `assignment`); `delivery`, the last failed Input delivery (`error`, `at`), until a delivery succeeds, a new Assignment starts or the Ticket ends; and `follows`, the Threads a Source made it follow, each `{thread, own, closed?}`: `own` when the Ticket opened it, and `closed` with `at` and `outcome` once it closed. Tickets alone writes `follows`; the GitHub Source reads its pull requests with `pullsOf` and `pullOf` (`src/sources/github-pull.ts`).
+Its fields are typed: `origin`, the admissible Trigger that gave its Eval's batch its strength and the batch itself (`triggerId`, `triggerIds`); `execution`, what the Executor chose (`name`, `directory` and `assignment`); `delivery`, the last failed Input delivery (`error`, `at`), until a delivery succeeds, a new Assignment starts or the Ticket ends; and `follows`, the Threads a Source made it follow, each `{thread, own, closed?}`: `own` when the Ticket opened it, and `closed` with `at` and `outcome` once it closed. Tickets alone writes `follows`, through `bindThread` and `threadClosed`; no built-in Source binds a Thread now.
 
 An Input that carries a Trigger records whether a person wrote it, which `waitsForPerson` reads. A Thread also lists in `context` the subscribed Tickets that follow it only for context, and counts in `expired` the Evals of its queued Triggers that expired in a row; an Evaluation records its `primary` Trigger and when its candidate was `delivered`.
 
@@ -210,7 +210,7 @@ Transient provider and network failures get three retries. Launches use effect b
 
 `MasterAssessor` (`src/app/assessment.ts`) lets the main Session assess proactive candidates. `request` queues an assessment effect; `release` drops cached state when its Eval ends.
 
-Its `context`, `read` and `decide` methods serve `orchestrator_eval`, `orchestrator_eval_read` and `orchestrator_eval_decide`. They provide bounded Thread context through `SourceRegistry.threadContext`, repository context, and decision submission. A kind without a context reader supplies only the Trigger and batch.
+Its `context`, `read` and `decide` methods serve `orchestrator_eval`, `orchestrator_eval_read` and `orchestrator_eval_decide`. They provide bounded Thread context through `SourceRegistry.threadContext` and decision submission. A kind without a context reader supplies only the Trigger and batch.
 
 `assessmentOutcome` converts the model's answer for `Engine.decide`. Evals checks inferred acceptance against the current Policy again.
 
@@ -250,7 +250,7 @@ Each model request binds the Session to the current prompt revision. The revisio
 | `src/app/tools/main.ts`, `src/app/tools/executor.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards |
 | `src/app/http.ts`, `src/app/views/`, `src/app/api.ts` | HTTP requests into calls, and Store reads into the panel's views; `api.ts` types every route for the panel |
 | `src/app/resources.ts`, `src/app/links.ts`, `src/app/cards.ts` | Resource names into reads, source messages into links, records into compact cards for models |
-| `src/sources/github*.ts`, `src/sources/feishu*.ts`, `src/sources/poll.ts` | GitHub and Feishu payloads into Triggers and Thread facts, and messages into CLI calls |
+| `src/sources/feishu*.ts`, `src/sources/local.ts`, `src/sources/poll.ts` | Feishu payloads and local requests into Triggers and Thread facts, and messages into CLI calls |
 | `src/deployment.ts`, `src/setup.ts`, `src/infra/` | Setup probes and problems, CLI transport, the agent's process environment |
 
 ## Dependency rules
@@ -275,16 +275,13 @@ Each model request binds the Session to the current prompt revision. The revisio
 - **Fixed refusals.** A refusal a person or an agent can cause is a `UserError(code, values)` from `USER_ERRORS` in `src/core/errors.ts`. The management API answers a `missing` code with 404 and the others with 400, and the panel words each code in its language. Setup problems are `SetupError` codes (`src/setup.ts`) and fixed health texts `HealthCode`s (`src/sources/host.ts`), worded the same way.
 ### Source-specific dependencies
 
-Some generic modules still refer directly to GitHub or Feishu:
+Some generic modules still refer directly to Feishu:
 
 - Outbox applies the Feishu chat word limit.
 - `src/app/links.ts` resolves Feishu message links and `repliedTo`. It and Runtime read settings with `feishuSettings`.
-- `src/app/resources.ts` reads the `feishu/` and `github/` originals; `src/app/cards.ts` uses `pullOf` for Ticket cards.
-- Runtime sends `pullEndNotices` for merged or closed Tickets.
-- Executor tools bind reported pull requests with `readPull` and `claimPull`, using the GitHub context exposed by Runtime.
-- MasterAssessor reads repository files with `readRepositoryPath`.
-- Sessions and Prompts register built-in skills only for GitHub and Feishu. Migration converts their schema-10 records.
-- Setup probes only GitHub and Feishu account fields (`SETUP_FIELDS`). Only those Sources receive account setup problems through `SourceContext.problem`.
+- `src/app/resources.ts` reads the `feishu/` originals.
+- Sessions and Prompts register the built-in Feishu skill. Migration converts the schema-10 records.
+- Setup probes only the Feishu account fields (`SETUP_FIELDS`). Only that Source receives account setup problems through `SourceContext.problem`.
 
 
 ## Modules
@@ -292,7 +289,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | Path | Responsibility |
 | --- | --- |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
-| `src/deployment.ts` | The plugin `Config` and `Machine`; `resolveDeployment` and `resolveFeishuBot` read the repository and the accounts from the Source settings, each CLI run as Executor shells run it; `SETUP_FIELDS` lists the Source fields setup reads. The code names no person, account or organization |
+| `src/deployment.ts` | The plugin `Config` and `Machine`; `resolveFeishuBot` reads the optional bot from the Source settings, its CLI run as Executor shells run it; `SETUP_FIELDS` lists the Source fields setup reads. The code names no person, account or organization |
 | `src/setup.ts` | Setup problems: `SetupError`, with a code, the place that fixes it and the English text the log, the main Session and the panel share |
 | `src/policy.ts` | The Policy: the settings schemas by block, the Policy version, the gate and Mandate revalidation |
 | `src/admission.ts` | The admission table's values, each cell's options and defaults, shared with the panel |
@@ -319,7 +316,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/passes.ts` | Passes, the pass scheduler |
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
 | `src/app/notices.ts` | The main Session's notices and relays: `eventNotice`, `reportRelay`, `resultRelay` and `followupRelay` |
-| `src/app/notifications.ts` | Panel notifications recorded from Ticket attention and ending events, and from merges, reverts, required reviews, failing CI and checks, and pushes, newest first, with read and read-all |
+| `src/app/notifications.ts` | Panel notifications recorded from Ticket attention and ending events, and from merges, reverts, required reviews, failing checks and pushes, newest first, with read and read-all |
 | `src/app/merge-queue.ts` | The merge queue a person asks for: the Tickets waiting for their turn in order, enqueuing, cancelling, retrying a failed entry, the gate a failure names so one whose dependency merged or review was approved is retried by the host, taking the next one that has not failed, and a Ticket's place |
 | `src/app/store.ts` | The Store, and `Receipt`, a message of the outbox |
 | `src/app/store-read.ts` | `storeReads`: the Store's read queries for the views, the tools and the Sources' polls, which never write |
@@ -359,20 +356,15 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
-| `src/infra/commands.ts` | `Commands`, the CLI transport: `run`; `api` and `pages`, limited to the configured repository and validated; `lark` as the bot; `git`. `CliError` carries the code a command's output reports, such as a GitHub HTTP status, and a command that prints nothing fails with how it ended, never with its arguments; `validItems` skips and counts the malformed items of a list |
-| `src/infra/environment.ts` | The agent's process environment: command shims, the git configuration and credential helper, `runAsWorker`, and the checks of the environment and of a Ticket's directory |
+| `src/infra/commands.ts` | `Commands`, the CLI transport: `run`; `lark` as the bot; `git`. `CliError` carries the code a command's output reports, and a command that prints nothing fails with how it ended, never with its arguments; `validItems` skips and counts the malformed items of a list |
+| `src/infra/environment.ts` | The agent's process environment: command shims, the isolated git configuration and its empty credential helper, `runAsWorker`, and the checks of the environment and of a Ticket's directory |
 | `src/infra/paths.ts` | The package's root, where packaged files are |
 | `src/infra/text.ts` | Word counts and the chat message limit, `fill` and `sameName` |
 | `src/infra/health.ts` | The `HealthBoard`, every part's health entry, each claimed by its one writer |
 | `src/sources/kind.ts` | The `SourceKind` protocol |
 | `src/sources/registry.ts` | `SourceRegistry` |
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
-| `src/sources/poll.ts` | What GitHub and Feishu polling share: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
-| `src/sources/github.ts` | The GitHub kind and plugin entry, exported as `./github-watch`: a poll round of notifications, the pull requests of open Tickets with their CI, and subscribed Threads |
-| `src/sources/github-trigger.ts` | GitHub comments, reviews, Issue bodies and CI changes as Triggers, and GitHub addresses |
-| `src/sources/github-pull.ts` | The pull request rules: which pull requests a Ticket follows (`claimPull`, `observePull`), the closes it reports to the Engine, and `pullEndNotices`, the chat notice of a Ticket that ended merged or closed |
-| `src/sources/github-channel.ts` | The GitHub Channel: comments and review thread replies, `sent` or `gone` |
-| `src/sources/github-read.ts` | CI snapshots, repository reads, the `github/` resources, and `githubThreadContext`: an Issue's or pull request's conversation by page |
+| `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
 | `src/sources/feishu.ts` | The Feishu kind and plugin entry, exported as `./feishu-watch` |
 | `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
 | `src/sources/feishu-loops.ts` | The Feishu loops: the event consumer, history recovery, chat names and polling of subscribed topics |
@@ -406,7 +398,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/locales.ts` | All copy in both languages, and the glossary of [001 Domain model](001-domain.md) |
 | `src/client/client.css`, `css.d.ts` | The panel's stylesheet, loaded as text |
 
-`src/sources/github.ts`, `src/sources/feishu.ts` and `src/sources/local.ts` are also the entries of the three Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./github-watch`, `./feishu-watch` and `./local`. The bundle's `cordis.patch.yml` inserts the four plugins, with Feishu disabled and local tickets on.
+`src/sources/feishu.ts` and `src/sources/local.ts` are also the entries of the Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./feishu-watch` and `./local`. The bundle's `cordis.patch.yml` inserts the three plugins, with Feishu disabled and local tickets on.
 
 ## Tests
 
@@ -416,16 +408,16 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
-| `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
+| `tests/sources.spec.ts` | The Feishu Source on a `SourceContext`: translation, polls and read positions, health |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
 | `tests/review.spec.ts` | A ticket workspace's review and delivery: the committed diff split into files with their statuses and counts, branch, commits since the launch base, changed and uncommitted files, a non-git directory, the notes' anchors moved through later commits or marked when their own lines changed, fast-forward, squash and merge-commit strategies, a revert of each and the conflicts and refusals it reports, rebase after the repository moved, a conflicted rebase that aborts, the fork point a rebased or merged branch is reviewed from, a push to the named upstream or its refusal, a push of a reverting commit, and removal of a linked worktree |
-| `tests/merge.spec.ts` | Merging from the main Session: a merge queue drained in order, one entry that cannot land and waits with its reason, one retried by the host once its dependency merged, one re-queued to clear it, one whose Ticket moved on and is dropped, one whose Ticket was resumed and keeps waiting, a cancelled and a skipped entry, a queue paused by a check that failed on the merged target, the check run on the merged target, a revert of a recorded merge and its conflict, a revert that pushes its commit, a push after a revert, a failing followed CI announced once, the panel notifications a merge, a revert and a given-up standing merge leave; the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase handed to the worker or kept as a report for a stopped Ticket or a paused Policy, a branch that needs neither, a branch that changed after its review, the optional cleanup and push, the message a squash or merge commit carries, a waiting start dependency started by the merge, the interface and commit the record keeps, and a standing merge request that runs, waits with a growing wait without using up its attempts on a gate another Ticket or the person opens, gives up, and is cancelled or withdrawn by a stop; a stopped Ticket refused by the queue, a standing request and an automatic merge, while an explicit merge still runs |
+| `tests/merge.spec.ts` | Merging from the main Session: a merge queue drained in order, one entry that cannot land and waits with its reason, one retried by the host once its dependency merged, one re-queued to clear it, one whose Ticket moved on and is dropped, one whose Ticket was resumed and keeps waiting, a cancelled and a skipped entry, a queue paused by a check that failed on the merged target, the check run on the merged target, a revert of a recorded merge and its conflict, a revert that pushes its commit, a push after a revert, the panel notifications a merge, a revert and a given-up standing merge leave; the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase handed to the worker or kept as a report for a stopped Ticket or a paused Policy, a branch that needs neither, a branch that changed after its review, the optional cleanup and push, the message a squash or merge commit carries, a waiting start dependency started by the merge, the interface and commit the record keeps, and a standing merge request that runs, waits with a growing wait without using up its attempts on a gate another Ticket or the person opens, gives up, and is cancelled or withdrawn by a stop; a stopped Ticket refused by the queue, a standing request and an automatic merge, while an explicit merge still runs |
 | `tests/check.spec.ts` | The workspace checks: the `name: command` lines, each run's pass/fail with exit code and environment, the combined record, truncated output, and the merge gate |
 | `tests/webhook.spec.ts` | The webhook POST and a non-2xx answer |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
-| `tests/commands.spec.ts` | CLI calls as the deployment's accounts, the Channels' answers, and repository-scoped GitHub calls |
-| `tests/feishu-read.spec.ts`, `tests/github-read.spec.ts` | Feishu and GitHub reads |
+| `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
+| `tests/feishu-read.spec.ts` | Feishu reads |
 | `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu image reads |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
 | `tests/background.spec.ts` | Waiting for a worker's shell jobs and subagents: an end that woke it, and a host that stops |
@@ -491,14 +483,14 @@ A generated column is computed from its row's JSON and is empty outside its set,
 | Prompt versions | `prompt-revision`, `prompt-version:<n>` |
 | Main Session | `master-id` |
 | Session prompt history | `session-prompts:<session id>` |
-| Source state | Read positions such as `github-cursor:<number>`, PR CI fingerprints and seen Feishu-topic messages; keys begin with the kind or `thread-` plus a Thread key |
+| Source state | Read positions and seen Feishu-topic messages; keys begin with the kind or `thread-` plus a Thread key |
 | Display names | `source-labels:<source id>` |
 
 Dismissal is stored on its Decision. Input text is rendered from the Ticket when read, so neither needs a separate key-value record.
 
 Read caches use bounded in-memory `TextCache` instances and are lost on restart. A Session paging through an original Source record or prompt preview must reread offset 0 after a restart. Feishu links resolved after intake are cached the same way; link-based search finds them only after that link has been read during the current process lifetime.
 
-Nothing deletes old records yet, so these grow without bound: the `trigger`, `disposition` and `decision` rows; ended Tickets and their Threads; the outbox's receipts; and in `kv`, every saved settings revision and prompt version, the prompt revisions each Session worked under, and the Sources' records per Thread and per Issue or pull request.
+Nothing deletes old records yet, so these grow without bound: the `trigger`, `disposition` and `decision` rows; ended Tickets and their Threads; the outbox's receipts; and in `kv`, every saved settings revision and prompt version, the prompt revisions each Session worked under, and the Sources' records per Thread.
 
 `SCHEMA_VERSION` only increases. A database of a newer version refuses to start; `src/app/migration.ts` upgrades a database of the pre-release schema 10 once, at start, and refuses an older one.
 
@@ -540,7 +532,7 @@ Each Executor has six application tools:
 | --- | --- |
 | `orchestrator_read` | Read resources available to its own Ticket |
 | `orchestrator_ack` | Acknowledge a request |
-| `orchestrator_report` | Report progress or an outcome, binding a pull request under the pull-request rules |
+| `orchestrator_report` | Report progress, ready, blocked, failed or dropped, with an optional question for a person |
 | `orchestrator_thread_unrelated` | Drop an unrelated attached Thread, hand back its owned follow-ups and tell the main Session why |
 | `orchestrator_thread_follow` | Subscribe to a related Thread for context and tell the main Session |
 | `orchestrator_trigger_handback` | Hand back a message once, with a reason carried by its candidate |
@@ -574,19 +566,19 @@ Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open
 | `tickets`, `triggers`, `threads`, `decisions` | Paged lists as `{items, next_offset}`; activity lists put newest first |
 | `decision/<id>` | One Decision |
 | `thread/<key>` | Label, Tickets, recent Decisions and a page of Triggers |
-| `trigger/<id>` | Message text, replied-to Trigger and neighboring messages, excluding CI runs |
+| `trigger/<id>` | Message text, replied-to Trigger and neighboring messages |
 | `ticket/<id>` | Related ids, source-batch Triggers, Threads, and first pages of Assignments and Inputs |
 | Ticket subresources | `/assignments`, `/inputs`, `/assignment`, `/result`, `/diff`, `/report/<assignment id>`, `/transcript`, `/message/<n>`, `/input/<id>` |
 | `settings`, `settings/<block>` | Revisions and summaries, or a complete block ready to save |
 | `prompts`, `prompts/<revision>`, `prompts/current`, `prompts/defaults`, `prompt-preview/<id>` | Prompt configurations and composed text |
 | `models`, `models/<provider>` | Available models |
-| `feishu/<trigger id>/…`, `github/…` | Original Source records, described in the Source skills |
+| `feishu/<trigger id>/…` | Original Feishu records, described in the Feishu skill |
 
 `/diff` is the main Session's read of the committed change the panel shows as View diff; a Ticket's details also list `blocked_by`, the Tickets whose merge comes first. Ticket Threads are marked `context` for context-only follows and `bound` for Source bindings. Assignment pages are newest first and include report previews. Continue lists with `next_offset`. `/input/<id>` accepts an Input's name or id. `settings` includes small blocks in full and summarizes Policy and Source blocks.
 
-Source resources include message neighborhoods, `github/pulls/<n>/thread/<comment id>` and `github/commits/<sha>/checks`.
+Source resources include message neighborhoods and the topic and reply pages of a Feishu conversation.
 
-An original's messages read in one compact shape, `{id, from, at, text, reply_to?, path?, line?, url?}`, not as GitHub or Feishu records them.
+An original's messages read in one compact shape, `{id, from, at, text, reply_to?, path?, line?, url?}`, not as Feishu records them.
 
 An Executor Session reads only its own Ticket, its Threads, the Triggers that reached it or that its request held, the prompt versions it worked under and the originals, and its pages leave out the ids of what it cannot read, Decisions and other Tickets.
 
@@ -602,7 +594,7 @@ These messages are steered into the main Session's turn:
 
 | Message | Content |
 | --- | --- |
-| Candidate | Batch Trigger cards, Thread, `related_tickets`, `tickets_total`, `delivered_to`, referenced Tickets from Issue/PR links, `handed_back` reasons and the next action |
+| Candidate | Batch Trigger cards, Thread, `related_tickets`, `tickets_total`, `delivered_to`, referenced Tickets the text names, `handed_back` reasons and the next action |
 | `follow_up` | One message as its Executor sees it, `replies_to`, receiving Tickets, and the reminder that Executors decide it while the main Session may only stop work |
 | `worker_report` | Ticket card, originating Trigger, state and summary up to 600 characters; `chars` and a read pointer when truncated |
 | `worker_attention` | Ticket card carrying the question |
@@ -623,11 +615,11 @@ Most built-in instructions live in `prompts/*.md`, with one sentence per line jo
 
 Every plugin configuration key except `stateDir` is volatile. The panel's Deployment settings and DeepSeek Harness's Plugin Manager edit them through DeepSeek Harness's configuration form; the host writes `cordis.patch.yml` and updates the values in place, and dsh-superagent reads each limit when it uses it, so a change applies without a restart.
 
-A settings save that changes a Source field setup reads, such as an account's CLI, and any save while setup waits, restarts dsh-superagent. DeepSeek Harness's settings service does not serve the entry during that restart, so after its own restart dsh-superagent asks it to read the entry again, and an open form becomes editable again.
+A settings save that changes a Source field setup reads, such as the Feishu CLI, and any save while setup waits, restarts dsh-superagent. DeepSeek Harness's settings service does not serve the entry during that restart, so after its own restart dsh-superagent asks it to read the entry again, and an open form becomes editable again.
 
 ## Reviewing a change against real data
 
-Point `DSH_HOME` at a temporary directory and create a new profile there. Copy the database from a backup, disable every Source, pause processing and remove the main Session id. Give the GitHub and Feishu CLIs read-only stand-ins.
+Point `DSH_HOME` at a temporary directory and create a new profile there. Copy the database from a backup, disable every Source, pause processing and remove the main Session id. Give the Feishu CLI a read-only stand-in.
 
 ## Open questions
 

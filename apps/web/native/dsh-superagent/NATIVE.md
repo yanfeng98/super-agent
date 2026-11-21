@@ -4,8 +4,9 @@ This directory is the source-vendored copy of [`yanfeng98/nano-dsh-superagent-pr
 that ships with this Super Agent checkout as a built-in capability. It is not installed from npm and it is not a third-party
 profile plugin.
 
-It is a proactive coding agent that takes requests from local tickets created in its panel, GitHub, or Feishu, evaluates
-them under a Policy, turns authorized ones into Tickets, and runs each Ticket in its own DSH Session and directory. Every
+It is a proactive coding agent that takes requests from local tickets created in its panel or by its main Session, or from
+Feishu when a bot is configured, evaluates them under a Policy, turns authorized ones into Tickets, and runs each Ticket in
+its own DSH Session and directory. Every
 local ticket is archived as a Markdown file that also receives the agent's replies and results. The **Superagent** entry in
 the Web sidebar opens its panel.
 
@@ -21,20 +22,19 @@ the Web sidebar opens its panel.
 - `pnpm-workspace.yaml` lists `apps/web/native/dsh-superagent`.
 - `packages/bundle/web-app/package.json` depends on `dsh-superagent` as a workspace package.
 - `packages/bundle/web-app/cordis.patch.yml` inserts the `dsh-superagent` row (Host plugin plus the browser panel from its
-  `dsh.client` declaration), the `github-watch` and `local` Sources, and the `feishu-watch` Source (disabled).
+  `dsh.client` declaration), the `local` Source, and the `feishu-watch` Source (disabled).
 - `packages/bundle/web-app/presets/superagent-worker.patch.yml` and `superagent-router.patch.yml` define the two agent presets
   its Sessions run under (`dsh-superagent-worker`, `dsh-superagent-router`); the Web bundle lists them in `dsh.bundle.patch`.
   Their sandbox rows use `superagent-` ids because a preset row id must not repeat a host row's.
 - `packages/bundle/web-app/tests/superagent-bundle.spec.ts` guards the dependency, the mounted rows and both presets.
 - `scripts/build.ts` runs the package's own `tsdown` build before the Web shell build, producing `lib/index.js`,
-  `lib/client.js`, `lib/github-watch.js`, `lib/feishu-watch.js` and `lib/local.js`.
+  `lib/client.js`, `lib/feishu-watch.js` and `lib/local.js`.
 - No profile edit, plugin-market install, or `dsh plugin add` is needed. A fresh clone needs the usual
   `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop).
 
-Without a GitHub repository and agent account the runtime still starts: the GitHub Source reports that it is unconfigured
-and polls nothing, while the local Source accepts tickets from **Execution → New ticket** or from the main Session in the
-DSH chat. Configure the repository and the agent CLI in the panel (or with the Management API of `docs/006-deployment.md`)
-to use the GitHub Source too.
+The runtime starts without a repository or an account: the local Source accepts tickets from **Execution → New ticket** or
+from the main Session in the DSH chat, and Feishu stays off until a bot CLI is configured in the panel (or with the
+Management API of `docs/006-deployment.md`).
 
 The state directory defaults to `<DSH_HOME>/state/superagent` (with `DSH_HOME` defaulting to `~/.dsh`), so the built-in
 copy starts without machine configuration. Set `stateDir` in the profile's `cordis.patch.yml` to relocate it.
@@ -74,16 +74,14 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 5. **Management API bind.** `src/app/http.ts` follows the Web server's bound host (loopback aliases included) instead of
    requiring `127.0.0.1`, so a container or LAN bind keeps its panel. DSH's Web authentication, the
    `x-orchestrator-request` header and the same-origin check still protect every route.
-6. **Local tickets and optional GitHub.** `src/sources/local.ts` (exported as `./local`) adds a panel-driven Source: the
+6. **Local tickets.** `src/sources/local.ts` (exported as `./local`) adds a panel-driven Source: the
    management routes `POST local/requests` and `POST local/followups` write `<archive>/<request id>.md`, ingest Triggers whose
    actor is `operator`, and append every outbound message to the same file; the ticket page lists those receipts under
-   **Replies and results** and offers a reply box for the follow-ups (`src/app/views/tickets.ts`, `src/app/store.ts`). Setup no longer requires a repository and an account: `resolveDeployment`
-   resolves an empty GitHub deployment when the Source names neither, `writeEnvironment` writes a failing `gh` shim, no
-   GitHub credential helper, and the neutral author `dsh-superagent <dsh-superagent@localhost>`, and the GitHub Source
-   reports `githubUnset`. Receipts record the time of their last delivery state, and the overview counts a kind's default
+   **Replies and results** and offers a reply box for the follow-ups (`src/app/views/tickets.ts`, `src/app/store.ts`). Setup no longer requires a repository and an account: `resolveFeishuBot` resolves only the optional Feishu bot and
+   `writeEnvironment` writes the command shims and the neutral author `dsh-superagent <dsh-superagent@localhost>`. Receipts record the time of their last delivery state, and the overview counts a kind's default
    Policy part (`src/app/views/overview.ts`) so a fresh install is not told that nobody may ask. `local.spec.ts`,
    `deployment.spec.ts`, `environment.spec.ts`, `http.spec.ts`, `views.spec.ts` and `panel-execution.spec.tsx` cover it.
-7. **No-GitHub worker prompt.** `prompts/work.md` tells a worker that an empty `$DSH_SUPERAGENT_GITHUB_ACCOUNT` means there is no GitHub account, so it commits locally (setting `user.name` and `user.email` itself when git has none) and does not push, open a pull request or call `gh`; without this, a local ticket's worker would follow the upstream push/PR instructions and fail.
+7. **Local-only worker prompt.** `prompts/work.md`, `prompts/worker.md` and `prompts/team/delivery.md` tell a worker that there is no remote account, so it commits locally (setting `user.name` and `user.email` itself when git has none), does not push, and reports ready without waiting for a merge; `prompts/orchestrator.md` says the main Session merges or undoes a merge only on the person's explicit request.
 9. **Ticket review, reopening and searchable results.** The Executor records a Ticket workspace's base commit at its first
    launch (`src/executor/dsh.ts`); when the Ticket ends, Runtime captures the branch, the commits since that base, the changed
    files and any uncommitted work (`src/app/review.ts`) onto `ticket.review`, and the local archive appends a **Closed**
@@ -103,7 +101,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    `workspaceRepo`, `mergeWorkspace`, `rebaseWorkspace` and `discardWorkspace` (`src/app/review.ts`), record the
    corresponding Ticket fields (`src/app/runtime.ts`) and append matching archive sections (`src/sources/local.ts`).
    `src/app/check.ts` runs `executor.check` at each ending and `Runtime.mergeTicket` refuses a merge without a passing run
-   dated after that ending (`POST tickets/:id/check`) and a bound pull request's failed CI refuses it too; check runs keep a capped history (`ticket.checkHistory`); a review decision (`Tickets.review`, `POST tickets/:id/review`, `executor.requireReview`) gates a merge and is archived; reviewer notes (`Tickets.addNote`/`removeNote`/`resolveNote`/`replyToNote`,
+   dated after that ending (`POST tickets/:id/check`); check runs keep a capped history (`ticket.checkHistory`); a review decision (`Tickets.review`, `POST tickets/:id/review`, `executor.requireReview`) gates a merge and is archived; reviewer notes (`Tickets.addNote`/`removeNote`/`resolveNote`/`replyToNote`,
    `POST tickets/:id/notes`, `/notes/:noteId/remove`, `/notes/:noteId/resolve`, `/notes/:noteId/replies`) can be resolved, reopened, or sent to the
    Executor as one follow-up, and an open note blocks a merge; related Tickets (`Tickets.link`,
    `POST tickets/:id/related`) and the person-action history appear on the page. `review.spec.ts`, `check.spec.ts`,
@@ -177,7 +175,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     merge it undoes. `orchestrator_ticket_merge` takes `ticket_ids` for several Tickets, which merge in the order given and
     are each answered on their own, and `orchestrator_ticket_revert` undoes one from the chat; `POST tickets/<id>/revert`
     does the same from the panel. Panel notifications now cover `merged`, `reverted`, `review` (a deployment that requires an
-    approval), `ci` (a followed pull request reporting failing CI, once per reported result) and `automerge` (a standing
+    approval) and `automerge` (a standing
     merge given up after its attempts), and each also reaches a local Source's webhook. `tests/review.spec.ts`,
     `tests/merge.spec.ts`, `tests/chat-tools.spec.ts`, `tests/runtime.spec.ts` and `tests/panel-execution.spec.tsx` cover
     them. The router prompt now says the main Session merges or undoes a merge only on the person's explicit ask, within
@@ -302,6 +300,17 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     archive. `tests/chat-tools.spec.ts` covers them; the orchestrator model-surface budget moved from 65,500 to 67,500 for
     the new tool and options.
 
+28. **Removal of the GitHub Source and account integration.** The vendored copy no longer contains `src/sources/github*.ts`,
+    the GitHub skill, the GitHub account and repository setup, the pull-request binding and its CI gate, or the GitHub
+    prompt text and UI. `Deployment` carries only `stateDir` and the optional Feishu bot; `SETUP_FIELDS` probes only
+    Feishu; `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
+    reads only Thread context; `orchestrator_read` exposes `feishu/` originals and no `github/` resources; and the merge
+    gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
+    containment, rebase, queue and the post-merge target check. The schema 11 migration drops GitHub settings and keys
+    from a schema 10 database, and a startup sweep drops the same data when a database still holds it; a database already
+    at schema 11 needs no migration for this, and this code reads no GitHub data. `tests/local.spec.ts`,
+    `tests/migration.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and `tests/merge.spec.ts` cover it.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.
@@ -317,10 +326,9 @@ rewriting its test idioms.
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a
-  setup problem even when GitHub is unconfigured, and `<DSH_HOME>/state/superagent` is created.
-- Usage starts at [docs/006-deployment.md#quick-start](docs/006-deployment.md#quick-start): local tickets, the agent account
-  and `gh` wrapper for GitHub, the three settings groups, the first request, everyday follow-ups, Feishu enabling and
-  troubleshooting.
+  setup problem, and `<DSH_HOME>/state/superagent` is created.
+- Usage starts at [docs/006-deployment.md#quick-start](docs/006-deployment.md#quick-start): local tickets, the optional
+  Feishu bot, the three settings groups, the first request, everyday follow-ups, Feishu enabling and troubleshooting.
 - A clean worktree `pnpm install && pnpm run build` includes the `Superagent plugin` gate before the Web build.
 
 ## Syncing upstream
@@ -335,8 +343,7 @@ rewriting its test idioms.
 
 - Executor Sessions run with the profile's permissions as the operator's OS user. The command shims and git configuration
   under the state directory are defaults, not a security boundary; use a dedicated OS account for isolation.
-- Feishu stays disabled until a bot CLI is configured; the GitHub Source needs an agent account with write access to the
-  repository, and stays quiet without one.
+- Feishu stays disabled until a bot CLI is configured; local tickets need no account.
 - The upstream documents describe installing the bundle into a separate `superagent` profile. The built-in copy needs no
   such profile; `docs/006-deployment.md` starts with the built-in path.
 - The management API follows the Web server's bind address. On a non-loopback bind it is reachable from that network;

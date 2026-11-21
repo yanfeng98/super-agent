@@ -72,17 +72,14 @@
       name: '@xmanrui/dsh-im'
 
     # Native proactive coding agent (vendored dsh-superagent): the Superagent
-    # panel plus its GitHub Source, mounted for every Web profile. The Feishu
-    # Source stays off until a bot CLI is configured. Its state directory
-    # defaults to `<DSH_HOME>/state/superagent`; without a GitHub account the
-    # panel shows what setup still needs and nothing else runs.
+    # panel, mounted for every Web profile. The Feishu Source stays off until a
+    # bot CLI is configured. Its state directory defaults to
+    # `<DSH_HOME>/state/superagent`; local tickets run without any account.
     # The two agent presets dsh-superagent creates its Sessions under are in
     # `presets/superagent-worker.patch.yml` and `presets/superagent-router.patch.yml`;
     # keep them while its Sessions are in use.
     - id: dsh-superagent
       name: dsh-superagent
-    - id: dsh-superagent-github
-      name: dsh-superagent/github-watch
     - id: dsh-superagent-feishu
       name: dsh-superagent/feishu-watch
       disabled: true

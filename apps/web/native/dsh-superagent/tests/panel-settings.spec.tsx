@@ -42,9 +42,9 @@ it('saves the Eval block on the Policy settings and the Executor with its execut
   const prepare = field<HTMLTextAreaElement>(zh.prepareCommand)
   await type(prepare, 'git worktree add ')
   prepare.setSelectionRange(17, 17)
-  await click('可用的环境变量 3')
+  await click('可用的环境变量 4')
   expect(all('.dt-table tbody tr').map(row => row.textContent)).toEqual(['DSH_SUPERAGENT_DIR工单的执行目录执行器', 'DSH_SUPERAGENT_NAME工单短名执行器',
-    'DSH_SUPERAGENT_GITHUB_REPOSITORY仓库GitHub · 已关闭'])
+    'DSH_SUPERAGENT_FEISHU_BOT飞书机器人飞书', 'DSH_SUPERAGENT_FEISHU_CHAT发起工单的飞书群飞书'])
   await click('DSH_SUPERAGENT_DIR')
   expect(field<HTMLTextAreaElement>(zh.prepareCommand).value).toBe('git worktree add "$DSH_SUPERAGENT_DIR"')
   await type(field<HTMLInputElement>(zh.blockedCommands), 'gh-personal  gh.other')
@@ -101,11 +101,11 @@ it('shows save and discard only while a settings block has edits, at the end of 
   expect(document.activeElement).toBe(workers.form)
   await click(find(zh['term.source'], '.dt-settings-link'))
   expect(all('.dt-savebar')).toHaveLength(0)
-  const github = all('.dt-card').find(card => card.querySelector('.dt-card-title')?.textContent === 'GitHub')!
-  await type(field<HTMLInputElement>('智能体的 GitHub CLI'), 'gh-other')
-  expect(github.lastElementChild!.classList.contains('dt-savebar')).toBe(true)
-  // The agent CLI is read by setup, so the bar warns that saving restarts dsh-superagent and interrupts running work.
-  expect(github.lastElementChild!.textContent).toContain('2 个进行中的派工会中断')
+  const feishu = all('.dt-card').find(card => card.querySelector('.dt-card-title')?.textContent === '飞书')!
+  await type(field<HTMLInputElement>('机器人的 lark-cli'), 'lark-other')
+  expect(feishu.lastElementChild!.classList.contains('dt-savebar')).toBe(true)
+  // The bot CLI is read by setup, so the bar warns that saving restarts dsh-superagent and interrupts running work.
+  expect(feishu.lastElementChild!.textContent).toContain('2 个进行中的派工会中断')
 })
 
 it('gives the focus back to the field that had it once a block\'s save ends', async () => {

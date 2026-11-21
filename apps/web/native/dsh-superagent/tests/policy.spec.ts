@@ -4,7 +4,6 @@ import type { MandateBasis } from '../src/core/index.ts'
 import { migrateSettings } from '../src/app/migration.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuKind } from '../src/sources/feishu.ts'
-import { githubKind } from '../src/sources/github.ts'
 import type { Thread, Ticket, Trigger } from '../src/core/index.ts'
 
 const MEMBER = 'ou_alice'
@@ -12,20 +11,19 @@ const CHAT = 'oc_team'
 const OBSERVED = 'oc_1111111111111111111111111111'
 const feishuSource = (config: { chats: { chatId: string; listen: 'mentions' | 'all' }[]; directMessages: boolean }, enabled = true) => ({ enabled, config })
 const base = SettingsSchema.parse({
-  policy: { sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT }, github: { allowed: [{ id: 'Alice' }] } } },
+  policy: { sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } } },
   eval: { mode: 'auto' },
   sources: { feishu: feishuSource({ chats: [{ chatId: CHAT, listen: 'mentions' }, { chatId: OBSERVED, listen: 'all' }], directMessages: true }) },
 })
 function setup(settings: Settings = base) {
   const sources = new SourceRegistry(() => settings)
-  sources.register(feishuKind); sources.register(githubKind)
+  sources.register(feishuKind)
   return { sources, policy: settingsPolicy(settings, sources), version: policyVersion(settings) }
 }
 const { sources, policy } = setup()
 const thread = (subscriptions: string[] = []): Thread => ({ key: 'feishu:x', ref: { source: 'feishu', id: 'x' }, createdAt: '', subscriptions, correlated: [], pending: [], meta: {} })
 const feishu = (overrides: Partial<Trigger> & { meta?: Record<string, unknown> } = {}): Trigger => ({ id: 't', source: 'feishu', threads: [{ source: 'feishu', id: 'x' }], actor: { source: 'feishu', id: MEMBER }, human: true, at: '', text: 'hi', addressed: 'mention', meta: { chatId: CHAT, direct: false, mentioned: true }, ...overrides })
 const unaddressed = (overrides: Partial<Trigger> = {}): Trigger => { const { addressed: _addressed, ...rest } = feishu(overrides); return rest }
-const github = (login: string, addressed?: 'mention'): Trigger => ({ id: 'g', source: 'github', threads: [{ source: 'github', id: '1' }], actor: { source: 'github', id: login }, human: true, at: '', text: 'x', ...addressed ? { addressed } : {}, meta: { number: 1, isPr: true } })
 const ticket = { id: 'ticket', ended: { at: '', by: 'executor', reason: 'closed', outcome: 'closed' } } as Ticket
 
 describe('source scope', () => {
@@ -35,31 +33,29 @@ describe('source scope', () => {
     expect(sources.scope(feishu({ meta: { chatId: 'oc_other', direct: false, mentioned: true } }))).toEqual({ listened: false, reason: 'chat_not_allowed' })
     expect(sources.scope(feishu({ meta: { chatId: 'p2p', direct: true, mentioned: false } }))).toEqual({ listened: true, observed: false, row: 'direct' })
     expect(setup({ ...base, sources: { feishu: feishuSource({ chats: [], directMessages: false }) } }).sources.scope(feishu({ meta: { chatId: 'p2p', direct: true, mentioned: false } }))).toEqual({ listened: false, reason: 'direct_messages_not_allowed' })
-    expect(sources.scope(github('anyone'))).toEqual({ listened: true, observed: false })
   })
   it('listens to nothing from a configured Source whose plugin is not loaded, and keeps an invalid stored configuration disabled', () => {
     const bare = new SourceRegistry(() => base)
     expect(bare.scope(feishu())).toEqual({ listened: false, reason: 'source_not_installed' })
-    expect(bare.scope(github('anyone'))).toEqual({ listened: true, observed: false })
+    // A Source with no stored configuration and no plugin listens to what it produces, as a kind without `scope` does.
+    expect(bare.scope({ source: 'probe', meta: {} })).toEqual({ listened: true, observed: false })
     const broken = new SourceRegistry(() => SettingsSchema.parse({ sources: { feishu: { enabled: true, config: { chats: 'oops' } } } }))
     broken.register(feishuKind)
     expect(broken.instance('feishu')).toMatchObject({ enabled: false })
     expect(broken.scope(feishu())).toEqual({ listened: false, reason: 'source_disabled' })
   })
   it('filters everything from a disabled Source', () => {
-    expect(setup({ ...base, sources: { ...base.sources, github: { enabled: false, config: {} } } }).sources.scope(github('anyone'))).toEqual({ listened: false, reason: 'source_disabled' })
+    const disabled = { ...base, sources: { feishu: feishuSource({ chats: [{ chatId: CHAT, listen: 'mentions' }], directMessages: true }, false) } }
+    expect(setup(disabled).sources.scope(feishu())).toEqual({ listened: false, reason: 'source_disabled' })
   })
 })
 describe('gate', () => {
   it('grants explicit strength when the sender is allowed in its Source\'s part and the Source marked the Trigger addressed', () => {
     expect(policy.gate(feishu(), thread(), [])).toMatchObject({ admissible: true, strength: 'explicit', basis: { via: 'addressed', source: 'feishu', sender: 'Alice', addressed: 'mention', scope: { chatId: CHAT } } })
     expect(policy.gate(feishu({ addressed: 'direct', meta: { chatId: 'p2p', direct: true, mentioned: false } }), thread(), [])).toMatchObject({ admissible: true, strength: 'explicit', basis: { addressed: 'direct' } })
-    // GitHub logins compare without case; the entry's id names the sender when it has no display name.
-    expect(policy.gate(github('alice', 'mention'), thread(), [])).toMatchObject({ admissible: true, strength: 'explicit', basis: { source: 'github', sender: 'Alice' } })
   })
-  it('checks each Source\'s own list: a Feishu id allows nothing on GitHub', () => {
-    expect(policy.gate(github(MEMBER, 'mention'), thread(), [])).toEqual({ admissible: false, reason: 'not_a_member' })
-    expect(allowedSender(base, { source: 'github', id: 'ALICE' })).toEqual({ id: 'Alice' })
+  it('looks a sender up in its own Source\'s list', () => {
+    expect(allowedSender(base, { source: 'feishu', id: MEMBER })).toEqual({ id: MEMBER, name: 'Alice' })
     expect(allowedSender(base, { source: 'feishu', id: 'Alice' })).toBeUndefined()
     expect(anyoneAllowed(base)).toBe(true)
     expect(anyoneAllowed(SettingsSchema.parse({}))).toBe(false)
@@ -68,7 +64,6 @@ describe('gate', () => {
     const quiet = { meta: { chatId: CHAT, direct: false, mentioned: false } }
     expect(policy.gate(unaddressed({ ...quiet, actor: { source: 'feishu', id: 'ou_guest' } }), thread(['ticket']), [])).toMatchObject({ admissible: true, strength: 'inferred', basis: { via: 'followup' } })
     expect(policy.gate(unaddressed(quiet), thread(['ticket']), [])).toMatchObject({ admissible: true, strength: 'explicit', basis: { via: 'followup', sender: 'Alice' } })
-    expect(policy.gate(github('someone'), thread(), [ticket])).toMatchObject({ admissible: true, strength: 'inferred' })
     // A Thread a ticket follows only for context lends no follow-up: the admission table decides, as on any Thread.
     const context = { ...thread(['ticket']), context: ['ticket'] }
     expect(policy.gate(unaddressed(quiet), context, [ticket])).toMatchObject({ admissible: false })
@@ -223,23 +218,22 @@ describe('revalidate and version', () => {
   })
   it('changes the Policy version for rules, accept mode and the Sources\' parts, not for pause, concurrency, models or Source configuration', () => {
     const version = setup().version
-    expect(setup({ ...base, paused: true, executor: { ...base.executor, maxWorkers: 9 }, eval: { ...base.eval, timeoutSeconds: 300 }, sources: { ...base.sources, github: { enabled: true, config: { pollSeconds: 600 } } } }).version).toBe(version)
-    expect(setup({ ...base, sources: { feishu: feishuSource({ chats: [], directMessages: false }) } }).version).toBe(version)
+    expect(setup({ ...base, paused: true, executor: { ...base.executor, maxWorkers: 9 }, eval: { ...base.eval, timeoutSeconds: 300 }, sources: { feishu: feishuSource({ chats: [], directMessages: false }) } }).version).toBe(version)
     expect(setup({ ...base, eval: { ...base.eval, mode: 'off' } }).version).not.toBe(version)
-    expect(setup({ ...base, policy: { ...base.policy, sources: { ...base.policy.sources, github: { allowed: [], admission: {} } } } }).version).not.toBe(version)
+    expect(setup({ ...base, policy: { ...base.policy, sources: { feishu: { allowed: [], admission: {} } } } }).version).not.toBe(version)
   })
 })
 describe('settings migration', () => {
   it('moves each member\'s identity into each Source\'s part of the Policy and drops the fields prompts and the execution environment replaced', () => {
     const saved = SettingsSchema.parse(migrateSettings({
-      policy: { members: [{ name: 'Alice', feishuId: MEMBER, github: 'alice' }, { name: 'Bob', feishuId: 'ou_bob', github: '' }, { name: 'Carol', feishuId: '', github: 'carol' }], memberChat: CHAT, autoMergeLineLimit: 300,
+      policy: { members: [{ name: 'Alice', feishuId: MEMBER }, { name: 'Bob', feishuId: 'ou_bob' }, { name: 'Carol', feishuId: '' }], memberChat: CHAT, autoMergeLineLimit: 300,
         rules: [{ id: 'visual', name: 'V', enabled: true, visual: true, instruction: 'x' }] },
       executor: { maxWorkers: 2, reviewer: 'dave', visualReviewer: 'carol', branchPrefix: 'bot/' },
       sources: { feishu: { enabled: true, config: { chats: [], directMessages: true }, authority: { chats: [] } } },
     }))
     expect(saved.policy).toEqual({
       rules: [{ id: 'visual', name: 'V', enabled: true, instruction: 'x' }],
-      sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }, { id: 'ou_bob', name: 'Bob' }], syncChat: CHAT, admission: {} }, github: { allowed: [{ id: 'alice' }, { id: 'carol' }], admission: {} } },
+      sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }, { id: 'ou_bob', name: 'Bob' }], syncChat: CHAT, admission: {} } },
     })
     expect(saved).toMatchObject({ paused: false, executor: { model: null, maxWorkers: 2, directory: '', prepare: '', check: '', requireReview: false, blockedCommands: [] } })
     expect(saved.sources.feishu).toEqual({ enabled: true, config: { chats: [], directMessages: true } })
@@ -247,12 +241,12 @@ describe('settings migration', () => {
     expect(SettingsSchema.parse(migrateSettings({ executor: { maxWorkers: 2, paused: true } }))).toMatchObject({ paused: true, executor: { maxWorkers: 2 } })
   })
   it('moves pre-domain chat lists into the Feishu Source, the pause into a setting of its own, and members into the Sources\' parts', () => {
-    const migrated = SettingsSchema.parse(migrateSettings({ paused: true, allowedChats: [CHAT, OBSERVED], allowDirectMessages: false, pollSeconds: 120, maxWorkers: 5, members: [{ name: 'A', feishuId: MEMBER, github: 'a' }],
+    const migrated = SettingsSchema.parse(migrateSettings({ paused: true, allowedChats: [CHAT, OBSERVED], allowDirectMessages: false, pollSeconds: 120, maxWorkers: 5, members: [{ name: 'A', feishuId: MEMBER }],
       models: { orchestrator: { provider: 'p', model: 'm' }, worker: null, admission: null }, admission: { mode: 'auto', chats: [OBSERVED], maxEvaluators: 1, timeoutSeconds: 90, rules: [] } }))
     expect(migrated).toEqual({
       paused: true,
-      sources: { feishu: feishuSource({ chats: [{ chatId: CHAT, listen: 'mentions' }, { chatId: OBSERVED, listen: 'all' }], directMessages: false }), github: { enabled: true, config: { pollSeconds: 120 } } },
-      policy: { rules: [], sources: { feishu: { allowed: [{ id: MEMBER, name: 'A' }], admission: {} }, github: { allowed: [{ id: 'a' }], admission: {} } } },
+      sources: { feishu: feishuSource({ chats: [{ chatId: CHAT, listen: 'mentions' }, { chatId: OBSERVED, listen: 'all' }], directMessages: false }) },
+      policy: { rules: [], sources: { feishu: { allowed: [{ id: MEMBER, name: 'A' }], admission: {} } } },
       eval: { mode: 'auto', timeoutSeconds: 90, model: { provider: 'p', model: 'm' } },
       executor: { model: null, maxWorkers: 5, directory: '', prepare: '', check: '', requireReview: false, blockedCommands: [] },
     })
@@ -267,11 +261,6 @@ describe('settings migration', () => {
 it('renames the variables a stored prepare command reads from earlier project names to the current one', () => {
   const settings = SettingsSchema.parse(migrateSettings({ executor: { prepare: 'git worktree add "$DSH_TAG_DIR" -b "agent/${DSH_GO_NAME}" "refs/x/$DSH_FREELANCER_TICKET"' } }))
   expect(settings.executor.prepare).toBe('git worktree add "$DSH_SUPERAGENT_DIR" -b "agent/${DSH_SUPERAGENT_NAME}" "refs/x/$DSH_SUPERAGENT_TICKET"')
-})
-
-it('reads a stored GitHub Source configuration that names a merge account without it', () => {
-  const settings = SettingsSchema.parse(migrateSettings({ sources: { github: { enabled: true, config: { repository: 'acme/widgets', cli: 'gh-agent', mergeCli: 'gh-merge-account', pollSeconds: 120 } } } }))
-  expect(settings.sources.github!.config).toEqual({ repository: 'acme/widgets', cli: 'gh-agent', pollSeconds: 120 })
 })
 
 describe('assessment outcomes', () => {
@@ -407,80 +396,34 @@ describe('policy effects', () => {
     expect(policyEffects([visual], base, deleted, scope).get('t4')).toEqual({ rules: [{ id: 'visual', name: 'Visual', change: 'disabled' }] })
   })
 })
-describe('bots and events without a sender', () => {
-  const observing = (config: Record<string, unknown>, part: Record<string, unknown> = {},
-    mode: 'auto' | 'off' = 'auto') => SettingsSchema.parse({
-    policy: { sources: { github: { allowed: [{ id: 'Alice' }], bots: [{ id: 'dependabot[bot]' }], ...part } } }, eval: { mode },
-    sources: { github: { enabled: true, config } } })
-  const comment: Trigger = { id: 'b', source: 'github', threads: [{ source: 'github', id: '1' }],
-    actor: { source: 'github', id: 'dependabot[bot]' }, human: false, at: '', text: 'Bump lodash',
-    meta: { number: 1, isPr: true, kind: 'conversation' } }
-  const ci = (meta: Record<string, unknown>): Trigger => ({ id: 'ci', source: 'github', threads: [{ source: 'github', id: 'ci:main' }],
-    actor: { source: 'github', id: '' }, human: false, at: '', text: 'CI failed 1/9 on main', meta: { ci: true, ...meta } })
-  it('admits a bot on its Source\'s list as an inferred candidate where the Source observes its scope, and no other bot', () => {
-    const { policy } = setup(observing({ observeComments: true }))
-    expect(policy.gate(comment, thread(), [])).toMatchObject({ admissible: true, strength: 'inferred',
-      basis: { via: 'bot', source: 'github', sender: 'dependabot[bot]', row: 'comments', observation: { mode: 'auto' } } })
-    // A bot that addresses the agent still makes no explicit request; on a Thread with tickets it is no follow-up either.
-    expect(policy.gate({ ...comment, addressed: 'mention' }, thread(['ticket']), [ticket])).toMatchObject({ strength: 'inferred',
-      basis: { via: 'bot', addressed: 'mention' } })
-    expect(policy.gate({ ...comment, actor: { source: 'github', id: 'renovate[bot]' } }, thread(), [])).toEqual({ admissible: false,
-      reason: 'not_human' })
-    expect(setup(observing({})).policy.gate(comment, thread(), [])).toEqual({ admissible: false, reason: 'not_human' })
-    expect(setup(observing({ observeComments: true }, {}, 'off')).policy.gate(comment, thread(), [])).toEqual({ admissible: false,
-      reason: 'admission_ignored' })
-  })
-  it('keeps a bot candidate\'s Mandate while the bot stays on its list and candidates may become work', () => {
-    const settings = observing({ observeComments: true })
-    const mandate = { strength: 'inferred' as const, policyVersion: '', actor: comment.actor, scope: '',
-      basis: { via: 'bot' as const, source: 'github', scope: comment.meta, row: 'comments', sender: 'dependabot[bot]',
-        observation: { mode: 'auto' as const } } }
-    expect(setup(settings).policy.revalidate(mandate)).toBe(true)
-    expect(setup(observing({ observeComments: true }, { bots: [] })).policy.revalidate(mandate)).toBe(false)
-    expect(setup({ ...settings, eval: { ...settings.eval, mode: 'observe' } }).policy.revalidate(mandate)).toBe(false)
-  })
-  it('admits the default branch\'s CI through its row once observed and set, and never a PR\'s CI', () => {
-    const admission = { ci: { unlistedUnaddressed: 'inferred' } }
-    const branch = setup(observing({ observeCi: true }, { admission })).policy.gate(ci({ branch: 'main' }), thread(), [])
-    expect(branch).toMatchObject({ admissible: true, strength: 'inferred',
-      basis: { via: 'admission', cell: 'unlistedUnaddressed', row: 'ci', observation: { mode: 'auto' } } })
-    // The cell defaults to ignore, so observing the CI changes nothing until the table says so.
-    expect(setup(observing({ observeCi: true })).policy.gate(ci({ branch: 'main' }), thread(), [])).toEqual({ admissible: false,
-      reason: 'admission_ignored' })
-    const pull = setup(observing({ observeCi: true }, { admission })).policy.gate(ci({ number: 9, isPr: true }), thread(), [])
-    expect(pull).toEqual({ admissible: false, reason: 'not_human' })
-  })
-  it('admits a Feishu bot on its list in a chat the Source observes', () => {
-    const settings = SettingsSchema.parse({ ...base, policy: { ...base.policy, sources: { ...base.policy.sources,
-      feishu: { ...base.policy.sources.feishu, bots: [{ id: 'cli_alerts', name: 'Alerts' }] } } } })
-    const alert = unaddressed({ actor: { source: 'feishu', id: 'cli_alerts' }, human: false,
-      meta: { chatId: OBSERVED, direct: false, mentioned: false } })
-    expect(setup(settings).policy.gate(alert, thread(), []))
+describe('bots', () => {
+  const withBots = (bots: { id: string; name?: string }[], config: Record<string, unknown> = {},
+    mode: 'auto' | 'observe' | 'off' = 'auto') => SettingsSchema.parse({ ...base, eval: { ...base.eval, mode },
+    policy: { ...base.policy, sources: { feishu: { ...base.policy.sources.feishu!, bots } } },
+    sources: { ...base.sources, feishu: { enabled: true, config: { ...base.sources.feishu!.config, ...config } } } })
+  const alert = (overrides: Partial<Trigger> = {}): Trigger => unaddressed({ actor: { source: 'feishu', id: 'cli_alerts' }, human: false,
+    meta: { chatId: OBSERVED, direct: false, mentioned: false }, ...overrides })
+  it('admits a Feishu bot on its list in a chat the Source observes, and no other bot', () => {
+    const settings = withBots([{ id: 'cli_alerts', name: 'Alerts' }])
+    expect(setup(settings).policy.gate(alert(), thread(), []))
       .toMatchObject({ admissible: true, strength: 'inferred', basis: { via: 'bot', sender: 'Alerts', row: OBSERVED } })
     // In a chat the Source receives only mentions in, a bot's message that does not address the agent is not received.
-    const unobserved = setup(settings).policy.gate({ ...alert, meta: { chatId: CHAT, direct: false, mentioned: false } }, thread(), [])
-    expect(unobserved).toEqual({ admissible: false, reason: 'not_human' })
+    expect(setup(settings).policy.gate(alert({ meta: { chatId: CHAT, direct: false, mentioned: false } }), thread(), []))
+      .toEqual({ admissible: false, reason: 'not_human' })
+    expect(setup(settings).policy.gate(alert({ actor: { source: 'feishu', id: 'cli_other' } }), thread(), []))
+      .toEqual({ admissible: false, reason: 'not_human' })
+    expect(setup(withBots([])).policy.gate(alert(), thread(), [])).toEqual({ admissible: false, reason: 'not_human' })
+    // A bot that mentions the agent is still only an inferred candidate.
+    expect(setup(settings).policy.gate({ ...alert(), addressed: 'mention' }, thread(), []))
+      .toMatchObject({ admissible: true, strength: 'inferred', basis: { via: 'bot', addressed: 'mention' } })
   })
-  it('says on the GitHub bot list when a listed bot\'s comment is received: when it mentions the agent, or comments are observed', () => {
-    const field = githubKind.policy!.fields.find(item => item.key === 'bots')!
-    const comments = githubKind.fields.find(item => item.key === 'observeComments')!.label
-    expect(field.hint!.en).toContain('mentions the agent')
-    expect(field.hint!.en).toContain(comments.en)
-    expect(field.hint!.zh).toContain(comments.zh)
-  })
-  it('names a GitHub Trigger\'s receiving scope, which the Source observes where its switch is on', () => {
-    const { sources } = setup(observing({ observeIssues: true }))
-    const github = (meta: Record<string, unknown>) => ({ source: 'github', meta })
-    expect(sources.scope(github({ kind: 'issue', number: 3 }))).toEqual({ listened: true, observed: true, row: 'issues' })
-    expect(sources.scope(github({ kind: 'pull', number: 4, isPr: true }))).toEqual({ listened: true, observed: false, row: 'pulls' })
-    expect(sources.scope(github({ kind: 'inline', number: 4 }))).toEqual({ listened: true, observed: false, row: 'comments' })
-    expect(sources.scope(github({ ci: true, branch: 'main' }))).toEqual({ listened: true, observed: false, row: 'ci' })
-    expect(sources.scope(github({ ci: true, number: 4 }))).toEqual({ listened: true, observed: false })
-    const rows = githubKind.policy!.rows!({ observeIssues: true })
-    expect(rows.map(row => [row.id, row.cells])).toEqual([
-      ['issues', { listedUnaddressed: true, unlistedAddressed: true, unlistedUnaddressed: true }],
-      ['pulls', { listedUnaddressed: false, unlistedAddressed: true, unlistedUnaddressed: false }],
-      ['comments', { listedUnaddressed: false, unlistedAddressed: true, unlistedUnaddressed: false }],
-      ['ci', { listedUnaddressed: false, unlistedAddressed: false, unlistedUnaddressed: false }]])
+  it('keeps a bot candidate\'s Mandate while the bot stays on its list and candidates may become work', () => {
+    const settings = withBots([{ id: 'cli_alerts', name: 'Alerts' }])
+    const mandate = { strength: 'inferred' as const, policyVersion: '', actor: { source: 'feishu', id: 'cli_alerts' }, scope: '',
+      basis: { via: 'bot' as const, source: 'feishu', scope: alert().meta, row: OBSERVED, sender: 'Alerts',
+        observation: { mode: 'auto' as const } } }
+    expect(setup(settings).policy.revalidate(mandate)).toBe(true)
+    expect(setup(withBots([])).policy.revalidate(mandate)).toBe(false)
+    expect(setup({ ...settings, eval: { ...settings.eval, mode: 'observe' } }).policy.revalidate(mandate)).toBe(false)
   })
 })

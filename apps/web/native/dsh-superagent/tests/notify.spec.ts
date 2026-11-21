@@ -17,7 +17,7 @@ describe('desktop notifications', () => {
   it('announces a merge event from the inbox, which a Ticket\'s state does not show', () => {
     expect(eventNotificationFor({ id: 'n1', kind: 'merged', title: '修复回归', text: 'Merged T-0001 into main' }))
       .toEqual({ title: en['notification.merged'], body: '修复回归 · Merged T-0001 into main' })
-    expect(eventNotificationFor({ id: 'n2', kind: 'ci', title: '修复回归', text: 'CI on github:42 is failing' }))
+    expect(eventNotificationFor({ id: 'n2', kind: 'ci', title: '修复回归', text: 'CI on feishu:oc_1:om_42 is failing' }))
       .toMatchObject({ title: en['notification.ci'] })
     // A question or an ending is announced from the ticket's own state, not twice.
     expect(eventNotificationFor({ id: 'n3', kind: 'attention', title: 'x', text: 'y' })).toBeUndefined()
