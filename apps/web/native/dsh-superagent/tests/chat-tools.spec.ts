@@ -143,12 +143,23 @@ it('records a line-anchored note and a rejection from the main Session', async (
   await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
     { ticket_id: 'T-0001', file: 'src/c.ts', line: 1, text: longNote })
   expect(h.runtime.store.tickets.get(ticket.id)!.notes?.at(-1)?.text).toBe(longNote)
+  // The note's ceiling matches the panel's, and a note at it is kept whole.
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/d.ts', text: 'x'.repeat(2_001) })).rejects.toThrow(/2,000 characters/)
+  const atLimit = 'y'.repeat(2_000)
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/e.ts', text: atLimit })
+  expect(h.runtime.store.tickets.get(ticket.id)!.notes?.at(-1)?.text).toBe(atLimit)
   // A note without a file still reaches the worker as a plain message, where the shorter limit applies.
   const plain = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
     { ticket_id: 'T-0001', text: '继续用单列布局。' }) as unknown as { reason: string }
   expect(plain.reason).toBe('Noted for the worker')
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
     { ticket_id: 'T-0001', text: longNote })).rejects.toThrow(/At most 100 words/)
+  // A message is bounded by its word limit, not the note ceiling, so a long link still reaches the worker.
+  const longUrl = `https://example.com/${'a'.repeat(2_100)}`
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note', { ticket_id: 'T-0001', text: longUrl })
+  expect(h.runtime.store.tickets.get(ticket.id)!.inputs.at(-1)).toMatchObject({ kind: 'note', text: longUrl })
   // The schema refuses a line without a file, a backwards range, and a note without text.
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
     { ticket_id: 'T-0001', line: 3, text: 'x' })).rejects.toThrow(/file is required with line/)
