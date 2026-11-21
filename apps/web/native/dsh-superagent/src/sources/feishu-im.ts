@@ -64,8 +64,8 @@ export function imTrigger(event: DshImEvent): Trigger {
     actor: { source: SOURCE, id: event.actor.id }, human: true,
     ...(direct ? { addressed: 'direct' as const } : event.mentionedAccount ? { addressed: 'mention' as const } : {}),
     at: event.at, text: event.text,
-    channel: { source: SOURCE, thread: `feishu:${event.conversation.id}`, address: { ...routeAddress(event), ...direct ? { direct: 'true' } : {} } },
-    meta: { chatId: event.conversation.id, messageId: event.messageId, direct, mentioned: event.mentionedAccount,
+    channel: { source: SOURCE, thread: `feishu:${event.conversation.id}`, address: { ...routeAddress(event), botId: event.botId, ...direct ? { direct: 'true' } : {} } },
+    meta: { botId: event.botId, chatId: event.conversation.id, messageId: event.messageId, direct, mentioned: event.mentionedAccount,
       ...event.reply.threadId ? { threadId: event.reply.threadId } : {},
       ...event.reply.rootId ? { rootId: event.reply.rootId } : {},
       ...event.reply.parentId ? { parentId: event.reply.parentId } : {} },
@@ -85,14 +85,15 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
   async read(_commands, trigger, part, cursor, config) {
     const im = dshIm()
     if (!im) throw new Error('dsh-im is not mounted')
-    if (!config.botId) throw new Error('Choose an IM Feishu bot first')
-    const bot = await botFor(im, config.botId)
+    const botId = typeof trigger.meta.botId === 'string' ? trigger.meta.botId : config.botId
+    if (!botId) throw new Error('Choose an IM Feishu bot first')
+    const bot = await botFor(im, botId)
     const route = routeOf(trigger.channel?.address ?? {})
     const scope: 'group' | 'nearby' | 'thread' = (part === 'thread' || part === 'root' || part === 'parent') && route.threadId
       ? 'thread' : 'nearby'
     let page
     try {
-      page = await im.historyChecked(config.botId, route, {
+      page = await im.historyChecked(botId, route, {
         scope, limit: config.readPageSize, ...cursor ? { cursor } : {},
         ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
       }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
@@ -114,10 +115,11 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
 export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, message: OutboundMessage): Promise<'sent' | 'gone'> {
   const config = currentConfig
   const im = dshIm()
-  if (!im || !config?.botId) throw new Error('dsh-im is not ready for Feishu replies')
-  const bot = await botFor(im, config.botId)
+  const botId = message.channel.address.botId || config?.botId || ''
+  if (!im || !botId) throw new Error('dsh-im is not ready for Feishu replies')
+  const bot = await botFor(im, botId)
   try {
-    await im.replyChecked(config.botId, routeOf(message.channel.address), checkedImText(message.text),
+    await im.replyChecked(botId, routeOf(message.channel.address), checkedImText(message.text),
       { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
     return 'sent'
   } catch (error) {
@@ -194,7 +196,8 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
       { key: 'DSH_SUPERAGENT_FEISHU_BOT', description: { zh: 'dsh-im 飞书机器人；回复由 dsh-im 发送', en: 'The dsh-im Feishu bot; dsh-im sends the replies' } },
       { key: 'DSH_SUPERAGENT_FEISHU_CHAT', description: { zh: '接下工单的飞书群 chat_id；工单不是从飞书来的时为空', en: 'chat_id of the Feishu chat that started the ticket; empty when the ticket did not start on Feishu' } },
     ],
-    values: ({ config, trigger }) => ({ DSH_SUPERAGENT_FEISHU_BOT: config.botId,
+    values: ({ config, trigger }) => ({ DSH_SUPERAGENT_FEISHU_BOT: trigger?.source === SOURCE && typeof trigger.meta.botId === 'string'
+      ? trigger.meta.botId : config.botId,
       DSH_SUPERAGENT_FEISHU_CHAT: trigger?.source === SOURCE ? String(trigger.meta.chatId ?? '') : '' }),
   },
   async refreshLabels(host) {
