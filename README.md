@@ -64,7 +64,7 @@ pnpm dsh web
 
 `standard` preset 的会话已经挂载 rust-anything，不需要安装：说一句「把这个模块重写成 Rust」或「给 `src/parser/` 出一份迁移计划」，也可以用 `/` 点名 `dsh-rust-anything` 先加载技能，Agent 随后调用 `mcp__rust-anything__*` 工具推进。一个单元的循环是 `analyze` → `bridge` → `record` → 写 `port.rs` → `build` → `diff` → `bench` → `gate`，`gate` 不通过就不算完成；整应用改写成纯 Rust 可执行文件走 `app_*`。
 
-CLI 由 `pnpm run build` 从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 编译到 `native/rust-anything/bin/rust-anything`，终端里可以直接用同一套命令（`analyze`、`gate`、`doctor` 等）。生成的 crate 写在**目标仓库**的 `rust/<unit>-rs/`，回放时会执行被录制的代码，所以只在副本上做迁移，不要把生产凭据放进环境。不需要这项能力时，用 `--patch` 把 `mcp-rust-anything` 行禁用；嫌 16 个工具占请求 token 时改成 `toolLoading: on-demand`。
+CLI 由 `pnpm run build` 从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 编译到 `native/rust-anything/bin/rust-anything`，终端里可以直接用同一套命令（`analyze`、`gate`、`doctor` 等）。生成的 crate 写在**你指定的目标仓库**（要迁移的那个，不是本仓库）的 `rust/<unit>-rs/`，直接出现在它的工作树里；`record`、`bench`、`shadow` 和 `app record` 会真的运行目标项目的代码（`record --test-command` 还会跑它自己的测试套件），这些代码以你的用户身份读写文件、访问网络，所以迁移在副本或临时 worktree 上做，并且不要把生产凭据留在环境里。不需要这项能力时，用 `--patch` 把 `mcp-rust-anything` 行禁用；嫌 16 个工具占请求 token 时改成 `toolLoading: on-demand`。
 
 单元级流程见[rust-anything 使用指南](docs/user/guide/rust-anything.zh.md)，整应用重写见[技能正文](.agents/skills/dsh-rust-anything/whole-app.md)，源码基线与上游同步见 [NATIVE.md](native/rust-anything/NATIVE.md)。
 

@@ -37,3 +37,19 @@
 - **不写 `rust-anything setup`**：它是给 Claude Code、Codex 这类外部 agent 注册用的；本仓库走 `mcp-rust-anything` 插件挂载，写了反而让人以为要额外配置。
 - **不展开 16 个工具名**：工具清单由 MCP client 的 `toolLoading` 与 server 决定，README 列举会漂移；这里只给数量与命名前缀。
 - **保留「产物写进目标仓库」这条警告**：这是在本仓库里用它会踩到的唯一真实风险（在 `super-agent` 自己的树上跑迁移会生成 `rust/<unit>-rs/` 并执行被录制代码），属于 README 该承担的提醒，细节仍留在使用指南。
+
+## 5. 复查：把风险句写清楚
+
+用户读不懂原句「生成的 crate 写在目标仓库的 `rust/<unit>-rs/`，回放时会执行被录制的代码」。原文三处含糊：没说明「目标仓库」就是被迁移的那个仓库（不是本仓库）、没说明哪几步真的会运行目标代码、也没说清楚具体后果。已改写为一句自足的说明：crate 落在**你指定的目标仓库**并出现在它的工作树里；`record`、`bench`、`shadow`、`app record` 会真的运行目标代码（`record --test-command` 还会跑它的测试套件），这些代码以当前用户身份读写文件、访问网络；因此迁移在副本或临时 worktree 上做，生产凭据不留在环境里。
+
+实测证据（临时演示仓库 `/tmp/ra-demo2`，2 行 JS）：
+
+```
+$ rust-anything bridge /tmp/ra-demo2 src/math.mjs --kind napi
+  → 生成 /tmp/ra-demo2/rust/math-rs/{Cargo.toml,rust-anything.json,index.cjs,src/port.rs,…}
+$ rust-anything record /tmp/ra-demo2/rust/math-rs
+Recorded 24 cases (20 threw) in …/cases.jsonl
+  slug: 12   sum: 12   Coverage: 2 of 2 original lines (100%)
+```
+
+`record` 的产物里包含 `{"fn":"sum","args":[null],"error":"Cannot read properties of null (reading 'reduce')"}` 这类真实运行结果，说明它确实把目标函数跑了起来，而不是静态分析。bridge 只写文件、不编译，也不会执行目标代码。
