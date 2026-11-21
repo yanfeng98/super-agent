@@ -14,8 +14,6 @@ export interface PassesHost {
   automerge?: () => void
   /** Takes the next Ticket from the merge queue, when one waits; the pass does not wait for it. */
   mergeQueue?: () => void
-  /** Looks for facts a person should hear about, such as a followed pull request's failing CI. */
-  watch?: () => void
 }
 
 const now = (): string => new Date().toISOString()
@@ -74,6 +72,5 @@ export class Passes {
     // A standing merge request runs beside the pass rather than in it, since its check or merge may take minutes.
     this.host.automerge?.()
     this.host.mergeQueue?.()
-    this.host.watch?.()
   }
 }

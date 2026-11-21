@@ -15,7 +15,7 @@ const REVIEW_HISTORY = 50
 const AUTO_MERGE_WAITS = [60_000, 120_000, 240_000, 480_000, 900_000] as const
 
 const sameChannel = (a: ChannelRef, b: ChannelRef): boolean => JSON.stringify(a) === JSON.stringify(b)
-/** Whether an Input is a message no person wrote, such as CI's, a bot's, or the main Session's note. */
+/** Whether an Input is a message no person wrote, such as a bot's or the main Session's note. */
 export const automatic = (input: TicketInput | undefined): boolean => input?.kind === 'note' || (input?.kind === 'trigger' && !input.human)
 /**
  * Whether a ticket's worker read a Trigger Input before `until`, its latest report or turn end: its Session took the message
@@ -657,7 +657,7 @@ export class Tickets extends EnginePart {
     const policy = this.policy()
     if (policy.paused) return
     if (!policy.revalidate(ticket.mandate)) { this.refuse(ticket); return }
-    // A human's message is what resumes an ended ticket through `wake`; bot/CI triggers wait alongside inputs from before the ticket ended. A host finding of its own resumes one through `resumeWithNote`.
+    // A human's message is what resumes an ended ticket through `wake`; bot triggers wait alongside inputs from before the ticket ended. A host finding of its own resumes one through `resumeWithNote`.
     const first = ticket.undelivered.map(id => ticket.inputs.find(input => input.id === id)).find(input => input?.kind === 'trigger' && input.human)
     if (first?.kind !== 'trigger') return
     const at = this.now()
@@ -739,7 +739,7 @@ export class Tickets extends EnginePart {
     ticket.undelivered.unshift(...untaken.map(input => input.id))
   }
   /**
-   * End a ticket with its outcome. `at` records when the ending fact happened, such as a PR merge, and `reason` says
+   * End a ticket with its outcome. `at` records when the ending fact happened, such as a close, and `reason` says
    * why in words, by default the outcome. The ticket lets go (see `letGo`) of the messages its worker never received, and of
    * the person's messages it decides that its worker did not read before its latest report or turn end, the report that
    * ends the ticket included (see `readBefore`), and neither acknowledged, answered nor handed back: one may have come while
@@ -754,7 +754,7 @@ export class Tickets extends EnginePart {
     const waiting = this.triggersOf(ticket, ticket.undelivered)
     const left = this.untaken(ticket, ticket.inputs.flatMap(input => input.kind === 'trigger'
       && (!readBefore(input, until) || ticket.undelivered.includes(input.id)) ? [input.id] : []))
-    // An end dated earlier, such as a PR's merge, does not move the ticket's last change back.
+    // An end dated earlier, such as a close, does not move the ticket's last change back.
     ticket.ended = { at, by, outcome, ...why }; ticket.undelivered = []; ticket.updatedAt = this.now()
     // A ticket that ends again after resuming starts its standing merge request over, so the next attempt is immediate.
     if (ticket.autoMerge) {

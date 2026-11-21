@@ -63,7 +63,7 @@ const DEFAULT_RULES = [
   { id: 'copy', name: 'Copy fixes', enabled: true, instruction: 'Explicit requests to correct a typo, wording, punctuation or existing translation. Preserve product promises and business meaning.' },
   { id: 'visual', name: 'Visual fixes', enabled: true, instruction: 'Explicit implementation requests for local spacing, alignment, overflow or styling, with a specified target or an objectively established existing standard/correct state to restore. Locating an element or calling it inconsistent, unattractive or hard to understand does not establish a target. Do not invent visual style, information hierarchy, rendering or interaction decisions. No redesign, new interaction or behavior. A known spacing defect does not authorize adjacent undefined restyling; assess only a clearly separable authorized scope. If direction or scope is unsettled, observe only: no acknowledgement, worker or unsolicited question.' },
 ]
-/** An assessment rule; its instruction may also specify PR reviewers and whether to wait for their approval. */
+/** An assessment rule; its instruction may also specify reviewers and whether to wait for their approval. */
 export const RuleSchema = z.object({ id: RuleIdSchema, name: z.string().trim().min(1).max(LIMITS.ruleName), enabled: z.boolean(),
   instruction: z.string().trim().min(1).max(LIMITS.ruleInstruction) }).strict()
 export type Rule = z.infer<typeof RuleSchema>
@@ -170,7 +170,7 @@ export function policyEffects(tickets: readonly Ticket[], old: Settings, now: Se
 export function settingsPolicy(settings: Settings, sources: SourceScope): Policy {
   const version = policyVersion(settings)
   const mode = settings.eval.mode
-  /** Gate non-human triggers: only listed bots (as inferred candidates) and senderless system/CI events may pass; other bots are rejected. */
+  /** Gate non-human triggers: only listed bots (as inferred candidates) and senderless automated events may pass; other bots are rejected. */
   const machineGate = (trigger: Trigger): GateResult => {
     const bot = trigger.actor.id ? listedBot(settings, trigger.actor) : undefined
     if (trigger.actor.id && !bot) return { admissible: false, reason: 'not_human' }
