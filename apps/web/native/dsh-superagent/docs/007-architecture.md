@@ -36,7 +36,7 @@ Shutdown cancels turns, waits for passes, effects and agents, restores the proce
 
 | Part | Module | Does |
 | --- | --- | --- |
-| Setup | `src/app/setup.ts` | Resolves the legacy lark-cli Feishu account when one is configured, writes and applies the workers' environment and command shims, and keeps the setup problem; the dsh-im-backed Feishu Source checks its own handoff and needs no account CLI here |
+| Setup | `src/app/setup.ts` | Resolves the legacy lark-cli Feishu account only when no dsh-im `botId` is configured, writes and applies the workers' environment and command shims, and keeps the setup problem; the dsh-im-backed Feishu Source checks its own handoff and needs no account CLI here |
 | Passes | `src/app/passes.ts` | One pass at a time, every two seconds and whenever a command asks: the due effects, then `Engine.evaluateDue`, the standing merge request and the merge queue; a Source's Trigger reaches the Engine through it |
 | Outbox | `src/app/outbox.ts` | The Engine's `Outbox` port, and the only writer of the receipts: `send` keeps a message's receipt and queues its `reply` effect in one transaction, and the effect's handler sends it through `SourceRegistry.send`; a message waits while its Source is off, and is dropped when the conversation is gone or not listened to |
 | Notices | `src/app/notices.ts` | Converts domain events and worker activity into main-Session messages. `eventNotice` handles domain notices; `reportRelay` forwards questions immediately, keeps ordinary progress on its Ticket, and relays other reports; `followupRelay` names the Tickets that own a human follow-up. Relays arriving during a turn are delivered together at its next step through the DeepSeek Harness inbox |

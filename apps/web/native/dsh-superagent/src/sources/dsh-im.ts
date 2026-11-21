@@ -50,6 +50,8 @@ export interface DshImService {
   listBots(): Promise<DshImBot[]>
   listTargets(botId: string): Promise<DshImTarget[]>
   describeBot(botId: string): Promise<DshImBotDescription>
+  /** Cheap handoff state; absent on an older dsh-im, where the watcher falls back to `describeBot`. */
+  inboundStatus?(botId: string): Promise<{ version: 1; botId: string; superagent: boolean; superagentActive: boolean }>
   consumeInbound(botId: string, options: {
     expectedFingerprint: string
     signal: AbortSignal

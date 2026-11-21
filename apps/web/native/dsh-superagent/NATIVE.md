@@ -315,7 +315,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 
 29. **Feishu intake through dsh-im.** The Feishu Source is now `src/sources/feishu-im.ts`, exported as `./feishu-watch`.
     It consumes `ctx.dshIm`'s exclusive text consumer after the operator turns on **交给 Superagent** in a dsh-im Feishu
-    bot's settings; `src/sources/dsh-im.ts` types that service. It stops using the separate `lark-cli` bot, app secret,
+    bot's settings; `src/sources/dsh-im.ts` types that service; the watcher polls `inboundStatus` and calls `describeBot` only when registering. It stops using the separate `lark-cli` bot, app secret,
     `FeishuBot` setup and `dsh-superagent-feishu` opt-in: the Source is mounted by default and stays idle until the
     handoff. Replies go through `replyChecked`, context through `historyChecked`, and the Source remains text-only
     (no images, bot-authored messages, member sync or old `lark-cli` resource reads). dsh-im owns the switch and the

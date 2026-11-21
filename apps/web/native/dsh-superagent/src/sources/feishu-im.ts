@@ -13,6 +13,8 @@ import type { SourceRegistry } from './registry.ts'
 export const SOURCE = 'feishu'
 const POLL_MS = 2_000
 let currentConfig: FeishuConfig | undefined
+interface CachedBot { botId: string; fingerprint: string; name: string }
+let cachedBot: CachedBot | undefined
 /** Sets the config the Channel uses; the watch loop keeps it current, and tests set it directly. */
 export const setFeishuConfig = (value: FeishuConfig | undefined): void => { currentConfig = value }
 const HISTORY_LIMIT = 20
@@ -30,6 +32,12 @@ export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
 /** Parses a stored Feishu Source config, ignoring keys the lark-cli Source used. */
 export const feishuImConfig = (value: unknown): FeishuConfig => FeishuConfigSchema.parse(value ?? {})
 
+const botFor = async (im: DshImService, botId: string): Promise<CachedBot> => {
+  if (cachedBot?.botId === botId) return cachedBot
+  const described = await im.describeBot(botId)
+  cachedBot = { botId, fingerprint: described.account.fingerprint, name: described.account.name || botId }
+  return cachedBot
+}
 const routeOf = (address: Record<string, string>): DshImEvent['reply'] => {
   const messageId = address.messageId ?? ''
   const conversationId = address.conversationId ?? address.chatId ?? ''
@@ -77,14 +85,20 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
     const im = dshIm()
     if (!im) throw new Error('dsh-im is not mounted')
     if (!config.botId) throw new Error('Choose an IM Feishu bot first')
-    const bot = await im.describeBot(config.botId)
+    const bot = await botFor(im, config.botId)
     const route = routeOf(trigger.channel?.address ?? {})
     const scope: 'group' | 'nearby' | 'thread' = (part === 'thread' || part === 'root' || part === 'parent') && route.threadId
       ? 'thread' : 'nearby'
-    const page = await im.historyChecked(config.botId, route, {
-      scope, limit: config.readPageSize, ...cursor ? { cursor } : {},
-      ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
-    }, { expectedFingerprint: bot.account.fingerprint, signal: AbortSignal.timeout(30_000) })
+    let page
+    try {
+      page = await im.historyChecked(config.botId, route, {
+        scope, limit: config.readPageSize, ...cursor ? { cursor } : {},
+        ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
+      }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
+    } catch (error) {
+      if ((error as { code?: string }).code === 'account-changed') cachedBot = undefined
+      throw error
+    }
     if (part === 'root' || part === 'parent') {
       const id = part === 'root' ? route.rootId : route.parentId
       const found = id ? page.events.find(event => event.messageId === id) : undefined
@@ -100,13 +114,14 @@ export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, messa
   const config = currentConfig
   const im = dshIm()
   if (!im || !config?.botId) throw new Error('dsh-im is not ready for Feishu replies')
-  const bot = await im.describeBot(config.botId)
+  const bot = await botFor(im, config.botId)
   try {
     await im.replyChecked(config.botId, routeOf(message.channel.address), checkedImText(message.text),
-      { expectedFingerprint: bot.account.fingerprint, signal: AbortSignal.timeout(30_000) })
+      { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
     return 'sent'
   } catch (error) {
     if ((error as { code?: string }).code === 'stale-route') return 'gone'
+    if ((error as { code?: string }).code === 'account-changed') cachedBot = undefined
     throw error
   }
 }
@@ -222,6 +237,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
   let release: (() => void) | undefined
   let controller: AbortController | undefined
   let botId = ''
+  let botName = ''
   const stop = (): void => { controller?.abort(); release?.(); controller = undefined; release = undefined }
   try {
     while (!signal.aborted) {
@@ -244,18 +260,22 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         await delay(POLL_MS, undefined, { signal }).catch(() => {})
         continue
       }
-      if (botId !== config.botId) { stop(); botId = config.botId }
+      if (botId !== config.botId) { stop(); botId = config.botId; botName = ''; cachedBot = undefined }
       try {
-        const bot = await im.describeBot(config.botId)
-        if (!bot.superagent) {
+        // `inboundStatus` is a cheap local read; `describeBot` verifies the account over the network, so only registration pays for it.
+        const status = im.inboundStatus ? await im.inboundStatus(config.botId) : await im.describeBot(config.botId)
+        if (!status.superagent) {
           stop(); ctx.report('feishu', { state: 'paused', detail: 'Hand to Superagent is off for this bot' })
         } else {
           // dsh-im can release the consumer without aborting our lease (switch off, restart, or a replacement runtime).
-          if (release && !bot.superagentActive) stop()
+          if (release && !status.superagentActive) stop()
           if (!release) {
-            if (bot.superagentActive) {
+            if (status.superagentActive) {
               ctx.report('feishu', { state: 'error', detail: 'Another consumer already owns this Feishu bot' })
             } else {
+              const bot = await im.describeBot(config.botId)
+              cachedBot = { botId: config.botId, fingerprint: bot.account.fingerprint, name: bot.account.name || config.botId }
+              botName = cachedBot.name
               controller = new AbortController()
               const lease = AbortSignal.any([signal, controller.signal])
               release = await im.consumeInbound(config.botId, {
@@ -266,13 +286,14 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                   return { accepted: true }
                 },
               })
-              ctx.report('feishu', { state: 'ready', detail: `Listening for ${bot.account.name || config.botId}`, at: new Date().toISOString() })
+              ctx.report('feishu', { state: 'ready', detail: `Listening for ${botName}`, at: new Date().toISOString() })
             }
           } else {
-            ctx.report('feishu', { state: 'ready', detail: `Listening for ${bot.account.name || config.botId}`, at: new Date().toISOString() })
+            ctx.report('feishu', { state: 'ready', detail: `Listening for ${botName || config.botId}`, at: new Date().toISOString() })
           }
         }
       } catch (error) {
+        if ((error as { code?: string }).code === 'account-changed') cachedBot = undefined
         stop()
         ctx.report('feishu', { state: 'error', detail: String(error) })
       }
@@ -282,12 +303,14 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
     stop()
     setDshIm(undefined)
     currentConfig = undefined
+    cachedBot = undefined
   }
 }
 
 export const name = 'dsh-superagent-feishu'
 export const inject = ['orchestrator']
 export function apply(ctx: Context): void {
+  setDshIm(dshImOf(ctx))
   ctx.effect(() => ctx.orchestrator.sources.register(feishuImKind), 'feishu: source kind')
   ctx.effect(() => {
     const controller = new AbortController()

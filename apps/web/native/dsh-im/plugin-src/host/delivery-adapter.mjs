@@ -376,6 +376,11 @@ export function createDeliveryAdapter({
   };
   return Object.freeze({
     channel,
+    inboundStatus: (botId) => {
+      if (typeof coreController.inboundStatus !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.inboundStatus(botId);
+    },
     consumeInbound: (botId, options) => {
       if (typeof coreController.consumeInbound !== 'function')
         throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });

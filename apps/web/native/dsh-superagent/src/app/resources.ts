@@ -237,6 +237,9 @@ const ROUTES: readonly Route[] = [
   }],
   ['feishu/', async read => {
     const source = trigger(read.host, read.rest.split('/')[0]!, read.ticketId)
+    if (source.channel?.address.actorId) {
+      throw new Error('Use feishu-im/<trigger-id>/thread, /root or /parent for dsh-im Feishu messages')
+    }
     const ref = feishuRef(source)
     if (!ref) throw new Error('A Feishu source trigger is required')
     const commands = read.host.commands.withSignal(read.signal)

@@ -616,6 +616,16 @@ export class MultiBotDshFeishuController {
     });
   }
 
+  /** Cheap handoff state for polling consumers; unlike `describeDeliveryAccount`, it does not verify the account over the network. */
+  async inboundStatus(botId) {
+    this.#assertOpen();
+    return this.#withBotTransition(botId, async () => {
+      const config = this.#requireBot(botId);
+      return { version: 1, botId, superagent: config.superagent === true,
+        superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(botId) };
+    });
+  }
+
   async consumeInbound(botId, { expectedFingerprint, onEvent, signal, superagent } = {}) {
     this.#assertOpen();
     return this.#serializeConfig(() => this.#withBotTransition(botId, async () => {

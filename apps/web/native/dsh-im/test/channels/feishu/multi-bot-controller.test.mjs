@@ -1503,6 +1503,23 @@ test('delivery account fingerprint is authenticated and checked inside the sendi
 });
 
 
+test('inboundStatus reads the handoff state without verifying the account', async () => {
+  const existing = bot('bot_inbound_status', 'inbound_status');
+  let verified = 0;
+  const fx = fixture({ bots: [existing], secrets: { [existing.secretRef]: 'local-secret' },
+    verifyApp: async () => { verified += 1; return { openId: existing.botOpenId, name: 'Verified' } } });
+  await fx.controller.initialize();
+  const before = verified;
+  const off = await fx.controller.inboundStatus(existing.id);
+  assert.deepEqual(off, { version: 1, botId: existing.id, superagent: false, superagentActive: false });
+  assert.equal(verified, before);
+  await fx.controller.updateSuperagent(existing.id, true);
+  const on = await fx.controller.inboundStatus(existing.id);
+  assert.equal(on.superagent, true);
+  assert.equal(on.superagentActive, false);
+  await fx.controller.close();
+});
+
 test('superagent handoff records the request, activates on consumer registration, and restores standalone', async () => {
   const existing = bot('bot_superagent', 'superagent');
   const fx = fixture({ bots: [existing], secrets: { [existing.secretRef]: 'local-secret' },

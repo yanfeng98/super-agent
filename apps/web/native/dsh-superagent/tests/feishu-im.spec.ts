@@ -102,9 +102,18 @@ describe('the dsh-im-backed Feishu Source', () => {
     let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
     const received: string[] = []
     const reports: { state: string }[] = []
+    let active = false
+    let described = 0
     const imService = service({
+      inboundStatus: async () => ({ version: 1, botId: 'bot_1', superagent: true, superagentActive: active }),
+      describeBot: async () => {
+        described += 1
+        return { version: 1, botId: 'bot_1', channel: 'feishu', account: { fingerprint: 'f'.repeat(64), name: 'Bot' },
+          connected: true, superagent: true, superagentActive: active, capabilities: ['exclusive-text-consumer'] }
+      },
       consumeInbound: async (_botId, options) => {
         accept = options.onEvent
+        active = true
         return () => { release += 1 }
       },
     })
@@ -124,6 +133,7 @@ describe('the dsh-im-backed Feishu Source', () => {
     controller.abort()
     await running
     expect(release).toBe(1)
+    expect(described).toBe(1)
   })
 
   it('exposes the bot and chat labels dsh-im owns', async () => {

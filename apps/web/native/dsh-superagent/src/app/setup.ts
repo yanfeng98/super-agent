@@ -60,8 +60,11 @@ export class Setup {
   /** Verify the Feishu account CLI for a modified source block before saving, ignoring setup errors belonging to other blocks. */
   async checkAccounts(block: SettingsBlock, settings: Settings): Promise<void> {
     if (block !== 'source:feishu') return
+    const config = settings.sources.feishu?.config
+    // A dsh-im-backed Source has a botId and owns no CLI; only the legacy lark-cli config is checked here.
+    if (typeof config?.botId === 'string' && config.botId) return
     const { machine } = this.host
-    await resolveFeishuBot(machine, settings.sources.feishu?.config, this.probe())
+    await resolveFeishuBot(machine, config, this.probe())
       .catch((error: unknown) => { if (!(error instanceof SetupError) || error.place === 'feishu') throw error })
   }
   async blockCommands(blocked: readonly string[]): Promise<void> {
@@ -76,12 +79,15 @@ export class Setup {
   private async resolve(settings: Settings): Promise<Deployment> {
     const { context, machine } = this.host
     const probe = this.probe()
-    const feishu = await resolveFeishuBot(machine, settings.sources.feishu?.config, probe).catch((error: unknown) => {
-      if (!(error instanceof SetupError)) throw error
-      this.feishuProblem = error.problem
-      context.logger.warn('dsh-superagent leaves Feishu out: %s', error.message)
-      return undefined
-    })
+    this.feishuProblem = undefined
+    const feishuConfig = settings.sources.feishu?.config
+    const feishu = typeof feishuConfig?.botId === 'string' && feishuConfig.botId ? undefined
+      : await resolveFeishuBot(machine, feishuConfig, probe).catch((error: unknown) => {
+        if (!(error instanceof SetupError)) throw error
+        this.feishuProblem = error.problem
+        context.logger.warn('dsh-superagent leaves Feishu out: %s', error.message)
+        return undefined
+      })
     const resolved: Deployment = { ...machine, ...(feishu ? { feishu } : {}) }
     const machineProblem = (error: unknown): never => {
       if (error instanceof SetupError) throw error

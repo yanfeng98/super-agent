@@ -635,6 +635,18 @@ export class DeliveryService {
     } catch (error) { throw publicOperationError(error); }
   }
 
+  async inboundStatus(botId) {
+    const id = botIdOf(botId);
+    const registration = await this.#checkedRegistrationFor(id);
+    if (typeof registration.adapter.inboundStatus !== 'function') throw deliveryError('capability-unavailable');
+    this.#assertRegistered(registration);
+    try {
+      const status = await registration.adapter.inboundStatus(id);
+      this.#assertRegistered(registration);
+      return status;
+    } catch (error) { throw publicOperationError(error); }
+  }
+
   async consumeInbound(botId, options = {}) {
     const id = botIdOf(botId);
     cancellation(options.signal);
