@@ -95,7 +95,7 @@ The prepare command and Executor instructions receive the same execution variabl
 
 Ticket-specific values come from its directory and originating Trigger. Other values come from the current deployment settings. Only the panel can change execution environment settings; text sent to the main Session cannot change the configured shell command.
 
-Workers reach Feishu through the bot's `lark-cli`. Blocked commands fail when invoked by name.
+Workers read Feishu context through the Feishu Source's thread reader; dsh-im owns the bot connection and sends the replies. Blocked commands fail when invoked by name.
 
 These wrappers and directories establish defaults, not a security boundary. A worker can still execute a program by absolute path.
 

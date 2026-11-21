@@ -36,7 +36,7 @@ Shutdown cancels turns, waits for passes, effects and agents, restores the proce
 
 | Part | Module | Does |
 | --- | --- | --- |
-| Setup | `src/app/setup.ts` | Resolves the optional Feishu bot by probing its CLI the way worker shells run it, writes and applies the workers' environment and command shims, and keeps the setup problems; Settings checks a changed bot through it, and restarts through it, which runs setup again |
+| Setup | `src/app/setup.ts` | Resolves the legacy lark-cli Feishu account when one is configured, writes and applies the workers' environment and command shims, and keeps the setup problem; the dsh-im-backed Feishu Source checks its own handoff and needs no account CLI here |
 | Passes | `src/app/passes.ts` | One pass at a time, every two seconds and whenever a command asks: the due effects, then `Engine.evaluateDue`, the standing merge request and the merge queue; a Source's Trigger reaches the Engine through it |
 | Outbox | `src/app/outbox.ts` | The Engine's `Outbox` port, and the only writer of the receipts: `send` keeps a message's receipt and queues its `reply` effect in one transaction, and the effect's handler sends it through `SourceRegistry.send`; a message waits while its Source is off, and is dropped when the conversation is gone or not listened to |
 | Notices | `src/app/notices.ts` | Converts domain events and worker activity into main-Session messages. `eventNotice` handles domain notices; `reportRelay` forwards questions immediately, keeps ordinary progress on its Ticket, and relays other reports; `followupRelay` names the Tickets that own a human follow-up. Relays arriving during a turn are delivered together at its next step through the DeepSeek Harness inbox |
@@ -250,7 +250,7 @@ Each model request binds the Session to the current prompt revision. The revisio
 | `src/app/tools/main.ts`, `src/app/tools/executor.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards |
 | `src/app/http.ts`, `src/app/views/`, `src/app/api.ts` | HTTP requests into calls, and Store reads into the panel's views; `api.ts` types every route for the panel |
 | `src/app/resources.ts`, `src/app/links.ts`, `src/app/cards.ts` | Resource names into reads, source messages into links, records into compact cards for models |
-| `src/sources/feishu*.ts`, `src/sources/local.ts`, `src/sources/poll.ts` | Feishu payloads and local requests into Triggers and Thread facts, and messages into CLI calls |
+| `src/sources/feishu*.ts`, `src/sources/local.ts`, `src/sources/poll.ts` | Feishu payloads and local requests into Triggers and Thread facts, and messages into dsh-im calls |
 | `src/deployment.ts`, `src/setup.ts`, `src/infra/` | Setup probes and problems, CLI transport, the agent's process environment |
 
 ## Dependency rules
@@ -365,7 +365,9 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/registry.ts` | `SourceRegistry` |
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
 | `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
-| `src/sources/feishu.ts` | The Feishu kind and plugin entry, exported as `./feishu-watch` |
+| `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry |
+| `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch` |
+| `src/sources/dsh-im.ts` | The typed same-Host dsh-im intake service used by the Feishu Source |
 | `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
 | `src/sources/feishu-loops.ts` | The Feishu loops: the event consumer, history recovery, chat names and polling of subscribed topics |
 | `src/sources/feishu-channel.ts` | The Feishu Channel: topic replies, `sent` or `gone` |
@@ -398,7 +400,7 @@ Some generic modules still refer directly to Feishu:
 | `src/client/locales.ts` | All copy in both languages, and the glossary of [001 Domain model](001-domain.md) |
 | `src/client/client.css`, `css.d.ts` | The panel's stylesheet, loaded as text |
 
-`src/sources/feishu.ts` and `src/sources/local.ts` are also the entries of the Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./feishu-watch` and `./local`. The bundle's `cordis.patch.yml` inserts the three plugins, with Feishu disabled and local tickets on.
+`src/sources/feishu-im.ts` and `src/sources/local.ts` are also the entries of the Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./feishu-watch` and `./local`. The bundle's `cordis.patch.yml` inserts the three plugins, with Feishu disabled and local tickets on.
 
 ## Tests
 
@@ -417,6 +419,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
 | `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
+| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded thread context, bot/chat labels, and handoff consumer registration and release |
 | `tests/feishu-read.spec.ts` | Feishu reads |
 | `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu image reads |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |

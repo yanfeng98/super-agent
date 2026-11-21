@@ -74,7 +74,7 @@ const RULES: [rule: string, file: string, says: string[], gone?: string[]][] = [
   ['The main Session has no tool that messages a worker', 'replies',
     ['wait for the worker\'s report, or request one with orchestrator_ticket_request_status when the ticket is idle'], ['ask the worker']],
   ['The main Session has no tool that messages a worker', 'shared', ['leave those activities to workers'], ['delegate']],
-  ['The main Session has no tool that messages a worker', 'cli', ['leaves other context reads and local downloads to workers'], ['delegate']],
+  ['The main Session has no tool that messages a worker', 'cli', ['leaves other context reads to workers'], ['delegate']],
   ['The main Session has no tool that messages a worker', 'dispatch', [], ['Ask a worker']],
   ['The main Session has no tool that messages a worker', 'handoff-orchestrator', [], ['ask the worker']],
   ['A ticket owner\'s decision is a structured attention request, not progress', 'handoff',
@@ -97,7 +97,7 @@ const RULES: [rule: string, file: string, says: string[], gone?: string[]][] = [
   ['An Executor merges only as the delivery requirements say', 'team/delivery',
     ['Never merge your own work: the main Session merges the local branch only on the person\'s explicit request.']],
   ['Reading context changes nothing', 'cli', ['Do not alter remote state, authorization, or configuration while reading.']],
-  ['Feishu is read as the bot, never as a person', 'cli', ['Feishu uses --as bot; unavailable content does not authorize switching to the user\'s identity.']],
+  ['Feishu is read through dsh-im, never through lark-cli', 'cli', ['dsh-im owns the Feishu bot connection', 'do not call lark-cli']],
   ['Removed rules stay removed', '*', [], ['at most three investigation/implementation rounds', 'continue dispatch until explicitly instructed', 'page-size']],
 ]
 const textOf = (file: string) => file === '*' ? composePrompt(defaultPrompts(), 'orchestrator') + composePrompt(defaultPrompts(), 'worker')

@@ -128,7 +128,7 @@ export class Runtime extends Service implements SourceHost {
       const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart })
       const deployed = () => setup.configured()
         ? environmentOf({ deployment: setup.deployment, sources: this.sources, settings: store.settings() }) : undefined
-      const feishu = () => setup.configured() && !!setup.deployment.feishu
+      const feishu = () => setup.configured() && (!!setup.deployment.feishu || !!this.sources?.instance<{ botId?: string }>('feishu')?.config.botId)
       const prompts = this.prompts = new Prompts(store, () => machine.promptMaxChars.get(), deployed, feishu)
       const masterId = this.masterId = store.get(KV.runtime.masterId) ?? `orchestrator-${key(machine.stateDir)}`
       store.set(KV.runtime.masterId, masterId)

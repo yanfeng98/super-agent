@@ -302,8 +302,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 
 28. **Removal of the GitHub Source and account integration.** The vendored copy no longer contains `src/sources/github*.ts`,
     the GitHub skill, the GitHub account and repository setup, the pull-request binding and its CI gate, or the GitHub
-    prompt text and UI. `Deployment` carries only `stateDir` and the optional Feishu bot; `SETUP_FIELDS` probes only
-    Feishu; `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
+    prompt text and UI. `Deployment` carries only `stateDir`; `SETUP_FIELDS` is empty; `stateView.accounts` has only
+    `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
     reads only Thread context; `orchestrator_read` exposes `feishu/` originals and no `github/` resources; and the merge
     gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
     containment, rebase, queue and the post-merge target check. No migration or startup cleanup handles GitHub records:
@@ -312,6 +312,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     unavailable and clears `GH_TOKEN`/`GITHUB_TOKEN`, so a worker cannot reach the operator's GitHub credentials.
     `tests/local.spec.ts`, `tests/migration.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and
     `tests/merge.spec.ts` cover the local behavior.
+
+29. **Feishu intake through dsh-im.** The Feishu Source is now `src/sources/feishu-im.ts`, exported as `./feishu-watch`.
+    It consumes `ctx.dshIm`'s exclusive text consumer after the operator turns on **交给 Superagent** in a dsh-im Feishu
+    bot's settings; `src/sources/dsh-im.ts` types that service. It stops using the separate `lark-cli` bot, app secret,
+    `FeishuBot` setup and `dsh-superagent-feishu` opt-in: the Source is mounted by default and stays idle until the
+    handoff. Replies go through `replyChecked`, context through `historyChecked`, and the Source remains text-only
+    (no images, bot-authored messages, member sync or old `lark-cli` resource reads). dsh-im owns the switch and the
+    `superagent`/`superagentActive` status; turning it off releases the consumer and restores normal IM chat.
+    `tests/feishu-im.spec.ts` covers the mapping, scope, policy, replies, history and consumer registration; dsh-im's
+    `tests/bot-general-settings.test.mjs` and `tests/channels/feishu/multi-bot-controller.test.mjs` cover the switch.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
@@ -324,13 +334,13 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,396 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,321 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a
   setup problem, and `<DSH_HOME>/state/superagent` is created.
-- Usage starts at [docs/006-deployment.md#quick-start](docs/006-deployment.md#quick-start): local tickets, the optional
-  Feishu bot, the three settings groups, the first request, everyday follow-ups, Feishu enabling and troubleshooting.
+- Usage starts at [docs/006-deployment.md#quick-start](docs/006-deployment.md#quick-start): local tickets, the dsh-im-backed
+  Feishu Source, the three settings groups, the first request, everyday follow-ups, Feishu enabling and troubleshooting.
 - A clean worktree `pnpm install && pnpm run build` includes the `Superagent plugin` gate before the Web build.
 
 ## Syncing upstream
@@ -345,7 +355,7 @@ rewriting its test idioms.
 
 - Executor Sessions run with the profile's permissions as the operator's OS user. The command shims and git configuration
   under the state directory are defaults, not a security boundary; use a dedicated OS account for isolation.
-- Feishu stays disabled until a bot CLI is configured; local tickets need no account.
+- The Feishu Source stays idle until a dsh-im bot's **交给 Superagent** switch is on; local tickets need no account.
 - The upstream documents describe installing the bundle into a separate `superagent` profile. The built-in copy needs no
   such profile; `docs/006-deployment.md` starts with the built-in path.
 - The management API follows the Web server's bind address. On a non-loopback bind it is reachable from that network;

@@ -1,17 +1,17 @@
 # 006 Deployment
 
-Use this guide to install, configure and operate dsh-superagent. It covers the optional Feishu bot, startup checks, upgrades and troubleshooting, building on [001 Domain model](001-domain.md) through [005 Panel](005-panel.md).
+Use this guide to install, configure and operate dsh-superagent. It covers the optional dsh-im-backed Feishu intake, startup checks, upgrades and troubleshooting, building on [001 Domain model](001-domain.md) through [005 Panel](005-panel.md).
 
 ## Built-in copy
 
-This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source on and Feishu off. Restart an already running `pnpm dsh web` after a rebuild so the host loads the new plugin build. This build has no GitHub Source: there is no repository connection, pull request or PR CI, and review and merge are local. Setup needs no repository and no account: work starts from the panel or the main Session (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the Policy and Execution in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation and its operations, which apply to the built-in copy too.
+This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source on and the dsh-im-backed Feishu Source idle until its handoff switch is on. Restart an already running `pnpm dsh web` after a rebuild so the host loads the new plugin build. This build has no GitHub Source: there is no repository connection, pull request or PR CI, and review and merge are local. Setup needs no repository and no account: work starts from the panel or the main Session (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the Policy and Execution in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation and its operations, which apply to the built-in copy too.
 
 ### Quick start
 
 1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), restarting it if it is already running, and open **Superagent** in the sidebar.
 2. In **Settings → Execution**, set the directory root and, when the work needs files, a prepare command that creates a worktree per Ticket (see the prepare-command example under Settings below). The default root is `<stateDir>/work`.
 3. Create the first ticket under **Execution → New ticket**, or ask the main Session in the DSH chat. The first request seeds the local Source's Policy part with the operator on the allowed list, so no extra configuration is needed.
-4. Optionally enable Feishu (see Enabling Feishu) and mention the bot in a configured chat.
+4. Optionally hand a dsh-im Feishu bot to superagent (see Enabling Feishu) and mention it in a configured chat.
 5. Review the result on the ticket page and **Merge** it once the gates pass, or ask the main Session to merge it.
 
 ### Local tickets
@@ -50,21 +50,21 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
 
 ### Enabling Feishu
 
-The Feishu Source is mounted but disabled. Enable it by overriding its row in the profile's `cordis.patch.yml`:
+The Feishu Source uses a bot that dsh-im already owns; it needs no `lark-cli`, app secret or separate bot in superagent.
 
-```yaml
-- id: dsh-superagent-feishu
-  disabled: false
-```
+1. In dsh-im, configure the Feishu bot under **IM 机器人 → 飞书** and keep it connected.
+2. In superagent, open **Settings → Sources → Feishu**, choose that bot, and set the chats, direct messages and other-chat mode.
+3. In the same bot's dsh-im settings, open **通用** and turn on **交给 Superagent**. The bot's messages now become Triggers for this Source; superagent acknowledges, works and replies through dsh-im.
+4. Turn the same switch off to release the bot and return it to normal dsh-im conversation. The Source then stays idle until the switch is on again.
 
-Then configure the bot CLI, chats and direct messages under **Settings → Sources → Feishu**; the bot needs a `lark-cli` restricted to its own identity (see Feishu bot under Accounts).
+The handoff is exclusive while it is on: dsh-im's own Session bridge, cards and slash commands for that bot do not run. It is also text-only: images, bot-authored messages, chat-member sync and the old `lark-cli` context reads are not available. Add the people who may originate work under **Policy → On each Source** manually.
 
 ## What runs
 
 - **A dedicated DeepSeek Harness profile** (standalone installation; the built-in copy uses the Web profile), called `superagent` in this guide. Create it from the Web profile template. It loads the bundle and serves its panel on `127.0.0.1`. Keep it separate from the profile you work in: the plugin changes process-wide `PATH` and git settings, and its process needs independent restarts and upgrades.
-- **Optional:** a Feishu bot for chat requests. Without one, local tickets are the only intake.
+- **Optional:** a dsh-im Feishu bot handed to superagent for chat requests. Without one, local tickets are the only intake.
 
-Plugin configuration holds the state directory and machine limits. Use the panel for everything else: Sources for the local archive and the Feishu bot, Policy for allowed lists, and Execution for worker directories and commands.
+Plugin configuration holds the state directory and machine limits. Use the panel for everything else: Sources for the local archive and the dsh-im-backed Feishu Source, Policy for allowed lists, and Execution for worker directories and commands.
 
 ### Permissions and isolation
 
@@ -72,38 +72,20 @@ The bundle defines `dsh-superagent-worker` for Executors and `dsh-superagent-rou
 
 Opening a blank managed Session in the Web UI can select the profile's default preset. dsh-superagent restores its role-specific preset before the first turn.
 
-Both presets run with `danger-full-access` as the operator's OS user and read messages from subscribed Threads. The command shims choose the bot's credentials by default; they do not isolate the process. A worker can execute programs by path and read the operator's home directory. For isolation, use a dedicated OS account containing only the agent's credentials.
+Both presets run with `danger-full-access` as the operator's OS user and read messages from subscribed Threads. The command shims block listed commands; they do not isolate the process. A worker can execute programs by path and read the operator's home directory. For isolation, use a dedicated OS account containing only the agent's credentials.
 
 ## Prerequisites
 
 - Node.js 22.19+ or 24+, pnpm, git 2.32+, Python 3.8+ and tmux
 - A local clone of the repository the agent works in, when the prepare command creates a worktree per Ticket. Install `git-lfs` if that repository uses Git LFS.
 - A model provider configured for DeepSeek Harness. dsh-superagent uses the profile's default model unless the Eval or Execution settings name another.
-- For Feishu: `lark-cli` (tested with 1.0.90) and a Feishu or Lark app with a bot
+- For Feishu: dsh-im with a connected Feishu or Lark bot
 
 ## Accounts
 
 ### Feishu bot (optional)
 
-1. Create a self-built app with the bot capability. Grant it the permissions to receive message events, read and send chat messages, and read chat members, then publish the app version.
-2. Give the bot its own `lark-cli` configuration, restricted to the bot identity, and a wrapper:
-
-   ```sh
-   LARKSUITE_CLI_CONFIG_DIR="$HOME/.lark-cli-dsh-superagent" lark-cli config init --app-id <cli_…> --app-secret-stdin
-   LARKSUITE_CLI_CONFIG_DIR="$HOME/.lark-cli-dsh-superagent" lark-cli config strict-mode bot --global
-   cat > ~/.local/bin/lark-bot <<'EOF'
-   #!/bin/sh
-   export LARKSUITE_CLI_CONFIG_DIR="$HOME/.lark-cli-dsh-superagent"
-   exec lark-cli "$@"
-   EOF
-   chmod +x ~/.local/bin/lark-bot
-   ```
-
-   The first command reads the app secret from standard input. Use a separate configuration directory: `lark-cli` allows one profile per app id, and your personal configuration may already contain a user login for that app.
-
-   The host refuses a CLI that can act as a user. It reads the app id, Feishu/Lark brand and bot `open_id` from the bot configuration.
-
-   Both configurations share the keychain entry for the app secret. To remove only the bot configuration, delete its directory; do not run `lark-cli config remove`, which would affect the shared secret.
+Configure the Feishu or Lark bot in dsh-im, not here: create the app in the Feishu or Lark console, give dsh-im its App ID and App Secret, and keep the bot connected. dsh-im owns the credentials, the long connection and the bot identity. superagent only consumes the text events after the bot's **交给 Superagent** switch is on.
 
 ## Install
 
@@ -125,7 +107,7 @@ Run the profile-creation command only for a new installation. If the profile alr
 
 ## Machine configuration
 
-Copy [examples/profile.cordis.patch.yml](../examples/profile.cordis.patch.yml) to `~/.dsh/profiles/superagent/cordis.patch.yml`, replacing that file, and replace every `<placeholder>`. For Feishu, also enable the `dsh-superagent-feishu` entry there. The `webserver` entry sets the panel's port.
+Copy [examples/profile.cordis.patch.yml](../examples/profile.cordis.patch.yml) to `~/.dsh/profiles/superagent/cordis.patch.yml`, replacing that file, and replace every `<placeholder>`. The Feishu Source is mounted by default and waits for its dsh-im handoff; it needs no profile override. The `webserver` entry sets the panel's port.
 
 | Key | Required | Meaning |
 | --- | --- | --- |
@@ -156,7 +138,7 @@ scripts/dsh-superagent status
 | 2 | It runs, but a part other than the runtime, such as a Source or a Policy sync (`sync:<source id>`), reports an error; a restart does not fix it |
 | 3 | It runs and waits for setup; a restart does not fix it |
 
-A Source that is still starting counts as normal operation. So does a Feishu bot that setup could not check.
+A Source that is still starting counts as normal operation. So does a Feishu Source waiting for its dsh-im handoff.
 
 `status` returns failed parts and their details under `errors`, and setup requirements under `setup`. `start` and `restart` print those problems as lines; they exit 1 if the service never comes up. Only an intentional `stop` pauses automatic recovery.
 
@@ -181,8 +163,8 @@ Check dsh-superagent: run `scripts/dsh-superagent --profile superagent status` i
 
 Setup must succeed before polling or work starts. Overview lists missing requirements and links to their settings. A settings change runs setup again. If you fix something outside the application, such as CLI authentication, choose **Check again**.
 
-1. **Sources.** The local Source sets the Markdown archive directory, an optional notification webhook and its per-project rows. For Feishu, set the bot CLI, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
-2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the people who may ask for work: the local Source lists the operator, and Feishu lists its users; until a list has someone, no request can become a Ticket. With Feishu, a chat can be chosen to sync the list from, at startup and on **Sync now**.
+1. **Sources.** The local Source sets the Markdown archive directory, an optional notification webhook and its per-project rows. For Feishu, choose the dsh-im bot, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
+2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the people who may ask for work: the local Source lists the operator, and Feishu lists its users; until a list has someone, no request can become a Ticket. With Feishu, add users manually; dsh-im does not expose a member list to sync from.
 3. **Execution.** The directory root, a prepare command, and optionally one check command per line, each named by writing `name: command`. The checks run in the worktree when each Ticket ends, and each keeps its own result beside the combined one; once configured, a merge requires all of them to pass after the Ticket's latest ending. To give each Ticket a checkout of the repository:
 
    ```sh
@@ -278,11 +260,11 @@ curl -s -X PUT -H 'x-orchestrator-request: 1' -H 'content-type: application/json
 
 Setup uses the DeepSeek Harness subprocess service, as worker shells do. It removes environment variables whose names contain KEY, PASSWORD, SECRET or TOKEN.
 
-Setup verifies the optional Feishu bot and writes the worker environment. A Feishu setup failure leaves only the Feishu Source out, and local tickets keep working.
+Setup writes the worker environment. Feishu credentials and the bot connection belong to dsh-im; superagent reports only whether the handoff is on and the consumer is registered.
 
 The process environment that setup writes:
 
-- **Command shims** in `<stateDir>/worker-bin`, first on `PATH`: `lark-cli` runs the bot's CLI when a bot is configured, and blocked commands fail. A shim removes its own directory from `PATH` before it runs its target.
+- **Command shims** in `<stateDir>/worker-bin`, first on `PATH`: blocked commands fail. A shim removes its own directory from `PATH` before it runs its target.
 - **git configuration** in `<stateDir>/worker-gitconfig`: replaces the operator's global and system git configuration with Git LFS filters, a neutral author and an empty credential helper, so a worker commits under the identity it sets and git never prompts for credentials. Personal git settings such as an HTTP proxy do not apply.
 
 A file in `worker-bin` or `worker-gitconfig` that dsh-superagent did not write stops setup. A Ticket directory inside a git repository whose own configuration adds credentials fails the Ticket.
@@ -327,9 +309,10 @@ Setup problems appear on the overview with a link to the fix, in the panel's lan
 | `The local ticket Thread is unknown` | The page names a Thread another Source owns or one that no longer exists; reopen the Ticket from Execution |
 | `The local Source filtered the request` | The Source was turned off while the request was created, or its scope no longer listens; check the Source |
 | A local Ticket's archive file cannot be written | Set **Archive directory** to an absolute, writable directory; the default is `<stateDir>/tickets` |
-| `The bot lark-cli allows user identities` | Point the Feishu Source at a bot-only configuration, as in Feishu bot above |
-| `The bot lark-cli does not work.` or `The bot identity of app … is …` | Check the configuration's app id and secret |
-| `The Feishu bot is not a member of the chat.` | Add the bot to the chat in the chat's settings; the next attempt succeeds |
+| The Feishu Source says `dsh-im is not mounted` | dsh-im is not loaded in this profile; mount it, or leave the Feishu Source off |
+| The Feishu Source says `Choose an IM Feishu bot` | Pick the dsh-im bot under **Settings → Sources → Feishu** |
+| The Feishu Source says `Hand to Superagent is off for this bot` | Turn on **交给 Superagent** in that bot's dsh-im settings |
+| The Feishu Source says `Another consumer already owns this Feishu bot` | Another process owns the dsh-im consumer; stop it, then retry |
 | `status` exits 2 | A part reports an error, which a restart does not fix: `errors` names each part, as listed under Management API, with its detail; each part clears its own entry once it works again |
 | `status` exits 3 | Setup waits: `setup` says what is missing, and the overview links to the setting that fixes it |
 | `status` exits 1 | The service does not run, runs twice, does not answer, or its runtime reports an error; the output and the newest log say which |

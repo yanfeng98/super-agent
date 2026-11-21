@@ -4,10 +4,10 @@
 - insert:
     - id: dsh-superagent
       name: dsh-superagent
-    # Optional Feishu Source; requires configuring a bot CLI after enabling.
+    # Feishu Source backed by a dsh-im bot: choose the bot in Settings → Sources, then
+    # turn on Hand to Superagent in that bot's dsh-im settings. It stays idle until then.
     - id: dsh-superagent-feishu
       name: dsh-superagent/feishu-watch
-      disabled: true
     # Local tickets: requests created in the panel, archived as Markdown; on by default.
     - id: dsh-superagent-local
       name: dsh-superagent/local
