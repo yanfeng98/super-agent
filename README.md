@@ -57,9 +57,16 @@ pnpm dsh web
 |---|---|
 | IM 机器人 | 设置页「IM bots」：微信、飞书、钉钉、企业微信、QQ、iMessage 与邮箱，`/goal`、`/plan` 是原生命令；见 [dsh-im NATIVE.md](apps/web/native/dsh-im/NATIVE.md) |
 | Superagent | 侧栏「Superagent」→「执行」→「新建工单」，默认只用本地工单、不需要远端账号；见[快速开始](apps/web/native/dsh-superagent/docs/006-deployment.md#quick-start) |
-| rust-anything | `standard` preset 的会话自带 16 个 `mcp__rust-anything__*` 工具，也可用 `/` 点名 `dsh-rust-anything`；见[使用指南](docs/user/guide/rust-anything.zh.md) |
 | 工程工作流技能 | `/` 菜单可点名 16 个，另 11 个按任务自动加载；见[使用指南](docs/user/guide/engineering-skills.zh.md)与[技能包](packages/skill/skill-engineering/README.zh.md) |
 | 启动片头 | 默认播放，点按钮或按 Esc 跳过；设置页可调序列参数、换用自己的片头视频，见[启动片头包](packages/client/ui-boot-animation/README.zh.md) |
+
+### 把代码迁移到 Rust
+
+`standard` preset 的会话已经挂载 rust-anything，不需要安装：说一句「把这个模块重写成 Rust」或「给 `src/parser/` 出一份迁移计划」，也可以用 `/` 点名 `dsh-rust-anything` 先加载技能，Agent 随后调用 `mcp__rust-anything__*` 工具推进。一个单元的循环是 `analyze` → `bridge` → `record` → 写 `port.rs` → `build` → `diff` → `bench` → `gate`，`gate` 不通过就不算完成；整应用改写成纯 Rust 可执行文件走 `app_*`。
+
+CLI 由 `pnpm run build` 从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 编译到 `native/rust-anything/bin/rust-anything`，终端里可以直接用同一套命令（`analyze`、`gate`、`doctor` 等）。生成的 crate 写在**目标仓库**的 `rust/<unit>-rs/`，回放时会执行被录制的代码，所以只在副本上做迁移，不要把生产凭据放进环境。不需要这项能力时，用 `--patch` 把 `mcp-rust-anything` 行禁用；嫌 16 个工具占请求 token 时改成 `toolLoading: on-demand`。
+
+单元级流程见[rust-anything 使用指南](docs/user/guide/rust-anything.zh.md)，整应用重写见[技能正文](.agents/skills/dsh-rust-anything/whole-app.md)，源码基线与上游同步见 [NATIVE.md](native/rust-anything/NATIVE.md)。
 
 ### 命令行模式
 
