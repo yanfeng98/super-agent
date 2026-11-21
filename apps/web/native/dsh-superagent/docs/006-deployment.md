@@ -307,7 +307,7 @@ Create the ticket under **Execution → New ticket**, or ask the main Session in
 
 A restart ends running Assignments and starts replacements with recovery notes. Team text and overridden prompt parts are retained; parts without overrides follow the new defaults. Review parts marked **Default updated** after upgrading.
 
-A database migrated by a newer version cannot be opened by an older one. Rollback therefore requires the pre-upgrade backup. This build has no GitHub Source and does not interpret GitHub records; the schema 10 migration leaves any GitHub settings, keys, channels, or followed threads in place. A state directory written by a GitHub-enabled build is not cleaned: start with a new state directory if the old records must not remain. Saved prompt revisions keep the text they were saved with; restore the built-in team sections if an earlier revision still mentions the removed Source. After upgrading DeepSeek Harness itself, restart the running instance so the panel loads matching artifacts.
+A database migrated by a newer version cannot be opened by an older one. Rollback therefore requires the pre-upgrade backup. This build has no GitHub Source and does not interpret GitHub records; the schema 10 migration has no GitHub-specific step and leaves domain settings, keys, ticket channels, and followed threads in place. A state directory written by a GitHub-enabled build is not cleaned: start with a new state directory if the old records must not remain. Saved prompt revisions keep the text they were saved with; restore the built-in team sections if an earlier revision still mentions the removed Source. After upgrading DeepSeek Harness itself, restart the running instance so the panel loads matching artifacts.
 
 ### Agent presets
 
