@@ -57,7 +57,7 @@ The Feishu Source uses a bot that dsh-im already owns; it needs no `lark-cli`, a
 3. In the same bot's dsh-im settings, open **通用** and turn on **交给 Superagent**. The bot's messages now become Triggers for this Source; superagent acknowledges, works and replies through dsh-im.
 4. Turn the same switch off to release the bot and return it to normal dsh-im conversation. The Source then stays idle until the switch is on again.
 
-The handoff is exclusive while it is on: dsh-im's own Session bridge, cards and slash commands for that bot do not run. It is also text-only: images, bot-authored messages, chat-member sync and the old `lark-cli` context reads are not available. Add the people who may originate work under **Policy → On each Source** manually.
+Each Ticket keeps the bot that created it, so changing the selected bot later affects new Tickets only. The handoff is exclusive while it is on: dsh-im's own Session bridge, cards and slash commands for that bot do not run. It is also text-only: images, bot-authored messages, chat-member sync and the old `lark-cli` context reads are not available. Add the people who may originate work under **Policy → On each Source** manually.
 
 ## What runs
 
