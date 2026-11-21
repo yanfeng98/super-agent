@@ -1571,12 +1571,14 @@ export class Runtime extends Service implements SourceHost {
     const stale = new Set<string>()
     // A ticket whose GitHub channels or followed threads are gone would wait forever for a Source that no longer exists.
     for (const ticket of this.store.tickets.list()) {
-      if (!ticket.follows?.length && !ticket.ciNotice && !ticket.channels.some(channel => removed.has(channel.source))) continue
+      const origin = this.store.triggers.get(ticket.origin.triggerId)?.source
+      const githubOrigin = origin !== undefined && removed.has(origin)
+      if (!ticket.follows?.length && !ticket.ciNotice && !githubOrigin && !ticket.channels.some(channel => removed.has(channel.source))) continue
       this.store.atomic(() => {
         const current = this.store.tickets.get(ticket.id)
         if (!current) return
         const channels = current.channels.filter(channel => !removed.has(channel.source))
-        const bound = !!current.follows?.length || current.channels.some(channel => removed.has(channel.source))
+        const bound = githubOrigin || !!current.follows?.length || current.channels.some(channel => removed.has(channel.source))
         if (bound) stale.add(current.id)
         if (!bound && !current.ciNotice && channels.length === current.channels.length) return
         if (current.follows) delete current.follows
@@ -1587,14 +1589,18 @@ export class Runtime extends Service implements SourceHost {
         this.store.tickets.save(current)
       })
     }
-    if (stale.size) {
-      const queue = this.store.get(KV.runtime.mergeQueue) ?? []
-      const kept = queue.filter(entry => !stale.has(entry.ticketId))
-      if (kept.length !== queue.length) {
-        this.store.set(KV.runtime.mergeQueue, kept)
-        // An old queue that paused itself leaves nothing to release; a remaining local queue keeps its pause.
-        if (!kept.length) this.store.set(KV.runtime.mergeQueuePaused, false)
-      }
+    const queue = this.store.get(KV.runtime.mergeQueue) ?? []
+    const kept = queue.filter(entry => {
+      if (stale.has(entry.ticketId)) return false
+      const ticket = this.store.tickets.get(entry.ticketId)
+      if (!ticket) return false
+      const origin = this.store.triggers.get(ticket.origin.triggerId)?.source
+      return !(origin !== undefined && removed.has(origin))
+    })
+    if (kept.length !== queue.length) {
+      this.store.set(KV.runtime.mergeQueue, kept)
+      // An old queue that paused itself leaves nothing to release; a remaining local queue keeps its pause.
+      if (!kept.length) this.store.set(KV.runtime.mergeQueuePaused, false)
     }
     // A pending reply to a removed Source can never be delivered; settle it rather than retrying it forever.
     for (const receipt of this.store.receipts.waiting()) if (removed.has(receipt.channel.source)) this.store.receipts.settle(receipt, 'channelGone')
