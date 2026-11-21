@@ -1,4 +1,4 @@
-# 00100 — 移除 dsh-superagent 的 GitHub 集成
+# 00103 — 移除 dsh-superagent 的 GitHub 集成
 
 - **日期**：2026-11-21
 - **背景**：用户确认只用本地工单，要求把 GitHub 那一套直接删掉，而不是仅关闭。目标是保留本地 Source、面板/聊天建单、本地合并、检查、队列、回退与清理，同时不再出现 GitHub Source、账号探测、PR 绑定、PR CI 门禁、GitHub 技能与相关提示词。
@@ -13,9 +13,9 @@
 | Worker 环境 | `writeEnvironment` 不再写 GitHub 凭据 helper、SSH 重写或 agent 账号；固定中性提交身份 `dsh-superagent <dsh-superagent@localhost>`。`gh` 仍是一个失败 shim，避免 worker 误用操作者本机的真实 `gh`；`GH_TOKEN`/`GITHUB_TOKEN` 仍被清除，作为凭据隔离而不是 GitHub 集成。 |
 | 合并门禁 | 移除绑定 PR 的 CI 检查、PR 关闭/合并通知、`orchestrator_report.pr_number`、PR 绑定与 `orchestrator_eval_read` 的仓库文件/目录读取；本地门禁保留：评审结论、`requireReview`、未解决备注、配置检查、依赖、目标包含、变基、队列、合并后目标检查。 |
 | 提示词与技能 | 主 Session、worker、work、dispatch、subscriptions、replies、cli、handoff、team/communication、team/delivery、team/scope 去掉 GitHub/PR/CI/自动合并/评审 bot 内容；内置技能只剩 Feishu；`skill/github` 与 `sourceSkills.github` 删除。 |
-| 面板与聊天 | 删除 GitHub 来源卡片、账号字段、PR 图标、GitHub 搜索提示与相关文案；`orchestrator_read` 不再暴露 `github/…`；`outcome.merged`/`closed` 仅作为旧数据标签保留，已从“待评审”与可合并判定中排除。 |
-| 迁移与清理 | schema 10→11 迁移不再构造 GitHub follows/PR 结束记录，并删除 GitHub 设置、Policy part 与 `github-*`/`thread-since:github:` 键；启动时对已经是 schema 11 但仍带 GitHub 设置/键的数据库做一次同样的清理。`ticketOf` 同时丢弃旧记录里的 `follows` 与 GitHub channel。 |
-| 文档 | 插件 `README.md`、`SETUP.md`、`NATIVE.md`、`docs/000`–`008`、`examples` 与根 `README.md` 改为本地工单 + 可选 Feishu；`NATIVE.md` 新增第 28 条记录本次移除。 |
+| 面板与聊天 | 删除 GitHub 来源卡片、账号字段、PR 图标、GitHub 搜索提示与相关文案；`orchestrator_read` 不再暴露 `github/…`；`outcome.merged`/`closed` 仅作为旧数据标签保留，只对已删除 GitHub 来源的 ticket 排除，自定义 Source 的 ticket 仍可评审与合并。 |
+| 迁移与清理 | schema 10→11 迁移不再构造 GitHub follows/PR 结束记录，并删除 GitHub 设置、Policy part 与 `github-*`/`thread-since:github:` 键；启动时对已经是 schema 11 但仍带 GitHub 设置/键的数据库做一次同样的清理。`ticketOf` 只丢弃 `github:` 前缀的 follows 与 GitHub channel，保留自定义 Source 的绑定。 |
+| 文档 | 插件 `README.md`、`SETUP.md`、`NATIVE.md`、`docs/000`–`008`、`examples` 与根 `README.md` 改为本地工单 + 可选 Feishu；`NATIVE.md` 新增第 28 条记录本次移除；`docs/007` 删除已不存在的 `pullEndNotices` 说明；插件 `locale/en.json`、`locale/zh.json` 的元数据也改为本地工单。 |
 
 ## 2. 行为
 
@@ -53,3 +53,11 @@
 - 审计后补充（第六轮）：`prompts/admission.md` 不再让 Eval 读取仓库文件；启动清理只删除 `github:` 前缀的 follows，保留自定义 Source 的 `bindThread` 绑定与 `merged`/`closed` outcome；Feishu 技能、迁移提示、搜索提示与相关注释去掉了 PR/Issue 残留；新增自定义 Source 与 legacy `guide/github` 的回归测试。
 - 审计后补充（第七轮）：删除已无生产者的 `ci` 通知 kind（Notification、Webhook、桌面通知与文案）；旧 CI 通知仍由启动清理删除。
 - 审计后补充（第八轮）：启动清理也删除 `thread-since:github-issue:` 游标，覆盖旧 `github-issue` 来源的残留读取位置。
+
+## 5. 文档与日志同步
+
+- 插件文档 `README.md`、`SETUP.md`、`NATIVE.md`、`docs/000`–`008`、`examples` 已改为本地工单 + 可选 Feishu；根 `README.md` 的 Superagent 段落、bundle patch 测试与 `apps/web/tests/scaffold.ts` 同步移除 GitHub Source。
+- `docs/007` 删除了已删除的 `pullEndNotices`；`docs/005` 的通知列表只保留本地检查/合并事件；`docs/006` 的迁移说明写明 schema 10→11 与启动清理。
+- 插件 `locale/en.json`、`locale/zh.json` 的 `meta.description` 已不再写 GitHub；`pnpm run verify-locale-metadata` 通过。
+- `prompts/admission.md` 不再让 Eval 读取仓库文件；Feishu 技能、迁移提示、搜索提示与相关注释已去掉 PR/Issue/CI 残留。
+- 本文档原编号 00100 与并发会话的 `00100-文档同步-rust-anything使用指南.md`、`00101-技能改名-dsh-rust-anything.md`、`00102-改名收尾-文档与日志同步.md` 冲突，因此改为 00103。

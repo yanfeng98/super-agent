@@ -4,7 +4,7 @@
  */
 import { basename } from 'node:path'
 import { z } from 'zod'
-import { isoTime, said, type AcceptMode, type AdmissionCell, type ChannelRef, type Decision, type Execution, type MandateBasis,
+import { isoTime, said, type AcceptMode, type AdmissionCell, type ChannelRef, type Decision, type Execution, type Follow, type MandateBasis,
   type Reason, type Thread, type Ticket, type TicketInput, type TriggerDisposition } from '../core/index.ts'
 import { feishuChatLink } from '../sources/feishu-channel.ts'
 import { SettingsSchema, policyVersion, type Settings, type SettingsOrigin } from '../policy.ts'
@@ -346,8 +346,10 @@ export function basisOf(stored: unknown): MandateBasis {
  * inputs into `text` inputs for the worker.
  */
 export function ticketOf(old: Stored, answers = new Map<string, string[]>(), human: (triggerId: string) => boolean = () => false): Ticket {
-  const { meta: storedMeta, follows: _follows, ...rest } = old as Stored & { meta?: Stored; follows?: unknown }
+  const { meta: storedMeta, follows: storedFollows, ...rest } = old as Stored & { meta?: Stored; follows?: unknown }
   const ticket = rest as unknown as Ticket
+  const follows = Array.isArray(storedFollows)
+    ? (storedFollows as Follow[]).filter(follow => !follow.thread.startsWith('github:')) : []
   const meta = storedMeta ?? {}
   const triggerId = text(meta.sourceTriggerId) ?? ''
   const triggerIds = Array.isArray(meta.triggerIds) ? meta.triggerIds as string[] : triggerId ? [triggerId] : []
@@ -368,6 +370,7 @@ export function ticketOf(old: Stored, answers = new Map<string, string[]>(), hum
     // A ticket stopped by a person receives no further work, so clear any undelivered inputs.
     ...ended?.by === 'human' ? { undelivered: [] } : {},
     ...kept ? { execution: kept } : {}, ...delivery ? { delivery } : {},
+    ...follows.length ? { follows } : {},
     channels: ticket.channels.filter(channel => channel.source !== 'github' && channel.source !== 'github-issue'),
     ...reported.length ? { answers: reported } : {} }
 }
