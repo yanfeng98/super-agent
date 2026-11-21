@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { UserError, key, latestReport, noteOutdated, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
 import { batchOf, inputMessage, triggerMessage, workerSessionId } from '../executor/dsh.ts'
-import { feishuReferences, feishuRead } from '../sources/feishu-read.ts'
+import { feishuRead } from '../sources/feishu-read.ts'
 import { feishuRef } from '../sources/feishu.ts'
 import { feishuTriggerId } from '../sources/feishu-trigger.ts'
 import { ASSIGNMENTS, INPUTS, assignmentLine, decisionCard, decisionDetails, inputLine, newestPage, preview, textPage, threadCard, ticketCard,
@@ -224,7 +224,6 @@ const ROUTES: readonly Route[] = [
     const { host, rest, ticketId, offset, signal } = read
     if (!rest || rest.includes('/')) throw new Error('Unknown context resource')
     const found = trigger(host, rest, ticketId)
-    const ref = feishuRef(found)
     // Redact decision IDs, other tickets, and unreachable neighbour triggers when a worker session reads a trigger.
     const ticket = ticketId ? host.store.tickets.get(ticketId) : undefined
     const shown = (item: Trigger | undefined) => item && (!ticket || readable(host, ticket, item)) ? item : undefined
@@ -238,7 +237,6 @@ const ROUTES: readonly Route[] = [
     const neighbours = host.store.read.neighbours(threadKey(found.threads[0]!), found.at, found.id)
     const around = { before: shown(neighbours.before), after: shown(neighbours.after) }
     return { ...card, ...await host.sourceLink(found, signal), acknowledgement: host.store.replyStatus(key('ack', found.id)) ?? 'not_requested',
-      ...(ref ? { context: feishuReferences(ref) } : {}),
       ...(offset === 0 ? {
         ...repliedTo ? { replied_to: triggerLine(repliedTo) } : {},
         around: { ...around.before ? { before: triggerLine(around.before) } : {}, ...around.after ? { after: triggerLine(around.after) } : {} },
