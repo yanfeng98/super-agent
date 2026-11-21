@@ -95,7 +95,7 @@
 | 2 | **`dtolnay/rust-toolchain@1.97.0` 引用的不是 tag**：该 action 的版本 ref 是分支，`1.97.0` 在 refs 里不存在 | 改为 `@v1` + `with: toolchain: 1.97.0` |
 | 2 | **漏接 node-compat 与 python SDK 可执行文件**：前者在 Node 24.9 上跑 `build:artifacts`，后者默认跑 `pnpm run build` | 两个 job 都补 `setup-rust` |
 | 2 | **`scripts/build.spec.ts` 没有跟上构建图**：新增 `rust-anything` gate 后该 spec 仍然只断言旧图（顺带发现它也没跟上本 fork 的 `dsh-im`/`superagent` gate 与 `web` 依赖，属于既有的红） | 把 `artifactGraph` 更新为实际图（含三个 fork gate 与 `web` 的依赖），`scripts/build.spec.ts` 20/20 通过 |
-| 2 | **vendored 树保真度未验证** | 用 `git archive <tag>` 重新导出上游树并 `diff -r`：除新增 `NATIVE.md`、`rust-toolchain.toml` 与构建产物 `bin/`、`target/` 外，与上游逐字节一致 |
+| 2 | **vendored 树保真度未验证** | 用 `git archive <tag>` 重新导出上游树并 `diff -r`：除新增 `NATIVE.md`、`rust-toolchain.toml` 与构建产物 `bin/`、`target/` 外与上游一致；提交时又按仓库空白门禁去掉了两个上游文件末尾的多余空行（已记入 `NATIVE.md` 的本地改动） |
 | 2 | **技能里还写着 npm 安装路径**：`SKILL.md` 称 CLI 在 `node_modules/.bin/rust-anything`，并建议 `cargo install rust-anything` + `rust-anything setup` | 改为"由本检出编译到 `native/rust-anything/bin/`"，删掉全局安装与 `setup` 建议 |
 | 2 | **`packages/mcp/README*` 行描述仍是 npm 依赖** | 中英文改为 vendored 源码编译，并重记 i18n 哈希 |
 | 2 | **构建脚本在 `CARGO_TARGET_DIR` 被设置时给出难以理解的 ENOENT** | 先检查产物是否存在，报错指明该环境变量 |
