@@ -35,6 +35,8 @@ import { decisionList, search, threadDetail, threadList } from '../src/app/views
 import { executorLoad, ticketDetail, ticketList } from '../src/app/views/tickets.ts'
 
 let runtime: Runtime
+/** The environment the test process inherited, which every Runtime's stop must restore. */
+const inheritedGitConfig = process.env.GIT_CONFIG_GLOBAL
 const viewsOf = (value: Runtime) => ({ store: value.store, sources: value.sources, links: value.links() })
 const overviewOf = (value: Runtime) => overview(viewsOf(value), value.health, policyVersion(value.store.settings()), executorLoad(value.store, value.executor.activeCount()), value.setupProblem ?? value.feishuProblem)
 let directory: string
@@ -213,7 +215,6 @@ it('relays an explicit member mention as a candidate and creates the ticket, ack
   // The ticket's execution environment is fixed at accept time: its directory under the execution root, and the Sources' values from its Trigger.
   expect(ticket.execution!.directory).toBe(join(directory, 'work', ticket.execution!.name))
   expect(Object.fromEntries(runtime.ticketEnvironment(ticket).map(variable => [variable.key, variable.value]))).toMatchObject({ DSH_SUPERAGENT_DIR: ticket.execution!.directory, DSH_SUPERAGENT_NAME: ticket.execution!.name, DSH_SUPERAGENT_TICKET: ticket.id, DSH_SUPERAGENT_FEISHU_CHAT: CHAT, DSH_SUPERAGENT_FEISHU_BOT: 'ou_bot' })
-  expect(runtime.ticketEnvironment(ticket).map(variable => variable.key)).not.toContain('DSH_SUPERAGENT_GITHUB_REPOSITORY')
   expect(ticket.assignments).toEqual([expect.objectContaining({ state: 'running', startedAt: expect.any(String) })])
   expect(sessionId).toBe(`worker-${ticket.id}`)
   expect(runtime.store.threads.get(`feishu:${CHAT}:om_1`)?.subscriptions).toEqual([ticket.id])
@@ -835,7 +836,7 @@ it('writes worker shims and the agent environment from the configuration only, a
   expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
   expect(process.env.PATH?.split(':')[0]).toBe(bin)
   await next.stop()
-  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
+  expect(process.env.GIT_CONFIG_GLOBAL).toBe(inheritedGitConfig)
   expect(process.env.PATH?.split(':')).not.toContain(bin)
 })
 
@@ -866,7 +867,7 @@ it('tells both roles the execution environment through a generated prompt sectio
   const section = preview.parts.worker.at(-1)!
   expect(section.name).toBe('runtime/environment')
   for (const line of ['- DSH_SUPERAGENT_FEISHU_BOT = "ou_bot"', '- DSH_SUPERAGENT_FEISHU_CHAT = ""']) expect(section.text).toContain(line)
-  expect(section.text).not.toMatch(/GITHUB|MERGE_ACCOUNT/)
+  expect(section.text).not.toMatch(/MERGE_ACCOUNT/)
   // Outside a ticket there is no ticket directory.
   expect(section.text).not.toContain('DSH_SUPERAGENT_DIR')
   // The main Session's Policy section follows it.
@@ -1794,7 +1795,7 @@ it('keeps the Policy the main Session judges by in its prompt, after admission a
   expect(policy()).toContain('The accept mode and the rules decide proactive candidates only')
 })
 
-it('keeps a local standing merge request when startup drops removed Source data', async () => {
+it('keeps a standing merge request across a restart', async () => {
   const { ticket, sessionId } = await acceptedTicket()
   await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
   runtime.autoMergeTicket(ticket.id, {})
@@ -1802,20 +1803,4 @@ it('keeps a local standing merge request when startup drops removed Source data'
   const next = await restart()
   await next.ready
   expect(next.store.tickets.get(ticket.id)?.autoMerge).toBeDefined()
-})
-
-it('drops old GitHub ticket bindings and their merge queue entries at startup', async () => {
-  const { ticket, sessionId } = await acceptedTicket()
-  await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
-  const current = runtime.store.tickets.get(ticket.id)!
-  runtime.store.tickets.save({ ...current, follows: [{ thread: 'github:7', own: true }, { thread: 'custom:9', own: false }] })
-  runtime.store.saveSettings({ ...runtime.store.settings(), paused: true })
-  runtime.queueMerges([ticket.id], {})
-  runtime.store.receipts.add({ id: 'old-github-reply', channel: { source: 'github', thread: 'github:7', address: { number: '7' } },
-    text: 'old', kind: 'reply' })
-  const next = await restart()
-  await next.ready
-  expect(next.store.tickets.get(ticket.id)?.follows).toEqual([{ thread: 'custom:9', own: false }])
-  expect(next.store.get(KV.runtime.mergeQueue) ?? []).toEqual([])
-  expect(next.store.receipts.get('old-github-reply')).toMatchObject({ status: 'dropped', dropped: { reason: 'channelGone' } })
 })

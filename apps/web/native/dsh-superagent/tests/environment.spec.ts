@@ -85,16 +85,16 @@ describe('agent git configuration', () => {
   it('ignores the operator\'s global and system git configuration, also after DSH drops credential-shaped variables', async () => {
     const home = join(dir, 'home'); mkdirSync(home)
     // Operator configuration that rewrites HTTPS to SSH, enables commit signing, and sets a credential helper.
-    writeFileSync(join(home, '.gitconfig'), '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n[commit]\n\tgpgsign = true\n[credential]\n\thelper = osxkeychain\n')
+    writeFileSync(join(home, '.gitconfig'), '[url "git@git.example.com:"]\n\tinsteadOf = https://git.example.com/\n[commit]\n\tgpgsign = true\n[credential]\n\thelper = osxkeychain\n')
     const deployment = testDeployment({ stateDir: dir })
     await writeEnvironment(deployment, [])
     // Operator identity variables and git's fallback from the OS username must not apply to worker commits.
     const env = workerEnv({ PATH: process.env.PATH, HOME: home, GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.abbrev', GIT_CONFIG_VALUE_0: '12', GIT_AUTHOR_NAME: 'Operator', GIT_COMMITTER_EMAIL: 'operator@example.com', ...agentVariables(dir) })
     const git = async (...args: string[]): Promise<string> => (await exec('git', args, { cwd: dir, env })).stdout.trim()
     await git('init', '-q', 'repo')
-    await exec('git', ['-C', 'repo', 'remote', 'add', 'origin', 'git@github.com:acme/widgets.git'], { cwd: dir, env })
+    await exec('git', ['-C', 'repo', 'remote', 'add', 'origin', 'git@git.example.com:acme/widgets.git'], { cwd: dir, env })
     // The operator's HTTPS-to-SSH rewrite, signing, and credential helper are all ignored.
-    expect(await git('-C', 'repo', 'remote', 'get-url', '--push', 'origin')).toBe('git@github.com:acme/widgets.git')
+    expect(await git('-C', 'repo', 'remote', 'get-url', '--push', 'origin')).toBe('git@git.example.com:acme/widgets.git')
     expect((await exec('git', ['config', '--show-origin', '--get-all', 'credential.helper'], { cwd: dir, env })).stdout)
       .toBe(`file:${workerGitConfig(dir)}\t\n`)
     expect(await git('config', '--get-all', 'credential.helper')).toBe('')
@@ -121,7 +121,7 @@ it('fails instead of asking the operator\'s askpass helpers when the agent\'s cr
   await exec('git', ['init', '-q', 'repo'], { cwd: dir, env })
   await exec('git', ['-C', 'repo', 'config', 'core.askPass', askpass], { cwd: dir, env })
   const fill = exec('git', ['-C', 'repo', 'credential', 'fill'], { cwd: dir, env, timeout: 10_000 })
-  fill.child.stdin?.end('protocol=https\nhost=github.com\n\n')
+  fill.child.stdin?.end('protocol=https\nhost=git.example.com\n\n')
   await expect(fill).rejects.toMatchObject({ stderr: expect.stringContaining('terminal prompts disabled') })
   expect(() => readFileSync(log, 'utf8')).toThrow()
 })
@@ -160,8 +160,8 @@ describe('ticket directory check', () => {
   })
   it('names the credential settings of the repository\'s own configuration', async () => {
     await git('init', '-q', 'repo')
-    await git('-C', 'repo', 'config', 'http.https://github.com/.extraheader', 'AUTHORIZATION: basic x')
-    await expect(check('repo')).rejects.toThrow('sets http.https://github.com/.extraheader')
+    await git('-C', 'repo', 'config', 'http.https://git.example.com/.extraheader', 'AUTHORIZATION: basic x')
+    await expect(check('repo')).rejects.toThrow('sets http.https://git.example.com/.extraheader')
   })
   it('fails when git cannot read the repository\'s configuration, instead of passing it', async () => {
     await git('init', '-q', 'repo')

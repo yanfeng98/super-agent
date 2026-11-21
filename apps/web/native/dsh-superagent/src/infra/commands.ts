@@ -25,7 +25,7 @@ export function commandError(error: unknown, program = 'command'): Error {
     catch { /* Non-JSON CLI diagnostics are retained below. */ }
     const code = parsed?.error?.code
     if (parsed?.error?.message) return new CliError(`${parsed.error.message}${code ? ` (${code})` : ''}`, code, exitCode)
-    // `gh` exits non-zero on HTTP errors (such as `gh: Not Found (HTTP 404)`) and on `gh: HTTP 304`, which ETag polling relies on.
+    // A CLI exits non-zero on HTTP errors (such as `Not Found (HTTP 404)`), so keep the status as the error code.
     if (stderr) return new CliError(stderr.slice(0, 2000), Number(/\bHTTP (\d{3})\b/.exec(stderr)?.[1]) || undefined, exitCode)
   }
   return new CliError(`${basename(program)} ${ended(error)}`, undefined, exitCode)

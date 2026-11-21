@@ -45,13 +45,21 @@ it('refuses a database older than schema 10 and asks for a new state directory',
   expect(() => new Store(path)).toThrow(/schema 9 predates schema 10, which this version cannot migrate; start with a new state directory/)
 })
 
+it('keeps an unknown Source in a schema 10 database instead of failing to open it', () => {
+  const path = join(directory, 'db.sqlite')
+  schema10(path, { settings: { sources: { custom: { enabled: true, config: { value: 1 } } } } })
+  const store = new Store(path)
+  expect(store.settings().sources.custom).toEqual({ enabled: true, config: { value: 1 } })
+  store.close()
+})
+
 it('writes a schema 10 database in its current shape once, so nothing reads an older shape', () => {
   const path = join(directory, 'db.sqlite')
   // A channel to a Feishu topic, which schema 11 keeps as it is.
   const channel = { source: 'feishu', thread: 'feishu:oc_team:om_2', address: { chatId: 'oc_team', messageId: 'om_2' } }
   const ticket = {
     id: 't1', title: 'Fix', decisionId: 'd1', state: 'open', assignments: [], summary: '', createdAt: '1', updatedAt: '2',
-    channels: [channel], follows: [{ thread: 'github:7', own: true }, { thread: 'custom:9', own: false }],
+    channels: [channel], follows: [{ thread: 'custom:9', own: false }],
     mandate: mandate({ chatId: 'oc_team', direct: false, member: 'ou_alice', mention: true }),
     inputs: [{ id: 'i1', kind: 'reopen', decisionId: 'd2', at: '3' }, { id: 'i2', kind: 'reopen', decisionId: 'd0', at: '0' },
       { id: 'i3', kind: 'trigger', triggerId: 'trig-2', at: '4' }, { id: 'i4', kind: 'trigger', triggerId: 'bot-1', at: '5' }], undelivered: ['i1'],
@@ -76,9 +84,7 @@ it('writes a schema 10 database in its current shape once, so nothing reads an o
   const thread = { key: 'feishu:oc_obs:om_5', ref: { source: 'feishu', id: 'oc_obs:om_5' }, createdAt: '', subscriptions: [], correlated: [], pending: [], evaluating, meta: {} }
   schema10(path, {
     settings: { policy: { rules: [{ id: 'copy', name: 'Copy', enabled: true, instruction: 'x', visual: true }] }, executor: { reviewer: 'bob', prepare: 'echo $DSH_TAG_DIR' },
-      // Sources this version removed are dropped; the Feishu Source stays as stored.
-      sources: { feishu: { enabled: true, config: { chats: [{ chatId: 'oc_team', listen: 'mentions' }], directMessages: true } },
-        'github-issue': { enabled: true, config: {} }, github: { enabled: true, config: { mergeCli: 'gh' } } } },
+      sources: { feishu: { enabled: true, config: { chats: [{ chatId: 'oc_team', listen: 'mentions' }], directMessages: true } } } },
     'settings-version:1': { revision: 1, savedAt: '', source: 'web', policyVersion: '', policyChanged: false, notified: [],
       settings: { allowedChats: ['oc_team'], members: [], sources: undefined } },
     'settings-version:2': { revision: 2, savedAt: '', source: 'orchestrator-tool', policyVersion: '', policyChanged: false, notified: [],
@@ -238,14 +244,14 @@ const opened = (records: Record<string, unknown>) => {
 }
 
 it('writes a prompt version saved before the team sections in them, keeping its skills, and marks it', () => {
-  const store = opened({ ...legacyPrompts(3, { notes: 'Call orchestrator_create_task with event_id, read event/<id>, follow guide/work, guide/github and guide/feishu, load dsh-tag-release and dsh-tag-github, cd "$DSH_TAG_DIR".' }) })
+  const store = opened({ ...legacyPrompts(3, { notes: 'Call orchestrator_create_task with event_id, read event/<id>, follow guide/work and guide/feishu, load dsh-tag-release, cd "$DSH_TAG_DIR".' }) })
   const prompts = new Prompts(store, () => 100000, () => undefined, () => true)
   const { config } = prompts.version(3)
   expect(config.communication).toBe(defaultPrompts().communication)
   expect(config.delivery).toBe(defaultPrompts().delivery)
   // Guides that are now fixed or built-in are gone; the team's own skills stay, in current names.
   expect(Object.keys(config.skills)).toEqual(['identities', 'notes'])
-  expect(config.skills.notes).toBe('Call orchestrator_route (kind accept) with trigger_id, read trigger/<id>, follow the work section, the repository guidance and the feishu section, load dsh-superagent-release and the repository guidance, cd "$DSH_SUPERAGENT_DIR".')
+  expect(config.skills.notes).toBe('Call orchestrator_route (kind accept) with trigger_id, read trigger/<id>, follow the work section and the feishu section, load dsh-superagent-release, cd "$DSH_SUPERAGENT_DIR".')
   const prompt = composePrompt(config, 'orchestrator')
   expect(prompt).not.toContain('Legacy orchestrator')
   expect(prompt).toContain(masterPrompt)

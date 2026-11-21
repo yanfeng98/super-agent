@@ -40,7 +40,7 @@ export interface Machine {
 }
 const MOVED: Record<string, string> = {
   repository: 'this key was removed', branchPrefix: 'in the prepare command of the Execution settings',
-  github: 'this key was removed', feishu: 'on the Feishu Source', author: 'prompt text',
+  feishu: 'on the Feishu Source', author: 'prompt text',
   repositoryPath: 'in the prepare command of the Execution settings',
   worktreeRoot: 'the ticket directory of the Execution settings', blockedCommands: 'in the Execution settings',
 }
