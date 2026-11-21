@@ -1793,3 +1793,29 @@ it('keeps the Policy the main Session judges by in its prompt, after admission a
   expect(policy()).toContain('No rule is enabled: a proactive candidate can only be ignored.')
   expect(policy()).toContain('The accept mode and the rules decide proactive candidates only')
 })
+
+it('keeps a local standing merge request when startup drops removed Source data', async () => {
+  const { ticket, sessionId } = await acceptedTicket()
+  await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  runtime.autoMergeTicket(ticket.id, {})
+  runtime.store.saveSettings({ ...runtime.store.settings(), paused: true })
+  const next = await restart()
+  await next.ready
+  expect(next.store.tickets.get(ticket.id)?.autoMerge).toBeDefined()
+})
+
+it('drops old GitHub ticket bindings and their merge queue entries at startup', async () => {
+  const { ticket, sessionId } = await acceptedTicket()
+  await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
+  const current = runtime.store.tickets.get(ticket.id)!
+  runtime.store.tickets.save({ ...current, follows: [{ thread: 'github:7', own: true }] })
+  runtime.store.saveSettings({ ...runtime.store.settings(), paused: true })
+  runtime.queueMerges([ticket.id], {})
+  runtime.store.receipts.add({ id: 'old-github-reply', channel: { source: 'github', thread: 'github:7', address: { number: '7' } },
+    text: 'old', kind: 'reply' })
+  const next = await restart()
+  await next.ready
+  expect(next.store.tickets.get(ticket.id)?.follows).toBeUndefined()
+  expect(next.store.get(KV.runtime.mergeQueue) ?? []).toEqual([])
+  expect(next.store.receipts.get('old-github-reply')).toMatchObject({ status: 'dropped', dropped: { reason: 'channelGone' } })
+})
