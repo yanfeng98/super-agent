@@ -25,7 +25,7 @@ Connect an agent to [rust-anything](https://github.com/erkamyaman/rust-anything)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mounted by the Web `standard` agent preset as row `mcp-rust-anything`; the tools appear in that agent as `mcp__rust-anything__*` with no setup step. A task shaped like "rewrite this CLI in Rust", "move this hot loop to Rust", or "plan a migration of `src/parser/`" reaches the matching [skill](../../../.agents/skills/rust-anything/SKILL.md), which drives the loop: `analyze`, `bridge`, `record`, write `port.rs`, `build`, `diff`, `bench`, `gate`, and `app_*` for whole apps.
+Mounted by the Web `standard` agent preset as row `mcp-rust-anything`; the tools appear in that agent as `mcp__rust-anything__*` with no setup step. A task shaped like "rewrite this CLI in Rust", "move this hot loop to Rust", or "plan a migration of `src/parser/`" reaches the matching [`dsh-rust-anything`](../../../.agents/skills/dsh-rust-anything/SKILL.md) skill, which drives the loop: `analyze`, `bridge`, `record`, write `port.rs`, `build`, `diff`, `bench`, `gate`, and `app_*` for whole apps.
 
 | Field | Default | Meaning |
 |---|---|---|
