@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "rust-anything",
+    "description": "挂载 rust-anything MCP server，让 Agent 按单元把代码迁移到 Rust 并逐单元验证。"
+  }
+}

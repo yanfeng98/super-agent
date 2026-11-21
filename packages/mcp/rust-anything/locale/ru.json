@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "rust-anything",
+    "description": "Подключает MCP-сервер rust-anything, чтобы агент переносил код на Rust по одному проверенному фрагменту за раз."
+  }
+}

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/mcp/rust-anything/README.md
+/:
+  en: 9b2ff6e2d25dea40
+  zh: 0c575fdff2b5a72b
+/deepseek-ai-dsh-rust-anything:
+  en: a401f1528d90959f
+  zh: 9de0b85532b9030b
+/deepseek-ai-dsh-rust-anything/summary:
+  en: bbb93364d9411bb6
+  zh: 1b5de1f590c85fde
+/deepseek-ai-dsh-rust-anything/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: af2f3a72884f5587
+/deepseek-ai-dsh-rust-anything/use-this-package:
+  en: 2bdcfdae97bddc1b
+  zh: 855cda38e48482c8
+/deepseek-ai-dsh-rust-anything/understand-the-implementation:
+  en: 261911b58820b885
+  zh: 4aee84b3435f54dd
+/deepseek-ai-dsh-rust-anything/further-exploration:
+  en: 324aedca6f0e66c0
+  zh: 0e9e490407aaeb3b
+/deepseek-ai-dsh-rust-anything/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server:
+  en: 3ec83f7a88d8ac6a
+  zh: e0291cbc2a6a5106
+/deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server/what-the-model-sees:
+  en: 3e691939e0e6c7bb
+  zh: d6cb8b12e6c4cc1f
+/deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server/token-effect:
+  en: 780ebd8632797288
+  zh: f3e01d6fe85e76f7
+/deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server/kv-cache-effect:
+  en: 4085ace7d94fe688
+  zh: ea24e49ac90ecc64
+/deepseek-ai-dsh-rust-anything/known-limitations-and-deferred-work:
+  en: a7c7297ed5c74227
+  zh: 89c231cb5817d24b
+/deepseek-ai-dsh-rust-anything/known-limitations-and-deferred-work/dev-note:
+  en: 78192fa850a3e11f
+  zh: 6917cb313adcfbdd
