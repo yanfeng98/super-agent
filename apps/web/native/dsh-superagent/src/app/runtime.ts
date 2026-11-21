@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
 import { Engine, key, latestAssignment, latestReport, liveTicket, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
   type TicketCheck, type TicketCheckRun, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
-import { allowedSender, settingsPolicy } from '../policy.ts'
+import { allowedSender, policyVersion, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
 import type { Deployment, Machine } from '../deployment.ts'
@@ -1565,13 +1565,30 @@ export class Runtime extends Service implements SourceHost {
       this.ctx.logger.warn('dsh-superagent: completing archive records failed: %s', String(error))
     })
   }
-  /** Drop the removed GitHub Source's settings, Policy part, and read cursors from a database that predates its removal. */
+  /** Drop the removed GitHub Sources' settings, Policy parts, read cursors, and ticket bindings from a database that predates their removal. */
   private dropRemovedSourceData(): void {
+    const removed = new Set(['github', 'github-issue'])
+    // A ticket whose GitHub channels or followed threads are gone would wait forever for a Source that no longer exists.
+    for (const ticket of this.store.tickets.list()) {
+      if (!ticket.follows?.length && !ticket.channels.some(channel => removed.has(channel.source))) continue
+      this.store.atomic(() => {
+        const current = this.store.tickets.get(ticket.id)
+        if (!current) return
+        const channels = current.channels.filter(channel => !removed.has(channel.source))
+        if (!current.follows?.length && channels.length === current.channels.length) return
+        if (current.follows) delete current.follows
+        current.channels = channels
+        this.store.tickets.save(current)
+      })
+    }
     const settings = this.store.settings()
-    if (!settings.sources.github && !settings.policy.sources.github) return
-    const without = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => id !== 'github'))
-    this.store.saveSettings({ ...settings, sources: without(settings.sources), policy: { ...settings.policy, sources: without(settings.policy.sources) } })
+    const holds = (record: Record<string, unknown>) => Object.keys(record).some(id => removed.has(id))
+    if (!holds(settings.sources) && !holds(settings.policy.sources)) return
+    const without = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => !removed.has(id)))
+    const next = { ...settings, sources: without(settings.sources), policy: { ...settings.policy, sources: without(settings.policy.sources) } }
+    this.store.saveSettings(next, { source: 'internal', policyVersion: policyVersion(next), policyChanged: true, notified: [] })
     for (const prefix of ['github-', 'thread-since:github:']) for (const name of this.store.keys(prefix)) this.store.delete(name)
+    for (const id of removed) this.store.delete(KV.settings.block(`source:${id}`))
   }
   private httpHost(): HttpHost {
     const runtime = this

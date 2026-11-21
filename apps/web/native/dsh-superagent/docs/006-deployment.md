@@ -307,7 +307,7 @@ Create the ticket under **Execution → New ticket**, or ask the main Session in
 
 A restart ends running Assignments and starts replacements with recovery notes. Team text and overridden prompt parts are retained; parts without overrides follow the new defaults. Review parts marked **Default updated** after upgrading.
 
-A database migrated by a newer version cannot be opened by an older one. Rollback therefore requires the pre-upgrade backup. Schema 11 no longer reads GitHub settings or keys: the migration from schema 10 drops the GitHub settings block and its stored keys, and a database that still holds them starts without them. A database already at schema 11 needs no migration for this. After upgrading DeepSeek Harness itself, restart the running instance so the panel loads matching artifacts.
+A database migrated by a newer version cannot be opened by an older one. Rollback therefore requires the pre-upgrade backup. Schema 11 no longer reads GitHub settings or keys: the migration from schema 10 drops the GitHub settings block and its stored keys, and a database that still holds them starts without them, with old tickets stripped of GitHub channels and followed threads. A database already at schema 11 needs no migration for this. Saved prompt revisions keep the text they were saved with; restore the built-in team sections if an earlier revision still mentions the removed Source. After upgrading DeepSeek Harness itself, restart the running instance so the panel loads matching artifacts.
 
 ### Agent presets
 
