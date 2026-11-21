@@ -49,3 +49,4 @@
 - 审计后补充（第二轮）：启动清理保留本地 `autoMerge`，只清 GitHub-bound ticket 的 standing merge；移除旧 GitHub 的 merge queue entry，并在队列清空时解除 pause；把发往已删除 Source 的 pending reply 标记为 dropped，避免永远重试。
 - 审计后补充（第三轮）：识别旧 GitHub ticket 时也看它的 origin Trigger 的 Source，因此即使绑定已被清过，队列里残留的旧 entry 仍会被移除；本地 ticket 的 origin 是 local/Feishu，不受影响。
 - 审计后补充（第四轮）：无条件清理 GitHub 读取游标、Policy block revision 与 source label，旧 CI 通知也删除；清理保存推进 policy block revision；旧 ticket 缺 origin/channels 时用可选链兜底。
+- 审计后补充（第五轮）：插件 `locale/en.json` 与 `locale/zh.json` 的元数据仍写着 GitHub，已改为本地工单 + 可选飞书；`verify-locale-metadata` 通过。
