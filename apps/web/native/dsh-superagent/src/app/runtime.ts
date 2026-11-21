@@ -1604,9 +1604,16 @@ export class Runtime extends Service implements SourceHost {
     }
     // A pending reply to a removed Source can never be delivered; settle it rather than retrying it forever.
     for (const receipt of this.store.receipts.waiting()) if (removed.has(receipt.channel.source)) this.store.receipts.settle(receipt, 'channelGone')
+    // Old CI notifications describe a Source this installation no longer has.
+    for (const name of this.store.keys('notification:')) {
+      if (this.store.get<{ kind?: string }>(name)?.kind === 'ci') this.store.delete(name)
+    }
     // Read cursors and block revisions are removed even when a partial cleanup already dropped the settings.
     for (const prefix of ['github-', 'thread-since:github:']) for (const name of this.store.keys(prefix)) this.store.delete(name)
-    for (const id of removed) this.store.delete(KV.settings.block(`source:${id}`))
+    for (const id of removed) {
+      this.store.delete(KV.settings.block(`source:${id}`))
+      this.store.delete(KV.sources.labels(id))
+    }
     const settings = this.store.settings()
     const holds = (record: Record<string, unknown>) => Object.keys(record).some(id => removed.has(id))
     if (!holds(settings.sources) && !holds(settings.policy.sources)) return
