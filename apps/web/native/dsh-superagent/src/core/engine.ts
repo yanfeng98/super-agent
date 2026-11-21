@@ -47,7 +47,7 @@ export class Engine {
    */
   receive(trigger: Trigger): ReceiveResult { return this.repo.atomic(() => this.intake.receive(trigger)) }
   /**
-   * A Source's request to make an open ticket follow one of its Threads, such as a pull request's, `own` when the ticket
+   * A Source's request to make an open ticket follow one of its Threads, `own` when the ticket
    * opened it: the ticket subscribes to it, and a ready report ends it only once `followsDone` holds (see `Tickets.followsDone`).
    * @throws UserError when the ticket is unknown or has ended.
    */
@@ -55,7 +55,7 @@ export class Engine {
     return this.repo.atomic(() => this.tickets.bind(ticketId, thread, own))
   }
   /**
-   * A Source's fact that a Thread closed, such as its pull request's merge, at the time it happened. An open ticket that
+   * A Source's fact that a Thread closed, such as a thread it opened, at the time it happened. An open ticket that
    * follows it ends once it is done with the Threads it follows, unless work resumed since the close has not finished, or
    * its worker took up a person's message the ticket decides after its latest report.
    */
@@ -325,7 +325,7 @@ export class Engine {
    * A worker's request, through its Executor, to mark a Thread attached to its ticket unrelated, for `reason`: only that
    * ticket's Subscription drops, until a new Decision subscribes it again.
    * @throws UserError when the ticket is unknown, or for the Thread the ticket started on, one a Source bound it to (such as
-   * its pull request's), or one it does not follow.
+   * a thread it opened), or one it does not follow.
    */
   markUnrelated(ticketId: string, thread: string, reason: string): void {
     this.repo.atomic(() => { this.tickets.markUnrelated(ticketId, thread, reason) })

@@ -562,7 +562,7 @@ export class Runtime extends Service implements SourceHost {
         throw new Error(`The configured workspace check failed (exit ${check.exitCode ?? 'unknown'}); fix it before merging.${output ? `\n${output}` : ''}`)
       }
     }
-    // A squash or merge commit carries what the Ticket says it did, as a pull request's title and body would.
+    // A squash or merge commit carries what the Ticket says it did, as a commit message would.
     const number = this.store.tickets.number(current.id)
     const message = [current.title, latestReport(current)?.summary.trim(),
       `${number ? `Ticket ${number}` : `Ticket ${current.id}`}`].filter(Boolean).join('\n\n').slice(0, 4_000)
@@ -1571,16 +1571,16 @@ export class Runtime extends Service implements SourceHost {
     const stale = new Set<string>()
     // A ticket whose GitHub channels or followed threads are gone would wait forever for a Source that no longer exists.
     for (const ticket of this.store.tickets.list()) {
-      const origin = this.store.triggers.get(ticket.origin.triggerId)?.source
+      const origin = ticket.origin?.triggerId ? this.store.triggers.get(ticket.origin.triggerId)?.source : undefined
       const githubOrigin = origin !== undefined && removed.has(origin)
-      if (!ticket.follows?.length && !ticket.ciNotice && !githubOrigin && !ticket.channels.some(channel => removed.has(channel.source))) continue
+      if (!ticket.follows?.length && !ticket.ciNotice && !githubOrigin && !(ticket.channels ?? []).some(channel => removed.has(channel.source))) continue
       this.store.atomic(() => {
         const current = this.store.tickets.get(ticket.id)
         if (!current) return
-        const channels = current.channels.filter(channel => !removed.has(channel.source))
-        const bound = githubOrigin || !!current.follows?.length || current.channels.some(channel => removed.has(channel.source))
+        const channels = (current.channels ?? []).filter(channel => !removed.has(channel.source))
+        const bound = githubOrigin || !!current.follows?.length || (current.channels ?? []).some(channel => removed.has(channel.source))
         if (bound) stale.add(current.id)
-        if (!bound && !current.ciNotice && channels.length === current.channels.length) return
+        if (!bound && !current.ciNotice && channels.length === (current.channels ?? []).length) return
         if (current.follows) delete current.follows
         // A standing merge from a GitHub-bound ticket must not act on the local repository; a local standing merge stays.
         if (bound && current.autoMerge) delete current.autoMerge
@@ -1594,7 +1594,7 @@ export class Runtime extends Service implements SourceHost {
       if (stale.has(entry.ticketId)) return false
       const ticket = this.store.tickets.get(entry.ticketId)
       if (!ticket) return false
-      const origin = this.store.triggers.get(ticket.origin.triggerId)?.source
+      const origin = ticket.origin?.triggerId ? this.store.triggers.get(ticket.origin.triggerId)?.source : undefined
       return !(origin !== undefined && removed.has(origin))
     })
     if (kept.length !== queue.length) {
@@ -1604,14 +1604,15 @@ export class Runtime extends Service implements SourceHost {
     }
     // A pending reply to a removed Source can never be delivered; settle it rather than retrying it forever.
     for (const receipt of this.store.receipts.waiting()) if (removed.has(receipt.channel.source)) this.store.receipts.settle(receipt, 'channelGone')
+    // Read cursors and block revisions are removed even when a partial cleanup already dropped the settings.
+    for (const prefix of ['github-', 'thread-since:github:']) for (const name of this.store.keys(prefix)) this.store.delete(name)
+    for (const id of removed) this.store.delete(KV.settings.block(`source:${id}`))
     const settings = this.store.settings()
     const holds = (record: Record<string, unknown>) => Object.keys(record).some(id => removed.has(id))
     if (!holds(settings.sources) && !holds(settings.policy.sources)) return
     const without = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => !removed.has(id)))
     const next = { ...settings, sources: without(settings.sources), policy: { ...settings.policy, sources: without(settings.policy.sources) } }
-    this.store.saveSettings(next, { source: 'internal', policyVersion: policyVersion(next), policyChanged: true, notified: [] })
-    for (const prefix of ['github-', 'thread-since:github:']) for (const name of this.store.keys(prefix)) this.store.delete(name)
-    for (const id of removed) this.store.delete(KV.settings.block(`source:${id}`))
+    this.store.saveSettings(next, { source: 'internal', block: 'policy', policyVersion: policyVersion(next), policyChanged: true, notified: [] })
   }
   private httpHost(): HttpHost {
     const runtime = this

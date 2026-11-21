@@ -32,7 +32,7 @@
 | 命令 | 结果 |
 |---|---|
 | `pnpm typecheck`（插件） | 通过 |
-| `pnpm test`（插件） | 67 个文件、1311 个测试通过 |
+| `pnpm test`（插件） | 67 个文件、1313 个测试通过 |
 | `pnpm build`（插件） | 通过；`lib/` 不再生成 `github-watch.*` |
 | `pnpm run test:docs`（仓库根） | 21 通过、0 失败 |
 | `pnpm vitest run packages/bundle/web-app/tests/superagent-bundle.spec.ts` | 4/4 通过 |

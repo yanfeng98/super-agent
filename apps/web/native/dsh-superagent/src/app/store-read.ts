@@ -38,7 +38,7 @@ export function storeReads(db: DatabaseSync) {
   },
   threadPage: (threadKeyValue: string, offset: number, limit: number): Trigger[] => values(`SELECT t.value FROM trigger_thread x
     JOIN trigger t ON t.id = x.id WHERE x.thread = ? ORDER BY x.at DESC, t.rowid DESC LIMIT ? OFFSET ?`, threadKeyValue, limit, offset),
-  /** Nearest non-CI triggers on a thread immediately before and after `(at, id)`. */
+  /** Nearest non-CI triggers on a thread immediately before and after `(at, id)`, skipping legacy automated results. */
   neighbours: (threadKeyValue: string, at: string, id: string): { before?: Trigger; after?: Trigger } => {
     const nearest = (side: '<' | '>') => values<Trigger>(`SELECT t.value FROM trigger_thread x JOIN trigger t ON t.id = x.id
       WHERE x.thread = ? AND (x.at, x.id) ${side} (?, ?) AND json_extract(t.value, '$.meta.ci') IS NULL

@@ -36,7 +36,7 @@ const MERGE_EVENTS = new Set(['merged', 'reverted', 'ci', 'automerge', 'check', 
 /** One panel notification as the desktop watcher reads it. */
 export interface InboxItem { id: string; kind: string; title: string; text: string }
 /**
- * Decides whether an inbox notification deserves a desktop announcement: a merge outcome, a failing check or CI, or a
+ * Decides whether an inbox notification deserves a desktop announcement: a merge outcome, a failing check, or a
  * standing merge the host gave up on. A question or an ending is announced from the ticket's own state instead.
  * @param item - The notification the panel recorded.
  * @returns The localized title and body, or undefined for a kind the ticket poller already covers.
@@ -79,7 +79,7 @@ async function poll(first: boolean): Promise<void> {
       try { new Notification(notice.title, { body: notice.body, tag: `dsh-superagent:${ticket.id}` }) }
       catch (error) { /* The browser can refuse while hidden or after permission changed; the next poll tries again. */ }
     }
-    // The inbox carries what the ticket poller cannot see: a merge, a revert, failing CI, a failed check, a push.
+    // The inbox carries what the ticket poller cannot see: a merge, a revert, a failed check, a push.
     for (const item of await loadInbox()) {
       if (announced.has(item.id)) continue
       announced.add(item.id)

@@ -26,7 +26,7 @@ export interface Trigger {
   /** Every thread the trigger belongs to; the first (`threads[0]`) is the primary thread that hosts its evaluation. */
   threads: ThreadRef[]
   actor: ActorRef
-  /** Source-declared: the event was written by a person rather than a bot, CI, or this agent. */
+  /** Source-declared: the event was written by a person rather than a bot or this agent. */
   human: boolean
   /** Source-declared: the sender addressed the agent, by mentioning it or in a direct message to it. */
   addressed?: 'mention' | 'direct'
@@ -163,7 +163,7 @@ export interface Thread {
   /** Tickets subscribed to this thread; live ones receive every trigger as context through fan-out. */
   subscriptions: string[]
   /**
-   * The subscribed tickets whose Executor follows the thread for read-only context, such as an Issue or another pull request
+   * The subscribed tickets whose Executor follows the thread for read-only context, such as another thread
    * it found: its messages reach them, but grant nothing, and a person's message there resumes none of them that ended.
    */
   context?: string[]
@@ -182,7 +182,7 @@ export interface Thread {
 }
 /** Text in both interface languages, or the same text in both. */
 export type Text = string | { zh: string; en: string }
-/** One fact a Source states about its thread, such as an issue number or a CI result; `problem` marks one that needs a person. */
+/** One fact a Source states about its thread, such as an issue number or a check result; `problem` marks one that needs a person. */
 export interface ThreadFact { label?: Text; value: Text; problem?: true }
 /** A thread's facts by id, ordered for display; each writer owns its fact ids. */
 export type ThreadFacts = Record<string, ThreadFact>
@@ -269,7 +269,7 @@ export interface PolicyEffect {
 }
 
 export type TicketEndBy = 'executor' | 'human'
-/** How a ticket ended: with its result, with its pull request merged or closed unmerged, with nothing to do, or stopped by a person. */
+/** How a ticket ended: with its result, with a followed thread merged or closed unmerged, with nothing to do, or stopped by a person. */
 export type TicketOutcome = 'completed' | 'merged' | 'closed' | 'dropped' | 'stopped'
 /** A question for a person; `triggerId` is the human message that raised it, whose conversation it goes back to. */
 export interface Attention { id: string; question: string; triggerId?: string }
@@ -301,7 +301,7 @@ export interface Ticket {
   /** Inputs not yet handed to a running assignment. */
   undelivered: string[]
   /**
-   * Threads a Source made the ticket follow, such as its pull requests': a `ready` report ends the ticket only once
+   * Threads a Source made the ticket follow, such as a thread it opened: a `ready` report ends the ticket only once
    * `followsDone` holds; the close that makes it hold ends the ticket with that outcome unless its work has not finished (see
    * `Tickets.unfinished`), and then its next `ready` or `dropped` report ends it.
    */
@@ -350,7 +350,7 @@ export interface Ticket {
   merged?: TicketMerge
   /** When a person undid that merge with a reverting commit, and the merge it undoes. */
   reverted?: TicketRevert
-  /** The last failing CI a followed pull request reported, so the same failure is announced once. */
+  /** The last failing check a followed thread reported, so the same failure is announced once. */
   ciNotice?: { thread: string; value: string }
   /** Why the latest merge attempt did not land, kept after the chat that asked has scrolled away. */
   mergeError?: { at: string; error: string; via?: ActionOrigin }
@@ -360,7 +360,7 @@ export interface Ticket {
   cleaned?: { at: string; via?: ActionOrigin }
   /**
    * A person's standing request to merge as soon as the gates pass, recorded when they asked to merge once the check or a
-   * bound pull request's CI succeeds rather than now; the host carries it out and clears it.
+   * gates pass rather than now; the host carries it out and clears it.
    */
   autoMerge?: AutoMerge
   /** The latest failed delivery of an Input to its worker, until a delivery succeeds. */
@@ -505,7 +505,7 @@ export interface TicketReview {
   error?: string
 }
 /**
- * A Thread a ticket follows, by its key: `own` when the ticket opened it, such as its own pull request, and when and how it
+ * A Thread a ticket follows, by its key: `own` when the ticket opened it, such as a thread it opened, and when and how it
  * closed. `followsDone` holds once no Thread of its own is open, or, when the ticket has no `own` Thread, once every followed
  * Thread closed; the ticket then ends unless its work has not finished (see `Tickets.unfinished`).
  */

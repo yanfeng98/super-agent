@@ -13,7 +13,7 @@ export const guides: Readonly<Record<string, string>> = Object.fromEntries(['sub
 /** Bundled Source skills registered by dsh-superagent; a team may override their text. */
 export const sourceSkills: Readonly<Record<'feishu', string>> = { feishu: bundledSkills.feishu.content }
 export const cliNotes = promptFile('cli')
-/** Default text for the team-editable prompt sections (communication, ticket scope, and PR delivery). */
+/** Default text for the team-editable prompt sections (communication, ticket scope, and delivery). */
 export const teamDefaults = {
   communication: promptFile('team/communication'), scope: promptFile('team/scope'), delivery: promptFile('team/delivery'),
 }
