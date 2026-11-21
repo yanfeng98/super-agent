@@ -1568,19 +1568,36 @@ export class Runtime extends Service implements SourceHost {
   /** Drop the removed GitHub Sources' settings, Policy parts, read cursors, and ticket bindings from a database that predates their removal. */
   private dropRemovedSourceData(): void {
     const removed = new Set(['github', 'github-issue'])
+    const stale = new Set<string>()
     // A ticket whose GitHub channels or followed threads are gone would wait forever for a Source that no longer exists.
     for (const ticket of this.store.tickets.list()) {
-      if (!ticket.follows?.length && !ticket.channels.some(channel => removed.has(channel.source))) continue
+      if (!ticket.follows?.length && !ticket.ciNotice && !ticket.channels.some(channel => removed.has(channel.source))) continue
       this.store.atomic(() => {
         const current = this.store.tickets.get(ticket.id)
         if (!current) return
         const channels = current.channels.filter(channel => !removed.has(channel.source))
-        if (!current.follows?.length && channels.length === current.channels.length) return
+        const bound = !!current.follows?.length || current.channels.some(channel => removed.has(channel.source))
+        if (bound) stale.add(current.id)
+        if (!bound && !current.ciNotice && channels.length === current.channels.length) return
         if (current.follows) delete current.follows
+        // A standing merge from a GitHub-bound ticket must not act on the local repository; a local standing merge stays.
+        if (bound && current.autoMerge) delete current.autoMerge
+        if (current.ciNotice) delete current.ciNotice
         current.channels = channels
         this.store.tickets.save(current)
       })
     }
+    if (stale.size) {
+      const queue = this.store.get(KV.runtime.mergeQueue) ?? []
+      const kept = queue.filter(entry => !stale.has(entry.ticketId))
+      if (kept.length !== queue.length) {
+        this.store.set(KV.runtime.mergeQueue, kept)
+        // An old queue that paused itself leaves nothing to release; a remaining local queue keeps its pause.
+        if (!kept.length) this.store.set(KV.runtime.mergeQueuePaused, false)
+      }
+    }
+    // A pending reply to a removed Source can never be delivered; settle it rather than retrying it forever.
+    for (const receipt of this.store.receipts.waiting()) if (removed.has(receipt.channel.source)) this.store.receipts.settle(receipt, 'channelGone')
     const settings = this.store.settings()
     const holds = (record: Record<string, unknown>) => Object.keys(record).some(id => removed.has(id))
     if (!holds(settings.sources) && !holds(settings.policy.sources)) return
