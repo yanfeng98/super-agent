@@ -1503,6 +1503,33 @@ test('delivery account fingerprint is authenticated and checked inside the sendi
 });
 
 
+test('superagent handoff records the request, activates on consumer registration, and restores standalone', async () => {
+  const existing = bot('bot_superagent', 'superagent');
+  const fx = fixture({ bots: [existing], secrets: { [existing.secretRef]: 'local-secret' },
+    verifyApp: async () => ({ openId: existing.botOpenId, name: 'Verified' }) });
+  await fx.controller.initialize();
+  let status = await fx.controller.updateSuperagent(existing.id, true);
+  assert.equal(status.bots[0].superagent, true);
+  assert.equal(status.bots[0].superagentActive, false);
+  assert.equal(fx.configStore.getBot(existing.id).consumerMode ?? 'standalone', 'standalone');
+  const info = await fx.controller.describeDeliveryAccount(existing.id);
+  assert.equal(info.superagent, true);
+  const dispose = await fx.controller.consumeInbound(existing.id, {
+    expectedFingerprint: info.account.fingerprint,
+    onEvent: async () => ({ accepted: true }),
+  });
+  assert.equal(fx.configStore.getBot(existing.id).consumerMode, 'external-consumer');
+  status = fx.controller.status(existing.id);
+  assert.equal(status.bots[0].superagentActive, true);
+  await fx.controller.updateSuperagent(existing.id, false);
+  assert.equal(fx.configStore.getBot(existing.id).superagent, false);
+  assert.equal(fx.configStore.getBot(existing.id).consumerMode, 'standalone');
+  const runtime = fx.runtimes.get(existing.id).at(-1);
+  assert.equal(runtime.config.consumerMode, 'standalone');
+  dispose();
+  await fx.controller.close();
+});
+
 test('external account consumption persists exclusive mode and never restores standalone after consumer loss or restart', async () => {
   const existing = bot('bot_external', 'external');
   const options = { bots: [existing], secrets: { [existing.secretRef]: 'local-secret' },

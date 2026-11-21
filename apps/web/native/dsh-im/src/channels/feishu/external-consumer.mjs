@@ -100,6 +100,10 @@ export class ExclusiveInboundConsumers {
     return { accepted: true };
   }
 
+  has(botId) {
+    return this.#entries.has(botId);
+  }
+
   signalFor(botId, fingerprint) {
     const entry = this.#entries.get(botId);
     if (!entry) throw refusal('consumer-unavailable');

@@ -610,6 +610,8 @@ export class MultiBotDshFeishuController {
       this.#assertOpen('capability-unavailable');
       return { version: 1, botId, channel: 'feishu', account,
         connected: isConnected(connectionStatus(this.#runtimes.get(botId))),
+        superagent: config.superagent === true,
+        superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(botId),
         capabilities: ['proactive-text-checked', 'proactive-receipt-checked', 'exclusive-text-consumer', 'reply-text-checked', 'history-text-checked', 'thread-history-text-checked'] };
     });
   }
@@ -754,6 +756,49 @@ export class MultiBotDshFeishuController {
       this.#touch();
       return this.status(botId);
     });
+  }
+
+  /**
+   * Records or clears the operator's request to hand this bot's Feishu intake to
+   * superagent. Enabling only records the request: superagent registers through
+   * `consumeInbound`, which switches the runtime to external-consumer mode.
+   * Disabling releases any registered consumer and restores standalone chat.
+   */
+  async updateSuperagent(botId, superagent) {
+    this.#assertOpen();
+    if (typeof superagent !== 'boolean') throw new TypeError('Invalid Feishu superagent flag');
+    return this.#serializeConfig(() => this.#withBotTransition(botId, async () => {
+      const config = this.#requireBot(botId);
+      if (config.superagent === superagent) return this.status(botId);
+      if (superagent) {
+        await this.#configStore.saveBot({ ...config, superagent: true });
+        this.#touch();
+        return this.status(botId);
+      }
+      this.#inboundConsumers.remove(botId);
+      const saved = await this.#configStore.saveBot({ ...config, superagent: false, consumerMode: 'standalone' });
+      if (config.consumerMode === 'external-consumer') {
+        const resolved = await atConnectionStage('credential.read', () => this.#credentials.resolve(saved.secretRef), 'credential-store').catch(() => null);
+        if (!resolved?.value) {
+          this.#botErrors.set(botId, {
+            code: 'missing_credentials',
+            message: '机器人凭据缺失，请删除后重新扫码接入。',
+          });
+        } else {
+          try {
+            await this.#startRuntime(saved, resolved.value);
+            this.#botErrors.delete(botId);
+          } catch (error) {
+            this.#botErrors.set(botId, this.#diagnostics.report(error, { reuse: true, botId, stage: 'connection.start', publicError: {
+              code: 'connection_failed',
+              message: '机器人暂时无法连接飞书，请重试。',
+            } }).publicError);
+          }
+        }
+      }
+      this.#touch();
+      return this.status(botId);
+    }));
   }
 
   async updateGroupResponseMode(botId, groupResponseMode) {
@@ -928,6 +973,8 @@ export class MultiBotDshFeishuController {
         phase: botPhase({ connected, error, connection }),
         connected,
         configured: true,
+        superagent: config.superagent === true,
+        superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(config.id),
         groupResponseMode: normalizeFeishuGroupResponseMode(config.groupResponseMode),
         mentionTopicReply: config.mentionTopicReply !== false,
         stepPush: config.stepPush === true,
@@ -1495,10 +1542,16 @@ export class MultiBotDshFeishuController {
 
   async #startRuntime(config, appSecret) {
     await this.#stopRuntime(config.id);
+    // A persisted external-consumer mode survives a Host restart without its
+    // consumer. Keep the bot answering normally until superagent registers again.
+    const runtimeConfig = config.superagent === true && config.consumerMode === 'external-consumer'
+      && !this.#inboundConsumers.has(config.id)
+      ? { ...config, consumerMode: 'standalone' }
+      : config;
     let runtime;
     runtime = await atConnectionStage('runtime.prepare', () => this.#createRuntime({
       botId: config.id,
-      config,
+      config: runtimeConfig,
       appSecret,
       repair: this.#runtimeRepairCapability(config.id),
       acceptExternal: async (event, { signal } = {}) => {

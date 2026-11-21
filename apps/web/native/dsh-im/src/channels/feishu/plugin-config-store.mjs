@@ -41,6 +41,7 @@ function normalizeBot(value, { legacy = false } = {}) {
   return Object.freeze({
     id,
     consumerMode: value.consumerMode === 'external-consumer' ? 'external-consumer' : 'standalone',
+    superagent: value.superagent === true,
     appId,
     secretRef,
     ownerOpenIds: Object.freeze(ownerOpenIds),

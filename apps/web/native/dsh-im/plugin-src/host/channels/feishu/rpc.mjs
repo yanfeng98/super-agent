@@ -320,6 +320,8 @@ function publicBotEntry(entry) {
     accessPolicy: normalizeAccessPolicy(source.accessPolicy),
     conversationDirectory: normalizeConversationDirectory(source.conversationDirectory),
     conversationDirectoryOverride: normalizeConversationDirectory(source.conversationDirectoryOverride),
+    superagent: source.superagent === true,
+    superagentActive: source.superagentActive === true,
     groupResponseMode: normalizeFeishuGroupResponseMode(source.groupResponseMode),
     mentionTopicReply: source.mentionTopicReply !== false,
     stepPush: source.stepPush === true,
@@ -505,6 +507,13 @@ function validPayload(endpoint, payload) {
       && isFeishuGroupResponseMode(payload.groupResponseMode)
       ? null
       : '请选择群聊响应方式。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setSuperagent) {
+    return hasOnlyKeys(payload, new Set(['botId', 'superagent']))
+      && safeOpaqueId(payload.botId)
+      && typeof payload.superagent === 'boolean'
+      ? null
+      : '请选择是否交给 Superagent。';
   }
   if (endpoint === FEISHU_ENDPOINTS.setMentionTopicReply) {
     return hasOnlyKeys(payload, new Set(['botId', 'mentionTopicReply']))
@@ -849,6 +858,14 @@ export function createFeishuRpcHandler(controller, { encodeQr = qrCodeDataUrl } 
         }
         value = await toPublicFeishuStatus(
           await controller.updateGroupResponseMode(payload.botId, payload.groupResponseMode),
+          { encodeQr: cachedEncodeQr },
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setSuperagent) {
+        if (typeof controller.updateSuperagent !== 'function') {
+          throw new Error('Superagent mode update is unavailable');
+        }
+        value = await toPublicFeishuStatus(
+          await controller.updateSuperagent(payload.botId, payload.superagent),
           { encodeQr: cachedEncodeQr },
         );
       } else if (endpoint === FEISHU_ENDPOINTS.setMentionTopicReply) {

@@ -42,6 +42,7 @@ export const FEISHU_ENDPOINTS = Object.freeze({
   setAccessPolicy: "bot.access-policy.set",
   setAlias: 'bot.alias.set',
   setGroupResponseMode: "bot.group-response-mode.set",
+  setSuperagent: "bot.superagent.set",
   setMentionTopicReply: "bot.mention-topic-reply.set",
   setStepPush: "bot.step-push.set",
   setStepPushMode: "bot.step-push-mode.set",

@@ -11,6 +11,8 @@ function settingsFromResult(result, botId) {
   return {
     busyMessageMode: normalizeBusyMessageMode(bot.busyMessageMode),
     stepCardPanels: normalizeFeishuStepCardPanels(bot.stepCardPanels),
+    superagent: bot.superagent === true,
+    superagentActive: bot.superagentActive === true,
   };
 }
 
@@ -18,6 +20,7 @@ export function BotGeneralSettingsPage({ channel, account, rpcCall }) {
   const modeId = React.useId();
   const [settings, setSettings] = React.useState(() => ({
     busyMessageMode: 'queue', stepCardPanels: normalizeFeishuStepCardPanels(),
+    superagent: false, superagentActive: false,
   }));
   const [savedSettings, setSavedSettings] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -57,7 +60,8 @@ export function BotGeneralSettingsPage({ channel, account, rpcCall }) {
     setBusy(true);
     setFeedback(null);
     try {
-      const endpoint = field === 'stepCardPanels' ? FEISHU_ENDPOINTS.setStepCardPanels : SET_MESSAGE_MODE_ENDPOINT;
+      const endpoint = field === 'stepCardPanels' ? FEISHU_ENDPOINTS.setStepCardPanels
+        : field === 'superagent' ? FEISHU_ENDPOINTS.setSuperagent : SET_MESSAGE_MODE_ENDPOINT;
       const saved = settingsFromResult(await rpcCall(endpoint, {
         botId: account.botId, [field]: value,
       }), account.botId);
@@ -108,6 +112,22 @@ export function BotGeneralSettingsPage({ channel, account, rpcCall }) {
               ...settings.stepCardPanels, [field]: event.target.checked,
             }),
           })))) : null),
+      channel === 'feishu' ? h('div', { className: 'dim-botGeneralRow dim-botGeneralPanelRow' },
+        h('div', { className: 'dim-botGeneralText' },
+          h('label', { className: 'dim-botGeneralTitle', htmlFor: `${modeId}-superagent` }, '交给 Superagent'),
+          h('p', { className: 'dim-botGeneralHelp', id: `${modeId}-superagent-description` },
+            settings.superagent
+              ? settings.superagentActive
+                ? '已接管：这个机器人的消息进入 Superagent 工单。'
+                : '等待 Superagent 注册；期间保持普通对话。'
+              : '关闭时使用普通飞书对话。')),
+        h('div', { className: 'dim-botGeneralControl' },
+          h('input', {
+            id: `${modeId}-superagent`, type: 'checkbox', role: 'switch', className: 'dim-contextSwitch',
+            checked: settings.superagent, disabled: busy || savedSettings === null,
+            'aria-label': '交给 Superagent', 'aria-describedby': `${modeId}-superagent-description`,
+            onChange: (event) => void save('superagent', event.target.checked),
+          }))) : null,
     channel === 'feishu' ? h('p', { className: 'dim-botGeneralHelp dim-botGeneralPanelHelp', id: `${modeId}-panels-description` },
       '仅对实时过程卡生效，任务结束后自动收起。') : null,
     feedback ? h('p', {
