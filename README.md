@@ -42,6 +42,39 @@ pnpm dsh web
 
 需要后台常驻时用 `make web-bg`（tmux 会话 `dsh-web`，启动后打印带 token 的 URL），停止用 `make web-stop`。
 
+## 使用
+
+打开页面后先在**设置 → 模型**填入 DeepSeek API 密钥（或选择其他提供方、自定义 OpenAI 兼容端点），保存即生效、无需重启；再用**选择工作区**添加启动 `dsh` 的目录并选中，然后新建会话。未选中工作区时输入框不可用。
+
+- **直接描述任务**：Agent 会读取和修改工作区文件、运行命令、委派子智能体并维护计划；按当前权限策略需要审批的操作会先询问。
+- **在输入框输入 `/`** 打开技能菜单：内置 27 个工程工作流技能（其中 11 个按任务自动加载，16 个从这里点名），[`.agents/skills`](.agents/skills)、项目与用户目录中的同名技能优先覆盖。
+- **空草稿时按 ↑** 召回当前文件夹最近 100 条输入，`↑`、`↓` 前后浏览。
+- **插件**页查看已装与实验性插件、添加社区索引，见下一节。
+
+### 内置能力
+
+| 能力 | 入口与说明 |
+|---|---|
+| IM 机器人 | 设置页「IM bots」：微信、飞书、钉钉、企业微信、QQ、iMessage 与邮箱，`/goal`、`/plan` 是原生命令；见 [dsh-im NATIVE.md](apps/web/native/dsh-im/NATIVE.md) |
+| Superagent | 侧栏「Superagent」→「执行」→「新建工单」，默认只用本地工单、不需要远端账号；见[快速开始](apps/web/native/dsh-superagent/docs/006-deployment.md#quick-start) |
+| rust-anything | `standard` preset 的会话自带 16 个 `mcp__rust-anything__*` 工具，也可用 `/` 点名 `dsh-rust-anything`；见[使用指南](docs/user/guide/rust-anything.zh.md) |
+| 工程工作流技能 | `/` 菜单可点名 16 个，另 11 个按任务自动加载；见[使用指南](docs/user/guide/engineering-skills.zh.md)与[技能包](packages/skill/skill-engineering/README.zh.md) |
+| 启动片头 | 默认播放，点按钮或按 Esc 跳过；设置页可调序列参数、换用自己的片头视频，见[启动片头包](packages/client/ui-boot-animation/README.zh.md) |
+
+### 命令行模式
+
+```sh
+pnpm dsh web                          # 启动 Web UI，等同于 dsh --profile web
+pnpm dsh headless "跑一下测试"         # 一次性任务，打印结果后退出（需 DEEPSEEK_API_KEY）
+pnpm dsh --profile acp                # 通过 ACP stdio 为自动化客户端提供服务
+pnpm dsh --profile sdk                # 以 JSON-RPC SDK 服务方式启动
+pnpm dsh web --patch ./extra.yml      # 在 profile 之上再叠一层配置覆盖
+pnpm dsh web --dump-config            # 打印合成后的插件树后退出，用于排障
+pnpm dsh plugin --profile <名称> add <包名>   # 给已有 profile 安装插件
+```
+
+`web`、`headless`、`acp`、`sdk`、`sdk-minimal` 这些 profile 首次使用时会从随附模板初始化。桌面端用 `pnpm run dev:desktop`（先构建再启动）或 `pnpm run start:desktop`（复用已有产物）。各模式自己的参数用 `pnpm dsh <名称> --help` 查看；Python 集成见 [Python SDK 指南](docs/user/guide/python-sdk.zh.md)，其余命令见 [CLI 包说明](apps/cli/README.zh.md)。
+
 ## 查找插件
 
 社区插件目录：[DSH Marketplace](https://dshmarketplace.dev/)。它汇总 DeepSeek Harness 的第三方插件，提供安装命令、安装验证与公开 API。要在 DSH 内浏览：打开**插件**，在**实验性插件**下启用**自定义插件索引**，再到**发现**标签页点击**添加索引源**，填入 `https://dshmarketplace.dev/market/index.json`。列表不代表安全审查，安装前请阅读源码，并优先在一次性 profile 中验证；索引用法见[插件索引指南](docs/user/guide/plugin-market.zh.md)。
