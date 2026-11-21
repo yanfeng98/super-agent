@@ -321,6 +321,8 @@ describe('candidates: sessionId addressing', () => {
         shipped: true, upstream: 'mattpocock/skills',
       },
       { name: 'alpha-bundled', description: 'own text', source: 'bundled', shipped: true },
+      { name: 'sourced-bundled', description: 'bundled root', source: 'bundled' },
+      { name: 'runtime-shipped', description: 'shipped runtime', source: 'runtime', shipped: true },
       { name: 'runtime-one', description: 'runtime text', source: 'runtime', owner: 'dsh-superagent' },
       { name: 'runtime-orphan', description: 'unattributed runtime', source: 'runtime' },
       { name: 'custom-one', description: 'custom dir', source: 'custom' },
@@ -332,6 +334,8 @@ describe('candidates: sessionId addressing', () => {
     const items = await source.candidates(proj('s1'), req(''))
     expect(items.map(item => [item.section, item.name])).toEqual([
       ['内置', 'alpha-bundled'],
+      ['内置', 'sourced-bundled'],
+      ['内置', 'runtime-shipped'],
       ['内置 · mattpocock/skills', 'ported'],
       ['插件', 'runtime-orphan'],
       ['插件 · dsh-superagent', 'runtime-one'],

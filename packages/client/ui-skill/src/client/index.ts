@@ -115,9 +115,9 @@ function sectionOf(skill: SkillEntry, t: (key: SkillKey) => string): SkillSectio
       return { rank: SECTION_RANK.custom, title: t('menu.sourceCustom') }
     case 'bundled':
     case 'runtime': {
-      // A shipped provider is part of the harness; a plugin keeps its own
-      // heading, named by the project its text came from or by the plugin.
-      if (skill.shipped === true) {
+      // A bundled root or a shipped provider belongs to the harness; anything
+      // else was registered by a plugin, which names its own heading.
+      if (skill.source === 'bundled' || skill.shipped === true) {
         return { rank: SECTION_RANK.builtin, title: heading(t('menu.sourceBuiltin'), skill.upstream) }
       }
       const label = t('menu.sourcePlugin')

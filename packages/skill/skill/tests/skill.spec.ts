@@ -236,14 +236,33 @@ describe('SkillRegistry registry', () => {
           content: 'Declared body.',
           owner: 'declared-plugin',
         })
+        pluginCtx.skills.register({
+          name: 'shipped-runtime',
+          description: 'Ships with the harness.',
+          source: 'runtime',
+          content: 'Shipped body.',
+          shipped: true,
+        })
       },
+    })
+    // An anonymous `ctx.inject` callback carries the empty plugin name, so the
+    // registration has no owner to record.
+    await ctx.inject(['skills'], (scope: Context) => {
+      scope.skills.register({
+        name: 'anonymous',
+        description: 'Registered from an anonymous scope.',
+        source: 'runtime',
+        content: 'Anonymous body.',
+      })
     })
 
     const catalog = await ctx.skills.list()
     expect(catalog.map(skill => [skill.name, skill.owner, skill.shipped])).toEqual([
+      ['anonymous', undefined, undefined],
       ['declared', 'declared-plugin', undefined],
       ['provided', 'owner-plugin', true],
       ['registered', 'owner-plugin', undefined],
+      ['shipped-runtime', 'owner-plugin', true],
     ])
   })
 
