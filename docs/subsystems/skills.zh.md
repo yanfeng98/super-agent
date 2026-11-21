@@ -32,6 +32,12 @@ interface SkillProvider {
   /** Unique provider name in the `ctx.skills` registry. */
   readonly name: string
   /**
+   * Whether this provider ships with the harness rather than being an
+   * installed or vendored plugin. Human-facing catalogs group shipped skills
+   * apart from plugin skills.
+   */
+  readonly shipped?: boolean
+  /**
    * List available skill candidates for the current lookup context. Provider
    * plugins register synchronously during `apply()`; remote initialization,
    * authentication, and discovery are awaited inside this method. Implementations
@@ -126,6 +132,10 @@ interface SkillSummary {
    * skills with it.
    */
   readonly upstream?: string
+  /** Cordis plugin that contributed this skill, such as `dsh-superagent`. */
+  readonly owner?: string
+  /** Whether the contributing provider ships with the harness. */
+  readonly shipped?: boolean
   /** Provider-specific base for relative resources. */
   readonly resourceBase?: SkillResourceBase
 }

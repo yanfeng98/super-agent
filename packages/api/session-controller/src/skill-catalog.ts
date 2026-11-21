@@ -85,6 +85,8 @@ export class SessionSkillCatalog extends TypertRemoteService {
           modelInvocable: skill.invocation.modelInvocable,
           source: skill.source,
           ...skill.upstream === undefined ? {} : { upstream: skill.upstream },
+          ...skill.owner === undefined ? {} : { owner: skill.owner },
+          ...skill.shipped === undefined ? {} : { shipped: skill.shipped },
         })),
       }
     } catch (error: unknown) {

@@ -38,6 +38,8 @@ type SkillRow = {
   modelInvocable?: boolean
   source?: string
   upstream?: string
+  owner?: string
+  shipped?: boolean
 }
 type ListResult =
   | { ok: true; value: { skills: SkillRow[] } }
@@ -314,9 +316,13 @@ describe('candidates: sessionId addressing', () => {
     const catalog: SkillRow[] = [
       { name: 'zeta-project', description: 'project skill', source: 'project-agents' },
       { name: 'beta-user', description: 'user skill', source: 'user-dsh' },
-      { name: 'ported', description: 'upstream text', source: 'bundled', upstream: 'mattpocock/skills' },
-      { name: 'alpha-bundled', description: 'own text', source: 'bundled' },
-      { name: 'runtime-one', description: 'runtime text', source: 'runtime' },
+      {
+        name: 'ported', description: 'upstream text', source: 'bundled',
+        shipped: true, upstream: 'mattpocock/skills',
+      },
+      { name: 'alpha-bundled', description: 'own text', source: 'bundled', shipped: true },
+      { name: 'runtime-one', description: 'runtime text', source: 'runtime', owner: 'dsh-superagent' },
+      { name: 'runtime-orphan', description: 'unattributed runtime', source: 'runtime' },
       { name: 'custom-one', description: 'custom dir', source: 'custom' },
       { name: 'vendor-one', description: 'unknown root', source: 'vendor-skills' },
       { name: 'aea-project', description: 'agents root skill', source: 'project-dsh' },
@@ -327,7 +333,8 @@ describe('candidates: sessionId addressing', () => {
     expect(items.map(item => [item.section, item.name])).toEqual([
       ['内置', 'alpha-bundled'],
       ['内置 · mattpocock/skills', 'ported'],
-      ['插件', 'runtime-one'],
+      ['插件', 'runtime-orphan'],
+      ['插件 · dsh-superagent', 'runtime-one'],
       ['项目 · .agents/skills', 'zeta-project'],
       ['项目 · .dsh/skills', 'aea-project'],
       ['用户 · ~/.agents/skills', 'aga-user'],

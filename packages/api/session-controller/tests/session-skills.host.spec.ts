@@ -67,6 +67,7 @@ describe('SessionSkillCatalog', () => {
         path: '/cold/project/.agents/skills/review/SKILL.md',
         invocation: { modelInvocable: true, userInvocable: true },
         source: 'project-agents',
+        owner: 'skill-filesystem',
       },
       {
         name: 'model-only',
@@ -86,6 +87,7 @@ describe('SessionSkillCatalog', () => {
         path: '/cold/project/.agents/skills/review/SKILL.md',
         modelInvocable: true,
         source: 'project-agents',
+        owner: 'skill-filesystem',
       }],
     })
     expect(observeSession).toHaveBeenCalledWith(sessionId)
@@ -141,6 +143,8 @@ describe('SessionSkillCatalog', () => {
       invocation: { modelInvocable: false, userInvocable: true },
       source: 'bundled',
       upstream: 'mattpocock/skills',
+      owner: 'skill-engineering',
+      shipped: true,
     }]))
     const acquireScope = vi.fn()
     ctx.provide('agentPresets', {
@@ -156,6 +160,8 @@ describe('SessionSkillCatalog', () => {
         modelInvocable: false,
         source: 'bundled',
         upstream: 'mattpocock/skills',
+        owner: 'skill-engineering',
+        shipped: true,
       }],
     })
     expect(scopedList).toHaveBeenCalledWith({ cwd: '/live/current', scope: agent })

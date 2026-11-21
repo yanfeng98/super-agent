@@ -110,6 +110,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
   }
   ctx.skills.registerProvider(control => ({
     name: 'dsh-office',
+    shipped: true,
     async list(options) {
       const reads = await Promise.all(SKILL_NAMES.map(async skillName => ({ skillName, read: await readSkill(skillName, options.signal) })))
       const candidates: SkillCandidate[] = []

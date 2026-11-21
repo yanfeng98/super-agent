@@ -255,6 +255,10 @@ export interface SkillEntry {
   readonly source: string
   /** Project the skill text was taken from, such as `mattpocock/skills`. */
   readonly upstream?: string
+  /** Cordis plugin that contributed the skill, such as `dsh-superagent`. */
+  readonly owner?: string
+  /** Whether the contributing provider ships with the harness. */
+  readonly shipped?: boolean
 }
 
 /** Human-invocable skills visible through one Session's composition. */

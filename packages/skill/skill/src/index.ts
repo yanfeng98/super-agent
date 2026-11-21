@@ -78,6 +78,10 @@ export interface SkillSummary {
    * skills with it.
    */
   readonly upstream?: string
+  /** Cordis plugin that contributed this skill, such as `dsh-superagent`. */
+  readonly owner?: string
+  /** Whether the contributing provider ships with the harness. */
+  readonly shipped?: boolean
   /** Provider-specific base for relative resources. */
   readonly resourceBase?: SkillResourceBase
 }
@@ -257,6 +261,12 @@ export interface SkillProvider {
   /** Unique provider name in the `ctx.skills` registry. */
   readonly name: string
   /**
+   * Whether this provider ships with the harness rather than being an
+   * installed or vendored plugin. Human-facing catalogs group shipped skills
+   * apart from plugin skills.
+   */
+  readonly shipped?: boolean
+  /**
    * List available skill candidates for the current lookup context. Provider
    * plugins register synchronously during `apply()`; remote initialization,
    * authentication, and discovery are awaited inside this method. Implementations
@@ -313,6 +323,10 @@ interface IndexedCandidate {
   localOrder: number
   /** Owning layer, so a stale-definition invalidation can verify the exact registration is still live. */
   layer: SkillLayer
+  /** Contributing plugin recorded at registration, kept beside the borrowed candidate. */
+  owner?: string
+  /** Whether the owning provider declared that it ships with the harness. */
+  shipped?: boolean
 }
 
 /** One provider registration retained by its layer. */
@@ -320,6 +334,8 @@ interface RegisteredProvider {
   provider: SkillProvider
   /** Service-wide monotonic registration order, the within-layer rank tiebreak. */
   order: number
+  /** Cordis plugin that registered this provider, when its fiber names one. */
+  owner?: string
 }
 
 interface LayerCollectResult {
@@ -417,10 +433,11 @@ export class SkillRegistry extends Service {
       }
       const order = this.nextProviderOrder
       this.nextProviderOrder += 1
+      const owner = this.ctx.fiber.runtime?.name
       return this.layers.effect(
         this.ctx,
         (layer) => {
-          const undo = layer.providers.insert(name, { provider, order })
+          const undo = layer.providers.insert(name, { provider, order, ...owner === undefined ? {} : { owner } })
           registration = { layer, name }
           return () => {
             registration = undefined
@@ -453,10 +470,12 @@ export class SkillRegistry extends Service {
       this.ctx.logger.warn(`runtime skill "${skill.name}" ignored because it is already registered`)
       return () => {}
     }
+    const owner = this.ctx.fiber.runtime?.name
     const definition: SkillDefinition = {
       ...skill,
       invocation: skill.invocation ?? { modelInvocable: true, userInvocable: true },
       provider: skill.provider ?? RUNTIME_PROVIDER,
+      ...owner === undefined ? {} : { owner },
     }
     return this.layers.effect(
       this.ctx,
@@ -491,7 +510,11 @@ export class SkillRegistry extends Service {
     const collected = await this.collect(options)
     return {
       skills: [...collected.entries.values()]
-        .map(entry => toSummary(entry.candidate))
+        .map(entry => ({
+          ...toSummary(entry.candidate),
+          ...entry.owner === undefined ? {} : { owner: entry.owner },
+          ...entry.shipped === true ? { shipped: true } : {},
+        }))
         .sort(compareSkillSummary),
       complete: collected.cacheable,
     }
@@ -605,7 +628,7 @@ export class SkillRegistry extends Service {
       })
       runtimeOrder += 1
     }
-    for (const { provider, order } of [...layer.providers.values()]) {
+    for (const { provider, order, owner } of [...layer.providers.values()]) {
       let localOrder = 0
       let output: unknown
       try {
@@ -620,7 +643,15 @@ export class SkillRegistry extends Service {
       if (!observation.complete) cacheable = false
       for (const candidate of observation.candidates) {
         validateCandidate(candidate, provider.name)
-        candidates.push({ candidate, provider, providerOrder: order, localOrder, layer })
+        candidates.push({
+          candidate,
+          provider,
+          providerOrder: order,
+          localOrder,
+          layer,
+          ...owner === undefined ? {} : { owner },
+          ...provider.shipped === true ? { shipped: true } : {},
+        })
         localOrder += 1
       }
     }
@@ -706,6 +737,8 @@ function runtimeCandidate(skill: SkillDefinition): SkillCandidate {
     source: skill.source,
     provider: skill.provider,
     ...skill.upstream === undefined ? {} : { upstream: skill.upstream },
+    ...skill.owner === undefined ? {} : { owner: skill.owner },
+    ...skill.shipped === undefined ? {} : { shipped: skill.shipped },
     ...skill.resourceBase !== undefined ? { resourceBase: skill.resourceBase } : {},
     rank: RUNTIME_RANK,
     locator: skill,
@@ -777,7 +810,7 @@ function validateDefinition(skill: SkillDefinition): void {
 }
 
 function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
-  const { name, description, whenToUse, invocation, source, provider, upstream, resourceBase } = skill
+  const { name, description, whenToUse, invocation, source, provider, upstream, owner, shipped, resourceBase } = skill
   return {
     name,
     ...skill.path === undefined ? {} : { path: skill.path },
@@ -787,6 +820,8 @@ function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
     source,
     provider,
     ...upstream === undefined ? {} : { upstream },
+    ...owner === undefined ? {} : { owner },
+    ...shipped === undefined ? {} : { shipped },
     ...resourceBase !== undefined ? { resourceBase } : {},
   }
 }

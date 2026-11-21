@@ -196,6 +196,47 @@ describe('SkillRegistry registry', () => {
     expect((await ctx.skills.get('ported'))?.upstream).toBe('mattpocock/skills')
   })
 
+  it('records the contributing plugin and whether its provider ships with the harness', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    await ctx.plugin({
+      name: 'owner-plugin',
+      inject: ['skills'],
+      apply(pluginCtx: Context) {
+        pluginCtx.skills.registerProvider(() => ({
+          name: 'owner-provider',
+          shipped: true,
+          async list() {
+            return [{
+              name: 'provided',
+              description: 'Provided by the plugin.',
+              invocation: { modelInvocable: true, userInvocable: true },
+              provider: 'owner-provider',
+              source: 'bundled',
+              rank: 10,
+              locator: { content: 'Provided body.' },
+            }]
+          },
+          async get(candidate) {
+            return { ...candidate, content: (candidate.locator as { content: string }).content }
+          },
+        }))
+        pluginCtx.skills.register({
+          name: 'registered',
+          description: 'Registered in memory.',
+          source: 'runtime',
+          content: 'Registered body.',
+        })
+      },
+    })
+
+    const catalog = await ctx.skills.list()
+    expect(catalog.map(skill => [skill.name, skill.owner, skill.shipped])).toEqual([
+      ['provided', 'owner-plugin', true],
+      ['registered', 'owner-plugin', undefined],
+    ])
+  })
+
   it('returns an invocation-neutral catalog and resolves model and user policy independently', async () => {
     const ctx = new Context()
     await ctx.plugin(SkillRegistry)

@@ -174,6 +174,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.inject(['skills'], (scope) => {
     scope.skills.registerProvider(control => ({
       name: PROVIDER_NAME,
+      shipped: true,
       async list(options) {
         const reads = await Promise.all(SKILL_NAMES.map(async skillName => ({
           skillName, read: await readSkill(skillName, options.signal),

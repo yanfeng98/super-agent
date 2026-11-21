@@ -102,22 +102,27 @@ const ROOT_LABELS: Readonly<Record<string, string>> = {
 function sectionOf(skill: SkillEntry, t: (key: SkillKey) => string): SkillSection {
   const heading = (label: string, source?: string): string =>
     source === undefined ? label : `${label} · ${source}`
-  if (skill.upstream !== undefined) {
-    return { rank: SECTION_RANK.builtin, title: heading(t('menu.sourceBuiltin'), skill.upstream) }
+  const root = ROOT_LABELS[skill.source]
+  if (root !== undefined) {
+    const user = skill.source.startsWith('user-')
+    return {
+      rank: user ? SECTION_RANK.user : SECTION_RANK.project,
+      title: heading(t(user ? 'menu.sourceUser' : 'menu.sourceProject'), root),
+    }
   }
   switch (skill.source) {
-    case 'bundled':
-      return { rank: SECTION_RANK.builtin, title: t('menu.sourceBuiltin') }
-    case 'runtime':
-      return { rank: SECTION_RANK.plugin, title: t('menu.sourcePlugin') }
-    case 'project-dsh':
-    case 'project-agents':
-      return { rank: SECTION_RANK.project, title: heading(t('menu.sourceProject'), ROOT_LABELS[skill.source]) }
-    case 'user-dsh':
-    case 'user-agents':
-      return { rank: SECTION_RANK.user, title: heading(t('menu.sourceUser'), ROOT_LABELS[skill.source]) }
     case 'custom':
       return { rank: SECTION_RANK.custom, title: t('menu.sourceCustom') }
+    case 'bundled':
+    case 'runtime': {
+      // A shipped provider is part of the harness; a plugin keeps its own
+      // heading, named by the project its text came from or by the plugin.
+      if (skill.shipped === true) {
+        return { rank: SECTION_RANK.builtin, title: heading(t('menu.sourceBuiltin'), skill.upstream) }
+      }
+      const label = t('menu.sourcePlugin')
+      return { rank: SECTION_RANK.plugin, title: heading(label, skill.upstream ?? skill.owner) }
+    }
     // SkillSource is merge-extensible: a provider outside the known roots
     // labels its own group with the source it reported.
     default:
