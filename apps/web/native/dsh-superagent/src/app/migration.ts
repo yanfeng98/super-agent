@@ -280,6 +280,7 @@ function legacyText(value: string): string {
   return currentNames(result.replaceAll('reply_to_event_id', 'reply_to_trigger_id').replace(/\bevent_id\b/g, 'trigger_id').replace(/\btask_id\b/g, 'ticket_id')
     .replaceAll('related_tasks', 'related_tickets').replace(/(?<![\w/-])event\//g, 'trigger/').replace(/(?<![\w/-])task\//g, 'ticket/').replaceAll('<event-id>', '<trigger-id>')
     .replace(/\bguide\/([a-z][a-z0-9-]*)\b/g, (_match, name: string) => LEGACY_FIXED.has(name) ? `the ${name} section` : `skill dsh-superagent-${name}`))
+    .replace(/\bthe github section\b/g, 'the repository guidance').replace(/\bdsh-superagent-github\b/g, 'the repository guidance')
 }
 /**
  * Upgrade a stored prompt configuration to current sections, tool names, and skill references; legacy configurations take
@@ -357,7 +358,7 @@ export function ticketOf(old: Stored, answers = new Map<string, string[]>(), hum
   const inputs = ticket.inputs.map((input): TicketInput => input.kind === 'trigger' ? { ...input, ...human(input.triggerId) ? { human: true } : {} }
     : input.kind !== 'reopen' || !ticket.undelivered.includes(input.id) ? input
     : { id: input.id, kind: 'text', at: input.at, text: JSON.stringify({ resumed: true, decision_id: input.decisionId, read: `ticket/${ticket.id}/assignment`,
-      note: 'This ticket ended earlier and a follow-up resumed it under the same mandate. Inspect the worktree, git history and PR state before continuing; do not repeat completed external operations.' }) })
+      note: 'This ticket ended earlier and a follow-up resumed it under the same mandate. Inspect the worktree and git history before continuing; do not repeat completed external operations.' }) })
   const reported = [...new Set([...ticket.answers ?? [], ...answers.get(ticket.id) ?? []])]
   const ended = ticket.ended && { ...ticket.ended, outcome: ticket.ended.outcome ?? outcomeOf(ticket.ended) }
   const mandate = { ...ticket.mandate, basis: basisOf(ticket.mandate.basis as unknown) }

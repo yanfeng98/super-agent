@@ -126,7 +126,7 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   const threads = named.threads.flatMap(key => { const thread = store.threads.get(key); return thread ? [threadSummary(view, thread)]
     : [] })
   const lower = value.toLowerCase()
-  // Match tickets by threads they own (e.g., bound PRs) or subscribe to, by title, by their latest result, and by a reply
+  // Match tickets by threads they own or subscribe to, by title, by their latest result, and by a reply
   // whose text the archive also holds, so searching a phrase an agent wrote finds the ticket.
   const reaches = (ticket: Ticket) => [...(ticket.follows ?? []).map(follow => follow.thread),
     ...view.threadsOf(ticket.id).map(thread => thread.key)]

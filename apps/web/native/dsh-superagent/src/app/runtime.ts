@@ -1573,15 +1573,22 @@ export class Runtime extends Service implements SourceHost {
     for (const ticket of this.store.tickets.list()) {
       const origin = ticket.origin?.triggerId ? this.store.triggers.get(ticket.origin.triggerId)?.source : undefined
       const githubOrigin = origin !== undefined && removed.has(origin)
-      if (!ticket.follows?.length && !ticket.ciNotice && !githubOrigin && !(ticket.channels ?? []).some(channel => removed.has(channel.source))) continue
+      const githubFollow = !!ticket.follows?.some(follow => follow.thread.startsWith('github:'))
+      if (!githubFollow && !ticket.ciNotice && !githubOrigin && !(ticket.channels ?? []).some(channel => removed.has(channel.source))) continue
       this.store.atomic(() => {
         const current = this.store.tickets.get(ticket.id)
         if (!current) return
         const channels = (current.channels ?? []).filter(channel => !removed.has(channel.source))
-        const bound = githubOrigin || !!current.follows?.length || (current.channels ?? []).some(channel => removed.has(channel.source))
+        const followsGitHub = !!current.follows?.some(follow => follow.thread.startsWith('github:'))
+        const bound = githubOrigin || followsGitHub || (current.channels ?? []).some(channel => removed.has(channel.source))
         if (bound) stale.add(current.id)
         if (!bound && !current.ciNotice && channels.length === (current.channels ?? []).length) return
-        if (current.follows) delete current.follows
+        // Only GitHub follows are removed; a custom Source's thread bindings stay.
+        if (current.follows) {
+          const follows = current.follows.filter(follow => !follow.thread.startsWith('github:'))
+          if (follows.length) current.follows = follows
+          else delete current.follows
+        }
         // A standing merge from a GitHub-bound ticket must not act on the local repository; a local standing merge stays.
         if (bound && current.autoMerge) delete current.autoMerge
         if (current.ciNotice) delete current.ciNotice
