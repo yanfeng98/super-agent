@@ -53,3 +53,7 @@ Recorded 24 cases (20 threw) in …/cases.jsonl
 ```
 
 `record` 的产物里包含 `{"fn":"sum","args":[null],"error":"Cannot read properties of null (reading 'reduce')"}` 这类真实运行结果，说明它确实把目标函数跑了起来，而不是静态分析。bridge 只写文件、不编译，也不会执行目标代码。
+
+## 6. 后续更正
+
+本轮写下的两处事实有误，已由 [日志 00107](00107-README使用章节自查.md) 更正：`record` 没有 `--test-command` 选项（实际是 `--from-tests -- <命令>`），profile 的 `--patch` 也触达不到 preset 内的 `mcp-rust-anything` 行（改为删除 `standard.patch.yml` 中该行）。本节保留原样作为当时的记录。
