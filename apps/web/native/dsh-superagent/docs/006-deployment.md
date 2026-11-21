@@ -4,11 +4,11 @@ Use this guide to install, configure and operate dsh-superagent. It covers the o
 
 ## Built-in copy
 
-This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source on and Feishu off. Setup needs no repository and no account: work starts from the panel or the main Session (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the Policy and Execution in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation and its operations, which apply to the built-in copy too.
+This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source on and Feishu off. Restart an already running `pnpm dsh web` after a rebuild so the host loads the new plugin build. This build has no GitHub Source: there is no repository connection, pull request or PR CI, and review and merge are local. Setup needs no repository and no account: work starts from the panel or the main Session (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the Policy and Execution in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation and its operations, which apply to the built-in copy too.
 
 ### Quick start
 
-1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), and open **Superagent** in the sidebar.
+1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), restarting it if it is already running, and open **Superagent** in the sidebar.
 2. In **Settings → Execution**, set the directory root and, when the work needs files, a prepare command that creates a worktree per Ticket (see the prepare-command example under Settings below). The default root is `<stateDir>/work`.
 3. Create the first ticket under **Execution → New ticket**, or ask the main Session in the DSH chat. The first request seeds the local Source's Policy part with the operator on the allowed list, so no extra configuration is needed.
 4. Optionally enable Feishu (see Enabling Feishu) and mention the bot in a configured chat.

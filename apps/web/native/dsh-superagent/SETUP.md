@@ -1,6 +1,6 @@
 # SETUP
 
-> **Built-in copy:** this checkout already mounts dsh-superagent in its Web profile. Skip the install, profile and plugin steps. The local Source creates tickets in the panel under **Execution → New ticket** and needs no repository or account; Feishu is optional, and its bot preparation below applies only when the operator wants it.
+> **Built-in copy:** this checkout already mounts dsh-superagent in its Web profile. Skip the install, profile and plugin steps. The local Source creates tickets in the panel under **Execution → New ticket** and needs no repository, account or GitHub setup; Feishu is optional, and its bot preparation below applies only when the operator wants it.
 
 Instructions for an agent that sets up dsh-superagent with its operator. If you are a person, ask your coding agent to read this file and follow it.
 
