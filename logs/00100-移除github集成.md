@@ -45,3 +45,4 @@
 - 通用 `Follow`/`ticket.follows`/`bindThread`/`threadClosed` 仍保留在 core，作为 Source 无关的线程订阅能力；GitHub 不再产生它们。`TicketOutcome` 的 `merged`/`closed` 也保留用于读取旧记录。
 - 并发会话当时正在修改 `.github/workflows/*` 与 `.gitignore`；这些不属于本次改动，也未纳入本次提交。
 - `tests/environment.spec.ts` 仍用 GitHub URL 作为“操作者全局 git 配置”的样例，验证 worker 不继承该配置；这是隔离测试数据，不是 GitHub 集成。
+- 审计后补充：启动清理同时去掉旧 ticket 的 GitHub channels/follows 与 `github-issue` 设置，避免旧 ticket 等待一个已不存在的 Source；删除迁移里已无作用的 `prompt-settings-text` 早退。

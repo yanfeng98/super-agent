@@ -309,7 +309,6 @@ function migratePrompts(store: Store): void {
     store.set(`prompt-version:${version.revision}`, { ...version, config, ...kept })
     readable = config
   }
-  if (store.get('prompt-settings-text') === 1) return
 }
 
 const CELLS: readonly string[] = ['listedUnaddressed', 'unlistedAddressed', 'unlistedUnaddressed']
@@ -368,7 +367,7 @@ export function ticketOf(old: Stored, answers = new Map<string, string[]>(), hum
     // A ticket stopped by a person receives no further work, so clear any undelivered inputs.
     ...ended?.by === 'human' ? { undelivered: [] } : {},
     ...kept ? { execution: kept } : {}, ...delivery ? { delivery } : {},
-    channels: ticket.channels.filter(channel => channel.source !== 'github'),
+    channels: ticket.channels.filter(channel => channel.source !== 'github' && channel.source !== 'github-issue'),
     ...reported.length ? { answers: reported } : {} }
 }
 /**

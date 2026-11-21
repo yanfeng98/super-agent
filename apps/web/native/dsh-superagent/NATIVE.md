@@ -307,7 +307,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     reads only Thread context; `orchestrator_read` exposes `feishu/` originals and no `github/` resources; and the merge
     gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
     containment, rebase, queue and the post-merge target check. The schema 11 migration drops GitHub settings and keys
-    from a schema 10 database, and a startup sweep drops the same data when a database still holds it; a database already
+    from a schema 10 database, and a startup sweep drops the same data and strips GitHub channels/follows from old
+    tickets when a database still holds them; a database already
     at schema 11 needs no migration for this, and this code reads no GitHub data. `tests/local.spec.ts`,
     `tests/migration.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and `tests/merge.spec.ts` cover it.
 
