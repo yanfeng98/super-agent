@@ -137,8 +137,8 @@
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
-          # rust-anything: verified, unit-by-unit ports to Rust. The CLI ships in
-          # the plugin's own npm dependency, so `pnpm install` is the only setup.
+          # rust-anything: verified, unit-by-unit ports to Rust. `pnpm run build`
+          # compiles the CLI from the crate vendored at native/rust-anything.
           - id: mcp-rust-anything
             name: '@deepseek-ai/dsh-rust-anything'
             config:

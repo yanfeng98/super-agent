@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for rust-anything.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/guide/rust-anything.md
+/port-code-to-rust-with-rust-anything:
+  en: 014c3b637b5ed000
+  zh: 79dff171a38f1832
+/port-code-to-rust-with-rust-anything/what-ships:
+  en: d20f2db2f2cb6acd
+  zh: ec44fb37e64e9f1f
+/port-code-to-rust-with-rust-anything/before-the-first-session:
+  en: 7191a4f496b4fb13
+  zh: 8c6cd54d436dbb5f
+/port-code-to-rust-with-rust-anything/ask-for-a-port:
+  en: 47cb239fe7390e58
+  zh: 0c376f2080890345
+/port-code-to-rust-with-rust-anything/what-it-leaves-behind:
+  en: d76ce620a1417af9
+  zh: 993f1856c35c679f
+/port-code-to-rust-with-rust-anything/use-the-cli-directly:
+  en: f1d4dcb8af448ebf
+  zh: 19d1772ffb9efb65
+/port-code-to-rust-with-rust-anything/tune-it:
+  en: d1f1cebec5b9e48f
+  zh: 202c564b29ff7de4
+/port-code-to-rust-with-rust-anything/costs-and-limits:
+  en: df733c648e9c30cb
+  zh: 85caee8df66634ba
+/port-code-to-rust-with-rust-anything/when-something-is-missing:
+  en: 597479d52c81b7b0
+  zh: 04efbc0d6dd5ac32

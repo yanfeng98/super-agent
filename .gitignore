@@ -38,6 +38,8 @@ python/**/__pycache__/
 python/**/.pytest_cache/
 packages/**/__pycache__/
 apps/web/dist/
+native/rust-anything/target/
+native/rust-anything/bin/
 apps/cli/docs/
 .artifacts/
 .dsh-build/

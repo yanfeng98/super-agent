@@ -117,6 +117,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           clean: true
+      - uses: ./.github/actions/setup-rust
 
       - name: Configure runner-private caches
         run: |

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.erkamyaman/rust-anything",
+  "title": "rust-anything",
+  "description": "Rewrite an app in Rust one piece at a time, checked against the original's recorded behavior.",
+  "repository": {
+    "url": "https://github.com/erkamyaman/rust-anything",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/erkamyaman/rust-anything",
+  "version": "2.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "rust-anything",
+      "version": "2.1.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

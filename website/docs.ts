@@ -202,6 +202,14 @@ const homeAndGuide = pairedPages([
     section: { root: '集成', en: 'Integrations' },
     order: 1,
   },
+  {
+    source: 'docs/user/guide/rust-anything.md',
+    route: 'guide/rust-anything.md',
+    label: { root: '迁移到 Rust', en: 'Port to Rust' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '集成', en: 'Integrations' },
+    order: 3,
+  },
 ])
 
 const develop = pairedPages([

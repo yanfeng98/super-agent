@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- Side effects: a rewrite that prints the same output but sends each email twice fails replay.
+     Every line of output is copied from a real run of rust-anything 2.0.0 (paths shortened).
+     Render with `node scripts/gifs.mjs effects`. -->
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #0b0d10; }
+  .win { width: 1100px; height: 620px; margin: 0; background: #111317; border: 1.5px solid #262a31; border-radius: 14px; overflow: hidden; font: 15.5px/1.55 "JetBrains Mono", monospace; color: #c9ced6; }
+  .bar { height: 34px; background: #16191e; border-bottom: 1px solid #262a31; display: flex; align-items: center; gap: 8px; padding: 0 14px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .title { margin-left: 12px; font: 13px Inter, sans-serif; color: #8b9099; }
+  .screen { height: 586px; padding: 16px 20px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  pre { margin: 0; white-space: pre-wrap; font: inherit; }
+  .p { color: #3fb950; } .c { color: #f2f2f2; } .m { color: #8b9099; } .o { color: #e8892f; font-weight: 700; } .g { color: #3fb950; } .w { color: #f2f2f2; }
+  .cur { background: #c9ced6; color: #111317; }
+</style></head><body>
+<div class="win"><div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="title">~/signup · rust-anything</span></div><div class="screen"><pre id="t"></pre></div></div>
+<script>
+const P = '<span class="p">~/signup $</span> '
+const script = [
+  ['cmd', '<span class="m"># notify.py posts a webhook and sends one welcome email per signup</span>', true],
+  ['cmd', 'rust-anything app record . --effects smtp --effect-env WEBHOOK_URL=http-url -- python3 notify.py'],
+  ['out', 'Recorded 2 cases in rust/app-cases (0 from examples, 2 from inputs, 0 traps)'],
+  ['pause', 14],
+  ['cmd', '<span class="m"># rewrite.py prints exactly the same thing, but mails twice</span>', true],
+  ['cmd', 'rust-anything app replay . --build "python3 rewrite.py"'],
+  ['out', '<span class="o">0/2 cases passed</span>'],
+  ['out', '- alice: <span class="o">effects</span>'],
+  ['out', '- bob: <span class="o">effects</span>'],
+  ['out', 'Report: rust/app-cases/replay-report.md'],
+  ['pause', 12],
+  ['cmd', 'sed -n 19,25p rust/app-cases/replay-report.md'],
+  ['out', '  MIME-Version: 1.0'],
+  ['out', '  '],
+  ['out', '  hi alice'],
+  ['out', '<span class="o">+ smtp from &lt;app@example.test&gt; to &lt;alice@example.test&gt;</span>'],
+  ['out', '<span class="o">+ From: app@example.test</span>'],
+  ['out', '<span class="o">+ To: alice@example.test</span>'],
+  ['out', '<span class="o">+ Subject: welcome</span>'],
+  ['pause', 50],
+]
+// Frames: each typed character of a command is one frame (two characters per frame for long
+// lines), each output line one frame.
+const frames = []
+let done = []
+for (const [kind, text, instant] of script) {
+  if (kind === 'pause') { for (let i = 0; i < text; i++) frames.push(done.join('\n') + '\n' + P + '<span class="cur"> </span>'); continue }
+  if (kind === 'out') { done.push(text); frames.push(done.join('\n')); continue }
+  if (instant) { done.push(P + text); frames.push(done.join('\n')); frames.push(done.join('\n')); continue }
+  const step = text.length > 40 ? 2 : 1
+  for (let i = 0; i <= text.length; i += step) frames.push([...done, P + '<span class="c">' + text.slice(0, i) + '</span><span class="cur"> </span>'].join('\n'))
+  for (let i = 0; i < 4; i++) frames.push([...done, P + '<span class="c">' + text + '</span>'].join('\n'))
+  done.push(P + '<span class="c">' + text + '</span>')
+}
+window.frameCount = frames.length
+window.render = i => { document.getElementById('t').innerHTML = frames[i] }
+render(0)
+</script></body></html>

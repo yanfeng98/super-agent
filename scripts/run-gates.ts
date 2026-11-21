@@ -748,8 +748,10 @@ function coverageGates(platform: NodeJS.Platform = process.platform): Gate[] {
     })
   return [
     pnpmScript('native-system', 'build:native-system'),
+    // The mount suite spawns the CLI the vendored crate builds.
+    pnpmScript('rust-anything', 'build:rust-anything'),
     ...electron,
-    { ...instrumented, needs: ['native-system', ...electron.map(gate => gate.id)] },
+    { ...instrumented, needs: ['native-system', 'rust-anything', ...electron.map(gate => gate.id)] },
     pnpmExec('coverage-exempt-heavy', [
       'vitest',
       'run',
@@ -771,9 +773,10 @@ function coverageGates(platform: NodeJS.Platform = process.platform): Gate[] {
 function ciUnitGates(): Gate[] {
   return [
     pnpmScript('native-system', 'build:native-system'),
+    pnpmScript('rust-anything', 'build:rust-anything'),
     pnpmExec('unit', ['vitest', 'run'], {
       label: 'test',
-      needs: ['native-system'],
+      needs: ['native-system', 'rust-anything'],
       streamOutput: true,
     }),
   ]

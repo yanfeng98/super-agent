@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-rust-anything",
-  "description": "Mounts the rust-anything MCP server (verified, unit-by-unit ports to Rust) with its CLI resolved from this package's own dependency",
+  "description": "Mounts the rust-anything MCP server (verified, unit-by-unit ports to Rust) from the crate vendored at native/rust-anything",
   "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
@@ -31,9 +31,6 @@
     "src"
   ],
   "license": "MIT",
-  "dependencies": {
-    "rust-anything": "2.1.0"
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-mcp-client": "workspace:*"

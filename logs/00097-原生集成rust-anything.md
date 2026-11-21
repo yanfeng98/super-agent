@@ -1,5 +1,7 @@
 # 00097 — 原生集成 rust-anything 迁移能力
 
+> 后续：[`logs/00099`](00099-源码vendored集成rust-anything.md) 把 CLI 从 npm 依赖改为仓库内 vendored 源码 + 现场编译；本文记录的注册、挂载点与 preset 取舍仍然有效。
+
 - **日期**：2026-11-21
 - **背景**：用户要求 clone 本仓库即可使用 [rust-anything](https://github.com/erkamyaman/rust-anything)，不要 `npm i -g` / `cargo install` 这类独立安装，也不要每台机器手改 profile。目标形态是：`pnpm install && pnpm dsh web` 之后，Web 默认会话直接能调用它的迁移工具。
 - **范围**：新增 `packages/mcp/rust-anything`；`packages/bundle/web-app`（依赖 + `presets/standard.patch.yml`）；`.agents/skills/rust-anything/`；`web-app` 之外还改了 `tsconfig.base.json`、`tsconfig.host.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`docs/module-graph*.md`、`packages/mcp/README*`。

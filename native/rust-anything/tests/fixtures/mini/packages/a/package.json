@@ -1,0 +1,1 @@
+{ "name": "a", "dependencies": { "yaml": "*", "svelte": "*" } }

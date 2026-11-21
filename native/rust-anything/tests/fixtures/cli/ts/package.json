@@ -1,0 +1,6 @@
+{
+  "name": "tcli",
+  "version": "0.0.0",
+  "private": true,
+  "bin": { "tcli": "tcli.js" }
+}

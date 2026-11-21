@@ -2,20 +2,19 @@
  * Mounts the rust-anything MCP server: verified, unit-by-unit ports of
  * TypeScript/JavaScript, Python, C, Go, Ruby, Java and Kotlin code to Rust.
  *
- * The CLI is resolved from this package's own `rust-anything` dependency
- * (`binaries/<platform>-<arch>/rust-anything`), so a checkout that ran
- * `pnpm install` needs no global install. `command` or `RUST_ANYTHING_BIN`
- * overrides the resolved binary.
+ * The CLI is compiled from the crate vendored at `native/rust-anything` by
+ * `pnpm run build`, which stages `bin/rust-anything` for the checkout. A
+ * checkout that ran that build needs no global install and no published
+ * binary; `command` or `RUST_ANYTHING_BIN` overrides the staged executable.
  *
  * @module @deepseek-ai/dsh-rust-anything
  */
 
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
-
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
+
+import { resolveCommand } from './binary.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'rust-anything'
@@ -34,7 +33,7 @@ const DEFAULT_STARTUP_TIMEOUT_MS = 20 * 1000
 
 /** Plugin config: an explicit executable plus the transport budgets. */
 export interface Config {
-  /** Executable to run instead of the bundled platform binary. */
+  /** Executable to run instead of the staged vendored build. */
   command?: string
   /**
    * `eager` puts all 16 tool schemas in every request; `on-demand` lists them
@@ -59,29 +58,6 @@ export const Config: z<Partial<Config>, Config> = z.object({
 })
 
 /**
- * The platform binary shipped inside the `rust-anything` npm package.
- * @param platform - `process.platform`.
- * @param arch - `process.arch`.
- * @returns Absolute path; the caller does not check that it exists.
- */
-export function bundledBinary(platform: string, arch: string): string {
-  const executable = platform === 'win32' ? 'rust-anything.exe' : 'rust-anything'
-  const packageDirectory = dirname(createRequire(import.meta.url).resolve('rust-anything/package.json'))
-  return join(packageDirectory, 'binaries', `${platform}-${arch}`, executable)
-}
-
-/**
- * The command to start: the configured executable, `RUST_ANYTHING_BIN`, else
- * the binary this package installed.
- * @param config - resolved plugin config.
- * @param env - environment to read `RUST_ANYTHING_BIN` from.
- * @returns Executable path or command name.
- */
-export function resolveCommand(config: Config, env: NodeJS.ProcessEnv = process.env): string {
-  return config.command ?? env.RUST_ANYTHING_BIN ?? bundledBinary(process.platform, process.arch)
-}
-
-/**
  * Connect the rust-anything MCP server and publish its tools.
  * @param ctx - plugin context carrying the tool registry.
  * @param config - resolved plugin config.
@@ -90,7 +66,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   await ctx.plugin(McpClient, {
     serverName: 'rust-anything',
     transport: 'stdio',
-    command: resolveCommand(config),
+    command: resolveCommand(config.command),
     args: ['mcp'],
     toolLoading: config.toolLoading,
     toolCallTimeoutMs: config.toolCallTimeoutMs,

@@ -151,6 +151,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/setup-rust
 
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
       # the root partition's /tmp before the first pnpm call in this lane.
@@ -201,6 +202,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7.0.1
+      - uses: ./.github/actions/setup-rust
 
       - uses: pnpm/action-setup@v5.0.0
         with:
@@ -240,6 +242,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7.0.1
+      - uses: ./.github/actions/setup-rust
 
       - name: Enable Developer Mode (symlink support)
         shell: pwsh
@@ -477,6 +480,7 @@ jobs:
             workers: '2'
     steps:
       - uses: actions/checkout@v7.0.1
+      - uses: ./.github/actions/setup-rust
 
       - uses: pnpm/action-setup@v5.0.0
         with:

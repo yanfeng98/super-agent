@@ -1,0 +1,1 @@
+{ "name": "@m/a", "type": "module", "exports": { ".": "./dist/index.mjs" } }

@@ -118,6 +118,7 @@ jobs:
           persist-credentials: false
           clean: true
           ref: ${{ inputs.source_ref }}
+      - uses: ./.github/actions/setup-rust
       - name: Validate selected source and adapter support
         run: >-
           node -e "const fs=require('node:fs'); const ref=process.env.PACKAGE_SOURCE_REF;

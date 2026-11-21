@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-与 DeepSeek Harness 一同维护的原生源码和公开包。[`system/` workspace](system/README.zh.md) 负责 Landlock 启动器、POSIX flock 绑定、平台包和[发布流程](system/docs/release.md)。
+与 DeepSeek Harness 一同维护的原生源码和公开包。[`system/` workspace](system/README.zh.md) 负责 Landlock 启动器、POSIX flock 绑定、平台包和[发布流程](system/docs/release.md)。[`rust-anything/` 子树](rust-anything/NATIVE.md) 是源码 vendored 的迁移 CLI，Web `standard` preset 挂载它的 MCP server，`pnpm run build` 在此现场编译。
 
 ## Workspace 与发布边界
 

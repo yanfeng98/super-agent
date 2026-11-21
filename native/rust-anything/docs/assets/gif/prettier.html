@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- Prettier against its Rust port on the 59 real files of ms, Fuse.js and json-server, one CLI
+     process per file. Times are the measured totals (Apple M4, docs/real-world.md#prettier:
+     3.63 s and 0.20 s, every output identical). Render with node scripts/gifs.mjs prettier -->
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #0b0d10; }
+  .frame { width: 1100px; padding: 26px 28px 22px; box-sizing: border-box; background: #0b0d10; font-family: Inter, -apple-system, sans-serif; color: #e9ebee; }
+  .title { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 18px; }
+  .title span { color: #ff8a3d; }
+  .cols { display: flex; gap: 22px; }
+  .panel { flex: 1; background: #111317; border: 1.5px solid #262a31; border-radius: 16px; padding: 20px 22px 18px; }
+  .rs.panel { border-color: #5a3418; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .name { font-size: 21px; font-weight: 700; }
+  .tag { font-size: 14px; color: #8b9099; }
+  .cmd { margin-top: 12px; font: 15px "JetBrains Mono", Menlo, monospace; color: #8b9099; }
+  .cmd b { color: #e9ebee; font-weight: 400; }
+  .time { font: 700 56px "JetBrains Mono", Menlo, monospace; margin-top: 14px; letter-spacing: -1px; }
+  .ts .time { color: #e9ebee; } .rs .time { color: #ff8a3d; }
+  .files { margin-top: 4px; font-size: 16px; color: #b9bdc4; height: 22px; }
+  .bar { margin-top: 14px; height: 16px; background: #1b1e24; border-radius: 8px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 8px; }
+  .ts .fill { background: #8b9099; } .rs .fill { background: #ff8a3d; }
+  .done { margin-top: 14px; height: 24px; font-size: 17px; font-weight: 600; color: #63c3a7; }
+  .foot { margin-top: 18px; text-align: center; font-size: 19px; color: #b9bdc4; height: 28px; }
+  .foot b { color: #ff8a3d; }
+</style></head><body><div class="frame" id="f"></div>
+<script>
+const FILES = 59, PRETTIER = 3.63, RUST = 0.20
+const fps = 15, intro = 12, run = Math.ceil(PRETTIER * fps), hold = 60
+window.frameCount = intro + run + hold
+function panel(cls, name, tag, cmd, elapsed, total) {
+  const t = Math.min(elapsed, total)
+  const files = Math.min(FILES, Math.floor(FILES * t / total))
+  const finished = elapsed >= total
+  return '<div class="panel ' + cls + '"><div class="head"><span class="name">' + name + '</span><span class="tag">' + tag + '</span></div>' +
+    '<div class="cmd">$ <b>' + cmd + '</b></div>' +
+    '<div class="time">' + t.toFixed(2) + ' s</div>' +
+    '<div class="files">' + (finished ? FILES : files) + ' / ' + FILES + ' files formatted</div>' +
+    '<div class="bar"><div class="fill" style="width:' + (100 * t / total) + '%"></div></div>' +
+    '<div class="done">' + (finished ? '✓ done' : '') + '</div></div>'
+}
+window.render = i => {
+  const elapsed = Math.max(0, (i - intro) / fps)
+  const over = elapsed >= PRETTIER
+  const foot = over
+    ? 'Same output, byte for byte, on all 59 files: <b>18x faster</b>'
+    : elapsed >= RUST ? 'Rust is done. Prettier is still going…' : 'Formatting the real files of ms, Fuse.js and json-server'
+  document.getElementById('f').innerHTML =
+    '<div class="title">Prettier, ported to Rust with <span>rust-anything</span></div><div class="cols">' +
+    panel('ts', 'Prettier', 'Node 24', 'prettier &lt;file&gt;', elapsed, PRETTIER) +
+    panel('rs', 'Rust port', 'one binary', 'prettier-rs &lt;file&gt;', elapsed, RUST) +
+    '</div><div class="foot">' + foot + '</div>'
+}
+render(0)
+</script></body></html>

@@ -14,7 +14,7 @@ const kitRepositoryUrl = new RegExp(`\\bgithub\\.com/${organization}/libreoffice
 // Decimal-only tokens collide with sizes, counts, and version components; see docs/AGENTS.md#repository-references.
 const commitCandidate = /(?<![a-z0-9])(?=[\da-f]{0,39}[a-f])[\da-f]{7,40}(?![a-z0-9])/gi
 // Vendored third-party documentation keeps its upstream commit references verbatim.
-const excludedPrefixes = ['vendor/', '.agents/notes/archived/', 'apps/web/native/']
+const excludedPrefixes = ['vendor/', '.agents/notes/archived/', 'apps/web/native/', 'native/rust-anything/']
 const gitOutputLimit = 64 * 1024 * 1024
 // One 41-byte line per object; 1.2 million objects produce about 49 MiB.
 const objectListingLimit = 1024 * 1024 * 1024

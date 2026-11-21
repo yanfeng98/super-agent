@@ -3313,6 +3313,34 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-rust-anything -->
+<a id="deepseek-aidsh-rust-anything"></a>
+
+## `@deepseek-ai/dsh-rust-anything`
+
+- `inject`: `tools`
+- `source`: [`packages/mcp/rust-anything/src/index.ts:35`](../packages/mcp/rust-anything/src/index.ts)
+
+```ts config-catalog
+/** Plugin config: an explicit executable plus the transport budgets. */
+export interface Config {
+  /** Executable to run instead of the staged vendored build. */
+  command?: string
+  /**
+   * `eager` puts all 16 tool schemas in every request; `on-demand` lists them
+   * in the system prompt and loads the ones an agent asks for.
+   */
+  toolLoading: 'eager' | 'on-demand'
+  /** Per-`tools/call` budget in milliseconds. */
+  toolCallTimeoutMs: number
+  /** Budget for the stdio probe, connection and initial tool sync. */
+  startupTimeoutMs: number
+  /** Extra environment for the server process. */
+  env: Record<string, string>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-rust-anything -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-sandbox-local -->
 <a id="deepseek-aidsh-sandbox-local"></a>
 

@@ -59,6 +59,7 @@ export function isInventorySource(file: string): boolean {
     // Vendored native plugins keep upstream source close for syncs; dsh-im ships JavaScript, and the
     // TypeScript ones are not first-party source.
     && !file.startsWith('apps/web/native/')
+    && !file.startsWith('native/rust-anything/')
     && !file.startsWith('.agents/notes/archived/')
 }
 
