@@ -775,8 +775,8 @@ export class MultiBotDshFeishuController {
         this.#touch();
         return this.status(botId);
       }
-      this.#inboundConsumers.remove(botId);
       const saved = await this.#configStore.saveBot({ ...config, superagent: false, consumerMode: 'standalone' });
+      this.#inboundConsumers.remove(botId);
       if (config.consumerMode === 'external-consumer') {
         const resolved = await atConnectionStage('credential.read', () => this.#credentials.resolve(saved.secretRef), 'credential-store').catch(() => null);
         if (!resolved?.value) {
