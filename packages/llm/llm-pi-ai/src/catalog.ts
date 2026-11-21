@@ -150,6 +150,19 @@ const CACHE_CONTROL_FORMAT_GATE: Record<PiAiCacheControlFormat, true> = {
 /** The prompt-cache marker conventions a profile may name. */
 export const CACHE_CONTROL_FORMATS = Object.keys(CACHE_CONTROL_FORMAT_GATE) as readonly PiAiCacheControlFormat[]
 
+/** The prompt cache-key modes pi-ai accepts. */
+export type PiAiPromptCacheKeyMode = NonNullable<OpenAICompletionsCompat['promptCacheKeyMode']>
+
+/** Drift gate over {@link PiAiPromptCacheKeyMode}; a new upstream mode fails compilation until named. */
+const PROMPT_CACHE_KEY_MODE_GATE: Record<PiAiPromptCacheKeyMode, true> = {
+  auto: true,
+  enabled: true,
+  disabled: true,
+}
+
+/** The prompt cache-key modes a profile may name. */
+export const PROMPT_CACHE_KEY_MODES = Object.keys(PROMPT_CACHE_KEY_MODE_GATE) as readonly PiAiPromptCacheKeyMode[]
+
 /** The request-state placeholders a `chat_template_kwargs` value may name. */
 export type PiAiChatTemplateVar = Extract<ChatTemplateKwargValue, { $var: string }>['$var']
 
@@ -181,178 +194,39 @@ function servesChat(provider: Provider): boolean {
 /**
  * Installed-catalog routes this build removes from the product.
  *
- * `amazon-bedrock`, `azure`, `cloudflare-ai-gateway`, and
- * `cloudflare-workers-ai` are withheld deliberately: Bedrock signs through the
- * AWS credential chain, Azure resolves deployment names and API versions
- * through provider environment, and both Cloudflare routes resolve account- or
- * gateway-scoped catalog endpoints from placeholders pi-ai fills using that
- * same environment — provider-specific wiring the route profile does not model.
- * `xiaomi` and `xiaomi-token-plan-sgp`/`xiaomi-token-plan-ams` are withheld
- * while `xiaomi-token-plan-cn` stays served: the two token-plan routes
- * duplicate the CN one, which serves the same four MiMo models, and `xiaomi`
- * is the pay-as-you-go open platform whose two extra models are UltraSpeed
- * variants of models that the token plan already carries. `moonshotai` and
- * `moonshotai-cn` are one Kimi service's global and China endpoints, both
- * withheld: this build offers Kimi through `kimi-coding` and through a custom
- * OpenAI-compatible route for the open platform. `qwen-token-plan`,
- * `qwen-token-plan-cn`, and `qwen-token-plan-individual` are one Alibaba Cloud
- * token-plan service as well: `qwen-token-plan` and `-cn` serve the same twenty
- * models from the Singapore and Beijing endpoints, and the individual route
- * exposes nine of those models from the Singapore endpoint, so the three
- * describe one subscription rather than three services. `vercel-ai-gateway` is
- * withheld as an aggregator: one third-party endpoint resells 301 models from
- * other vendors, 87 of which map to a model on a served route and 214 of which
- * depend on a custom one. `huggingface`
- * is the Hugging Face router: its 78 entries are Hub repository names that a
- * third-party inference provider serves, and 15 of those model names map to a
- * model on a served route, so the route adds a routing and billing layer rather
- * than another vendor's models. `openrouter` is the widest aggregator this
- * build withholds: one routing service resells 396 model ids from other
- * vendors, all vendor-prefixed but the bare `auto` router — 381 answer
- * OpenAI-compatible chat completions at `https://openrouter.ai/api/v1` and
- * fifteen Anthropic-shaped ones answer Anthropic Messages at
- * `https://openrouter.ai/api`. Dropping the vendor prefix and ignoring
- * punctuation, 95 of those ids name a model another served route also carries,
- * two more match by display name, and the remaining 299 have no other route —
- * 18 floating `~…-latest` aliases, 14 `:free` free-tier variants, five
- * `openrouter/*` router ids, one `unbiased/*` alias, the bare `auto` router,
- * and 260 vendor-prefixed entries across 36 prefixes, 77 of them `:batch`
- * siblings of a model a served route carries. Withholding it therefore removes
- * model coverage as well as a serving surface; a deployment that needs the
- * service again adds those two endpoints as custom model APIs, one per
- * protocol, under different provider ids. `cerebras` is a chip vendor's inference cloud
- * carrying two open-weight models, `gpt-oss-120b` and Qwen3.8 27B, that appear
- * on no other served route, so withholding it removes model coverage as well as
- * a serving surface. `groq` is another chip vendor's inference cloud in the
- * same position: none of its seven open-weight models — the Llama
- * pair, three GPT OSS entries, and two Qwen entries — appears on another served
- * route, so withholding it removes model coverage as well as a serving surface.
- * Its endpoint answers OpenAI-compatible chat completions
- * at `https://api.groq.com/openai/v1`, so a deployment that needs it can add
- * that as an `openai-completions` custom model API under a different provider
- * id. `together` is the inference cloud that hosts other vendors' open-weight
- * models behind one endpoint: seven of its seventeen catalog entries map to a
- * model on a served route, and the other ten — its Llama 3.3 70B Instruct Turbo
- * and Qwen2.5 7B Instruct Turbo entries among them — appear nowhere else, so
- * withholding it removes a serving surface plus those ten ids. That endpoint
- * answers OpenAI-compatible chat
- * completions at `https://api.together.ai/v1`, so a deployment that needs it
- * can add that as an `openai-completions` custom model API under a different
- * provider id.
- * `opencode` is OpenCode's pay-as-you-go Console gateway: this build
- * keeps the same vendor's subscription route `opencode-go`, both resolve the one
- * `OPENCODE_API_KEY` credential, and 58 of Zen's 84 model ids map to a model on
- * a served route, so withholding it leaves the vendor served without a
- * second billing surface. Its paid models stay reachable through an OpenAI-compatible
- * custom model API at `https://opencode.ai/inference/v1`; its free-tier models
- * require the OpenCode client, and its System One entries are classifier models
- * rather than chat routes. `minimax` is MiniMax's international platform
- * endpoint and `minimax-cn` its China platform endpoint: both serve the same
- * three models with identical capabilities and catalog costs, from separate
- * accounts billed in separate currencies, so this build keeps the China route and
- * withholds the international one; an international account can still be used
- * through an Anthropic Messages custom model API at
- * `https://api.minimax.io/anthropic`. `radius` is a third-party gateway that
- * resells other vendors' models: 26 of its 29 model ids keep the same id on
- * built-in routes, and the other three (`balanced`, `cheap`, `precise`) are
- * intent aliases resolving to `kimi-k3`, `deepseek-v4.1-flash`, and
- * `gpt-5.6-sol`, which other routes serve, so withholding it removes a routing
- * and billing layer rather than model coverage. It speaks `pi-messages`, a
- * protocol no hand-declared route can select, but its endpoint also answers
- * OpenAI-compatible chat completions at `https://radius.pi.dev/v1`, so a
- * deployment that needs the gateway can add it as an `openai-completions`
- * custom model API under a different provider id. `nvidia` is NVIDIA's own
- * inference cloud: three of its twenty models also appear on built-in routes,
- * while the remaining seventeen, including its Nemotron and Cosmos entries,
- * appear nowhere else. It speaks OpenAI-compatible chat completions, so a deployment
- * that needs those models can add `https://integrate.api.nvidia.com/v1` as an
- * `openai-completions` custom model API under a different provider id.
- * `ant-ling` serves the Ling and Ring model families from
- * `https://api.ant-ling.com/v1`: this build carries three models, the Ling 2.6
- * pair and the reasoning Ring 2.6 1T, and none appears on another route, so
- * withholding it removes model coverage rather than only a routing layer. It
- * speaks OpenAI-compatible chat completions, so a deployment that needs those
- * models can add the endpoint as an `openai-completions` custom model API
- * under a different provider id. `zai` is Z.AI's international coding-plan
- * endpoint and `zai-coding-cn` its China platform endpoint: both serve GLM
- * models through the same protocol from separate subscription accounts, so this
- * build keeps the China route and withholds the international one. The kept
- * route carries three of `zai`'s seven model ids — `glm-5.3`, `glm-5.3-flash`,
- * and `glm-5.3-highspeed` — with identical capabilities and catalog costs;
- * `glm-5.2` also appears on `opencode-go`, while `glm-4.7`, `glm-5-turbo`, and
- * `glm-5.2-highspeed` appear on no other served route.
- * An international account keeps working
- * through an `openai-completions` custom model API at
- * `https://api.z.ai/api/coding/paas/v4` under a different provider id.
- * `meta` is Meta's first-party model API at `https://api.meta.ai/v1`, serving
- * six chat models through the `openai-responses` protocol: `muse-spark-1.1`,
- * `muse-spark-1.2`, `muse-spark-1.2-contributor`, `muse-spark-1.3`,
- * `muse-spark-1.3-contributor`, and `muse-wonder-1.0`. The two
- * `-contributor` ids also appear on `opencode-go` with the same capabilities
- * and catalog costs, while the other four appear on no other
- * served route, so withholding it removes model coverage as well as a serving
- * surface. `openai-responses` is one of the selectable custom model API
- * protocols, so a deployment that needs those models can add
- * `https://api.meta.ai/v1` as an `openai-responses` custom model API under a
- * different provider id.
- * `xai` is xAI's first-party API at `https://api.x.ai/v1`, serving four Grok
- * chat models through the `openai-responses` protocol: `grok-4.3`, `grok-4.5`,
- * `grok-4.6`, and `grok-4.7`. Three of them also appear on `github-copilot`
- * under the same ids — with a 128,000-token output cap there instead of the
- * 500,000 this route records, and, for `grok-4.5`, a higher cache-read price —
- * and `grok-4.7` appears on `opencode-go` with the same capabilities and
- * catalog costs, so withholding it leaves `grok-4.3` without another served
- * route. The route also adds `XAI_API_KEY` authentication and a SuperGrok or
- * X Premium sign-in that no remaining route offers. `openai-responses` is one
- * of the selectable custom model API protocols, so a deployment that needs the
- * direct endpoint can add `https://api.x.ai/v1` as an `openai-responses` custom
- * model API under a different provider id.
- * `mistral` is Mistral AI's own platform endpoint rather than a reseller, so
- * withholding it removes model coverage as well as a serving surface: three of
- * its 40 entries map to a model on a served route — the Z.AI GLM entries it
- * hosts, `zai-glm-5-2`, `zai-glm-5-3`, and `glm-5-2`, all on `opencode-go` —
- * while thirty-seven map to no other route. Those include the Pixtral pair,
- * Magistral Medium, Leanstral 1.5, Devstral Medium, its three Devstral Small
- * entries, Mistral Large 2.1, Mistral 7B, and Mixtral 8x7B. The
- * endpoint also answers OpenAI-compatible chat completions at
- * `https://api.mistral.ai/v1`, so a deployment that needs those models can add
- * that as an `openai-completions` custom model API under a different provider
- * id.
- * `fireworks` is a third-party inference cloud behind one endpoint: it resells
- * other vendors' open-weight models alongside its own Ember family and
- * `routers/*` aliases, so withholding it removes a serving and billing layer.
- * It serves chat through Anthropic Messages and also accepts
- * OpenAI-compatible chat completions, so a deployment that needs it can add
- * `https://api.fireworks.ai/inference` as an `anthropic-messages` custom model
- * API, or `https://api.fireworks.ai/inference/v1` as an `openai-completions`
- * one, under a different provider id.
- * `baseten` is a third-party inference cloud that hosts other vendors'
- * open-weight models behind one OpenAI-compatible endpoint: seven of its
- * twenty-two model ids map to a model on a served route, and the fifteen that
- * appear nowhere else include `deepseek-ai/DeepSeek-V4.1-Flash-Fast` and
- * `zai-org/GLM-5.2-Fast`, so withholding it removes a serving surface plus
- * those fifteen ids rather than a vendor's own model family. It speaks
- * OpenAI-compatible chat completions, so a deployment that needs those models
- * can add `https://inference.baseten.co/v1` as an `openai-completions` custom
- * model API under a different provider id; the `chat_template_args` thinking
- * format it uses stays nameable for such a route.
- * `google-vertex` is Google Cloud's Vertex AI endpoint rather than the Gemini
- * API endpoint `google` serves, and it reaches the same models through its own
- * `google-vertex` protocol, whose application-default-credentials path also
- * needs a project and a location. All fourteen of its catalog entries appear on
- * `google` with the same ids, context windows, and input modalities, so
- * withholding it removes a serving surface rather than model coverage; the two
- * catalogs still differ in one output cap, one cache price, and the tiered
- * input pricing `google` records for three entries.
- * The Baseten, Cerebras, Together, Moonshot, Xiaomi, Qwen, Hugging Face,
- * OpenRouter, NVIDIA, Z.AI, and Ant Ling routes speak OpenAI-compatible chat
- * completions, the Mistral
- * endpoint answers those requests beside its own protocol, the Meta and xAI
- * endpoints speak OpenAI Responses, and the Vercel AI
- * Gateway and MiniMax endpoints speak Anthropic Messages, so a deployment that
- * needs one can add it as a custom model API. The Vertex route speaks
- * `google-vertex`, which no custom route can select, so the served `google`
- * route is how those models stay reachable.
+ * Five routes need provider-specific wiring the route profile does not model:
+ * `amazon-bedrock` signs through the AWS credential chain, `azure` resolves
+ * deployment names and API versions from provider environment, the two
+ * Cloudflare routes resolve account- or gateway-scoped catalog endpoints from
+ * placeholders pi-ai fills from that same environment, and `google-vertex`
+ * reaches the Gemini models the served `google` route carries through its own
+ * protocol, whose application-default-credentials path also needs a project and
+ * a location.
+ *
+ * Ten routes repeat a plan this build serves from another endpoint.
+ * `xiaomi-token-plan-sgp` and `xiaomi-token-plan-ams` are regional twins of the
+ * served `xiaomi-token-plan-cn`, and `xiaomi` is the pay-as-you-go platform that
+ * adds only an UltraSpeed variant. `moonshotai` and `moonshotai-cn` are one
+ * Kimi service's global and China endpoints; the served `kimi-coding` plan and a
+ * custom OpenAI-compatible route reach the family. `qwen-token-plan` and
+ * `qwen-token-plan-cn` serve the same Alibaba Cloud token-plan models, and
+ * `qwen-token-plan-individual` carries exactly the models of the served
+ * `qwen-token-plan-individual-cn`. `minimax` is the international twin of the
+ * served `minimax-cn`, and `zai` the international coding plan beside the served
+ * `zai-coding-cn`, which carries the same GLM coding models.
+ *
+ * `opencode`, `openrouter`, `vercel-ai-gateway`, `huggingface`, and `radius` are
+ * gateways and routers: they resell models that mostly appear on served routes,
+ * so withholding them removes a routing and billing layer rather than model
+ * coverage. `radius` also speaks `pi-messages`, which no hand-declared route can
+ * select.
+ *
+ * Ten vendors ship catalogs whose models this build does not offer:
+ * `ant-ling`, `baseten`, `cerebras`, `fireworks`, `groq`, `mistral`, `nvidia`,
+ * `together`, `meta`, and `xai`. Each carries models that appear on no served
+ * route, so withholding them removes model coverage as well as a serving
+ * surface. The package README lists each endpoint and the custom model API
+ * protocol that reaches it.
  *
  * None may be offered, discovered, signed in to, or resolved as an installed
  * route. `resolveProfiles()` refuses a profile that names one, so configuration
@@ -481,6 +355,8 @@ const COMPLETIONS_COMPAT_GATE = {
   maxTokensField: 'offer',
   requiresToolResultName: 'offer',
   requiresAssistantAfterToolResult: 'offer',
+  requiresNonNullAssistantContent: 'offer',
+  requiresToolsWithToolHistory: 'offer',
   requiresThinkingAsText: 'offer',
   requiresReasoningContentOnAssistantMessages: 'offer',
   thinkingFormat: 'offer',
@@ -492,6 +368,7 @@ const COMPLETIONS_COMPAT_GATE = {
   supportsStrictMode: 'offer',
   cacheControlFormat: 'offer',
   supportsLongCacheRetention: 'offer',
+  promptCacheKeyMode: 'offer',
   openRouterRouting: 'withhold',
   vercelGatewayRouting: 'withhold',
   zaiToolStream: 'withhold',
@@ -508,6 +385,7 @@ const RESPONSES_COMPAT_GATE = {
   supportsMaxOutputTokens: 'offer',
   supportsStrictMode: 'offer',
   supportsLongCacheRetention: 'offer',
+  promptCacheKeyMode: 'offer',
   sessionAffinityFormat: 'withhold',
   supportsOpenAIGrammarTools: 'withhold',
   supportsAdditionalTools: 'withhold',
@@ -526,6 +404,7 @@ const ANTHROPIC_COMPAT_GATE = {
   forceAdaptiveThinking: 'offer',
   allowEmptySignature: 'offer',
   supportsStrictTools: 'offer',
+  supportsMessageThreads: 'offer',
   sendSessionAffinityHeaders: 'withhold',
   sessionAffinityFormat: 'withhold',
   supportsMidConvoSystemMessages: 'withhold',
@@ -541,6 +420,7 @@ const BEDROCK_COMPAT_GATE = {
 
 /** Disposition of every `MistralConversationsCompat` field. */
 const MISTRAL_COMPAT_GATE = {
+  supportsStrictMode: 'offer',
   supportsMidConvoSystemMessages: 'withhold',
 } as const satisfies Record<keyof MistralConversationsCompat, CompatDisposition>
 
@@ -586,14 +466,17 @@ function compatGate(api: string): Readonly<Record<string, CompatDisposition>> | 
 /** The field names one gate offers. */
 type OfferedIn<G> = { [K in keyof G]: G[K] extends 'offer' ? K : never }[keyof G]
 
-/** Every compat field name a profile may set, on whichever protocol takes it. */
+/**
+ * Every compat field name a profile may set, on whichever protocol takes it.
+ * The Mistral gate is absent because every field it offers is already named
+ * here; its own `satisfies` gate still fails on a new upstream field, and
+ * whoever offers that field adds this gate when the name is new.
+ */
 type OfferedCompatField =
   | OfferedIn<typeof COMPLETIONS_COMPAT_GATE>
   | OfferedIn<typeof RESPONSES_COMPAT_GATE>
   | OfferedIn<typeof ANTHROPIC_COMPAT_GATE>
   | OfferedIn<typeof BEDROCK_COMPAT_GATE>
-  // oxlint-disable-next-line typescript/no-redundant-type-constituents -- Include gates whose current offering is empty.
-  | OfferedIn<typeof MISTRAL_COMPAT_GATE>
 
 /**
  * pi-ai wire-compatibility switches, set on the route (its models' default) or
@@ -637,6 +520,17 @@ export interface PiAiCompatProfile {
   requiresToolResultName?: boolean
   /** Whether a user message after tool results needs an assistant message between; `openai-completions`. */
   requiresAssistantAfterToolResult?: boolean
+  /**
+   * Whether an assistant message that carries only tool calls needs `""`
+   * instead of `null` content; `openai-completions`.
+   */
+  requiresNonNullAssistantContent?: boolean
+  /**
+   * Whether a request whose history holds tool calls must still send `tools`,
+   * because the endpoint rejects the empty array pi-ai otherwise omits;
+   * `openai-completions`.
+   */
+  requiresToolsWithToolHistory?: boolean
   /** Whether thinking blocks must travel as text in `<thinking>` delimiters; `openai-completions`. */
   requiresThinkingAsText?: boolean
   /** Whether replayed assistant messages need an empty `reasoning_content` while reasoning is on; `openai-completions`. */
@@ -663,11 +557,18 @@ export interface PiAiCompatProfile {
   supportsMaxOutputTokens?: boolean
   /**
    * Whether the endpoint accepts `strict` in tool definitions;
-   * `openai-completions`, the three Responses protocols, `bedrock-converse-stream`.
+   * `openai-completions`, the three Responses protocols,
+   * `bedrock-converse-stream`, `mistral-conversations`.
    */
   supportsStrictMode?: boolean
   /** Prompt-cache marker convention; `openai-completions`. */
   cacheControlFormat?: NonNullable<OpenAICompletionsCompat['cacheControlFormat']>
+  /**
+   * Whether a request may carry a prompt cache key: `auto` leaves pi-ai's own
+   * decision in force, and `disabled` omits the key for endpoints that reject
+   * it. `openai-completions` and the three Responses protocols.
+   */
+  promptCacheKeyMode?: PiAiPromptCacheKeyMode
   /**
    * Whether the endpoint accepts long prompt-cache retention;
    * `openai-completions`, the three Responses protocols, `anthropic-messages`.
@@ -685,6 +586,12 @@ export interface PiAiCompatProfile {
   allowEmptySignature?: boolean
   /** Whether the endpoint accepts Anthropic strict tool schemas; `anthropic-messages`. */
   supportsStrictTools?: boolean
+  /**
+   * Whether the endpoint may continue a session through Anthropic message
+   * threads; omitted leaves pi-ai's `api.anthropic.com` detection in force.
+   * `anthropic-messages`.
+   */
+  supportsMessageThreads?: boolean
 }
 
 /** Compile-time constraint that `T` is `never`. */
@@ -710,6 +617,17 @@ type AssertTrue<T extends true> = T
 type UpstreamCompat = OpenAICompletionsCompat & OpenAIResponsesCompat & AnthropicMessagesCompat & BedrockCompat & MistralConversationsCompat
 
 /**
+ * `PiAiCompatProfile` with the `undefined` pi-schema writes next to each
+ * optional field removed. Both sides state optionality with `?`, so only the
+ * field types are compared; an explicit `| undefined` on one side alone would
+ * otherwise fail every field the moment upstream renders its types that way.
+ */
+type NormalizedProfile = { [K in keyof PiAiCompatProfile]?: NonNullable<PiAiCompatProfile[K]> }
+
+/** The upstream side of the same comparison, over the fields a gate offers. */
+type NormalizedUpstream = { [K in OfferedCompatField]?: NonNullable<UpstreamCompat[K]> }
+
+/**
  * Proof that each documented field carries its upstream type, not a hand-copied
  * restatement of it. The name gates above pin *which* fields exist; this pins
  * their types, in both directions because each catches a different drift. A
@@ -719,8 +637,8 @@ type UpstreamCompat = OpenAICompletionsCompat & OpenAIResponsesCompat & Anthropi
  * union would otherwise leave configuration silently behind.
  */
 export type EveryProfileFieldMatchesUpstream = AssertTrue<
-  PiAiCompatProfile extends Partial<Pick<UpstreamCompat, OfferedCompatField>>
-    ? Partial<Pick<UpstreamCompat, OfferedCompatField>> extends PiAiCompatProfile ? true : false
+  NormalizedProfile extends NormalizedUpstream
+    ? NormalizedUpstream extends NormalizedProfile ? true : false
     : false
 >
 

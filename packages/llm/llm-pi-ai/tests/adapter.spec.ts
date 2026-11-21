@@ -805,12 +805,14 @@ describe('provider profile lifecycle', () => {
           api: 'openai-completions',
           baseURL: `${server.url}/v1`,
           models: [
-            // pi-ai sends the system prompt as `developer` to a reasoning
-            // model whenever its URL detection says the endpoint is OpenAI —
-            // which is what an unrecognized private URL resolves to. Most
-            // OpenAI-compatible gateways reject that role.
+            // pi-ai sends the system prompt as `developer` to a reasoning model
+            // only when the endpoint is api.openai.com; every other host,
+            // including this private one, gets `system`. The switch overrides
+            // that either way, and most OpenAI-compatible gateways reject the
+            // developer role.
             { id: 'acme-think', reasoningEfforts: { off: null, high: 'high' }, compat: { supportsDeveloperRole: false } },
             { id: 'acme-guess', reasoningEfforts: { off: null, high: 'high' } },
+            { id: 'acme-developer', reasoningEfforts: { off: null, high: 'high' }, compat: { supportsDeveloperRole: true } },
           ],
         },
       },
@@ -828,9 +830,10 @@ describe('provider profile lifecycle', () => {
     }
 
     expect(await roles('acme-think')).toEqual(['system'])
-    // The switch is the only thing that changes it: the same route, same
-    // endpoint, same reasoning declaration still gets pi-ai's guess.
-    expect(await roles('acme-guess')).toEqual(['developer'])
+    // The same route, endpoint, and reasoning declaration: the switch selects
+    // the role, and leaving it unset keeps pi-ai's non-OpenAI default.
+    expect(await roles('acme-guess')).toEqual(['system'])
+    expect(await roles('acme-developer')).toEqual(['developer'])
   })
 
   it('sends a declared off value as the effort parameter instead of omitting it', async () => {

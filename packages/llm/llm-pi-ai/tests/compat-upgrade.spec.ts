@@ -31,11 +31,31 @@ describe('pi-ai gateway compatibility declarations', () => {
     expect(resolved({ [field]: value })).toMatchObject({ [field]: value })
   })
 
+  it('accepts an explicit off-omission flag on a template value', () => {
+    const value = { budget: { $var: 'thinking.budget', omitWhenOff: true } }
+    expect(resolved({ chatTemplateKwargs: value })).toMatchObject({ chatTemplateKwargs: value })
+  })
+
+  it.each(['requiresNonNullAssistantContent', 'requiresToolsWithToolHistory'])('preserves %s', (field) => {
+    expect(resolved({ [field]: true })).toMatchObject({ [field]: true })
+  })
+
+  it.each(['auto', 'enabled', 'disabled'])('preserves prompt cache key mode %s', (mode) => {
+    expect(resolved({ promptCacheKeyMode: mode })).toMatchObject({ promptCacheKeyMode: mode })
+    expect(resolved({ promptCacheKeyMode: mode }, 'openai-responses')).toMatchObject({ promptCacheKeyMode: mode })
+  })
+
+  it('preserves an Anthropic message-thread switch', () => {
+    expect(resolved({ supportsMessageThreads: false }, 'anthropic-messages'))
+      .toMatchObject({ supportsMessageThreads: false })
+  })
+
   it.each([
     { thinkingTokenBudgetField: 'unknown' },
     { vllmPriority: 'high' },
     { vllmPriority: 0.5 },
     { supportsMaxOutputTokens: 'false' },
+    { promptCacheKeyMode: 'sometimes' },
     { chatTemplateKwargs: { budget: { $var: 'thinking.unknown' } } },
     { chatTemplateArgs: { budget: { $var: 'thinking.unknown' } } },
   ])('rejects invalid schema values: %j', (compat) => {
@@ -46,6 +66,7 @@ describe('pi-ai gateway compatibility declarations', () => {
     { thinkingTokenBudgetField: 'thinking_budget' },
     { vllmPriority: 0 },
     { supportsMaxOutputTokens: false },
+    { requiresNonNullAssistantContent: true },
   ])('rejects fields on a protocol that cannot consume them: %j', (compat) => {
     expect(() => resolved(compat, 'anthropic-messages')).toThrow(/compat/)
   })
@@ -56,6 +77,10 @@ describe('pi-ai gateway compatibility declarations', () => {
   ])('withholds catalog-owned %s', (field) => {
     expect(() => resolved({ [field]: true }, 'anthropic-messages'))
       .toThrow(/which is not configurable here/)
+  })
+
+  it('rejects an Anthropic-only switch on an OpenAI-compatible route', () => {
+    expect(() => resolved({ supportsMessageThreads: true })).toThrow(/compat/)
   })
 
   it('refuses a declared route on the withheld Mistral protocol', () => {

@@ -29,6 +29,7 @@ import {
   MAX_TOKENS_FIELDS,
   MODALITIES,
   PiAiCatalogError,
+  PROMPT_CACHE_KEY_MODES,
   resolveRouteModels,
   SUPPORTED_THINKING_FORMATS,
   THINKING_LEVELS,
@@ -279,6 +280,11 @@ const chatTemplateKwarg: z<ChatTemplateKwargValue> = z.union([
   z.number(),
   z.boolean(),
   z.const(null),
+  // pi-ai reads an absent `omitWhenOff` as false, so a value that never omits
+  // itself needs no second field.
+  z.object({
+    $var: z.union(CHAT_TEMPLATE_VARS).required(),
+  }),
   z.object({
     $var: z.union(CHAT_TEMPLATE_VARS).required(),
     omitWhenOff: z.boolean(),
@@ -294,6 +300,8 @@ const compatProfile: z<PiAiCompatProfile> = z.object({
   maxTokensField: z.union(MAX_TOKENS_FIELDS),
   requiresToolResultName: z.boolean(),
   requiresAssistantAfterToolResult: z.boolean(),
+  requiresNonNullAssistantContent: z.boolean(),
+  requiresToolsWithToolHistory: z.boolean(),
   requiresThinkingAsText: z.boolean(),
   requiresReasoningContentOnAssistantMessages: z.boolean(),
   thinkingFormat: z.union(SUPPORTED_THINKING_FORMATS),
@@ -305,6 +313,7 @@ const compatProfile: z<PiAiCompatProfile> = z.object({
   supportsMaxOutputTokens: z.boolean(),
   supportsStrictMode: z.boolean(),
   cacheControlFormat: z.union(CACHE_CONTROL_FORMATS),
+  promptCacheKeyMode: z.union(PROMPT_CACHE_KEY_MODES),
   supportsLongCacheRetention: z.boolean(),
   supportsEagerToolInputStreaming: z.boolean(),
   supportsCacheControlOnTools: z.boolean(),
@@ -312,6 +321,7 @@ const compatProfile: z<PiAiCompatProfile> = z.object({
   forceAdaptiveThinking: z.boolean(),
   allowEmptySignature: z.boolean(),
   supportsStrictTools: z.boolean(),
+  supportsMessageThreads: z.boolean(),
 })
 
 /**

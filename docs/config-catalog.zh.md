@@ -2288,7 +2288,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:252`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:253`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -2497,6 +2497,17 @@ export interface PiAiCompatProfile {
   requiresToolResultName?: boolean
   /** Whether a user message after tool results needs an assistant message between; `openai-completions`. */
   requiresAssistantAfterToolResult?: boolean
+  /**
+   * Whether an assistant message that carries only tool calls needs `""`
+   * instead of `null` content; `openai-completions`.
+   */
+  requiresNonNullAssistantContent?: boolean
+  /**
+   * Whether a request whose history holds tool calls must still send `tools`,
+   * because the endpoint rejects the empty array pi-ai otherwise omits;
+   * `openai-completions`.
+   */
+  requiresToolsWithToolHistory?: boolean
   /** Whether thinking blocks must travel as text in `<thinking>` delimiters; `openai-completions`. */
   requiresThinkingAsText?: boolean
   /** Whether replayed assistant messages need an empty `reasoning_content` while reasoning is on; `openai-completions`. */
@@ -2523,11 +2534,18 @@ export interface PiAiCompatProfile {
   supportsMaxOutputTokens?: boolean
   /**
    * Whether the endpoint accepts `strict` in tool definitions;
-   * `openai-completions`, the three Responses protocols, `bedrock-converse-stream`.
+   * `openai-completions`, the three Responses protocols,
+   * `bedrock-converse-stream`, `mistral-conversations`.
    */
   supportsStrictMode?: boolean
   /** Prompt-cache marker convention; `openai-completions`. */
   cacheControlFormat?: NonNullable<OpenAICompletionsCompat['cacheControlFormat']>
+  /**
+   * Whether a request may carry a prompt cache key: `auto` leaves pi-ai's own
+   * decision in force, and `disabled` omits the key for endpoints that reject
+   * it. `openai-completions` and the three Responses protocols.
+   */
+  promptCacheKeyMode?: PiAiPromptCacheKeyMode
   /**
    * Whether the endpoint accepts long prompt-cache retention;
    * `openai-completions`, the three Responses protocols, `anthropic-messages`.
@@ -2545,6 +2563,12 @@ export interface PiAiCompatProfile {
   allowEmptySignature?: boolean
   /** Whether the endpoint accepts Anthropic strict tool schemas; `anthropic-messages`. */
   supportsStrictTools?: boolean
+  /**
+   * Whether the endpoint may continue a session through Anthropic message
+   * threads; omitted leaves pi-ai's `api.anthropic.com` detection in force.
+   * `anthropic-messages`.
+   */
+  supportsMessageThreads?: boolean
 }
 
 /** One request modality a pi-ai model may accept. */
@@ -2565,6 +2589,9 @@ export type PiAiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFo
 
 /** The reasoning-budget field spellings pi-ai accepts. */
 export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['thinkingTokenBudgetField']>
+
+/** The prompt cache-key modes pi-ai accepts. */
+export type PiAiPromptCacheKeyMode = NonNullable<OpenAICompletionsCompat['promptCacheKeyMode']>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-pi-ai -->
 

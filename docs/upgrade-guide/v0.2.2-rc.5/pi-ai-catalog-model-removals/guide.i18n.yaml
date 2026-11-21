@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/pi-ai-catalog-model-removals/guide.md
+/:
+  en: 6b6a4ea9331bdd6d
+  zh: 73b59c940f1584ba
+/removed-catalog-model-ids:
+  en: 58d13f360ff1f3d4
+  zh: a046ee0441fcaf61
+/removed-catalog-model-ids/change:
+  en: 45d4acc48fc31b8e
+  zh: b508b70efcc5e90b
+/removed-catalog-model-ids/migration:
+  en: 58d388bebe57f5cc
+  zh: 08ccd10bbecd0764
