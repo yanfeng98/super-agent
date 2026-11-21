@@ -213,6 +213,15 @@ export function apply(ctx: ClientContext): void {
   // locale service's own fallback ladder; candidate-time reads stay plain text.
   const t = ctx.locale.bind(NS)
 
+  /** One menu row: the skill's name, an optional group heading, and its routing description. */
+  const candidateOf = (skill: SkillEntry, section?: string) => ({
+    name: skill.name,
+    ...section === undefined ? {} : { section },
+    // The user-only marker rides the description (the menu's only secondary
+    // text); `hint` is the claim-state ghost text, not a badge.
+    description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
+  })
+
   const source = {
     trigger: '/',
     name: 'skill',
@@ -222,19 +231,18 @@ export function apply(ctx: ClientContext): void {
       const skills = await fetchCatalog(session.sessionId).promise
       // Superseded keystroke: the shared fetch stays warm, this caller yields.
       if (signal.aborted) return []
-      // The same filter as the command group of this menu, over names only.
-      const rows = new TextSearchIndex(skills, skill => ({ fuzzy: [skill.name] })).search(query)
-        .map(skill => ({ skill, section: sectionOf(skill, t) }))
-      // Sections must be adjacent for the menu to render one heading per
-      // group; the sort is stable, so matches keep their search order.
-      rows.sort((left, right) => compareSections(left.section, right.section))
-      return rows.map(({ skill, section }) => ({
-        name: skill.name,
-        section: section.title,
-        // The user-only marker rides the description (the menu's only
-        // secondary text); `hint` is the claim-state ghost text, not a badge.
-        description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
-      }))
+      // An unfiltered menu is grouped by where each skill came from. A typed
+      // query keeps the shared name ranking instead, the way the command group
+      // drops its own sections while filtering.
+      if (query === '') {
+        const rows = skills.map(skill => ({ skill, section: sectionOf(skill, t) }))
+        // Sections must be adjacent for the menu to render one heading per
+        // group; the sort is stable, so skills keep the catalog order.
+        rows.sort((left, right) => compareSections(left.section, right.section))
+        return rows.map(({ skill, section }) => candidateOf(skill, section.title))
+      }
+      return new TextSearchIndex(skills, skill => ({ fuzzy: [skill.name] })).search(query)
+        .map(skill => candidateOf(skill))
     },
     warm(session) {
       // Fire-and-forget scope-birth prewarm; the shared fetch reports

@@ -332,6 +332,13 @@ describe('candidates: sessionId addressing', () => {
       ['自定义目录', 'custom-one'],
       ['vendor-skills', 'vendor-one'],
     ])
+    // A typed query keeps the shared name ranking and drops the headings.
+    const filtered = await source.candidates(proj('s1'), req('one'))
+    expect(filtered.map(item => [item.name, item.section])).toEqual([
+      ['runtime-one', undefined],
+      ['custom-one', undefined],
+      ['vendor-one', undefined],
+    ])
   })
 
   it('does not fetch Agent-bound skills for an addressed child', async () => {
