@@ -231,8 +231,8 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       description: 'Tell a worker a fact, record a review note on a file or line, or hand an ended ticket back on its unsent notes or failing check; an open note blocks merging until resolved, and it grants no authority.',
       schema: z.object({
         ticket_id: z.string(),
-        text: z.string().trim().min(1).max(2_000).optional()
-          .describe(`A fact or instruction in the person\'s words (at most ${IM_WORDS} words), or the note\'s text when file is given (up to 2000 characters).`),
+        text: z.string().trim().min(1).optional()
+          .describe(`A fact or instruction in the person\'s words (at most ${IM_WORDS} words), or the note\'s text when file is given (up to 2,000 characters).`),
         file: z.string().trim().min(1).max(500).optional()
           .describe('A path from the ticket\'s diff; with text, records a review note anchored there instead of sending a message.'),
         line: z.number().int().positive().max(1_000_000).optional().describe('The line the note starts on.'),
@@ -244,6 +244,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
         .refine(args => !args.end_line || (!!args.file && !!args.line), 'file and line are required with end_line')
         .refine(args => !args.end_line || !args.line || args.end_line >= args.line, 'end_line must not be before line')
         .refine(args => !args.file || !!args.text, 'text is required for a note')
+        .refine(args => !args.file || !args.text || args.text.length <= 2_000, 'A note must not exceed 2,000 characters')
         .refine(args => !args.text || !!args.file || wordCount(args.text) <= IM_WORDS, `At most ${IM_WORDS} words when sent as a message`)
         .refine(args => !!args.text || args.review || args.check, 'text, review or check is required'),
       execute: async args => {
