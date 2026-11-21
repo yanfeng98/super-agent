@@ -316,7 +316,7 @@ export class Runtime extends Service implements SourceHost {
    * @param kind - The event a person should see, by the same name in both interfaces.
    * @param text - One sentence stating what happened.
    */
-  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'ci' | 'automerge' | 'check' | 'push', text: string): void {
+  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'automerge' | 'check' | 'push', text: string): void {
     const at = now()
     try { recordNotification(this.store, { at, kind, ticketId: ticket.id, title: ticket.title, text }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }

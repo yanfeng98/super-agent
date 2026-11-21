@@ -295,7 +295,6 @@ const TEXT = {
   'notification.merged': ['已合并', 'Merged'],
   'notification.reverted': ['已回退合并', 'Merge reverted'],
   'notification.review': ['等待评审', 'Waiting for review'],
-  'notification.ci': ['CI 失败', 'CI failed'],
   'notification.automerge': ['自动合并放弃', 'Standing merge gave up'],
   'notification.check': ['检查失败', 'Check failed'],
   'notification.push': ['推送结果', 'Push result'],
