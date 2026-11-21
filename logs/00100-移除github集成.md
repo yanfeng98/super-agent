@@ -47,3 +47,4 @@
 - `tests/environment.spec.ts` 仍用 GitHub URL 作为“操作者全局 git 配置”的样例，验证 worker 不继承该配置；这是隔离测试数据，不是 GitHub 集成。
 - 审计后补充：启动清理同时去掉旧 ticket 的 GitHub channels/follows 与 `github-issue` 设置，避免旧 ticket 等待一个已不存在的 Source；删除迁移里已无作用的 `prompt-settings-text` 早退。
 - 审计后补充（第二轮）：启动清理保留本地 `autoMerge`，只清 GitHub-bound ticket 的 standing merge；移除旧 GitHub 的 merge queue entry，并在队列清空时解除 pause；把发往已删除 Source 的 pending reply 标记为 dropped，避免永远重试。
+- 审计后补充（第三轮）：识别旧 GitHub ticket 时也看它的 origin Trigger 的 Source，因此即使绑定已被清过，队列里残留的旧 entry 仍会被移除；本地 ticket 的 origin 是 local/Feishu，不受影响。
