@@ -45,6 +45,7 @@ const DELIVERY_ERROR_CODES = new Set([
   'provider-unavailable',
   'consumer-unavailable',
   'consumer-conflict',
+  'superagent-mode-disabled',
   'ingress-not-accepted',
   'invalid-inbound',
   'stale-route',

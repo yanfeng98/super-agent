@@ -5,6 +5,7 @@ import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persis
 import { UserError, key, latestReport, noteOutdated, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
 import { batchOf, inputMessage, triggerMessage, workerSessionId } from '../executor/dsh.ts'
 import { feishuRead } from '../sources/feishu-read.ts'
+import { feishuImConfig, feishuImThreadContext } from '../sources/feishu-im.ts'
 import { feishuRef } from '../sources/feishu.ts'
 import { feishuTriggerId } from '../sources/feishu-trigger.ts'
 import { ASSIGNMENTS, INPUTS, assignmentLine, decisionCard, decisionDetails, inputLine, newestPage, preview, textPage, threadCard, ticketCard,
@@ -53,7 +54,8 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'prompt-preview/<id>', holds: 'a composed prompt that orchestrator_prompts_save previewed' },
   { name: 'models', holds: 'model providers, the DSH default and each role\'s model' },
   { name: 'models/<provider>', holds: 'one provider\'s models' },
-  { name: 'feishu/<trigger-id>/…', holds: 'a Feishu original, as the dsh-superagent-feishu skill describes', executor: true },
+  { name: 'feishu/<trigger-id>/…', holds: 'a legacy lark-cli Feishu original' },
+  { name: 'feishu-im/<trigger-id>/…', holds: 'the dsh-im text history around a Feishu trigger, as the dsh-superagent-feishu skill describes', executor: true },
 ]
 export const resourceGrammar = (executor: boolean): string => RESOURCES.filter(resource => !executor || resource.executor)
   .map(resource => `${resource.name}: ${resource.holds}`).join('; ')
@@ -129,6 +131,12 @@ async function transcript(host: ResourceHost, ticketId: string) {
   try { return (await handle.read()).events } finally { await handle.close() }
 }
 
+/** Reads one dsh-im Feishu history page for the `feishu-im/` resource and its tests. */
+export async function feishuImPage(host: Pick<ResourceHost, 'store' | 'commands'>, found: Trigger,
+  part: 'thread' | 'root' | 'parent', cursor?: string) {
+  return feishuImThreadContext.read(host.commands.withSignal(undefined), found, part, cursor,
+    feishuImConfig(host.store.settings().sources.feishu?.config))
+}
 const ROUTES: readonly Route[] = [
   ['tickets', read => {
     const host = main(read), tickets = host.store.tickets.list()
@@ -212,6 +220,20 @@ const ROUTES: readonly Route[] = [
     const models = (await main(read).context.sessionController.modelCatalog()).groups.find(group => group.id === read.rest)?.models
     if (!models) throw new Error('Unknown model provider')
     return list(read, (offset, count) => models.slice(offset, offset + count))
+  }],
+  ['feishu-im/', async read => {
+    const [triggerId, part, cursor, ...more] = read.rest.split('/')
+    if (!triggerId || !part || more.length || !['thread', 'root', 'parent'].includes(part)) {
+      throw new Error('Use feishu-im/<trigger-id>/thread, /root or /parent; follow next_resource for another page')
+    }
+    const found = trigger(read.host, triggerId, read.ticketId)
+    return sourcePage(read, 'feishu-im', async () => {
+      const page = await feishuImPage(read.host, found, part as 'thread' | 'root' | 'parent',
+        cursor ? decodeURIComponent(cursor) : undefined)
+      const { events: _events, ...body } = page.body
+      return { status: page.status ?? 'available', messages: page.messages,
+        ...page.next ? { next_resource: `feishu-im/${triggerId}/${part}/${encodeURIComponent(page.next)}` } : {}, ...body }
+    })
   }],
   ['feishu/', async read => {
     const source = trigger(read.host, read.rest.split('/')[0]!, read.ticketId)

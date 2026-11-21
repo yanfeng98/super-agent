@@ -54,6 +54,7 @@ export interface DshImService {
     expectedFingerprint: string
     signal: AbortSignal
     onEvent(event: DshImEvent, context: { signal: AbortSignal }): Promise<{ accepted: true }>
+    superagent?: true
   }): Promise<() => void>
   historyChecked(botId: string, route: DshImEvent['reply'], query: {
     scope: 'group' | 'nearby' | 'thread'

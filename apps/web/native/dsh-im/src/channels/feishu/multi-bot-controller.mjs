@@ -616,12 +616,14 @@ export class MultiBotDshFeishuController {
     });
   }
 
-  async consumeInbound(botId, { expectedFingerprint, onEvent, signal } = {}) {
+  async consumeInbound(botId, { expectedFingerprint, onEvent, signal, superagent } = {}) {
     this.#assertOpen();
     return this.#serializeConfig(() => this.#withBotTransition(botId, async () => {
       this.#assertOpen();
       signal?.throwIfAborted();
       const config = this.#requireBot(botId);
+      if (superagent === true && config.superagent !== true)
+        throw Object.assign(new Error('superagent-mode-disabled'), { code: 'superagent-mode-disabled' });
       const account = await this.#deliveryAccount(config);
       this.#assertOpen('capability-unavailable');
       signal?.throwIfAborted();
@@ -769,15 +771,17 @@ export class MultiBotDshFeishuController {
     if (typeof superagent !== 'boolean') throw new TypeError('Invalid Feishu superagent flag');
     return this.#serializeConfig(() => this.#withBotTransition(botId, async () => {
       const config = this.#requireBot(botId);
-      if (config.superagent === superagent) return this.status(botId);
+      if (config.superagent === superagent && (superagent
+        || (config.consumerMode !== 'external-consumer' && !this.#inboundConsumers.has(botId)))) return this.status(botId);
       if (superagent) {
         await this.#configStore.saveBot({ ...config, superagent: true });
         this.#touch();
         return this.status(botId);
       }
+      const wasExternal = config.consumerMode === 'external-consumer' || this.#inboundConsumers.has(botId);
       const saved = await this.#configStore.saveBot({ ...config, superagent: false, consumerMode: 'standalone' });
       this.#inboundConsumers.remove(botId);
-      if (config.consumerMode === 'external-consumer') {
+      if (wasExternal) {
         const resolved = await atConnectionStage('credential.read', () => this.#credentials.resolve(saved.secretRef), 'credential-store').catch(() => null);
         if (!resolved?.value) {
           this.#botErrors.set(botId, {

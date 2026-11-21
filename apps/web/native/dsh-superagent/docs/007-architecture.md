@@ -400,7 +400,7 @@ Some generic modules still refer directly to Feishu:
 | `src/client/locales.ts` | All copy in both languages, and the glossary of [001 Domain model](001-domain.md) |
 | `src/client/client.css`, `css.d.ts` | The panel's stylesheet, loaded as text |
 
-`src/sources/feishu-im.ts` and `src/sources/local.ts` are also the entries of the Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./feishu-watch` and `./local`. The bundle's `cordis.patch.yml` inserts the three plugins, with Feishu disabled and local tickets on.
+`src/sources/feishu-im.ts` and `src/sources/local.ts` are also the entries of the Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./feishu-watch` and `./local`. The bundle's `cordis.patch.yml` inserts the three plugins, with the dsh-im-backed Feishu Source and local tickets on.
 
 ## Tests
 
@@ -419,7 +419,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
 | `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
-| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded thread context, bot/chat labels, and handoff consumer registration and release |
+| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded thread context, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
 | `tests/feishu-read.spec.ts` | Feishu reads |
 | `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu image reads |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |

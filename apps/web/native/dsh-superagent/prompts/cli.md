@@ -1,4 +1,4 @@
-Workers read Feishu context through orchestrator_read thread/<thread-key> when Feishu is configured.
+Workers read Feishu context through orchestrator_read feishu-im/<trigger-id>/thread when Feishu is configured.
 dsh-im owns the Feishu bot connection and the bounded text history; do not call lark-cli.
 Subscription controls push delivery, not read access.
 The orchestrator uses orchestrator_eval_read for proactive assessment.

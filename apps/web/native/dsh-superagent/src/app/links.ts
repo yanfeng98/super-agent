@@ -20,6 +20,10 @@ export interface LinkHost {
 /** Resolves and caches a trigger's external message URL, falling back to a readable resource path when lookup fails. */
 export async function sourceLink(host: LinkHost, trigger: Trigger, signal?: AbortSignal): Promise<{ source_url?: string; source_url_read?: string }> {
   if (trigger.url) return { source_url: trigger.url }
+  // The dsh-im-backed Feishu Source has no lark-cli lookup; its Thread resource is the readable fallback.
+  if (trigger.source === 'feishu' && trigger.channel?.address.actorId) {
+    return { source_url_read: `feishu-im/${trigger.id}/thread` }
+  }
   const ref = feishuRef(trigger)
   if (!ref) return {}
   const cacheKey = `${ref.chatId}:${ref.messageId}`

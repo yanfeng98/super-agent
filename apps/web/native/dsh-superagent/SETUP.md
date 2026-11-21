@@ -34,7 +34,7 @@ Ask in this order, one per message, following the flow of work in [docs/001-doma
 **Sources: where requests come from.**
 
 1. **Sources.** Should the agent take requests from the panel and the main Session only, or also from Feishu chats? [Panel and main Session only, unless the team works in Feishu.]
-2. With Feishu: **which dsh-im bot and chats?** The operator configures the bot in dsh-im; the agent selects it in superagent and reads the chat list from dsh-im.
+2. With Feishu: **which dsh-im bot and chats?** The operator configures the bot in dsh-im; the agent selects it in superagent and enters the chat IDs. The chat picker only offers chats saved as dsh-im delivery targets.
 
 **Policy: who may ask for work.**
 

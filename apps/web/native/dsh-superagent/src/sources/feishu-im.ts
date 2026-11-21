@@ -27,6 +27,8 @@ const FeishuConfigSchema = z.object({
   readPageSize: z.number().int().min(1).max(HISTORY_LIMIT).default(HISTORY_LIMIT),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
+/** Parses a stored Feishu Source config, ignoring keys the lark-cli Source used. */
+export const feishuImConfig = (value: unknown): FeishuConfig => FeishuConfigSchema.parse(value ?? {})
 
 const routeOf = (address: Record<string, string>): DshImEvent['reply'] => {
   const messageId = address.messageId ?? ''
@@ -77,8 +79,8 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
     if (!config.botId) throw new Error('Choose an IM Feishu bot first')
     const bot = await im.describeBot(config.botId)
     const route = routeOf(trigger.channel?.address ?? {})
-    const scope: 'group' | 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread'
-      : part === 'thread' ? 'nearby' : 'group'
+    const scope: 'group' | 'nearby' | 'thread' = (part === 'thread' || part === 'root' || part === 'parent') && route.threadId
+      ? 'thread' : 'nearby'
     const page = await im.historyChecked(config.botId, route, {
       scope, limit: config.readPageSize, ...cursor ? { cursor } : {},
       ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
@@ -125,7 +127,7 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     { key: 'chats', type: 'rows', label: { zh: '接收的群', en: 'Chats' },
       hint: { zh: '“仅 @”只接收 @ 机器人的消息和已有工单的线程；“全部消息”也接收其余消息，需要 dsh-im 机器人有读取全部消息的权限。', en: '"@ only" receives messages that mention the bot and Threads that have Tickets; "All" also receives the rest and needs the dsh-im bot permission for all messages.' },
       columns: [
-        { key: 'chatId', type: 'text', label: { zh: '群', en: 'Chat' }, pattern: 'oc_[a-zA-Z0-9]+', choose: { zh: '选择机器人已加入的群', en: 'Choose a chat the bot has joined' } },
+        { key: 'chatId', type: 'text', label: { zh: '群', en: 'Chat' }, pattern: 'oc_[a-zA-Z0-9]+', choose: { zh: '选择 dsh-im 投递目标中的群', en: 'Choose a chat from dsh-im delivery targets' } },
         { key: 'listen', type: 'select', label: { zh: '接收', en: 'Receive' }, options: [{ value: 'mentions', label: { zh: '仅 @', en: '@ only' } }, { value: 'all', label: { zh: '全部消息', en: 'All' } }] },
       ] },
     { key: 'otherChats', type: 'select', label: { zh: '其他群', en: 'Other chats' }, options: [{ value: 'none', label: { zh: '不接收', en: 'Not received' } }, { value: 'mentions', label: { zh: '仅 @', en: '@ only' } }],
@@ -247,24 +249,28 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         const bot = await im.describeBot(config.botId)
         if (!bot.superagent) {
           stop(); ctx.report('feishu', { state: 'paused', detail: 'Hand to Superagent is off for this bot' })
-        } else if (!release) {
-          if (bot.superagentActive) {
-            ctx.report('feishu', { state: 'error', detail: 'Another consumer already owns this Feishu bot' })
+        } else {
+          // dsh-im can release the consumer without aborting our lease (switch off, restart, or a replacement runtime).
+          if (release && !bot.superagentActive) stop()
+          if (!release) {
+            if (bot.superagentActive) {
+              ctx.report('feishu', { state: 'error', detail: 'Another consumer already owns this Feishu bot' })
+            } else {
+              controller = new AbortController()
+              const lease = AbortSignal.any([signal, controller.signal])
+              release = await im.consumeInbound(config.botId, {
+                expectedFingerprint: bot.account.fingerprint, signal: lease, superagent: true,
+                onEvent: async (event: DshImEvent) => {
+                  const current = ctx.config(SOURCE)
+                  if (current && ctx.configured()) await ctx.receive(imTrigger(event))
+                  return { accepted: true }
+                },
+              })
+              ctx.report('feishu', { state: 'ready', detail: `Listening for ${bot.account.name || config.botId}`, at: new Date().toISOString() })
+            }
           } else {
-            controller = new AbortController()
-            const lease = AbortSignal.any([signal, controller.signal])
-            release = await im.consumeInbound(config.botId, {
-              expectedFingerprint: bot.account.fingerprint, signal: lease,
-              onEvent: async (event: DshImEvent) => {
-                const current = ctx.config(SOURCE)
-                if (current && ctx.configured()) await ctx.receive(imTrigger(event))
-                return { accepted: true }
-              },
-            })
             ctx.report('feishu', { state: 'ready', detail: `Listening for ${bot.account.name || config.botId}`, at: new Date().toISOString() })
           }
-        } else {
-          ctx.report('feishu', { state: 'ready', detail: `Listening for ${bot.account.name || config.botId}`, at: new Date().toISOString() })
         }
       } catch (error) {
         stop()

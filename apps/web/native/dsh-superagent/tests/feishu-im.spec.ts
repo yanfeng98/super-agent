@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { key } from '../src/core/index.ts'
+import { sourceLink } from '../src/app/links.ts'
+import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { feishuImKind, imTrigger, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
 
@@ -48,6 +50,18 @@ describe('the dsh-im-backed Feishu Source', () => {
     expect(feishuImKind.scope!({ meta: { chatId: 'oc_team', direct: false } }, config()).listened).toBe(true)
     expect(feishuImKind.scope!({ meta: { chatId: 'oc_other', direct: false } }, config()).listened).toBe(false)
     expect(feishuImKind.scope!({ meta: { chatId: 'oc_dm', direct: true } }, config()).listened).toBe(true)
+  })
+
+  it('uses the Thread resource instead of a lark-cli link for a dsh-im Feishu trigger', async () => {
+    const trigger = imTrigger(event())
+    await expect(sourceLink({} as never, trigger)).resolves.toEqual({ source_url_read: `feishu-im/${trigger.id}/thread` })
+  })
+
+  it('serves the feishu-im resource from the stored Source config', async () => {
+    setDshIm(service())
+    const host = { commands: { withSignal: () => ({}) }, store: { settings: () => ({ sources: { feishu: { config: { botId: 'bot_1' } } } }) } }
+    const page = await feishuImPage(host as never, imTrigger(event()), 'thread')
+    expect(page.messages.map(message => message.id)).toEqual(['om_1'])
   })
 
   it('drops legacy policy keys that the lark-cli Source used', () => {

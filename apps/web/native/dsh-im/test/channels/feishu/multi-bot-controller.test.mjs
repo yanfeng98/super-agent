@@ -1508,15 +1508,22 @@ test('superagent handoff records the request, activates on consumer registration
   const fx = fixture({ bots: [existing], secrets: { [existing.secretRef]: 'local-secret' },
     verifyApp: async () => ({ openId: existing.botOpenId, name: 'Verified' }) });
   await fx.controller.initialize();
+  const info = await fx.controller.describeDeliveryAccount(existing.id);
+  assert.equal(info.superagent, false);
+  await assert.rejects(fx.controller.consumeInbound(existing.id, {
+    expectedFingerprint: info.account.fingerprint,
+    onEvent: async () => ({ accepted: true }),
+    superagent: true,
+  }), { code: 'superagent-mode-disabled' });
   let status = await fx.controller.updateSuperagent(existing.id, true);
   assert.equal(status.bots[0].superagent, true);
   assert.equal(status.bots[0].superagentActive, false);
   assert.equal(fx.configStore.getBot(existing.id).consumerMode ?? 'standalone', 'standalone');
-  const info = await fx.controller.describeDeliveryAccount(existing.id);
-  assert.equal(info.superagent, true);
+  const enabled = await fx.controller.describeDeliveryAccount(existing.id);
   const dispose = await fx.controller.consumeInbound(existing.id, {
-    expectedFingerprint: info.account.fingerprint,
+    expectedFingerprint: enabled.account.fingerprint,
     onEvent: async () => ({ accepted: true }),
+    superagent: true,
   });
   assert.equal(fx.configStore.getBot(existing.id).consumerMode, 'external-consumer');
   status = fx.controller.status(existing.id);

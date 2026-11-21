@@ -53,7 +53,7 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
 The Feishu Source uses a bot that dsh-im already owns; it needs no `lark-cli`, app secret or separate bot in superagent.
 
 1. In dsh-im, configure the Feishu bot under **IM 机器人 → 飞书** and keep it connected.
-2. In superagent, open **Settings → Sources → Feishu**, choose that bot, and set the chats, direct messages and other-chat mode.
+2. In superagent, open **Settings → Sources → Feishu**, choose that bot, and set the chats, direct messages and other-chat mode. The chat picker lists chats saved as dsh-im delivery targets; enter a chat ID directly when it is not listed.
 3. In the same bot's dsh-im settings, open **通用** and turn on **交给 Superagent**. The bot's messages now become Triggers for this Source; superagent acknowledges, works and replies through dsh-im.
 4. Turn the same switch off to release the bot and return it to normal dsh-im conversation. The Source then stays idle until the switch is on again.
 

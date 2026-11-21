@@ -320,7 +320,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     handoff. Replies go through `replyChecked`, context through `historyChecked`, and the Source remains text-only
     (no images, bot-authored messages, member sync or old `lark-cli` resource reads). dsh-im owns the switch and the
     `superagent`/`superagentActive` status; turning it off releases the consumer and restores normal IM chat.
-    `tests/feishu-im.spec.ts` covers the mapping, scope, policy, replies, history and consumer registration; dsh-im's
+    `tests/feishu-im.spec.ts` covers the mapping, scope, policy, replies, history, the `feishu-im/` resource and consumer registration; dsh-im's
     `tests/bot-general-settings.test.mjs` and `tests/channels/feishu/multi-bot-controller.test.mjs` cover the switch.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
@@ -334,7 +334,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,321 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,323 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a
