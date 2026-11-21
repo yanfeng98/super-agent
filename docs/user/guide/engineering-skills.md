@@ -15,7 +15,7 @@ Eleven skills are model-invoked and appear in the Session skill catalog; the mod
 
 ## Invoke a skill
 
-Type `/` in the composer to list the user-invoked skills and insert one by name. `ask-matt` is the router: it recommends the skill or flow for your situation, so start there when you are unsure.
+Type `/` in the composer to list the user-invoked skills and insert one by name. Entries group by where they came from, so these 27 sit under `mattpocock/skills` next to headings for the project and user directories that supply other skills. `ask-matt` is the router: it recommends the skill or flow for your situation, so start there when you are unsure.
 
 For a model-invoked skill, describe the task and the model loads the one that fits; name the skill explicitly when you want that one.
 

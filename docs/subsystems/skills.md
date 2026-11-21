@@ -120,6 +120,12 @@ interface SkillSummary {
   readonly source: SkillSource
   /** Provider that owns this skill body. */
   readonly provider: string
+  /**
+   * Project the skill text was taken from, such as `mattpocock/skills`;
+   * absent when the text is the product's own. Human-facing catalogs label
+   * skills with it.
+   */
+  readonly upstream?: string
   /** Provider-specific base for relative resources. */
   readonly resourceBase?: SkillResourceBase
 }

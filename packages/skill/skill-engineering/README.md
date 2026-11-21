@@ -55,7 +55,7 @@ A relative `assetRoot` fails at load. To remove the skills from a profile, repla
 
 ### Observable success and failures
 
-Each packaged skill appears once in the catalog with its translated description, loads its own instruction body, and resolves relative references (`tests.md`, `PHASE-BOUNDARIES.md`, `template.sh`) against its directory. A missing or invalid `SKILL.md` is omitted from a complete catalog and reported once through `ctx.logger.warn`. Any other read error leaves discovery incomplete, so the registry retries it, and a load rejects rather than serving a partial body. Disposing the plugin removes every candidate.
+Each packaged skill appears once in the catalog with its description and the `upstream` project `mattpocock/skills`, loads its own instruction body, and resolves relative references (`tests.md`, `PHASE-BOUNDARIES.md`, `template.sh`) against its directory. A missing or invalid `SKILL.md` is omitted from a complete catalog and reported once through `ctx.logger.warn`. Any other read error leaves discovery incomplete, so the registry retries it, and a load rejects rather than serving a partial body. Disposing the plugin removes every candidate.
 
 -----
 

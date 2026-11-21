@@ -68,7 +68,7 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 
 正常在线时，transcript 与 steering 回显在 Inbox 接受与领取期间留在 Chat，直到持久消息到达。本地 Chat 消息入档后，其身份保留到 Inbox 水位覆盖 next-turn 或 next-step 领取序号：Chat 已显示真实 Node，而 Chat 与 QueueDock 排除匹配的旧 Inbox 行。其他排队消息照常显示。新的 follow 基线会将已有接收回执的回显按 observed 撤去，使用已接受的附件引用完成结算；尚未确认接收的提交继续保留。待处理或已入档的消息随后由 Host 数据呈现。在领取与入档之间重连时，气泡可能短暂消失；撤去回显只确认接收，不代表执行或失败。
 
-面向用户调用的 `skills/list` 元数据包含胜出提供方可选的指令文件 `path`。输入框可据此预览文件，无需加载每个 skill 的正文或激活冷态 Agent。
+面向用户调用的 `skills/list` 元数据包含胜出提供方可选的指令文件 `path`、发现来源 `source`，以及提供方声明时的 `upstream` 项目。输入框可据此预览文件、无需加载每个 skill 的正文或激活冷态 Agent，并按报告的来源为 `/` 菜单分组。
 
 Fork 将 `atSeq` 选定的含边界事件前缀（包括开放轮次内的截点）复制到不带 `parentSession` 的独立 Session。客户端占位项同样省略 `parentSessionId`；列表缩进仅适用于 subagent 来源的行，历史普通 fork 即使保留父 ID 也不缩进。工作区绑定及可选标题递增使用本次操作选定的源会话；递增时会跳过其他由 Host 列出的标题已使用的编号。子会话在合成的 fork 结果和结束事件之前记录继承标记。省略 `atSeq` 时选择最近已结束轮次及其独立尾部，在下一轮次或排队输入之前停止；不存在的事件会被拒绝。聊天操作选择已结束轮次。
 

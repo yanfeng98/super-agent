@@ -3810,7 +3810,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill`
 
-- `source`: [`packages/skill/skill/src/index.ts:281`](../packages/skill/skill/src/index.ts)
+- `source`: [`packages/skill/skill/src/index.ts:287`](../packages/skill/skill/src/index.ts)
 
 ```ts config-catalog
 /** Skill registry configuration. */
@@ -3826,7 +3826,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-engineering`
 
-- `source`: [`packages/skill/skill-engineering/src/index.ts:51`](../packages/skill/skill-engineering/src/index.ts)
+- `source`: [`packages/skill/skill-engineering/src/index.ts:54`](../packages/skill/skill-engineering/src/index.ts)
 
 ```ts config-catalog
 /** Bundled skill asset location. */

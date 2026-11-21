@@ -72,6 +72,12 @@ export interface SkillSummary {
   readonly source: SkillSource
   /** Provider that owns this skill body. */
   readonly provider: string
+  /**
+   * Project the skill text was taken from, such as `mattpocock/skills`;
+   * absent when the text is the product's own. Human-facing catalogs label
+   * skills with it.
+   */
+  readonly upstream?: string
   /** Provider-specific base for relative resources. */
   readonly resourceBase?: SkillResourceBase
 }
@@ -699,6 +705,7 @@ function runtimeCandidate(skill: SkillDefinition): SkillCandidate {
     invocation: skill.invocation,
     source: skill.source,
     provider: skill.provider,
+    ...skill.upstream === undefined ? {} : { upstream: skill.upstream },
     ...skill.resourceBase !== undefined ? { resourceBase: skill.resourceBase } : {},
     rank: RUNTIME_RANK,
     locator: skill,
@@ -770,7 +777,7 @@ function validateDefinition(skill: SkillDefinition): void {
 }
 
 function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
-  const { name, description, whenToUse, invocation, source, provider, resourceBase } = skill
+  const { name, description, whenToUse, invocation, source, provider, upstream, resourceBase } = skill
   return {
     name,
     ...skill.path === undefined ? {} : { path: skill.path },
@@ -779,6 +786,7 @@ function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
     invocation,
     source,
     provider,
+    ...upstream === undefined ? {} : { upstream },
     ...resourceBase !== undefined ? { resourceBase } : {},
   }
 }

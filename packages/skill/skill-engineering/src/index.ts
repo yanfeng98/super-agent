@@ -16,6 +16,9 @@ import { parse as parseYaml } from 'yaml'
 const PROVIDER_NAME = 'dsh-engineering'
 const LOG_PREFIX = 'skill-engineering'
 
+/** Upstream project the packaged skill text is taken from; labels the skills in the `/` menu. */
+const UPSTREAM = 'mattpocock/skills'
+
 /** Packaged skill directories, in catalog order. */
 const SKILL_NAMES = [
   'ask-matt',
@@ -185,6 +188,7 @@ export function apply(ctx: Context, config: Config): void {
             invocation: read.skill.invocation,
             provider: PROVIDER_NAME,
             source: 'bundled',
+            upstream: UPSTREAM,
             rank: BUNDLED_SKILL_RANK,
             resourceBase: { kind: 'directory', path: directory.split(sep).join('/') },
             locator: join(directory, 'SKILL.md'),

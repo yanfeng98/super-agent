@@ -160,6 +160,42 @@ describe('SkillRegistry registry', () => {
     expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['same-rank-skill', 'shadowed'])
   })
 
+  it('carries the upstream project through summaries and loaded definitions', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    registerProvider(ctx, {
+      name: 'upstream',
+      async list() {
+        return [{
+          name: 'ported',
+          description: 'Text taken from another project.',
+          invocation: { modelInvocable: true, userInvocable: true },
+          provider: 'upstream',
+          source: 'bundled',
+          upstream: 'mattpocock/skills',
+          rank: 10,
+          locator: { content: 'Ported body.' },
+        }]
+      },
+      async get(candidate) {
+        return { ...candidate, content: (candidate.locator as { content: string }).content }
+      },
+    })
+    ctx.skills.register({
+      name: 'embedded',
+      description: 'Registered in memory.',
+      source: 'runtime',
+      upstream: 'example/skills',
+      content: 'Embedded body.',
+    })
+
+    expect((await ctx.skills.list()).map(skill => [skill.name, skill.upstream])).toEqual([
+      ['embedded', 'example/skills'],
+      ['ported', 'mattpocock/skills'],
+    ])
+    expect((await ctx.skills.get('ported'))?.upstream).toBe('mattpocock/skills')
+  })
+
   it('returns an invocation-neutral catalog and resolves model and user policy independently', async () => {
     const ctx = new Context()
     await ctx.plugin(SkillRegistry)

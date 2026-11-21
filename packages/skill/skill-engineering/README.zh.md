@@ -55,7 +55,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 
 ### 可观察的成功与失败
 
-每个随包技能在目录中出现一次，带自己的描述，加载自己的指令正文，并把相对引用（`tests.md`、`PHASE-BOUNDARIES.md`、`template.sh`）解析到自己的目录。缺失或无效的 `SKILL.md` 会从完整目录中省略，并通过 `ctx.logger.warn` 报告一次。其他读取错误会让发现处于不完整状态，注册表会重试；加载会拒绝，而不是返回部分正文。销毁插件会移除所有候选。
+每个随包技能在目录中出现一次，带自己的描述和 `upstream` 项目 `mattpocock/skills`，加载自己的指令正文，并把相对引用（`tests.md`、`PHASE-BOUNDARIES.md`、`template.sh`）解析到自己的目录。缺失或无效的 `SKILL.md` 会从完整目录中省略，并通过 `ctx.logger.warn` 报告一次。其他读取错误会让发现处于不完整状态，注册表会重试；加载会拒绝，而不是返回部分正文。销毁插件会移除所有候选。
 
 -----
 

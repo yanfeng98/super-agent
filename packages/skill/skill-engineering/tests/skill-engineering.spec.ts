@@ -89,7 +89,11 @@ describe('bundled engineering workflow skills', () => {
       const catalog = await ctx.skills.list()
       expect(catalog.map(skill => skill.name)).toEqual([...names])
       for (const skill of catalog) {
-        expect(skill).toMatchObject({ source: 'bundled', provider: 'dsh-engineering' })
+        expect(skill).toMatchObject({
+          source: 'bundled',
+          provider: 'dsh-engineering',
+          upstream: 'mattpocock/skills',
+        })
         expect(skill.description.length).toBeGreaterThan(0)
         expect(skill.description.length).toBeLessThanOrEqual(500)
         expect(skill.resourceBase).toEqual({ kind: 'directory', path: join(assets, skill.name).split(sep).join('/') })

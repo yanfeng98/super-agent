@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### source 提供什么
 
-普通会话的候选来自 `skills/list` Remote；宿主提供每一个用户可调用的 skill，`modelInvocable: false` 的条目（即 `disable-model-invocation` skill，此路径是其唯一入口）会以当前语言把仅限用户标记作为描述前缀带上。结果与命令组使用同一套[文本搜索](../../util/text-search/README.zh.md)筛选：skill 名称按模糊匹配，得分相同的结果保持宿主给出的顺序。描述不参与匹配，因为 `/` 菜单高亮的是所有分组合在一起的第一行；如果较前分组中有描述命中，Enter 会选中这一行，而不是用户输入名称对应的 skill。`skills/list` 调用失败时会被记录并静默丢弃该菜单组——菜单只显示 pending／ready 状态。
+普通会话的候选来自 `skills/list` Remote；宿主提供每一个用户可调用的 skill，`modelInvocable: false` 的条目（即 `disable-model-invocation` skill，此路径是其唯一入口）会以当前语言把仅限用户标记作为描述前缀带上。每个候选带一个 `section`：skill 文本取自某个上游项目时是该 `upstream` 项目，否则是提供它的发现根（内置、项目、用户或自定义，按当前语言显示）。分组顺序为内置与上游在前，其后是项目、用户、自定义，以及部署自行添加的来源；同一分组内保持搜索顺序。结果与命令组使用同一套[文本搜索](../../util/text-search/README.zh.md)筛选：skill 名称按模糊匹配，得分相同的结果保持宿主给出的顺序。描述不参与匹配，因为 `/` 菜单高亮的是所有分组合在一起的第一行；如果较前分组中有描述命中，Enter 会选中这一行，而不是用户输入名称对应的 skill。`skills/list` 调用失败时会被记录并静默丢弃该菜单组——菜单只显示 pending／ready 状态。
 
 ### skill 工具行
 

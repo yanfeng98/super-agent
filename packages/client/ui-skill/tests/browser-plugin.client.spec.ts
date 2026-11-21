@@ -1,4 +1,4 @@
-import { es, fr, de, ru, pt } from '../src/client/locales.ts'
+import { es, fr, de, ru, pt, zh } from '../src/client/locales.ts'
 /**
  * ui-skill browser half: source and keyed toolview registration +
  * locale dictionaries + source duplicate-name proof +
@@ -30,7 +30,15 @@ import { SkillRow as SkillToolRow } from '../src/client/SkillRow.tsx'
 import { SkillReference, type SkillReferenceInjected } from '../src/client/SkillReference.tsx'
 import { UserTextRegistry } from '../../ui-conversation/src/client/conversation/user-text-registry.ts'
 
-type SkillRow = { name: string; description: string; whenToUse?: string; path?: string; modelInvocable?: boolean }
+type SkillRow = {
+  name: string
+  description: string
+  whenToUse?: string
+  path?: string
+  modelInvocable?: boolean
+  source?: string
+  upstream?: string
+}
 type ListResult =
   | { ok: true; value: { skills: SkillRow[] } }
   | { ok: false; error: RemoteFailure }
@@ -64,8 +72,8 @@ function providePresentation(ctx: Context): PresentationCapture {
       capture.dictionaries.push({ namespace, dictionaries })
       return () => { capture.localeDisposed = true }
     },
-    // Minimal bound-translate fake: zh dictionary lookup, key passthrough on miss.
-    bind: () => (key: string) => key === 'menu.userOnly' ? '仅用户' : key,
+    // Bound-translate fake over the real zh dictionary, key passthrough on miss.
+    bind: () => (key: string) => (zh as Record<string, string>)[key] ?? key,
   })
   return capture
 }
@@ -152,6 +160,10 @@ describe('apply', () => {
           'row.instructions': '说明',
           'row.inspect': '查看',
           'menu.userOnly': '仅用户',
+          'menu.sourceBuiltin': '内置技能',
+          'menu.sourceProject': '项目技能',
+          'menu.sourceUser': '用户技能',
+          'menu.sourceCustom': '自定义目录',
         },
         en: {
           'row.title': 'Skill',
@@ -162,6 +174,10 @@ describe('apply', () => {
           'row.instructions': 'Instructions',
           'row.inspect': 'Inspect',
           'menu.userOnly': 'user-only',
+          'menu.sourceBuiltin': 'Built-in skills',
+          'menu.sourceProject': 'Project skills',
+          'menu.sourceUser': 'User skills',
+          'menu.sourceCustom': 'Custom directory',
         },
         ja: {
           'row.title': 'スキル',
@@ -172,6 +188,10 @@ describe('apply', () => {
           'row.instructions': '手順',
           'row.inspect': '詳細を確認',
           'menu.userOnly': 'ユーザー専用',
+          'menu.sourceBuiltin': '組み込みスキル',
+          'menu.sourceProject': 'プロジェクトスキル',
+          'menu.sourceUser': 'ユーザースキル',
+          'menu.sourceCustom': 'カスタムディレクトリ',
         },
       },
     }])
@@ -285,6 +305,33 @@ describe('candidates: sessionId addressing', () => {
     }))
     await expect(source.candidates(proj('s1'), req('co')))
       .rejects.toThrow('skills/list failed: gateway/internal: boom')
+  })
+
+  it('groups candidates by skill source, product text first', async () => {
+    const catalog: SkillRow[] = [
+      { name: 'zeta-project', description: 'project skill', source: 'project-agents' },
+      { name: 'beta-user', description: 'user skill', source: 'user-dsh' },
+      { name: 'ported', description: 'upstream text', source: 'bundled', upstream: 'mattpocock/skills' },
+      { name: 'alpha-bundled', description: 'own text', source: 'bundled' },
+      { name: 'runtime-one', description: 'runtime text', source: 'runtime' },
+      { name: 'custom-one', description: 'custom dir', source: 'custom' },
+      { name: 'vendor-one', description: 'unknown root', source: 'vendor-skills' },
+      { name: 'aea-project', description: 'agents root skill', source: 'project-dsh' },
+      { name: 'aga-user', description: 'agents user skill', source: 'user-agents' },
+    ]
+    const { source } = await bench(listOk(catalog))
+    const items = await source.candidates(proj('s1'), req(''))
+    expect(items.map(item => [item.section, item.name])).toEqual([
+      ['mattpocock/skills', 'ported'],
+      ['内置技能', 'alpha-bundled'],
+      ['内置技能', 'runtime-one'],
+      ['项目技能', 'zeta-project'],
+      ['项目技能', 'aea-project'],
+      ['用户技能', 'beta-user'],
+      ['用户技能', 'aga-user'],
+      ['自定义目录', 'custom-one'],
+      ['vendor-skills', 'vendor-one'],
+    ])
   })
 
   it('does not fetch Agent-bound skills for an addressed child', async () => {

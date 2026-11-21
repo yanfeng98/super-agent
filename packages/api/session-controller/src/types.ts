@@ -247,6 +247,14 @@ export interface SkillEntry {
   readonly whenToUse?: string
   /** Whether the same skill is also advertised to the model. */
   readonly modelInvocable: boolean
+  /**
+   * Discovery root that supplied the skill (`bundled`, `project-dsh`,
+   * `project-agents`, `user-dsh`, `user-agents`, `custom`, `runtime`); the
+   * `/` menu groups by it, so an unknown root labels its own group.
+   */
+  readonly source: string
+  /** Project the skill text was taken from, such as `mattpocock/skills`. */
+  readonly upstream?: string
 }
 
 /** Human-invocable skills visible through one Session's composition. */

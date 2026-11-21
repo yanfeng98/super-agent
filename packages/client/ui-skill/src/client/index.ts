@@ -68,6 +68,55 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+/** `/` menu group for one skill: `rank` orders groups, `title` labels the heading. */
+interface SkillSection {
+  readonly rank: number
+  readonly title: string
+}
+
+/** Group ranks: shipped text first, then the nearer layers a workspace adds. */
+const SECTION_RANK = {
+  builtin: 0,
+  project: 1,
+  user: 2,
+  custom: 3,
+  other: 4,
+} as const
+
+/**
+ * Group one catalog entry by where its instructions came from.
+ * @param skill - catalog entry being rendered.
+ * @param t - the client dictionary bound to the skill namespace.
+ * @returns the group rank and its heading.
+ */
+function sectionOf(skill: SkillEntry, t: (key: SkillKey) => string): SkillSection {
+  if (skill.upstream !== undefined) return { rank: SECTION_RANK.builtin, title: skill.upstream }
+  switch (skill.source) {
+    case 'bundled':
+    case 'runtime':
+      return { rank: SECTION_RANK.builtin, title: t('menu.sourceBuiltin') }
+    case 'project-dsh':
+    case 'project-agents':
+      return { rank: SECTION_RANK.project, title: t('menu.sourceProject') }
+    case 'user-dsh':
+    case 'user-agents':
+      return { rank: SECTION_RANK.user, title: t('menu.sourceUser') }
+    case 'custom':
+      return { rank: SECTION_RANK.custom, title: t('menu.sourceCustom') }
+    // SkillSource is merge-extensible: a provider outside the known roots
+    // labels its own group with the source it reported.
+    default:
+      return { rank: SECTION_RANK.other, title: skill.source }
+  }
+}
+
+/** Order groups by rank, then by heading, so adjacent rows share one heading. */
+function compareSections(left: SkillSection, right: SkillSection): number {
+  if (left.rank !== right.rank) return left.rank - right.rank
+  if (left.title === right.title) return 0
+  return left.title < right.title ? -1 : 1
+}
+
 /** One session's catalog fetch: the shared promise plus its own abort handle. */
 interface CatalogFetch {
   readonly promise: Promise<readonly SkillEntry[]>
@@ -174,13 +223,18 @@ export function apply(ctx: ClientContext): void {
       // Superseded keystroke: the shared fetch stays warm, this caller yields.
       if (signal.aborted) return []
       // The same filter as the command group of this menu, over names only.
-      return new TextSearchIndex(skills, skill => ({ fuzzy: [skill.name] })).search(query)
-        .map(skill => ({
-          name: skill.name,
-          // The user-only marker rides the description (the menu's only
-          // secondary text); `hint` is the claim-state ghost text, not a badge.
-          description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
-        }))
+      const rows = new TextSearchIndex(skills, skill => ({ fuzzy: [skill.name] })).search(query)
+        .map(skill => ({ skill, section: sectionOf(skill, t) }))
+      // Sections must be adjacent for the menu to render one heading per
+      // group; the sort is stable, so matches keep their search order.
+      rows.sort((left, right) => compareSections(left.section, right.section))
+      return rows.map(({ skill, section }) => ({
+        name: skill.name,
+        section: section.title,
+        // The user-only marker rides the description (the menu's only
+        // secondary text); `hint` is the claim-state ghost text, not a badge.
+        description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
+      }))
     },
     warm(session) {
       // Fire-and-forget scope-birth prewarm; the shared fetch reports
