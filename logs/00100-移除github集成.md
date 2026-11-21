@@ -32,7 +32,7 @@
 | 命令 | 结果 |
 |---|---|
 | `pnpm typecheck`（插件） | 通过 |
-| `pnpm test`（插件） | 67 个文件、1313 个测试通过 |
+| `pnpm test`（插件） | 67 个文件、1314 个测试通过 |
 | `pnpm build`（插件） | 通过；`lib/` 不再生成 `github-watch.*` |
 | `pnpm run test:docs`（仓库根） | 21 通过、0 失败 |
 | `pnpm vitest run packages/bundle/web-app/tests/superagent-bundle.spec.ts` | 4/4 通过 |
@@ -50,3 +50,4 @@
 - 审计后补充（第三轮）：识别旧 GitHub ticket 时也看它的 origin Trigger 的 Source，因此即使绑定已被清过，队列里残留的旧 entry 仍会被移除；本地 ticket 的 origin 是 local/Feishu，不受影响。
 - 审计后补充（第四轮）：无条件清理 GitHub 读取游标、Policy block revision 与 source label，旧 CI 通知也删除；清理保存推进 policy block revision；旧 ticket 缺 origin/channels 时用可选链兜底。
 - 审计后补充（第五轮）：插件 `locale/en.json` 与 `locale/zh.json` 的元数据仍写着 GitHub，已改为本地工单 + 可选飞书；`verify-locale-metadata` 通过。
+- 审计后补充（第六轮）：`prompts/admission.md` 不再让 Eval 读取仓库文件；启动清理只删除 `github:` 前缀的 follows，保留自定义 Source 的 `bindThread` 绑定与 `merged`/`closed` outcome；Feishu 技能、迁移提示、搜索提示与相关注释去掉了 PR/Issue 残留；新增自定义 Source 与 legacy `guide/github` 的回归测试。

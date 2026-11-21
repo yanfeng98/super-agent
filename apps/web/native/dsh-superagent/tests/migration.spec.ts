@@ -238,14 +238,14 @@ const opened = (records: Record<string, unknown>) => {
 }
 
 it('writes a prompt version saved before the team sections in them, keeping its skills, and marks it', () => {
-  const store = opened({ ...legacyPrompts(3, { notes: 'Call orchestrator_create_task with event_id, read event/<id>, follow guide/work and guide/feishu, load dsh-tag-release, cd "$DSH_TAG_DIR".' }) })
+  const store = opened({ ...legacyPrompts(3, { notes: 'Call orchestrator_create_task with event_id, read event/<id>, follow guide/work, guide/github and guide/feishu, load dsh-tag-release and dsh-tag-github, cd "$DSH_TAG_DIR".' }) })
   const prompts = new Prompts(store, () => 100000, () => undefined, () => true)
   const { config } = prompts.version(3)
   expect(config.communication).toBe(defaultPrompts().communication)
   expect(config.delivery).toBe(defaultPrompts().delivery)
   // Guides that are now fixed or built-in are gone; the team's own skills stay, in current names.
   expect(Object.keys(config.skills)).toEqual(['identities', 'notes'])
-  expect(config.skills.notes).toBe('Call orchestrator_route (kind accept) with trigger_id, read trigger/<id>, follow the work section and the feishu section, load dsh-superagent-release, cd "$DSH_SUPERAGENT_DIR".')
+  expect(config.skills.notes).toBe('Call orchestrator_route (kind accept) with trigger_id, read trigger/<id>, follow the work section, the repository guidance and the feishu section, load dsh-superagent-release and the repository guidance, cd "$DSH_SUPERAGENT_DIR".')
   const prompt = composePrompt(config, 'orchestrator')
   expect(prompt).not.toContain('Legacy orchestrator')
   expect(prompt).toContain(masterPrompt)

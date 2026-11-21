@@ -62,7 +62,7 @@ export interface AssessorHost {
   candidateCard(candidate: Candidate): Promise<Record<string, unknown>>
 }
 
-/** Schema for bounded context or repository read requests during an active evaluation (`orchestrator_eval_read`). */
+/** Schema for bounded context read requests during an active evaluation (`orchestrator_eval_read`). */
 export const EvalReadSchema = z.object({
   trigger_id: z.string().min(1).describe('Original candidate ID returned by orchestrator_eval; every reference is scoped to this trigger.'),
   resource: z.enum(['message', 'root', 'parent', 'thread', 'image']),
@@ -80,7 +80,7 @@ export type EvalRead = z.infer<typeof EvalReadSchema>
 
 /**
  * Implements the `Engine` `Assessor` port for proactive candidate evaluation in the main Session.
- * Relays each evaluation's candidate card to the main Session through the durable `assessment` effect, serves bounded `TriggerContext` and repository reads while the evaluation runs, and converts the main Session's assessment into an `AssessmentOutcome` for `Engine.decide`.
+ * Relays each evaluation's candidate card to the main Session through the durable `assessment` effect, serves bounded `TriggerContext` and images while the evaluation runs, and converts the main Session's assessment into an `AssessmentOutcome` for `Engine.decide`.
  * Depends on `SourceRegistry` (via `AssessorHost`) for source-specific thread context and on `Sessions` for deduplicated candidate delivery; the main Session's `orchestrator_eval*` tools call `context`, `read`, and `decide`.
  */
 export class MasterAssessor implements Assessor {
@@ -216,7 +216,7 @@ export class MasterAssessor implements Assessor {
       thread }
   }
   /**
-   * Serves bounded paginated text or image attachments from the evaluation's thread context or repository for
+   * Serves bounded paginated text or image attachments from the evaluation's thread context for
    * `orchestrator_eval_read`; `agent` is the main Session, which receives images as attachments.
    */
   async read(agent: Agent, read: EvalRead, signal: AbortSignal) {

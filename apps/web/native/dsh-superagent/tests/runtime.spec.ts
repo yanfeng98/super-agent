@@ -1808,14 +1808,14 @@ it('drops old GitHub ticket bindings and their merge queue entries at startup', 
   const { ticket, sessionId } = await acceptedTicket()
   await runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'done' })
   const current = runtime.store.tickets.get(ticket.id)!
-  runtime.store.tickets.save({ ...current, follows: [{ thread: 'github:7', own: true }] })
+  runtime.store.tickets.save({ ...current, follows: [{ thread: 'github:7', own: true }, { thread: 'custom:9', own: false }] })
   runtime.store.saveSettings({ ...runtime.store.settings(), paused: true })
   runtime.queueMerges([ticket.id], {})
   runtime.store.receipts.add({ id: 'old-github-reply', channel: { source: 'github', thread: 'github:7', address: { number: '7' } },
     text: 'old', kind: 'reply' })
   const next = await restart()
   await next.ready
-  expect(next.store.tickets.get(ticket.id)?.follows).toBeUndefined()
+  expect(next.store.tickets.get(ticket.id)?.follows).toEqual([{ thread: 'custom:9', own: false }])
   expect(next.store.get(KV.runtime.mergeQueue) ?? []).toEqual([])
   expect(next.store.receipts.get('old-github-reply')).toMatchObject({ status: 'dropped', dropped: { reason: 'channelGone' } })
 })

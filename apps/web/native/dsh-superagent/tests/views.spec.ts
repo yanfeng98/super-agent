@@ -399,6 +399,18 @@ it('lists the person actions on a ticket in time order', () => {
     { code: 'cleaned', at: '2026-09-24T00:00:00Z' }])
 })
 
+it('keeps a custom Source ticket with a merged thread outcome reviewable and mergeable', () => {
+  const host = views()
+  live('custom')
+  const ticket = store.tickets.get('custom')!
+  ticket.ended = { at, by: 'executor', outcome: 'merged' }
+  ticket.execution = { name: 'custom', directory: '/w/custom', assignment: '' }
+  ticket.review = { capturedAt: at, branch: 'agent/custom', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [], files: [], dirty: [] }
+  store.tickets.save(ticket)
+  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id)).toContain('custom')
+  expect(ticketDetail(host, 'custom')!.actions).toMatchObject({ merge: true, rebase: true, discard: true })
+})
+
 it('lists the ended Tickets a person still has to review, and drops the approved ones', () => {
   const host = views()
   const ended = (id: string, patch: (ticket: NonNullable<ReturnType<typeof store.tickets.get>>) => void) => {

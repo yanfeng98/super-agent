@@ -84,7 +84,7 @@ export function DeploymentPage({ setup, form, accounts: showAccounts }: { setup:
   </form>
 }
 
-/** Plugin Manager config page; includes derived repository and accounts because Source settings live in the main panel. */
+/** Plugin Manager config page; includes derived accounts because Source settings live in the main panel. */
 function PluginPage({ form }: { form: DeploymentForm }) {
   const { t } = usePanel()
   const { state, error } = usePanelData()
