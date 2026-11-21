@@ -433,7 +433,7 @@ export class SkillRegistry extends Service {
       }
       const order = this.nextProviderOrder
       this.nextProviderOrder += 1
-      const owner = this.ctx.fiber.runtime?.name
+      const owner = pluginName(this.ctx)
       return this.layers.effect(
         this.ctx,
         (layer) => {
@@ -470,7 +470,7 @@ export class SkillRegistry extends Service {
       this.ctx.logger.warn(`runtime skill "${skill.name}" ignored because it is already registered`)
       return () => {}
     }
-    const owner = this.ctx.fiber.runtime?.name
+    const owner = skill.owner ?? pluginName(this.ctx)
     const definition: SkillDefinition = {
       ...skill,
       invocation: skill.invocation ?? { modelInvocable: true, userInvocable: true },
@@ -807,6 +807,17 @@ function validateDefinition(skill: SkillDefinition): void {
   if (typeof provider !== 'string') throw new SkillError(`loaded skill "${name}" provider must be a string`, 'SKILL_INVALID_DEFINITION')
   if (typeof content !== 'string') throw new SkillError(`loaded skill "${name}" content must be a string`, 'SKILL_INVALID_DEFINITION')
   if (path !== undefined && typeof path !== 'string') throw new SkillError(`loaded skill "${name}" path must be a string`, 'SKILL_INVALID_DEFINITION')
+}
+
+/**
+ * Name of the plugin whose fiber owns a calling context.
+ * @param ctx - the caller-bound context a registration arrives on.
+ * @returns the plugin's display name, or `undefined` for the root fiber and
+ *   anonymized `ctx.inject` callbacks.
+ */
+function pluginName(ctx: Context): string | undefined {
+  const name = ctx.fiber.runtime?.name
+  return name === undefined || name === '' ? undefined : name
 }
 
 function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {

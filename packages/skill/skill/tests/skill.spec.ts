@@ -227,11 +227,21 @@ describe('SkillRegistry registry', () => {
           source: 'runtime',
           content: 'Registered body.',
         })
+        // An explicit owner wins over the calling fiber: scopes created by an
+        // anonymous `ctx.inject` callback carry no plugin name of their own.
+        pluginCtx.skills.register({
+          name: 'declared',
+          description: 'Names its owner.',
+          source: 'runtime',
+          content: 'Declared body.',
+          owner: 'declared-plugin',
+        })
       },
     })
 
     const catalog = await ctx.skills.list()
     expect(catalog.map(skill => [skill.name, skill.owner, skill.shipped])).toEqual([
+      ['declared', 'declared-plugin', undefined],
       ['provided', 'owner-plugin', true],
       ['registered', 'owner-plugin', undefined],
     ])

@@ -65,7 +65,7 @@ kind: "package-reference"
 
 任意提供方报告的 skill 都会出现在合并目录中，按其精确 kebab-case 名称加载即可返回正文；无效名称返回无结果而非抛错。发现失败的提供方会被记录并跳过，观测被标记为不完整，因此消费方可区分发现失败与已确认的缺失；显式的不完整观测仍会贡献其候选项。格式错误的候选项、目录观测或已加载定义会以带 `SKILL_INVALID_DEFINITION` 的 `SkillError` 快速失败——注册表在缓存或返回任何内容之前，会先验证名称、描述、调用布尔值与提供方归属。`SkillError` 也承载 `skill` 工具的 `SKILL_NOT_FOUND`、`SKILL_NOT_MODEL_INVOCABLE` 失败与提供方的 `SKILL_READ_FAILED`。
 
-Skill 摘要保留胜出提供方可选的指令文件 `path`（供提供文件预览的发现消费者使用），以及发现来源 `source`、贡献该 skill 的 Cordis 插件（`owner`）、该提供方是否随 harness 分发（`shipped`）和提供方声明的可选 `upstream` 项目；面向人的目录据此标注 skill 的出处。列举仍不读取 skill 正文；面向模型的目录继续仅选择其负责的路由字段。
+Skill 摘要保留胜出提供方可选的指令文件 `path`（供提供文件预览的发现消费者使用），以及发现来源 `source`、贡献该 skill 的 Cordis 插件（`owner`）、该提供方是否随 harness 分发（`shipped`）和提供方声明的可选 `upstream` 项目；面向人的目录据此标注 skill 的出处。运行时注册可以自行给出 `owner`：匿名 `ctx.inject` 回调创建的 scope 没有可记录的插件名。列举仍不读取 skill 正文；面向模型的目录继续仅选择其负责的路由字段。
 
 -----
 
