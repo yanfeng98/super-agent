@@ -138,10 +138,17 @@ it('records a line-anchored note and a rejection from the main Session', async (
   expect(resumed.ended).toBeUndefined()
   expect(resumed.notes?.every(note => note.sent?.at)).toBe(true)
   expect(resumed.inputs.at(-1)).toMatchObject({ kind: 'text', text: expect.stringContaining('src/b.ts:7: 这里也要改') })
-  // A note without a file still reaches the worker as a plain message.
+  // A note may be longer than a chat message, as the panel's 2,000-character note is.
+  const longNote = Array.from({ length: 150 }, (_, index) => `word${index}`).join(' ')
+  await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', file: 'src/c.ts', line: 1, text: longNote })
+  expect(h.runtime.store.tickets.get(ticket.id)!.notes?.at(-1)?.text).toBe(longNote)
+  // A note without a file still reaches the worker as a plain message, where the shorter limit applies.
   const plain = await h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
     { ticket_id: 'T-0001', text: '继续用单列布局。' }) as unknown as { reason: string }
   expect(plain.reason).toBe('Noted for the worker')
+  await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
+    { ticket_id: 'T-0001', text: longNote })).rejects.toThrow(/At most 100 words/)
   // The schema refuses a line without a file, a backwards range, and a note without text.
   await expect(h.runTool(h.runtime.masterId, 'orchestrator_ticket_note',
     { ticket_id: 'T-0001', line: 3, text: 'x' })).rejects.toThrow(/file is required with line/)
