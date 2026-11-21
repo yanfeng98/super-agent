@@ -16,7 +16,7 @@
 | 工具链 | `native/rust-anything/rust-toolchain.toml` | 固定 `1.97.0`（oxc 依赖要求同一版本）；rustup 缺失时自动安装。这是与上游唯一的文件差异 |
 | 插件包 | `packages/mcp/rust-anything/`（`@deepseek-ai/dsh-rust-anything`） | `src/binary.ts` 解析暂存产物（`command` → `RUST_ANYTHING_BIN` → 仓库内构建产物），`src/index.ts` 挂一个 `dsh-mcp-client` 实例 |
 | 挂载点 | `packages/bundle/web-app/presets/standard.patch.yml` | Web 默认 preset `standard` 的 Agent 得到 16 个 `mcp__rust-anything__*` 工具（eager） |
-| 技能 | `.agents/skills/dsh-rust-anything/{SKILL.md,whole-app.md}` | 仓库根技能目录，clone 后自动发现；描述命中后加载完整迁移流程（已补 Kotlin 与本仓库须知） |
+| 技能 | `.agents/skills/dsh-rust-anything/{SKILL.md,whole-app.md}` | 仓库根技能目录，clone 后自动发现；描述命中后加载完整迁移流程（已补 Kotlin 与本仓库须知）。技能自带 `dsh-` 前缀，输入框敲 `/` 可点名调用（旧名 `rust-anything`，见 [日志 00101](logs/00101-技能改名-dsh-rust-anything.md)） |
 | 类型/清单 | `tsconfig.base.json` 路径映射、`tsconfig.host.json` 工程引用、`packages/mcp/README.md` 列表 | 让仓库的编译、产品可达性、文档门禁都认这个包 |
 | 本地化元数据 | `packages/mcp/rust-anything/locale/{en,zh,ja,es,fr,de,ru,pt}.json` + `exports`/`files` | `verify-locale-metadata` 要求全部 8 种发布语言的 `meta.title`/`meta.description` |
 | 依赖形态 | `@deepseek-ai/dsh-mcp-client` 放在 `peerDependencies`（同时 devDependency） | 插件之间按仓库共享实例约定走 peer；模块图里出现 `rust-anything → mcp-client` 边 |
