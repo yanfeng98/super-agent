@@ -466,7 +466,7 @@ async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persiste
  * @returns the running scaffold.
  */
 /** Rows this fork adds on top of upstream; the shared web e2e scaffold runs upstream surfaces. */
-const FORK_ONLY_ROWS = ['ui-boot-animation', 'dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu',
+const FORK_ONLY_ROWS = ['ui-boot-animation', 'dsh-superagent', 'dsh-superagent-feishu',
   'dsh-superagent-local'] as const
 
 export async function launchWebScaffold(options: LaunchOptions = {}): Promise<WebScaffold> {

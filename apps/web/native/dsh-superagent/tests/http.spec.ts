@@ -31,23 +31,23 @@ it('answers each kind of failure with its own status', async () => {
   const saves: unknown[] = []
   const call = serve({
     store: { tickets: { get: () => undefined }, blockRevision: () => 0 },
-    sources: { instances: () => [{ id: 'github' }] },
+    sources: { instances: () => [{ id: 'feishu' }] },
     settings: { save: async (...args: unknown[]) => {
       saves.push(args)
       if (args[1] === 'stale') throw new SettingsConflict('Settings changed. Reload before saving.')
       if (args[1] === 'invalid') z.object({ maxWorkers: z.number() }).parse({})
-      if (args[1] === 'refused') throw new SetupError('agentCliUnset')
+      if (args[1] === 'refused') throw new SetupError('feishuCliFailed')
       if (args[1] === 'broken') throw new Error('disk full')
       return { saved: true, revision: 1, restarting: false }
     } },
   })
   expect(await call('PUT', 'settings/executor', { value: 'stale', revision: 0 })).toMatchObject({ status: 409 })
   expect(await call('PUT', 'settings/executor', { value: 'invalid', revision: 0 })).toMatchObject({ status: 400, body: { issues: [{ path: 'maxWorkers' }] } })
-  expect(await call('PUT', 'settings/source:github', { value: 'refused', revision: 0 })).toMatchObject({ status: 400, body: { setup: { code: 'agentCliUnset', place: 'github' } } })
+  expect(await call('PUT', 'settings/source:feishu', { value: 'refused', revision: 0 })).toMatchObject({ status: 400, body: { setup: { code: 'feishuCliFailed', place: 'feishu' } } })
   expect(await call('PUT', 'settings/executor', { value: 'broken', revision: 0 })).toEqual({ status: 500, body: { error: 'disk full' } })
   // Block names are validated before calling settings.save: reject unknown blocks or non-existent Sources.
   expect(await call('PUT', 'settings/pause', { value: {}, revision: 0 })).toMatchObject({ status: 400 })
-  expect(await call('PUT', 'settings/source:feishu', { value: {}, revision: 0 })).toEqual({ status: 404, body: { error: 'Source not found' } })
+  expect(await call('PUT', 'settings/source:missing', { value: {}, revision: 0 })).toEqual({ status: 404, body: { error: 'Source not found' } })
   expect(saves).toHaveLength(4)
   expect(await call('POST', 'tickets/t9/retry')).toEqual({ status: 404, body: { error: 'Ticket not found' } })
   expect(await call('GET', 'nothing/here')).toEqual({ status: 404, body: { error: 'Unknown operation' } })
@@ -71,7 +71,7 @@ it('decodes path parameters and parses each route\'s query', async () => {
 
 it('answers only a same-origin request from the panel on the loopback address', async () => {
   const call = serve({ sessions: { delivery: async () => 'injected' }, engine: { unsubscribe: () => true } })
-  const post = (headers: Headers) => call('POST', 'threads/github%3A1/unsubscribe', undefined, headers)
+  const post = (headers: Headers) => call('POST', 'threads/feishu%3A1/unsubscribe', undefined, headers)
   for (const headers of [{ 'x-orchestrator-request': undefined }, { host: 'evil.example:3082' }, { host: '127.0.0.1:9999' },
     { origin: 'http://evil.example' }, { host: 'localhost:3082', origin: 'http://127.0.0.1:3082' }]) {
     expect(await post(headers), JSON.stringify(headers)).toEqual({ status: 403,

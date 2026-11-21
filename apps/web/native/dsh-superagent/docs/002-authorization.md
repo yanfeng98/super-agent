@@ -2,13 +2,13 @@
 
 Authorization determines who may start work and what that work may include. This document builds on [001 Domain model](001-domain.md).
 
-The host enforces allowed lists, rules and Mandates. Messages, comments and quoted documents are inputs to a decision; they cannot change those permissions.
+The host enforces allowed lists, rules and Mandates. Messages, review notes and quoted documents are inputs to a decision; they cannot change those permissions.
 
 ## Two paths for a Trigger
 
 ### Eval: deciding whether to start work
 
-The Source records whether a message addresses the agent: `mention` for a mention of the bot or agent account, and `direct` for a direct message. The gate checks the sender and the Source's Policy:
+The Source records whether a message addresses the agent: `mention` for a mention of the bot, and `direct` for a direct message or a request created in the panel. The gate checks the sender and the Source's Policy:
 
 - An allowed person who addresses the agent makes an explicit request.
 - A person's follow-up on a Thread with Tickets follows the rules below.
@@ -17,7 +17,7 @@ The Source records whether a message addresses the agent: `mention` for a mentio
 
 ### Subscriptions: continuing existing work
 
-Every message on a subscribed Thread reaches its subscribed Tickets as context, including messages from bots and CI. This delivery bypasses the gate and grants no new authority. Each Ticket remains limited by its Mandate.
+Every message on a subscribed Thread reaches its subscribed Tickets as context, including messages from bots. This delivery bypasses the gate and grants no new authority. Each Ticket remains limited by its Mandate.
 
 A person's message on a Ticket's own Thread belongs to that Ticket's Executor to decide. The same applies when the main Session attaches a message to a Ticket. While an Executor owns the message, it takes no Eval and gets no Decision. Each Executor either handles the request within its Ticket's scope or hands it back for routing elsewhere.
 
@@ -39,13 +39,13 @@ A person can send an owned follow-up to Eval from the panel. If the main Session
 
 ### Context-only subscriptions
 
-An Executor can follow a related Thread, such as another Issue or pull request, for context. Its messages reach the Ticket but grant no authority or follow-up strength. Human messages there do not resume an ended Ticket unless the main Session attaches a message from that Thread. Notes from the main Session about other work are also context only.
+An Executor can follow a related Thread, such as another Feishu topic, for context. Its messages reach the Ticket but grant no authority or follow-up strength. Human messages there do not resume an ended Ticket unless the main Session attaches a message from that Thread. Notes from the main Session about other work are also context only.
 
 Human messages that reach no Ticket, including Threads whose Tickets were stopped by a person, take the Eval path. Bot messages take that path independently of their delivery to subscribed Tickets.
 
 ### A person speaking to the main Session
 
-When the person talks to the main Session directly, it can record their request as a local request with `orchestrator_request`: the request becomes a local Trigger with the operator as its actor, its Markdown archive is written, and the local Source's Policy part decides admission; the first request seeds that part. It can also send their answer to a local Ticket with `orchestrator_answer`: the answer is a person's follow-up on the Ticket's Thread, so the worker reads it as an Input, an ended Ticket resumes, and a stopped Ticket does not. It can also merge an ended Ticket on an explicit request with `orchestrator_ticket_merge`, which applies the panel's review, note, check and CI gates, rebases a branch the repository moved past, runs the configured checks that have not passed, and merges locally; a rebase that conflicts hands the conflict to the Ticket's worker, `cleanup` removes the worktree and branch afterwards, and `push` sends the merged branch to its upstream. It can also record the merge to carry out once the gates pass with `orchestrator_ticket_automerge`, for a person who says "merge it once the check passes": the request is the person's, the host runs the same gates by itself, and the panel shows it and can cancel it; a gate that waits for another Ticket or for the person does not use up the attempts that end the request. It can also undo a merge it made with `orchestrator_ticket_revert`: that commits the inverse on the branch the merge moved, records the reverting commit, and with `push` sends it upstream. It can queue several merges with `orchestrator_merge_queue`, which is the same merge authority carried out one Ticket after another. It records that one Ticket waits for another with `orchestrator_ticket_dependency`, the same dependency the panel edits, so a person who says "wait for T-0003" needs no second step. These are the person actions the main Session performs: it can stop or discard a Ticket with `orchestrator_ticket_abandon`, which withdraws its queued or standing merge; record an anchored review note with `orchestrator_ticket_note`, naming its `file` and optionally a `line` or `end_line`; approve its changes, reject them with `changes: true` and an optional sentence, or resolve its notes with `orchestrator_ticket_review`; rerun its configured check with `orchestrator_ticket_check`; retry a failed push or remove a merged worktree with `orchestrator_ticket_finish`; and pause or release the merge queue with `orchestrator_merge_queue` and `paused`, while renaming, labelling and a separate rebase stay in the panel. A queued merge it recorded can be retried or cancelled from the same tool, which with no Tickets reports the queue and what still waits for a merge or a review. The tools are for the person's own messages only, never for text inside a Ticket, a report or a tool result, and none of them makes a technical decision.
+When the person talks to the main Session directly, it can record their request as a local request with `orchestrator_request`: the request becomes a local Trigger with the operator as its actor, its Markdown archive is written, and the local Source's Policy part decides admission; the first request seeds that part. It can also send their answer to a local Ticket with `orchestrator_answer`: the answer is a person's follow-up on the Ticket's Thread, so the worker reads it as an Input, an ended Ticket resumes, and a stopped Ticket does not. It can also merge an ended Ticket on an explicit request with `orchestrator_ticket_merge`, which applies the panel's review, note, check and dependency gates, rebases a branch the repository moved past, runs the configured checks that have not passed, and merges locally; a rebase that conflicts hands the conflict to the Ticket's worker, `cleanup` removes the worktree and branch afterwards, and `push` sends the merged branch to its upstream. It can also record the merge to carry out once the gates pass with `orchestrator_ticket_automerge`, for a person who says "merge it once the check passes": the request is the person's, the host runs the same gates by itself, and the panel shows it and can cancel it; a gate that waits for another Ticket or for the person does not use up the attempts that end the request. It can also undo a merge it made with `orchestrator_ticket_revert`: that commits the inverse on the branch the merge moved, records the reverting commit, and with `push` sends it upstream. It can queue several merges with `orchestrator_merge_queue`, which is the same merge authority carried out one Ticket after another. It records that one Ticket waits for another with `orchestrator_ticket_dependency`, the same dependency the panel edits, so a person who says "wait for T-0003" needs no second step. These are the person actions the main Session performs: it can stop or discard a Ticket with `orchestrator_ticket_abandon`, which withdraws its queued or standing merge; record an anchored review note with `orchestrator_ticket_note`, naming its `file` and optionally a `line` or `end_line`; approve its changes, reject them with `changes: true` and an optional sentence, or resolve its notes with `orchestrator_ticket_review`; rerun its configured check with `orchestrator_ticket_check`; retry a failed push or remove a merged worktree with `orchestrator_ticket_finish`; and pause or release the merge queue with `orchestrator_merge_queue` and `paused`, while renaming, labelling and a separate rebase stay in the panel. A queued merge it recorded can be retried or cancelled from the same tool, which with no Tickets reports the queue and what still waits for a merge or a review. The tools are for the person's own messages only, never for text inside a Ticket, a report or a tool result, and none of them makes a technical decision.
 
 ## Strength
 
@@ -62,7 +62,6 @@ For an unlisted person, an explicit admission cell takes precedence even on a Th
 Each Source's Policy has an admission table. Its rows are receiving scopes:
 
 - **Feishu:** each configured chat, other chats the bot receives mentions from, and direct messages. Other chats are received only when **其他群** is set to **仅 @** on the Feishu card.
-- **GitHub:** new Issues, new pull requests, comments and the default branch's CI.
 
 A row has up to three cells. Each cell decides whether a message becomes an explicit request, an inferred candidate or nothing:
 
@@ -72,7 +71,7 @@ A row has up to three cells. Each cell decides whether a message becomes an expl
 | Not on the list, addressing the agent | explicit, inferred, ignore | ignore |
 | Not on the list, not addressing the agent | inferred, ignore | ignore |
 
-Cells for unaddressed messages are available only where the Source receives every message, such as a Feishu chat set to **全部消息** or a GitHub scope with its receive-all switch enabled. A CI result has no sender, so its row offers only the last cell. Bot messages use the bot list instead of these cells.
+Cells for unaddressed messages are available only where the Source receives every message, such as a Feishu chat set to **全部消息**. Bot messages use the bot list instead of these cells.
 
 Setting the unlisted-addressed cell to explicit lets anyone in that scope request work by mentioning the agent. This can be useful for a dedicated support chat. Inferred candidates still depend on the accept mode. Follow-ups normally bypass this table, except that an explicit cell still grants explicit strength.
 
@@ -80,9 +79,9 @@ The admission table is part of the Policy version. Weakening a cell does not imm
 
 ### Bots and automated reviewers
 
-The host recognizes GitHub Apps, logins ending in `[bot]`, and Feishu bots as bots. A Source can list bots such as `dependabot[bot]` whose messages may become inferred candidates. They must either address the agent or post in a scope that receives every message. They cannot make explicit requests or stop Tickets.
+The host recognizes Feishu bots as bots. A Source can list bots whose messages may become inferred candidates. They must either address the agent or post in a scope that receives every message. They cannot make explicit requests or stop Tickets.
 
-An automated reviewer using an ordinary account counts as a person to the host. Its comments reach subscribed Tickets and generate follow-up notices. Team prompt text must identify such accounts as automated reviewers.
+A Feishu account that posts automatically counts as a person to the host unless the Source lists it as a bot. Its messages reach subscribed Tickets and generate follow-up notices, and team prompt text must identify such accounts as automated.
 
 ## Routing candidates
 
@@ -128,7 +127,7 @@ A condition on what the Executor may do with its own result, such as when it may
 
 ## Resume and stop
 
-An ended Ticket keeps its Mandate. A person's message on one of its own Threads can resume the same work without a new Eval or Decision, regardless of who sent it. Bots and CI do not wake ended Tickets. The Executor decides whether the request fits the scope and ends the round if it does not.
+An ended Ticket keeps its Mandate. A person's message on one of its own Threads can resume the same work without a new Eval or Decision, regardless of who sent it. Bots do not wake ended Tickets. The Executor decides whether the request fits the scope and ends the round if it does not.
 
 Only three operations change a Mandate: accept creates it, a person's stop withdraws it, and failed revalidation revokes it. A Ticket stopped by a person stays ended and receives nothing more. Work requested there needs a new accept.
 

@@ -1,35 +1,18 @@
 # 006 Deployment
 
-Use this guide to install, configure and operate dsh-superagent. It covers accounts, startup checks, upgrades and troubleshooting, building on [001 Domain model](001-domain.md) through [005 Panel](005-panel.md).
+Use this guide to install, configure and operate dsh-superagent. It covers the optional Feishu bot, startup checks, upgrades and troubleshooting, building on [001 Domain model](001-domain.md) through [005 Panel](005-panel.md).
 
 ## Built-in copy
 
-This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source and the GitHub Source on and Feishu off. GitHub is optional: without a repository and an agent account, setup succeeds and you create work from the panel (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the repository, the agent CLI and the Policy in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation, its accounts and its operations, which apply to the built-in copy too.
+This checkout mounts dsh-superagent in its Web profile: after `pnpm install && pnpm run build`, `pnpm dsh web` serves the **Superagent** panel, with the local ticket Source on and Feishu off. Setup needs no repository and no account: work starts from the panel or the main Session (see Local tickets). There is no separate profile and no `dsh plugin add`. The state directory defaults to `<DSH_HOME>/state/superagent`; set `stateDir` in the profile's `cordis.patch.yml` to move it. Configure the Policy and Execution in the panel; the Management API below is the same one the panel uses and follows the Web server's bind address. The rest of this document describes the standalone installation and its operations, which apply to the built-in copy too.
 
 ### Quick start
 
 1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), and open **Superagent** in the sidebar.
-2. Prepare a dedicated agent GitHub account with write access to the repository, and a `gh` wrapper that uses only that account:
-
-   ```sh
-   mkdir -p ~/.local/bin
-   cat > ~/.local/bin/gh-agent <<'EOF'
-   #!/bin/sh
-   GH_CONFIG_DIR="$HOME/.config/gh-agent" exec gh "$@"
-   EOF
-   chmod +x ~/.local/bin/gh-agent
-   gh-agent auth login
-   gh-agent api user --jq .login
-   ```
-
-3. In **Settings → Sources → GitHub**, set the repository and the wrapper path; setup verifies the account and its push access.
-4. In **Settings → Eval**, add at least one allowed login under the GitHub Source. Until a Source has an allowed login, no request becomes a Ticket.
-5. In **Settings → Execution**, set the directory root and a prepare command that creates a worktree per Ticket (see the prepare-command example under Settings below).
-6. From an allowed account, comment `@<agent login> <request>` on an Issue or pull request; Overview shows the Ticket within the polling interval.
-
-Editing an Issue body to add a mention is not received; post a comment instead.
-
-Without GitHub, skip steps 2–5 and create tickets from the panel instead; setup no longer waits for a repository or an account.
+2. In **Settings → Execution**, set the directory root and, when the work needs files, a prepare command that creates a worktree per Ticket (see the prepare-command example under Settings below). The default root is `<stateDir>/work`.
+3. Create the first ticket under **Execution → New ticket**, or ask the main Session in the DSH chat. The first request seeds the local Source's Policy part with the operator on the allowed list, so no extra configuration is needed.
+4. Optionally enable Feishu (see Enabling Feishu) and mention the bot in a configured chat.
+5. Review the result on the ticket page and **Merge** it once the gates pass, or ask the main Session to merge it.
 
 ### Local tickets
 
@@ -40,10 +23,10 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
 - When the Ticket ends, the file receives a **Closed** section with the outcome, the reason, the last summary, the git facts of the workspace (branch, commits since launch, changed and uncommitted files), and the configured check's status and command. A person who reopens the Ticket from its page appends a **Reopened** section, and the next end appends a new close. Each section is idempotent, so a retried host operation does not duplicate it.
 - Reopening is available on an ended Ticket whose Mandate the current Policy still holds and whose branch was not merged and whose worktree still exists; it starts a fresh Assignment under that Mandate. Stopping stays permanent for later messages on the Thread, so an accidental stop is undone with **Reopen**, not with a comment.
 - The panel's new-ticket form sends an idempotency key with each draft. A retry after a lost response returns the same Ticket instead of creating a second one; editing the title or request starts a new key.
-- A local ticket's page also has a reply box. Its message is appended to the same file as a follow-up, delivered to the Ticket's Executor as an Input, and resumes an ended Ticket. The main Session can send the same kind of follow-up with `orchestrator_answer` when the person answers in the DSH chat, and it can merge an ended Ticket with `orchestrator_ticket_merge` on an explicit request; that merge applies the same review, note, check and CI gates as the panel, rebases a branch the repository moved past, runs the configured check when it has not passed, pushes only when asked with `push`, and removes the worktree afterwards when asked with `cleanup`; a rebase that conflicts resumes the Ticket with the conflict, which its worker resolves. The main Session records with `orchestrator_ticket_dependency` the same "waits on before merging" dependencies the ticket page edits, and with `start` it also holds the waiting Ticket's first Assignment until they merge. Renaming, labelling and a separate rebase stay on the ticket page; the main Session also stops or discards a Ticket, withdrawing its queued merge, records an anchored note, approves or rejects its changes, resolves its review notes, reruns its configured check, retries a failed push, cleans up a merged worktree, and pauses or releases the merge queue; a stopped Ticket merges only on an explicit request, not from the queue or a standing one. Use either to answer the agent's question when a Ticket waits for a person. A stopped Ticket does not resume on a message; reopen it first. A merged, discarded or cleaned Ticket does not resume either: its message goes back to Eval.
+- A local ticket's page also has a reply box. Its message is appended to the same file as a follow-up, delivered to the Ticket's Executor as an Input, and resumes an ended Ticket. The main Session can send the same kind of follow-up with `orchestrator_answer` when the person answers in the DSH chat, and it can merge an ended Ticket with `orchestrator_ticket_merge` on an explicit request; that merge applies the same review, note, check and dependency gates as the panel, rebases a branch the repository moved past, runs the configured check when it has not passed, pushes only when asked with `push`, and removes the worktree afterwards when asked with `cleanup`; a rebase that conflicts resumes the Ticket with the conflict, which its worker resolves. The main Session records with `orchestrator_ticket_dependency` the same "waits on before merging" dependencies the ticket page edits, and with `start` it also holds the waiting Ticket's first Assignment until they merge. Renaming, labelling and a separate rebase stay on the ticket page; the main Session also stops or discards a Ticket, withdrawing its queued merge, records an anchored note, approves or rejects its changes, resolves its review notes, reruns its configured check, retries a failed push, cleans up a merged worktree, and pauses or releases the merge queue; a stopped Ticket merges only on an explicit request, not from the queue or a standing one. Use either to answer the agent's question when a Ticket waits for a person. A stopped Ticket does not resume on a message; reopen it first. A merged, discarded or cleaned Ticket does not resume either: its message goes back to Eval.
 - Search reaches the request text, the reply text, the title, the labels and the latest result, so a phrase the agent wrote in its result finds the Ticket and the archive that holds it. Qualifiers narrow the Ticket list: `is:open`, `is:ended`, `tag:<name>` (or `label:<name>`), `author:<id or name>`, and `created:` or `updated:` with a date or a full timestamp after an optional `>=`, `<=`, `>` or `<`, for example `is:open tag:backend created:>=2026-11-01`.
-- An ended Ticket whose directory is a linked git worktree also offers **Merge**, **Rebase** and **Discard**. Merge takes the chosen strategy: fast-forward, a single squashed commit, or a merge commit; a squash or merge commit carries the Ticket's title, the worker's report summary, and its number. Each moves the branch checked out in the main working tree to the Ticket branch and refuses when that tree has uncommitted tracked changes, an open review note remains, a review requested changes, an approval required by **Require review approval** is missing, the configured check has not passed since the ending, or a bound pull request's CI has failed. All three require the Ticket branch to contain the repository's commit, so none leaves a conflict state; a branch left behind by newer repository commits is refused with the target named, and **Rebase** rewrites the Ticket branch onto it (a conflict aborts and keeps the commits). Discard removes the worktree and deletes the branch, uncommitted work included. After a merge, **Clean up worktree** removes the worktree and its merged branch with git's safe deletion check; after a squash merge it removes the branch without that ancestry check because the squash commit is not an ancestor. The prepared worktree example above produces exactly this layout; a plain directory gets none of these actions.
-- The local Source also has an optional **Notification webhook** (http(s) URL). When a local Ticket asks a person a question, ends, is merged or reverted, needs a required review, sees a followed pull request's CI fail, fails the configured check, or gives up a standing merge, the host POSTs a small JSON body (`event`, `at`, `ticket{id,number,title}`, plus `question`, `outcome`/`reason`, or `text`) with a five-second timeout. It is best effort: a failure is logged and never changes the Ticket. Keep any secret in the URL and use a private receiver; the host sends no credentials.
+- An ended Ticket whose directory is a linked git worktree also offers **Merge**, **Rebase** and **Discard**. Merge takes the chosen strategy: fast-forward, a single squashed commit, or a merge commit; a squash or merge commit carries the Ticket's title, the worker's report summary, and its number. Each moves the branch checked out in the main working tree to the Ticket branch and refuses when that tree has uncommitted tracked changes, an open review note remains, a review requested changes, an approval required by **Require review approval** is missing, the configured check has not passed since the ending. All three require the Ticket branch to contain the repository's commit, so none leaves a conflict state; a branch left behind by newer repository commits is refused with the target named, and **Rebase** rewrites the Ticket branch onto it (a conflict aborts and keeps the commits). Discard removes the worktree and deletes the branch, uncommitted work included. After a merge, **Clean up worktree** removes the worktree and its merged branch with git's safe deletion check; after a squash merge it removes the branch without that ancestry check because the squash commit is not an ancestor. The prepared worktree example above produces exactly this layout; a plain directory gets none of these actions.
+- The local Source also has an optional **Notification webhook** (http(s) URL). When a local Ticket asks a person a question, ends, is merged or reverted, needs a required review, fails the configured check, or gives up a standing merge, the host POSTs a small JSON body (`event`, `at`, `ticket{id,number,title}`, plus `question`, `outcome`/`reason`, or `text`) with a five-second timeout. It is best effort: a failure is logged and never changes the Ticket. Keep any secret in the URL and use a private receiver; the host sends no credentials.
 - **Execution** offers **Enable desktop notifications**: the Web app then announces a Ticket that starts waiting on a person or ends, while the app is open. Permission is per browser; turning it on stores the choice in that browser only. The header's notification bell keeps the same events in a persistent inbox with unread counts, per-notification links and **Mark all read**.
 - The new-ticket form can **hold for approval**: the Ticket is accepted and acknowledged, but no worker launches until **Approve** on its page. Use it for work queued from a script or for requests that should be reviewed before any command runs.
 - The new-ticket form accepts up to five attachments, 8 MB in total. They are copied beside the archive under `<request id>.files/` with mode 600, their absolute paths are listed in the request and in an **Attachments** section of the Markdown file, and the worker reads them like any local file. A retried submission with the same key does not duplicate them.
@@ -63,8 +46,7 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
   ```sh
   git -C /path/to/the/project worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" HEAD
   ```
-- A partly configured GitHub Source (a repository without its CLI, or an account the CLI cannot reach) still fails the deployment check, which pauses every Source, including local tickets. Clear both fields or fix the account.
-- Without a GitHub account, git has no agent identity to commit as. The worker git configuration then carries the neutral author `dsh-superagent <dsh-superagent@localhost>`; the Delivery requirements prompt can name another author.
+- The worker git configuration carries the neutral author `dsh-superagent <dsh-superagent@localhost>`; a worker that does not set its own identity commits under it, and the Delivery requirements prompt can name another author.
 
 ### Enabling Feishu
 
@@ -80,10 +62,9 @@ Then configure the bot CLI, chats and direct messages under **Settings → Sourc
 ## What runs
 
 - **A dedicated DeepSeek Harness profile** (standalone installation; the built-in copy uses the Web profile), called `superagent` in this guide. Create it from the Web profile template. It loads the bundle and serves its panel on `127.0.0.1`. Keep it separate from the profile you work in: the plugin changes process-wide `PATH` and git settings, and its process needs independent restarts and upgrades.
-- **An agent GitHub account.** The agent comments, pushes branches and opens pull requests as this account, through a GitHub CLI signed in only as that account.
-- **Optional:** a Feishu bot for chat requests.
+- **Optional:** a Feishu bot for chat requests. Without one, local tickets are the only intake.
 
-Plugin configuration holds the state directory and machine limits. Use the panel for everything else: Sources for the repository and accounts, Policy for allowed lists, and Execution for worker directories and commands.
+Plugin configuration holds the state directory and machine limits. Use the panel for everything else: Sources for the local archive and the Feishu bot, Policy for allowed lists, and Execution for worker directories and commands.
 
 ### Permissions and isolation
 
@@ -91,35 +72,16 @@ The bundle defines `dsh-superagent-worker` for Executors and `dsh-superagent-rou
 
 Opening a blank managed Session in the Web UI can select the profile's default preset. dsh-superagent restores its role-specific preset before the first turn.
 
-Both presets run with `danger-full-access` as the operator's OS user and read messages from subscribed Threads. Account wrappers choose the agent's credentials by default; they do not isolate the process. A worker can execute programs by path and read the operator's home directory. For isolation, use a dedicated OS account containing only the agent's credentials.
+Both presets run with `danger-full-access` as the operator's OS user and read messages from subscribed Threads. The command shims choose the bot's credentials by default; they do not isolate the process. A worker can execute programs by path and read the operator's home directory. For isolation, use a dedicated OS account containing only the agent's credentials.
 
 ## Prerequisites
 
 - Node.js 22.19+ or 24+, pnpm, git 2.32+, Python 3.8+ and tmux
-- For the GitHub Source: GitHub CLI (`gh`) 2.48 or later. Source CLI fields must point to `gh` or `lark-cli` wrappers; the host relies on their subcommands and output formats.
-- For the GitHub Source: a repository on github.com; GitHub Enterprise Server is not supported. To create a checkout per Ticket, keep a local clone from which the prepare command can add worktrees. Install `git-lfs` if that repository uses Git LFS.
+- A local clone of the repository the agent works in, when the prepare command creates a worktree per Ticket. Install `git-lfs` if that repository uses Git LFS.
 - A model provider configured for DeepSeek Harness. dsh-superagent uses the profile's default model unless the Eval or Execution settings name another.
 - For Feishu: `lark-cli` (tested with 1.0.90) and a Feishu or Lark app with a bot
 
 ## Accounts
-
-### Agent GitHub account
-
-1. Create a GitHub user account for the agent and give it write access to the repository. A GitHub App cannot be the agent, because dsh-superagent reads the account's notifications.
-2. Give it a GitHub CLI that uses only its own credentials:
-
-   ```sh
-   mkdir -p ~/.local/bin
-   cat > ~/.local/bin/gh-agent <<'EOF'
-   #!/bin/sh
-   GH_CONFIG_DIR="$HOME/.config/gh-agent" exec gh "$@"
-   EOF
-   chmod +x ~/.local/bin/gh-agent
-   gh-agent auth login
-   gh-agent api user --jq .login
-   ```
-
-   Sign in as the agent account; the last command prints its login. dsh-superagent reads the login the same way.
 
 ### Feishu bot (optional)
 
@@ -219,17 +181,16 @@ Check dsh-superagent: run `scripts/dsh-superagent --profile superagent status` i
 
 Setup must succeed before polling or work starts. Overview lists missing requirements and links to their settings. A settings change runs setup again. If you fix something outside the application, such as CLI authentication, choose **Check again**.
 
-1. **Sources.** The local Source sets the Markdown archive directory. For GitHub, set the repository (`owner/name`) and agent CLI, for example `/home/me/.local/bin/gh-agent`. Requests normally arrive through the agent account's notifications. A new Issue or comment mentioning the account arrives on the next poll; adding a mention by editing an existing Issue body does not. Post a new comment instead. For Feishu, set the bot CLI, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
-2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the GitHub accounts and Feishu users who may ask for work; until a list has someone, no request can become a Ticket. With Feishu, a chat can be chosen to sync the list from, at startup and on **Sync now**.
+1. **Sources.** The local Source sets the Markdown archive directory, an optional notification webhook and its per-project rows. For Feishu, set the bot CLI, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
+2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the people who may ask for work: the local Source lists the operator, and Feishu lists its users; until a list has someone, no request can become a Ticket. With Feishu, a chat can be chosen to sync the list from, at startup and on **Sync now**.
 3. **Execution.** The directory root, a prepare command, and optionally one check command per line, each named by writing `name: command`. The checks run in the worktree when each Ticket ends, and each keeps its own result beside the combined one; once configured, a merge requires all of them to pass after the Ticket's latest ending. To give each Ticket a checkout of the repository:
 
    ```sh
-   git -C /home/me/src/widgets fetch --no-tags "https://github.com/$DSH_SUPERAGENT_GITHUB_REPOSITORY.git" "${DSH_SUPERAGENT_GITHUB_PR_HEAD:-HEAD}:refs/dsh-superagent/$DSH_SUPERAGENT_TICKET" &&
-   git -C /home/me/src/widgets worktree add -b "agent/$DSH_SUPERAGENT_NAME" "$DSH_SUPERAGENT_DIR" "refs/dsh-superagent/$DSH_SUPERAGENT_TICKET"
+   git -C /home/me/src/widgets worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" HEAD
    ```
 
-   List personal CLIs, such as one signed in to your own account, as blocked commands.
-4. **Prompts.** Set the team sections: the GitHub disclosure line, review bots, the commit author and the auto-merge condition.
+   List personal CLIs as blocked commands.
+4. **Prompts.** Set the team sections: the commit author, the delivery evidence a UI change needs, and the reviews a change must request.
 
 ### Management API
 
@@ -243,7 +204,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 
 | Request | Answer |
 | --- | --- |
-| `GET state` | What every page reads: `setup`, with `problem` and `feishuProblem`, each `null` or a setup problem with `place`, `code`, `values` and `detail`, and `accounts` once setup resolved them; `health`, an entry per part, below, with `state` (`starting`, `ready`, `paused` or `error`), `detail` and `at`; `load`, the Executor Sessions `running`, the Tickets `queued` and `maxWorkers`; `paused`; and `masterId` |
+| `GET state` | What every page reads: `setup`, with `problem` and `feishuProblem`, each `null` or a setup problem with `place`, `code`, `values` and `detail`, and, once setup resolved them, `accounts` with only `feishu`, the resolved bot or `null`; `health`, an entry per part, below, with `state` (`starting`, `ready`, `paused` or `error`), `detail` and `at`; `load`, the Executor Sessions `running`, the Tickets `queued` and `maxWorkers`; `paused`; and `masterId` |
 | `GET settings` | `blocks`: `policy`, `eval` and `executor`, each with its `value` and its `revision`; `sources`: the Source instances, each with `id`, `kind`, `installed`, its block's `value`, `{"enabled": …, "config": {…}}`, and `revision`, its kind's form, and its setup `problem` when it has one; `policyVersion`; and `environment`, the execution environment's `root` and `variables` |
 | `GET sources` | Each Source's status: `state` (`missing`, `off`, `error`, `setup`, `starting`, `paused` or `ready`), the `health` of its parts, its setup `problem`, the last day's `stats`, the Triggers it `filtered` in that day, and the messages it `dropped` in that day, newest drop first, each with its `channel`, `preview`, `ticket` (`id` and `title`) when it was for one, its `thread` when the store has it, and `dropped.at` and `dropped.reason`, `channelGone` or `channelIgnored` |
 | `PUT settings/<block>` with `{"value": …, "revision": n}` | Saves one block: `saved`, the block's new `revision`, `policy_changed` and `restarting`. `value` is the whole block, as `GET settings` holds it; a missing key takes its default |
@@ -260,7 +221,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 | `POST tickets/<id>/request` with `{"text": …}` | Replaces the request text the Ticket shows; the originating Trigger is unchanged: `request`, with `text` and `at` |
 | `POST tickets/<id>/tags` with `{"tags": []}` | Replaces a Ticket's labels (at most eight, each 1 to 24 characters; an empty list clears them): `tags` |
 | `POST tickets/<id>/retry`, `POST tickets/<id>/stop` | Retries or stops a Ticket, as the panel does |
-| `POST tickets/<id>/merge?strategy=ff\|squash\|merge` with `{"push": true}` to push afterwards, `POST tickets/<id>/discard` | Merges the Ticket branch into the repository by the chosen strategy (default `ff`) (`merged: true`, `branch`, `target`, the `head` commit the target branch holds afterwards, and `rebased` or `recaptured` when the merge had to rebase the branch or capture its review again, plus `pushed` or `pushError` when it pushed; a squash or merge commit carries the Ticket's title and report summary), refusing while a review note is open, a review requested changes, an approval required by `requireReview` is missing, a Ticket it is blocked by has not merged, the configured check has not passed since the ending, or a bound pull request's CI has failed; a rebase that conflicts resumes the Ticket for its worker and answers `400` with the conflict, or removes its linked worktree and branch (`discarded: true`) |
+| `POST tickets/<id>/merge?strategy=ff\|squash\|merge` with `{"push": true}` to push afterwards, `POST tickets/<id>/discard` | Merges the Ticket branch into the repository by the chosen strategy (default `ff`) (`merged: true`, `branch`, `target`, the `head` commit the target branch holds afterwards, and `rebased` or `recaptured` when the merge had to rebase the branch or capture its review again, plus `pushed` or `pushError` when it pushed; a squash or merge commit carries the Ticket's title and report summary), refusing while a review note is open, a review requested changes, an approval required by `requireReview` is missing, a Ticket it is blocked by has not merged, or the configured check has not passed since the ending; a rebase that conflicts resumes the Ticket for its worker and answers `400` with the conflict, or removes its linked worktree and branch (`discarded: true`) |
 | `POST tickets/<id>/rebase`, `POST tickets/<id>/cleanup` | Rebases the Ticket branch onto the repository's checked-out branch (`rebased: true`, `branch`, `target`; a conflict resumes the Ticket for its worker and answers `400`), or removes a merged Ticket's worktree and merged branch (`cleaned: true`; a squash-merged branch is force-deleted because its commit is not an ancestor) |
 | `POST tickets/<id>/revert` with `{"push": true}` to push the reverting commit | Undoes the Ticket's recorded merge on the branch it moved: `ticket_id`, `branch`, `target` and `commit`, plus `pushed` or `pushError` when a push was asked for; a fast-forward merge is undone commit by commit from the base the merge recorded; refused when the Ticket was not merged or was already reverted, the repository is on another branch or dirty, the merge commit is gone, or the revert conflicts |
 | `POST tickets/<id>/push` | Pushes the branch a merge or a revert moved, for one that was never pushed or whose push failed: `ticket_id` and `pushed: true`; refused when the repository is on another branch, and a failure is recorded on the merge or the revert and answered `400` |
@@ -287,7 +248,7 @@ Health entries are grouped by responsibility:
 | `evals` | Unavailable Evals from the last hour with no later judgement or dismissal |
 | `assessment`, `launch`, `delivery`, `relay`, `notice`, `reply` | Stored work described in [003 Execution](003-execution.md); delivery counts waiting work, while reply covers Channel messages |
 | `worker` | Executor Session event handling; appears after its first failure |
-| `github`, `feishu`, `history` | Source polling, events and history recovery |
+| `feishu`, `history` | Feishu events and history recovery |
 | `sync:<source id>` | Allowed-list synchronization |
 
 A refusal has a status and `error`, its English text:
@@ -299,40 +260,40 @@ A refusal has a status and `error`, its English text:
 
 The blocks:
 
-- `source:github`, `source:feishu`: `{"enabled": true, "config": {…}}`. GitHub's config has `repository` and `cli`, and the switches `observeIssues`, `observePulls`, `observeComments` and `observeCi`, off by default, which receive every new Issue, new pull request and comment in the repository and the default branch's CI; Feishu's has `cli`, `chats` as `[{"chatId": "oc_…", "name": "…", "listen": "mentions"}]` (or `"all"`), `directMessages`, and `otherChats` as `"none"` or `"mentions"`.
-- `policy`: `{"rules": […], "sources": {"github": {"allowed": [{"id": "<login>"}], "bots": [{"id": "dependabot[bot]"}]}, "feishu": {"allowed": [{"id": "ou_…", "name": "…"}], "syncChat": "oc_…", "admission": {"oc_…": {"unlistedAddressed": "explicit"}}}}}`. `bots` lists the bots whose messages may become inferred candidates. An `admission` row is keyed by chat id, `other` or `direct` for Feishu, and by `issues`, `pulls`, `comments` or `ci` for GitHub; an unset cell takes its default (see [002 Authorization](002-authorization.md)).
+- `source:local`, `source:feishu`: `{"enabled": true, "config": {…}}`. The local Source's config has `archive` (an absolute path, or empty for `<stateDir>/tickets`), `webhook` (an http(s) URL, or empty) and `projects`, each `{"name", "root", "prepare"}`; Feishu's has `cli`, `chats` as `[{"chatId": "oc_…", "name": "…", "listen": "mentions"}]` (or `"all"`), `directMessages`, and `otherChats` as `"none"` or `"mentions"`.
+- `policy`: `{"rules": […], "sources": {"local": {"allowed": [{"id": "operator", "name": "Operator"}]}, "feishu": {"allowed": [{"id": "ou_…", "name": "…"}], "syncChat": "oc_…", "admission": {"oc_…": {"unlistedAddressed": "explicit"}}}}}`. `bots` lists the bots whose messages may become inferred candidates. An `admission` row is keyed by chat id, `other` or `direct`; an unset cell takes its default (see [002 Authorization](002-authorization.md)).
 - `eval`: `mode`, `timeoutSeconds` and `model`.
 - `executor`: `model`, `maxWorkers`, `directory`, `prepare`, `check`, `requireReview` and `blockedCommands`. The processing pause is a setting of its own, `paused`, which `POST executor/pause` sets.
 
-Changing a repository or CLI runs the corresponding setup check first. A failed check returns 400 with details in `setup`. A successful account change, or any save while setup is pending, returns `restarting: true`. The API is temporarily unavailable while the application restarts.
+Changing the Feishu CLI runs its setup check first. A failed check returns 400 with details in `setup`. A successful account change, or any save while setup is pending, returns `restarting: true`. The API is temporarily unavailable while the application restarts.
 
 ```sh
 api=http://127.0.0.1:3082/orchestrator/api
-rev=$(curl -s -H 'x-orchestrator-request: 1' $api/settings | jq '.sources[] | select(.id == "github") | .revision')
-curl -s -X PUT -H 'x-orchestrator-request: 1' -H 'content-type: application/json' $api/settings/source:github \
-  -d "{\"value\": {\"enabled\": true, \"config\": {\"repository\": \"acme/widgets\", \"cli\": \"$HOME/.local/bin/gh-agent\"}}, \"revision\": $rev}"
+rev=$(curl -s -H 'x-orchestrator-request: 1' $api/settings | jq '.sources[] | select(.id == "local") | .revision')
+curl -s -X PUT -H 'x-orchestrator-request: 1' -H 'content-type: application/json' $api/settings/source:local \
+  -d "{\"value\": {\"enabled\": true, \"config\": {\"archive\": \"/home/me/tickets\", \"webhook\": \"\"}}, \"revision\": $rev}"
 ```
 
 ## Setup checks
 
 Setup uses the DeepSeek Harness subprocess service, as worker shells do. It removes environment variables whose names contain KEY, PASSWORD, SECRET or TOKEN.
 
-Setup verifies the GitHub repository and the agent's push access, writes the worker environment, and checks that git uses only the agent credentials for github.com. A Feishu setup failure disables only the Feishu Source.
+Setup verifies the optional Feishu bot and writes the worker environment. A Feishu setup failure leaves only the Feishu Source out, and local tickets keep working.
 
 The process environment that setup writes:
 
-- **Command shims** in `<stateDir>/worker-bin`, first on `PATH`: `gh` runs the agent's CLI; `lark-cli` runs the bot's CLI; blocked commands fail. A shim removes its own directory from `PATH` before it runs its target.
-- **git configuration** in `<stateDir>/worker-gitconfig`: replaces the operator's global and system git configuration. It selects the agent CLI as the github.com credential helper, rewrites GitHub SSH addresses to HTTPS and defines Git LFS filters. Personal git settings such as an HTTP proxy do not apply. No commit identity is set here, git never prompts for credentials, and `GH_TOKEN` and `GITHUB_TOKEN` are removed.
+- **Command shims** in `<stateDir>/worker-bin`, first on `PATH`: `lark-cli` runs the bot's CLI when a bot is configured, and blocked commands fail. A shim removes its own directory from `PATH` before it runs its target.
+- **git configuration** in `<stateDir>/worker-gitconfig`: replaces the operator's global and system git configuration with Git LFS filters, a neutral author and an empty credential helper, so a worker commits under the identity it sets and git never prompts for credentials. Personal git settings such as an HTTP proxy do not apply.
 
 A file in `worker-bin` or `worker-gitconfig` that dsh-superagent did not write stops setup. A Ticket directory inside a git repository whose own configuration adds credentials fails the Ticket.
 
 ## Try it
 
-From an allowed GitHub account, open an Issue or post a comment containing `@<agent login> <request>`. Within a polling interval (one minute by default), Overview should show a Ticket. The agent acknowledges the request, works in its own Session and directory, and delivers in the original conversation. For Feishu, mention the bot in a configured chat. Without GitHub or Feishu, create the ticket under **Execution → New ticket**, or ask the main Session in the DSH chat; its replies and results appear on the ticket page and in its Markdown file. An ended ticket can be merged from the panel or by asking the main Session; both run the same local merge and gates.
+Create the ticket under **Execution → New ticket**, or ask the main Session in the DSH chat. Overview should show it at once; the agent acknowledges the request, works in its own Session and directory, and delivers in the original conversation. Its replies and results appear on the ticket page and in its Markdown file. For Feishu, mention the bot in a configured chat. An ended ticket can be merged from the panel or by asking the main Session; both run the same local merge and gates.
 
 ### Everyday use
 
-- A comment on a Ticket's Issue or pull request reaches its Executor without another mention; a person's message resumes an ended Ticket under its Mandate, unless a person stopped it.
+- A Feishu message on a Ticket's Thread reaches its Executor without another mention; a person's message resumes an ended Ticket under its Mandate, unless a person stopped it.
 - **Overview** lists what needs a person: an answer, a review, a blocked or failed report, an undelivered input. **Execution** offers Stop, Retry and Request status on a Ticket.
 - **Pause processing** on the **Execution** tab holds dispatch, evaluation, delivery and replies; Sources keep recording events, and a running Executor turn is not interrupted.
 - Keep Eval's accept mode at `observe` until the recorded decisions look right, then switch to `auto`. Only enabled rules can accept proactive work; a rule's instructions override the default process and communication for that Ticket.
@@ -346,7 +307,7 @@ From an allowed GitHub account, open an Issue or post a comment containing `@<ag
 
 A restart ends running Assignments and starts replacements with recovery notes. Team text and overridden prompt parts are retained; parts without overrides follow the new defaults. Review parts marked **Default updated** after upgrading.
 
-A database migrated by a newer version cannot be opened by an older one. Rollback therefore requires the pre-upgrade backup. After upgrading DeepSeek Harness itself, restart the running instance so the panel loads matching artifacts.
+A database migrated by a newer version cannot be opened by an older one. Rollback therefore requires the pre-upgrade backup. Schema 11 no longer reads GitHub settings or keys: the migration from schema 10 drops the GitHub settings block and its stored keys, and a database that still holds them starts without them. A database already at schema 11 needs no migration for this. After upgrading DeepSeek Harness itself, restart the running instance so the panel loads matching artifacts.
 
 ### Agent presets
 
@@ -358,13 +319,7 @@ Setup problems appear on the overview with a link to the fix, in the panel's lan
 
 | Symptom | Cause and fix |
 | --- | --- |
-| `The agent GitHub CLI is not set.` | Set the agent's CLI on the GitHub card |
-| `The agent GitHub CLI was not found.` | Set the wrapper's absolute path, or a command name on `PATH` |
-| `The agent GitHub CLI cannot read its account` | Sign the wrapper in with `auth login` |
-| `@… cannot read …` or `@… cannot push to …` | Give the agent account write access to the repository |
-| `The GitHub Source names no repository.` | Set the repository, `owner/name`, on the GitHub card |
 | A Ticket fails with `The prepare command failed: …` | The output names the cause, such as a wrong clone path; fix the command, then retry the Ticket |
-| `git does not read the github.com credential configuration dsh-superagent writes` | Install git 2.32 or later |
 | A Ticket fails with `The git configuration of the repository in … sets …` | Remove the named credential or `http.*.extraheader` settings from the clone's `.git/config` |
 | `… was not written by dsh-superagent` | Move the named file out of `<stateDir>/worker-bin` or `<stateDir>/worker-gitconfig`, or choose another `stateDir` |
 | `The local Source is off; turn it on in Settings → Sources` | Enable the local Source on the Sources settings |
@@ -383,4 +338,4 @@ Setup problems appear on the overview with a link to the fix, in the panel's lan
 | `dsh-superagent configuration has keys it does not use` (log) | Remove the named keys; the message says where each value lives now |
 | The log says the plugin is incompatible with the running dsh | Install a DeepSeek Harness version within the `engines.dsh` range |
 | The panel shows "Failed to load plugins" after a DeepSeek Harness upgrade | Restart the running instance |
-| Nothing happens after a mention | Check that the author is on the Source's allowed list, the Source is on, and processing is not paused. On GitHub, a mention added by editing an Issue's body is not received; mention the agent in a comment |
+| Nothing happens after a Feishu mention | Check that the author is on the Source's allowed list, the Source is on, and processing is not paused. The bot receives mentions only in the chats it is configured for |

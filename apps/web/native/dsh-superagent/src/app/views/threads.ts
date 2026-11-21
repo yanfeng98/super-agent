@@ -32,7 +32,7 @@ export function threadDetail(host: ViewHost, key: string, before: string | undef
   if (!thread) return undefined
   const view = snapshot(host)
   const target = around ? store.triggers.get(around) : undefined
-  // Cursors pair timestamp and id so triggers sharing the same second (e.g., GitHub timestamps) page deterministically.
+  // Cursors pair timestamp and id so triggers sharing the same second page deterministically.
   const [at = '', id = ''] = before?.split('|') ?? []
   const triggers = target ? store.read.threadTriggers(key, limit + 1, target, true)
     : store.read.threadTriggers(key, limit + 1, before ? { at, id } : undefined)
@@ -57,7 +57,7 @@ export interface SearchDate { op: '>=' | '<=' | '>' | '<' | '='; value: string; 
 /** Search qualifiers parsed from a query: `is:open`, `tag:p1` (or `label:p1`), `author:alice`, `created:>=2026-01-01`. */
 export interface SearchQuery { text: string; is?: 'open' | 'ended'; tag?: string; author?: string; created?: SearchDate; updated?: SearchDate }
 /**
- * Splits a search query into the free text and GitHub-like qualifiers.
+ * Splits a search query into the free text and Source qualifiers.
  * @param query - The text a person typed.
  * @returns The remaining words and the qualifiers they narrowed; an unknown `is:` value or a malformed date stays as text.
  */

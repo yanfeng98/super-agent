@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SENSITIVE_ENV_PATTERN, type SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
-import { GIT_LOCATION, agentVariables, credentialHelper, runAsWorker, verifyDirectory, withoutDirectory, workerBin, workerGitConfig, writeEnvironment }
+import { GIT_LOCATION, agentVariables, runAsWorker, verifyDirectory, withoutDirectory, workerBin, workerGitConfig, writeEnvironment }
   from '../src/infra/environment.ts'
 import { CliError } from '../src/infra/commands.ts'
 import { testDeployment } from './fixtures/deployment.ts'
@@ -23,37 +23,37 @@ beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'environment-')); mkdirSync(
 afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
 
 describe('worker shims', () => {
-  it('run a wrapper that calls `gh` by name without reaching the shim again, and keep the caller\'s other PATH entries', async () => {
-    program(join(dir, 'real', 'gh'), 'echo "{\\"login\\":\\"agent-bot\\",\\"config\\":\\"$GH_CONFIG_DIR\\",\\"path\\":\\"$PATH\\"}"')
-    const wrapper = program(join(dir, 'gh-agent'), `GH_CONFIG_DIR=${dir}/agent-config exec gh "$@"`)
-    await writeEnvironment(testDeployment({ stateDir: dir, github: { ...testDeployment().github, cli: wrapper }, feishu: undefined }), [])
+  it('run a wrapper that calls `lark-cli` by name without reaching the shim again, and keep the caller\'s other PATH entries', async () => {
+    program(join(dir, 'real', 'lark-cli'), 'printf \'{"args":"%s","path":"%s"}\\n\' "$*" "$PATH"')
+    const wrapper = program(join(dir, 'lark-bot'), 'exec lark-cli "$@"')
+    await writeEnvironment(testDeployment({ stateDir: dir, feishu: { ...testDeployment().feishu!, cli: wrapper } }), [])
     const bin = workerBin(dir)
     const path = [bin, join(dir, 'venv'), join(dir, 'real'), '/usr/bin', '/bin'].join(':')
-    const { stdout } = await exec('gh', ['api', 'user'], { env: { PATH: path }, timeout: 10_000 })
-    expect(JSON.parse(stdout)).toEqual({ login: 'agent-bot', config: `${dir}/agent-config`, path: [join(dir, 'venv'), join(dir, 'real'), '/usr/bin', '/bin'].join(':') })
+    const { stdout } = await exec('lark-cli', ['im', '+chat-list'], { env: { PATH: path }, timeout: 10_000 })
+    expect(JSON.parse(stdout)).toEqual({ args: 'im +chat-list', path: [join(dir, 'venv'), join(dir, 'real'), '/usr/bin', '/bin'].join(':') })
   })
-  it('works without a GitHub account: `gh` reports why and git gets no GitHub credential helper', async () => {
-    await writeEnvironment(testDeployment({ stateDir: dir, github: { cli: '', login: '', noreply: '' } }), [])
-    await expect(exec(join(workerBin(dir), 'gh'), ['api', 'user'])).rejects.toMatchObject({ code: 1,
-      stderr: 'gh is unavailable: this installation has no GitHub account.\n' })
+  it('works without a Feishu bot: `lark-cli` reports why and git gets no credential helper', async () => {
+    await writeEnvironment(testDeployment({ stateDir: dir, feishu: undefined }), [])
+    await expect(exec(join(workerBin(dir), 'lark-cli'), ['im', '+chat-list'])).rejects.toMatchObject({ code: 1,
+      stderr: 'lark-cli is unavailable: this installation has no Feishu bot.\n' })
     const config = readFileSync(workerGitConfig(dir), 'utf8')
     expect(config).toContain('[user]')
     expect(config).toContain('name = dsh-superagent')
-    expect(config).not.toContain('credential "https://github.com"')
+    expect(config).toContain('[credential]\n\thelper =')
     expect(config).not.toContain('insteadOf')
   })
-  it('make `lark-cli` fail without a Feishu bot and each blocked command fail with the agent\'s login', async () => {
+  it('make `lark-cli` fail without a Feishu bot and each blocked command fail in this installation', async () => {
     await writeEnvironment(testDeployment({ stateDir: dir, feishu: undefined }), ['personal-gh'])
     const bin = workerBin(dir)
     await expect(exec(join(bin, 'lark-cli'), ['im', '+chat-list'])).rejects.toMatchObject({ code: 1, stderr: 'lark-cli is unavailable: this installation has no Feishu bot.\n' })
-    await expect(exec(join(bin, 'personal-gh'), [])).rejects.toMatchObject({ code: 1, stderr: 'personal-gh is blocked in this installation; use gh, which acts as agent-bot.\n' })
+    await expect(exec(join(bin, 'personal-gh'), [])).rejects.toMatchObject({ code: 1, stderr: 'personal-gh is blocked in this installation.\n' })
   })
-  it('keep `gh` and `lark-cli` working, and shim no `git`, when the blocked commands name the commands workers need', async () => {
-    const gh = program(join(dir, 'gh-agent'), 'echo gh "$@"'), lark = program(join(dir, 'lark-bot'), 'echo lark "$@"')
-    const base = testDeployment()
-    await writeEnvironment(testDeployment({ stateDir: dir, github: { ...base.github, cli: gh }, feishu: { ...base.feishu!, cli: lark } }), ['gh', 'git', 'lark-cli'])
+  it('keep `lark-cli` working, make `gh` report its absence, and shim no `git`, when the blocked commands name the commands workers need', async () => {
+    const bot = program(join(dir, 'lark-bot'), 'echo lark "$@"')
+    await writeEnvironment(testDeployment({ stateDir: dir, feishu: { ...testDeployment().feishu!, cli: bot } }), ['gh', 'git', 'lark-cli'])
     const bin = workerBin(dir)
-    expect([(await exec(join(bin, 'gh'), ['api', 'user'])).stdout, (await exec(join(bin, 'lark-cli'), ['im'])).stdout]).toEqual(['gh api user\n', 'lark im\n'])
+    expect((await exec(join(bin, 'lark-cli'), ['im'])).stdout).toBe('lark im\n')
+    await expect(exec(join(bin, 'gh'), ['api', 'user'])).rejects.toMatchObject({ code: 1, stderr: 'gh is unavailable in this installation.\n' })
     expect(readdirSync(bin)).not.toContain('git')
   })
   it('replace only what dsh-superagent wrote and refuse anything else in its places', async () => {
@@ -86,21 +86,26 @@ describe('agent git configuration', () => {
     const home = join(dir, 'home'); mkdirSync(home)
     // Operator configuration that rewrites HTTPS to SSH, enables commit signing, and sets a credential helper.
     writeFileSync(join(home, '.gitconfig'), '[url "git@github.com:"]\n\tinsteadOf = https://github.com/\n[commit]\n\tgpgsign = true\n[credential]\n\thelper = osxkeychain\n')
-    const deployment = testDeployment({ stateDir: dir, github: { ...testDeployment().github, cli: '/opt/agent tools/gh' } })
+    const deployment = testDeployment({ stateDir: dir })
     await writeEnvironment(deployment, [])
     // Operator identity variables and git's fallback from the OS username must not apply to worker commits.
     const env = workerEnv({ PATH: process.env.PATH, HOME: home, GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.abbrev', GIT_CONFIG_VALUE_0: '12', GIT_AUTHOR_NAME: 'Operator', GIT_COMMITTER_EMAIL: 'operator@example.com', ...agentVariables(dir) })
     const git = async (...args: string[]): Promise<string> => (await exec('git', args, { cwd: dir, env })).stdout.trim()
     await git('init', '-q', 'repo')
     await exec('git', ['-C', 'repo', 'remote', 'add', 'origin', 'git@github.com:acme/widgets.git'], { cwd: dir, env })
-    expect(await git('-C', 'repo', 'remote', 'get-url', '--push', 'origin')).toBe('https://github.com/acme/widgets.git')
-    expect(await git('config', '--show-origin', '--get-all', 'credential.https://github.com.helper')).toBe(`file:${workerGitConfig(dir)}\t${credentialHelper('/opt/agent tools/gh')}`)
+    // The operator's HTTPS-to-SSH rewrite, signing, and credential helper are all ignored.
+    expect(await git('-C', 'repo', 'remote', 'get-url', '--push', 'origin')).toBe('git@github.com:acme/widgets.git')
+    expect((await exec('git', ['config', '--show-origin', '--get-all', 'credential.helper'], { cwd: dir, env })).stdout)
+      .toBe(`file:${workerGitConfig(dir)}\t\n`)
     expect(await git('config', '--get-all', 'credential.helper')).toBe('')
     await expect(git('config', 'commit.gpgsign')).rejects.toThrow()
     await expect(git('config', 'core.abbrev')).rejects.toThrow()
     expect(env).not.toHaveProperty('GIT_AUTHOR_NAME')
     expect(env).not.toHaveProperty('GIT_COMMITTER_EMAIL')
-    await expect(git('-C', 'repo', 'commit', '--allow-empty', '-q', '-m', 'without identity')).rejects.toMatchObject({ stderr: expect.stringContaining('no email was given') })
+    // A worker that sets no identity commits as the neutral one, never as the operator's environment variables.
+    await git('-C', 'repo', 'commit', '--allow-empty', '-q', '-m', 'without identity')
+    expect(await git('-C', 'repo', 'log', '-1', '--format=%an <%ae> / %cn <%ce>'))
+      .toBe('dsh-superagent <dsh-superagent@localhost> / dsh-superagent <dsh-superagent@localhost>')
     await git('-C', 'repo', '-c', 'user.name=Alice', '-c', 'user.email=alice@example.com', 'commit', '--allow-empty', '-q', '-m', 'with identity')
     expect(await git('-C', 'repo', 'log', '-1', '--format=%an <%ae> / %cn <%ce>')).toBe('Alice <alice@example.com> / Alice <alice@example.com>')
   })
@@ -109,8 +114,8 @@ describe('agent git configuration', () => {
 it('fails instead of asking the operator\'s askpass helpers when the agent\'s credential helper has no answer', async () => {
   const log = join(dir, 'asked')
   const askpass = program(join(dir, 'askpass'), `echo asked >> ${log}; echo operator-secret`)
-  const agent = program(join(dir, 'real', 'gh'), 'exit 0')
-  const deployment = testDeployment({ stateDir: dir, github: { ...testDeployment().github, cli: agent } })
+  const agent = program(join(dir, 'real', 'lark-cli'), 'exit 0')
+  const deployment = testDeployment({ stateDir: dir, feishu: { ...testDeployment().feishu!, cli: agent } })
   await writeEnvironment(deployment, [])
   const env = workerEnv({ PATH: process.env.PATH, HOME: dir, GIT_ASKPASS: askpass, SSH_ASKPASS: askpass, ...agentVariables(dir) })
   await exec('git', ['init', '-q', 'repo'], { cwd: dir, env })

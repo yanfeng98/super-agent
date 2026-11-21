@@ -7,7 +7,6 @@ import { SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuKind } from '../src/sources/feishu.ts'
 import { localKind } from '../src/sources/local.ts'
-import { githubKind } from '../src/sources/github.ts'
 import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail, ticketList, ticketTags } from '../src/app/views/tickets.ts'
 import { search, threadDetail } from '../src/app/views/threads.ts'
@@ -18,8 +17,6 @@ import { policyHistory } from '../src/app/settings-history.ts'
 import { KV } from '../src/kv.ts'
 import { feishuLink } from '../src/sources/feishu-channel.ts'
 import { feishuChannel, feishuTriggerId } from '../src/sources/feishu-trigger.ts'
-import { githubLink } from '../src/sources/github-channel.ts'
-import { githubChannel } from '../src/sources/github-trigger.ts'
 import { followupOwners, type ChannelRef } from '../src/core/index.ts'
 
 let directory: string
@@ -29,7 +26,9 @@ beforeEach(() => {
   store = new Store(join(directory, 'orchestrator.sqlite'))
 })
 afterEach(() => { store.close(); rmSync(directory, { recursive: true, force: true }) })
-const links = (channel: ChannelRef) => (channel.source === 'feishu' ? feishuLink : githubLink)(channel.address, {})
+const links = (channel: ChannelRef) => channel.source === 'feishu'
+  ? feishuLink(channel.address, {})
+  : localKind.channel!.link(channel.address, {})
 const drop = (id: string, channel: ChannelRef, ticketId?: string) => {
   const message = { id, channel, text: id, kind: 'reply' as const, ...ticketId ? { ticketId } : {} }
   store.receipts.add(message)
@@ -40,22 +39,21 @@ it('names the Thread of each dropped message: the one of the Trigger its Channel
   // A Feishu Channel names its chat; the message it answers belongs to the Thread of the topic's root message.
   store.triggers.save({ id: feishuTriggerId('om_reply'), source: 'feishu', threads: [{ source: 'feishu', id: 'oc_1:om_root' }],
     actor: { source: 'feishu', id: 'ou_a' }, human: true, at: new Date().toISOString(), text: 'please', meta: {} })
-  store.threads.save({ key: 'github:42', ref: { source: 'github', id: '42' }, createdAt: '', subscriptions: [], correlated: [], pending: [],
+  store.threads.save({ key: 'local:req', ref: { source: 'local', id: 'req' }, createdAt: '', subscriptions: [], correlated: [], pending: [],
     meta: {} })
   drop('a', feishuChannel('oc_1', 'om_reply'))
-  drop('b', githubChannel(42))
+  drop('b', { source: 'local', thread: 'local:req', address: { request: 'req' } })
   // A message whose Trigger and Thread the store no longer has links nowhere.
   drop('c', feishuChannel('oc_2', 'om_gone'))
   expect(Object.fromEntries(droppedReplies({ store, links }).map(item => [item.id, item.thread])))
-    .toEqual({ a: 'feishu:oc_1:om_root', b: 'github:42', c: undefined })
+    .toEqual({ a: 'feishu:oc_1:om_root', b: 'local:req', c: undefined })
 })
 
 function views() {
-  store.saveSettings(SettingsSchema.parse({ policy: { sources: { feishu: { allowed: [{ id: 'ou_alice', name: 'Alice' }] },
-    github: { allowed: [{ id: 'alice' }] } },
+  store.saveSettings(SettingsSchema.parse({ policy: { sources: { feishu: { allowed: [{ id: 'ou_alice', name: 'Alice' }] } },
     rules: [{ id: 'copy', name: 'Copy fixes', enabled: true, instruction: 'Fix copy' }] } }))
   const sources = new SourceRegistry(() => store.settings())
-  sources.register(feishuKind); sources.register(githubKind)
+  sources.register(feishuKind)
   return { store, sources, links }
 }
 const at = new Date().toISOString()
@@ -69,13 +67,9 @@ const message = (id: string, actor: { source: string; id: string }, human = true
 
 it('names each sender as the Policy lists it, by its id where the id is readable, and as its kind names one it does not list', () => {
   const view = snapshot(views())
-  expect([view.actor({ source: 'feishu', id: 'OU_ALICE' }), view.actor({ source: 'github', id: 'alice' }), view.actor({ source: 'github',
-    id: 'bob' }),
-    view.actor({ source: 'feishu', id: 'ou_bob' }), view.actor({ source: 'feishu', id: 'ou_bot' }, false), view.actor({ source: 'feishu',
-      id: '' })])
-    .toEqual([{ source: 'feishu', id: 'OU_ALICE', name: { zh: 'Alice', en: 'Alice' } }, { source: 'github', id: 'alice',
-      name: { zh: 'alice', en: 'alice' } },
-      { source: 'github', id: 'bob', name: { zh: 'bob', en: 'bob' } }, { source: 'feishu', id: 'ou_bob',
+  expect([view.actor({ source: 'feishu', id: 'OU_ALICE' }), view.actor({ source: 'feishu', id: 'ou_bob' }),
+    view.actor({ source: 'feishu', id: 'ou_bot' }, false), view.actor({ source: 'feishu', id: '' })])
+    .toEqual([{ source: 'feishu', id: 'OU_ALICE', name: { zh: 'Alice', en: 'Alice' } }, { source: 'feishu', id: 'ou_bob',
         name: feishuKind.policy!.unnamed!.person },
       { source: 'feishu', id: 'ou_bot', name: feishuKind.policy!.unnamed!.bot }, { source: 'feishu', id: '' }])
   expect(view.rule('copy')).toEqual({ id: 'copy', name: 'Copy fixes' })
@@ -103,14 +97,12 @@ it('states each Source by the first state that holds', () => {
   const host = views()
   const states = (setup: Parameters<typeof sourcesStatus>[2], health: Parameters<typeof sourcesStatus>[1] = {}) =>
     Object.fromEntries(sourcesStatus(host, health, setup).map(source => [source.id, source.state]))
-  expect(states({})).toEqual({ feishu: 'starting', github: 'starting' })
-  expect(states({}, { feishu: { state: 'ready', detail: '' }, history: { state: 'paused', detail: '' }, github: { state: 'error',
-    detail: 'x' } }))
-    .toEqual({ feishu: 'paused', github: 'error' })
+  expect(states({})).toEqual({ feishu: 'starting' })
+  expect(states({}, { feishu: { state: 'error', detail: 'x' }, history: { state: 'paused', detail: '' } }))
+    .toEqual({ feishu: 'error' })
   const problem = { place: 'deployment', code: 'stateDirUnset', values: {}, detail: '' } as never
-  expect(states({ problem }, { feishu: { state: 'ready', detail: '' }, history: { state: 'ready', detail: '' }, github: { state: 'ready',
-    detail: '' } }))
-    .toEqual({ feishu: 'setup', github: 'setup' })
+  expect(states({ problem }, { feishu: { state: 'ready', detail: '' }, history: { state: 'ready', detail: '' } }))
+    .toEqual({ feishu: 'setup' })
 })
 
 it('follows the Ticket\'s stage: a blocked Ticket a person answered since is working, with no retry, note or turn end', () => {
@@ -167,18 +159,18 @@ it('counts a Source kind\'s default allowed senders, so a fresh local-ticket ins
 
 it('lists an Eval past its deadline, and as dsh-superagent\'s own errors only parts no Source or Policy sync reports', () => {
   const host = views()
-  const evaluating = { id: 'e1', threadKey: 'github:1', triggerIds: ['t1'], strength: 'explicit' as const, actor: { source: 'github',
-    id: 'alice' },
+  const evaluating = { id: 'e1', threadKey: 'feishu:oc_1:om_root', triggerIds: ['t1'], strength: 'explicit' as const, actor: { source: 'feishu',
+    id: 'ou_alice' },
     basis: { via: 'addressed' as const, addressed: 'mention' as const }, policyVersion: 'v1', startedAt: '2026-01-01T00:00:00Z',
     deadline: '2026-01-01T00:02:00Z' }
-  store.threads.save({ key: 'github:1', ref: { source: 'github', id: '1' }, createdAt: at, subscriptions: [], correlated: [], pending: [],
+  store.threads.save({ key: 'feishu:oc_1:om_root', ref: { source: 'feishu', id: 'oc_1:om_root' }, createdAt: at, subscriptions: [], correlated: [], pending: [],
     evaluating, meta: {} })
   const error = (detail: string) => ({ state: 'error' as const, detail })
   const health = { relay: error('relay failing'), reply: error('reply failing'), feishu: error('socket closed'),
     history: error('read failed'),
     'sync:feishu': error('sync failed'), evals: error('unavailable'), launch: { state: 'ready' as const, detail: '' } }
   const found = problems(host, health)
-  expect(found).toContainEqual({ kind: 'eval-overdue', thread: expect.objectContaining({ key: 'github:1', stage: 'evaluating' }) })
+  expect(found).toContainEqual({ kind: 'eval-overdue', thread: expect.objectContaining({ key: 'feishu:oc_1:om_root', stage: 'evaluating' }) })
   // Effects are dsh-superagent's own; a Source shows its parts and its Policy sync, and the Evals are listed one by one.
   expect(found.filter(item => item.kind === 'runtime-error')).toEqual([{ kind: 'runtime-error', name: 'relay', detail: 'relay failing' },
     { kind: 'runtime-error', name: 'reply', detail: 'reply failing' }])
@@ -189,11 +181,11 @@ it('says no Source runs when every Source is off, and states a Source missing or
   const host = views()
   expect(problems(host).map(item => item.kind)).not.toContain('no-source')
   const settings = store.settings()
-  store.saveSettings({ ...settings, sources: { feishu: { enabled: false, config: {} }, github: { enabled: false, config: {} },
+  store.saveSettings({ ...settings, sources: { feishu: { enabled: false, config: {} },
     jira: { enabled: true, config: { site: 'acme' } } } })
   expect(problems(host).map(item => item.kind)).toContain('no-source')
   expect(Object.fromEntries(sourcesStatus(host, {}, {}).map(source => [source.id, [source.state, source.installed]])))
-    .toEqual({ feishu: ['off', true], github: ['off', true], jira: ['missing', false] })
+    .toEqual({ feishu: ['off', true], jira: ['missing', false] })
 })
 
 it('sends text without HTML, entity-encoded tags included, and with images named', () => {
@@ -255,16 +247,16 @@ it('shows a follow-up that reached a ticket as delivered, the tickets that hande
   // A Trigger handed back goes to Eval as any message on its Thread; the Ticket that handed it back is named by its title once it has one.
   expect(triggerView(view, store.triggers.get('f2')!).disposition).toMatchObject({ delivered: false,
     handbacks: [{ ticketId: 't1', title: 't1', reason: 'Asks for a new feature' }] })
-  store.threads.save({ key: 'github:7', ref: { source: 'github', id: '7' }, createdAt: at, subscriptions: ['t1'], context: ['t1'],
+  store.threads.save({ key: 'local:req', ref: { source: 'local', id: 'req' }, createdAt: at, subscriptions: ['t1'], context: ['t1'],
     correlated: [], pending: [], meta: {} })
-  expect(threadDetail(host, 'github:7', undefined, 50)?.context).toEqual(['t1'])
+  expect(threadDetail(host, 'local:req', undefined, 50)?.context).toEqual(['t1'])
   store.tickets.save({ id: 't1', title: 'Fix', decisionId: 'd', channels: [], undelivered: [], createdAt: at, updatedAt: at,
     mandate: { strength: 'explicit', policyVersion: 'v', basis: { via: 'listed' }, actor: { source: 'feishu', id: 'ou_alice' }, scope: '' },
     origin: { triggerId: 'e1', triggerIds: ['e1'] }, assignments: [],
     inputs: [{ id: 'i1', kind: 'trigger', triggerId: 'f1', at }, { id: 'i2', kind: 'trigger', triggerId: 'f2', at }] })
   const page = ticketDetail(host, 't1')!
   expect(Object.fromEntries(page.threads.map(thread => [thread.key, !!thread.context]))).toEqual({ 'feishu:oc_1:om_root': false,
-    'github:7': true })
+    'local:req': true })
   expect(page.inputs.map(input => input.kind === 'trigger' && input.trigger?.handback)).toEqual([{ reason: 'Asks for a new feature', at },
     undefined])
   expect(triggerView(snapshot(host), store.triggers.get('f2')!).disposition.handbacks[0]?.title).toBe('Fix')

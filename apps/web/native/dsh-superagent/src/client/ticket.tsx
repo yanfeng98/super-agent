@@ -699,7 +699,7 @@ export function TicketPage({ id }: { id: string }) {
       </Details>}
       <Details icon="message" title={t('term.channel')}>
         <ul className="dt-plain-list">{data.channels.map((item, index) => <li key={index}>
-          {item.url ? <ExternalLink href={item.url} icon={item.source === 'github' ? 'pull' : 'message'}>{localized(t, item.label)}</ExternalLink>
+          {item.url ? <ExternalLink href={item.url} icon="message">{localized(t, item.label)}</ExternalLink>
             : <span className="dt-inline-link dt-icon-link"><Icon name="message" size={13} />{localized(t, item.label)}</span>}
         </li>)}</ul>
       </Details>

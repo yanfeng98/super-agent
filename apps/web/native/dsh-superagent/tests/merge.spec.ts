@@ -541,40 +541,6 @@ it('does not re-run a check that already failed for the same ending on an automa
   expect(workspaceChecks).toHaveBeenCalled()
 })
 
-it('announces a followed pull request\'s failing CI once, and again when the result changes', async () => {
-  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
-  ended(ticket.id)
-  h.runtime.store.atomic(() => {
-    h.runtime.store.threads.save({ key: 'github:42', ref: { source: 'github', id: '42' }, createdAt: '2026-11-19T00:00:00.000Z',
-      subscriptions: [ticket.id], correlated: [], pending: [],
-      meta: { facts: { ci: { value: { zh: '2 项检查失败', en: '2 checks failing' }, problem: true } } } })
-    const current = h.runtime.store.tickets.get(ticket.id)!
-    current.follows = [{ thread: 'github:42', own: true }]
-    h.runtime.store.tickets.save(current)
-  })
-  // A scan per pass is throttled; each step here clears the throttle to exercise the dedupe itself.
-  const scan = async (): Promise<void> => {
-    (h.runtime as unknown as { ciCheckedAt: number }).ciCheckedAt = 0
-    await h.runtime.pump()
-  }
-  await scan()
-  const failing = (): number => h.runtime.notifications().items.filter(item => item.kind === 'ci').length
-  expect(failing()).toBe(1)
-  expect(h.runtime.notifications().items.find(item => item.kind === 'ci')?.text).toContain('2 checks failing')
-  await scan()
-  expect(failing()).toBe(1)
-  // A changed CI result is news again.
-  h.runtime.store.threads.describe('github:42', { facts: { ci: { value: '3 checks failing', problem: true } } })
-  await scan()
-  expect(failing()).toBe(2)
-  // A pass that clears the problem is remembered as recovered, so the same failure later is news again.
-  h.runtime.store.threads.describe('github:42', { facts: { ci: { value: 'passed' } } })
-  await scan()
-  h.runtime.store.threads.describe('github:42', { facts: { ci: { value: '3 checks failing', problem: true } } })
-  await scan()
-  expect(failing()).toBe(3)
-})
-
 it('checks the merged branch on the target after merging, and reports a failure', async () => {
   const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   ended(ticket.id)

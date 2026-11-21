@@ -4,12 +4,11 @@
  */
 import { basename } from 'node:path'
 import { z } from 'zod'
-import { isoTime, said, type AcceptMode, type AdmissionCell, type ChannelRef, type Decision, type Execution, type Follow, type MandateBasis,
+import { isoTime, said, type AcceptMode, type AdmissionCell, type ChannelRef, type Decision, type Execution, type MandateBasis,
   type Reason, type Thread, type Ticket, type TicketInput, type TriggerDisposition } from '../core/index.ts'
 import { feishuChatLink } from '../sources/feishu-channel.ts'
-import { POLL_HORIZON_MS } from '../sources/poll.ts'
-import { SettingsSchema, policyVersion, type SettingsOrigin } from '../policy.ts'
-import { autoMergeThreshold, teamDefaults } from './context.ts'
+import { SettingsSchema, policyVersion, type Settings, type SettingsOrigin } from '../policy.ts'
+import { teamDefaults } from './context.ts'
 import { PromptConfigSchema, type PromptConfig, type PromptVersion } from './prompts.ts'
 import type { EffectKind, EffectPayloads } from './effects.ts'
 import { promptsNotice, settingsNotice, subscriptionNotice } from './notices.ts'
@@ -42,9 +41,8 @@ export function migrateTo11(store: Store): void {
     if (store.get(name) === true && ticketId && triggerId) answers.set(ticketId, [...answers.get(ticketId) ?? [], triggerId])
   }
   const human = (triggerId: string) => store.triggers.get(triggerId)?.human === true
-  const closed = (number: number) => pullEnd(store.get<unknown>(`github-ended:${number}`))
   for (const row of store.db.prepare('SELECT id, value FROM ticket').all()) {
-    step(`ticket ${String(row.id)}`, () => { store.tickets.save(ticketOf(JSON.parse(String(row.value)) as Stored, answers, human, closed)) })
+    step(`ticket ${String(row.id)}`, () => { store.tickets.save(ticketOf(JSON.parse(String(row.value)) as Stored, answers, human)) })
   }
   for (const row of store.db.prepare("SELECT id, value FROM decision WHERE json_type(value, '$.mandate') = 'object'").all()) {
     step(`decision ${String(row.id)}`, () => {
@@ -81,7 +79,6 @@ export function migrateTo11(store: Store): void {
   step('the Sources\' records', () => { migrateSourceRecords(store) })
   // Worker Sessions now render inputs directly from the ticket record, so standalone input body keys are obsolete.
   step('the Inputs\' bodies', () => { store.db.exec("DELETE FROM kv WHERE key LIKE 'ticket/%/input/%'") })
-  step('the pull request ends', () => { dropPullEnds(store) })
   step('the dismissed problems', () => { moveDismissals(store) })
   for (const row of store.db.prepare('SELECT id, value FROM ticket').all()) {
     step(`ticket ${String(row.id)}`, () => { store.tickets.save(withoutCopies(JSON.parse(String(row.value)) as Stored)) })
@@ -91,7 +88,7 @@ export function migrateTo11(store: Store): void {
 }
 /**
  * Normalize trigger and thread timestamps to fixed-width millisecond ISO strings so lexicographical text order matches
- * chronological order (GitHub wrote whole seconds like `…:00Z`, which sorted after `…:00.001Z`).
+ * chronological order (some Sources wrote whole seconds like `…:00Z`, which sorted after `…:00.001Z`).
  */
 function triggerTimes(store: Store): void {
   for (const row of store.db.prepare('SELECT id, at FROM trigger').all()) {
@@ -107,10 +104,11 @@ function triggerTimes(store: Store): void {
   }
 }
 /**
- * Obsolete KV keys and prefixes (ending in `:`) from removed `github-issue` eligibility checks, earlier migrations,
+ * Obsolete KV keys and prefixes (ending in `:`) from removed Sources, earlier migrations,
  * and pre-schema-11 maintenance and subscription tracking.
  */
-const DEAD_KEYS = ['github-object-state:', 'github-issue-eligibility:', 'github-auto-merge:',
+const DEAD_KEYS = ['github-object-state:', 'github-issue-eligibility:', 'github-auto-merge:', 'github-ended:', 'github-thread:',
+  'thread-since:github:', 'github-since', 'github-retry', 'github-stream:', 'github-branch-ci', 'github-ci:', 'github-cursor:',
   'source-labels-at:', 'legacy-migrated-at', 'thread-times-backfilled', 'settings-before-9', 'answer-ready:', 'prompt-sections', 'prompt-settings-text',
   'prompt-vocabulary', 'subscriptions', 'subscriptions-initialized', 'subscription-seen:', 'subscription-initialized:', 'subscription-since:',
   'observation-since:', 'task-threads:', 'maintenance-recovery:', 'maintenance-progress-report-recovery:', 'maintenance-thread-followup:',
@@ -178,8 +176,14 @@ function settingsAsVersions(store: Store): void {
 
 /** Settings save origin names recorded by versions before schema 11, mapped to current `SettingsOrigin` values. */
 const ORIGINS: Readonly<Record<string, SettingsOrigin>> = { web: 'panel', 'orchestrator-tool': 'tool', 'policy-sync': 'sync', 'member-sync': 'sync' }
-/** Source kinds removed from dsh-superagent; the unified `github` Source now ingests Issues via notifications. */
-const REMOVED_SOURCES: readonly string[] = ['github-issue']
+/** Source kinds removed from dsh-superagent. */
+const REMOVED_SOURCES: readonly string[] = ['github', 'github-issue']
+/** Drop a removed Source's instance and Policy part from settings. */
+function withoutRemovedSources(settings: Settings): Settings {
+  const sources = Object.fromEntries(Object.entries(settings.sources).filter(([id]) => !REMOVED_SOURCES.includes(id)))
+  const policySources = Object.fromEntries(Object.entries(settings.policy.sources).filter(([id]) => !REMOVED_SOURCES.includes(id)))
+  return { ...settings, sources, policy: { ...settings.policy, sources: policySources } }
+}
 /**
  * Upgrade current and historical settings records to the schema 11 structure: strip removed source kinds from active
  * settings while keeping them in historical revisions and mapping historical origin names.
@@ -188,19 +192,19 @@ function migrateSettingsRecords(store: Store): void {
   const stored = store.get<unknown>('settings')
   if (stored !== undefined) {
     const settings = SettingsSchema.parse(migrateSettings(stored))
-    store.set('settings', { ...settings, sources: Object.fromEntries(Object.entries(settings.sources).filter(([id]) => !REMOVED_SOURCES.includes(id))) })
+    store.set('settings', withoutRemovedSources(settings))
   }
   // Preserve unparseable historical revisions as-is so a corrupt history entry does not block startup.
   for (const name of store.keys('settings-version:')) {
     const version = store.get<{ source: string; settings: unknown }>(name)!
     const settings = SettingsSchema.safeParse(migrateSettings(version.settings))
-    store.set(name, { ...version, source: ORIGINS[version.source] ?? version.source, ...settings.success ? { settings: settings.data } : {} })
+    store.set(name, { ...version, source: ORIGINS[version.source] ?? version.source, ...settings.success ? { settings: withoutRemovedSources(settings.data) } : {} })
   }
 }
-interface Member { name?: string; feishuId?: string; github?: string }
+interface Member { name?: string; feishuId?: string }
 /**
  * Convert legacy flat settings (chat lists in Policy, top-level pause flag) or pre-schema-11 domain settings into current domain blocks:
- * strips fields replaced by rule instructions and prompts (Executor reviewers and branch prefix, rule `visual` flag, `autoMergeLineLimit`, Source `authority`, GitHub `mergeCli`), extracts `paused` to the top level, and splits cross-source `members` into per-source `policy.sources` entries.
+ * strips fields replaced by rule instructions and prompts (Executor reviewers and branch prefix, rule `visual` flag, `autoMergeLineLimit`, Source `authority`), extracts `paused` to the top level, and splits cross-source `members` into per-source `policy.sources` entries.
  */
 export function migrateSettings(value: unknown): unknown {
   if (!isObject(value)) return value
@@ -213,7 +217,7 @@ export function migrateSettings(value: unknown): unknown {
   if (old.admission?.mode !== 'off') for (const chatId of old.admission?.chats ?? []) chats.set(chatId, 'all')
   const feishu = { chats: [...chats].map(([chatId, listen]) => ({ chatId, listen })), directMessages: old.allowDirectMessages ?? true }
   return withoutRemovedFields({
-    sources: { feishu: { enabled: true, config: feishu }, github: { enabled: true, config: { pollSeconds: old.pollSeconds ?? 60 } } },
+    sources: { feishu: { enabled: true, config: feishu } },
     policy: { ...(old.members ? { members: old.members } : {}), ...(old.admission?.rules ? { rules: old.admission.rules } : {}) },
     eval: { ...(old.admission?.mode ? { mode: old.admission.mode } : {}), ...(old.admission?.timeoutSeconds ? { timeoutSeconds: old.admission.timeoutSeconds } : {}),
       model: old.models?.orchestrator ?? null },
@@ -231,13 +235,10 @@ function withoutRemovedFields(value: Stored): Stored {
   const parts = people ? {
     feishu: { allowed: people.filter(member => member.feishuId).map(member => ({ id: member.feishuId!, ...(member.name ? { name: member.name } : {}) })),
       ...(memberChat ? { syncChat: memberChat } : {}) },
-    github: { allowed: people.filter(member => member.github).map(member => ({ id: member.github! })) },
   } : undefined
-  // The GitHub Source no longer configures a dedicated merge account; auto-merge policy now lives in prompts.
-  const withoutMerge = (id: string, config: unknown) => { if (id !== 'github' || !isObject(config)) return config; const { mergeCli: _mergeCli, ...fields } = config; return fields }
   const instances = sources ? Object.fromEntries(Object.entries(sources).map(([id, instance]) => {
     const { authority: _authority, ...fields } = instance
-    return [id, 'config' in fields ? { ...fields, config: withoutMerge(id, fields.config) } : fields]
+    return [id, fields]
   })) : undefined
   // Rewrite environment variable prefixes from the project's earlier names in `prepare` commands.
   if (typeof kept.prepare === 'string') kept.prepare = kept.prepare.replace(/\bDSH_(?:TAG|GO|FREELANCER)_/g, 'DSH_SUPERAGENT_')
@@ -282,12 +283,11 @@ function legacyText(value: string): string {
 }
 /**
  * Upgrade a stored prompt configuration to current sections, tool names, and skill references; legacy configurations take
- * built-in team sections, keep custom guides as skills, and carry any auto-merge line threshold into `delivery`.
+ * built-in team sections and keep custom guides as skills.
  */
 function normalize(config: unknown): PromptConfig {
   const legacy = LegacyPromptConfigSchema.safeParse(config)
-  const limit = legacy.success ? /fewer than (\d+) lines \(additions plus deletions\)/.exec(legacy.data.guides.work ?? '')?.[1] : undefined
-  const current = legacy.success ? { ...teamDefaults, delivery: limit ? teamDefaults.delivery.replace(autoMergeThreshold(200), autoMergeThreshold(Number(limit))) : teamDefaults.delivery,
+  const current = legacy.success ? { ...teamDefaults,
     skills: Object.fromEntries(Object.entries(legacy.data.guides).filter(([name]) => !LEGACY_FIXED.has(name)).map(([name, body]) => [name, legacyText(body)])) }
     : PromptConfigSchema.parse(config)
   return { communication: currentNames(current.communication), scope: currentNames(current.scope), delivery: currentNames(current.delivery),
@@ -295,8 +295,7 @@ function normalize(config: unknown): PromptConfig {
 }
 /**
  * Normalize stored prompt revisions to current sections and names (recording original configs under `legacy` when saved
- * before team sections existed or unparseable) and synthesize a new revision for removed settings fields (auto-merge
- * threshold and cross-source member identities) unless an earlier migration already created it.
+ * before team sections existed or unparseable) unless an earlier migration already created it.
  */
 function migratePrompts(store: Store): void {
   // Preserve original configs on legacy or unparseable revisions, falling back to the last readable config so sessions always have valid prompts.
@@ -311,23 +310,6 @@ function migratePrompts(store: Store): void {
     readable = config
   }
   if (store.get('prompt-settings-text') === 1) return
-  const before = store.get<unknown>('settings-before-9')
-  const policy = (isObject(before) ? before.policy : undefined) as { autoMergeLineLimit?: unknown; members?: unknown } | undefined
-  const limit = typeof policy?.autoMergeLineLimit === 'number' ? policy.autoMergeLineLimit : 200
-  const mapped = ((Array.isArray(policy?.members) ? policy.members : []) as Member[]).filter(person => person.feishuId && person.github)
-  const revision = store.get<number>('prompt-revision')
-  const current = revision === undefined ? undefined : store.get<PromptVersion>(`prompt-version:${revision}`)
-  const config = current?.config ?? { ...teamDefaults, skills: {} }
-  const delivery = config.delivery.includes(autoMergeThreshold(200)) ? config.delivery.replace(autoMergeThreshold(200), autoMergeThreshold(limit))
-    : limit === 200 ? config.delivery : `${config.delivery}\nEnable auto-merge only on a PR that changes fewer than ${limit} lines (additions plus deletions).`
-  const identities = mapped.length && !config.skills.identities ? { identities: ['The same colleague may use a different account on each Source. When you mention, assign or request a review from someone you met on another Source, use their account on this one:',
-    ...mapped.map(person => `- ${person.name ?? person.feishuId} (Feishu ${person.feishuId}) is @${person.github} on GitHub`)].join('\n') } : {}
-  const next = { ...config, delivery, skills: { ...config.skills, ...identities } }
-  if (JSON.stringify(next) === JSON.stringify(config)) return
-  const previous = current?.revision ?? 0
-  if (!current) store.set('prompt-version:0', { revision: 0, previousRevision: null, savedAt: '', source: 'defaults', config })
-  store.set(`prompt-version:${previous + 1}`, { revision: previous + 1, previousRevision: previous, savedAt: new Date().toISOString(), source: 'settings-migration', config: next })
-  store.set('prompt-revision', previous + 1)
 }
 
 const CELLS: readonly string[] = ['listedUnaddressed', 'unlistedAddressed', 'unlistedUnaddressed']
@@ -359,13 +341,12 @@ export function basisOf(stored: unknown): MandateBasis {
   return { via: 'listed', ...common, ...addressed ? { addressed } : {}, ...old.observation === true ? { observation: mode ? { mode } : {} } : {}, ...authority }
 }
 /**
- * Upgrade a schema 10 ticket record to schema 11: extracts `origin`, `execution`, `delivery`, and followed PR threads
- * (`follows`) from `meta` and GitHub opener channels, merges reported `answers`, marks human trigger inputs (`human: true`),
- * and converts pending `reopen` inputs into `text` inputs for the worker.
+ * Upgrade a schema 10 ticket record to schema 11: extracts `origin`, `execution`, and `delivery` from `meta`, drops removed
+ * Source channels, merges reported `answers`, marks human trigger inputs (`human: true`), and converts pending `reopen`
+ * inputs into `text` inputs for the worker.
  */
-export function ticketOf(old: Stored, answers = new Map<string, string[]>(), human: (triggerId: string) => boolean = () => false,
-  closed: (number: number) => Follow['closed'] = () => undefined): Ticket {
-  const { meta: storedMeta, ...rest } = old as Stored & { meta?: Stored }
+export function ticketOf(old: Stored, answers = new Map<string, string[]>(), human: (triggerId: string) => boolean = () => false): Ticket {
+  const { meta: storedMeta, follows: _follows, ...rest } = old as Stored & { meta?: Stored; follows?: unknown }
   const ticket = rest as unknown as Ticket
   const meta = storedMeta ?? {}
   const triggerId = text(meta.sourceTriggerId) ?? ''
@@ -383,32 +364,12 @@ export function ticketOf(old: Stored, answers = new Map<string, string[]>(), hum
   const mandate = { ...ticket.mandate, basis: basisOf(ticket.mandate.basis as unknown) }
   const delivery = ticket.delivery ?? (text(meta.deliveryError) ? { error: meta.deliveryError as string, at: ticket.updatedAt } : undefined)
   const kept = execution ?? ticket.execution
-  const follows = ticket.follows ?? followsOf(meta, ticket.channels, closed)
   return { ...ticket, inputs, ...ended ? { ended } : {}, mandate, origin: ticket.origin ?? { triggerId, triggerIds },
     // A ticket stopped by a person receives no further work, so clear any undelivered inputs.
     ...ended?.by === 'human' ? { undelivered: [] } : {},
     ...kept ? { execution: kept } : {}, ...delivery ? { delivery } : {},
-    channels: ticket.channels.filter(channel => !opener(channel)), ...follows.length ? { follows } : {},
+    channels: ticket.channels.filter(channel => channel.source !== 'github'),
     ...reported.length ? { answers: reported } : {} }
-}
-/** Schema 10 recorded a PR opened by the ticket as a GitHub Channel without a comment URL (`address.url`). */
-const opener = (channel: ChannelRef): boolean => channel.source === 'github' && !channel.address.url && !!Number(channel.address.number)
-/**
- * Reconstruct followed PR threads from legacy ticket metadata (`meta.prNumber` last, after PRs opened via GitHub opener
- * channels), marking opened PRs `own: true` and attaching recorded close outcomes.
- */
-function followsOf(meta: Stored, channels: ChannelRef[], closed: (number: number) => Follow['closed']): Follow[] {
-  const opened = channels.filter(opener).map(channel => Number(channel.address.number))
-  const bound = typeof meta.prNumber === 'number' ? [meta.prNumber] : []
-  return [...new Set([...opened.filter(number => !bound.includes(number)), ...bound])].map(number => {
-    const end = closed(number)
-    return { thread: `github:${number}`, own: opened.includes(number), ...end ? { closed: end } : {} }
-  })
-}
-/** Parse a schema 10 `github-ended:<number>` record into a followed PR's `closed` state when valid. */
-function pullEnd(stored: unknown): Follow['closed'] {
-  if (!isObject(stored) || typeof stored.at !== 'string' || (stored.reason !== 'merged' && stored.reason !== 'closed')) return undefined
-  return { at: stored.at, outcome: stored.reason }
 }
 /**
  * Strip redundant fields stored twice on legacy tickets: removes `state` (derived from `ended`), moves top-level `summary`
@@ -496,10 +457,6 @@ function moveDismissals(store: Store): void {
     store.delete(name)
   }
 }
-/** Delete `github-ended:<number>` KV records after their close outcomes have been copied onto `Ticket.follows`. */
-function dropPullEnds(store: Store): void {
-  for (const name of store.keys('github-ended:')) store.delete(name)
-}
 /** Infer a ticket's `ended.outcome` when predating recorded outcomes (`stopped` for human stops, else matching `reason` or defaulting to `closed`). */
 function outcomeOf(ended: Pick<NonNullable<Ticket['ended']>, 'by' | 'reason'>): NonNullable<Ticket['ended']>['outcome'] {
   if (ended.by === 'human') return 'stopped'
@@ -517,13 +474,11 @@ function backfillThreadTimes(store: Store): void {
   }
 }
 
-/** Upgrade stored source state (Feishu topics, direct-chat flags, thread links, GitHub cursors, and pending assessments) to schema 11. */
+/** Upgrade stored source state (Feishu topics, direct-chat flags, thread links, and pending assessments) to schema 11. */
 function migrateSourceRecords(store: Store): void {
   feishuTopics(store)
   feishuDirectAddresses(store)
   feishuThreadLinks(store)
-  issueSourceRecords(store)
-  githubCursors(store)
   assessmentTriggers(store)
 }
 /** Convert legacy Feishu topic ID arrays into maps keyed by topic ID with the chat's last recovery timestamp. */
@@ -566,33 +521,6 @@ function feishuThreadLinks(store: Store): void {
     if (thread.ref.source !== 'feishu' || typeof thread.meta.url === 'string' || store.read.firstTrigger(thread.key)?.url) continue
     const chatId = thread.ref.id.split(':')[0]
     if (chatId) store.threads.save({ ...thread, meta: { ...thread.meta, url: feishuChatLink(lark ? 'lark' : 'feishu', chatId) } })
-  }
-}
-/**
- * Reassign triggers from the removed `github-issue` source to `github`, schedule a retry from the earliest waiting message
- * within `POLL_HORIZON_MS` on each issue that had pending messages, and delete the obsolete `github-issue` KV keys.
- */
-function issueSourceRecords(store: Store): void {
-  store.db.exec(`UPDATE trigger SET value = json_set(value, '$.source', 'github') WHERE value ->> '$.source' = 'github-issue'`)
-  const pending = store.get('github-issue-pending' as Key<Record<string, { number: number; at: string }>>) ?? {}
-  const retries = { ...store.get(KV.github.retries) }
-  for (const { number, at } of Object.values(pending)) {
-    if (!(Date.now() - Date.parse(at) < POLL_HORIZON_MS)) continue
-    const retry = retries[number]
-    retries[number] = { ...retry, since: retry && retry.since < at ? retry.since : at, pr: retry?.pr ?? false }
-  }
-  if (Object.keys(retries).length) store.set(KV.github.retries, retries)
-  const kept = ['github-issue-pending', 'github-issues-since', 'github-issues-started-at', ...store.keys('github-issue-eligibility:')]
-  for (const name of kept) store.delete(name)
-}
-/** Consolidate per-issue/PR notification and thread subscription cursors into a single cursor holding the later timestamp. */
-function githubCursors(store: Store): void {
-  for (const name of [...store.keys('github-thread:'), ...store.keys('thread-since:github:')]) {
-    const at = store.get<string>(name as Key<string>)
-    const cursor = KV.github.cursor(Number(name.slice(name.lastIndexOf(':') + 1)))
-    const current = store.get(cursor)
-    if (at && !(current && current >= at)) store.set(cursor, at)
-    store.delete(name)
   }
 }
 /** Attach trigger IDs to pending assessment effects and re-enqueue undelivered active evaluations so their timeout deadlines start. */

@@ -50,7 +50,7 @@ export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'] 
   const { store } = view
   // The review worklist is the ended Tickets a person still has to decide on: not merged, and not approved.
   const pending = (ticket: Ticket): boolean => !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
-    && ticket.reviewed?.decision !== 'approved'
+    && ticket.ended?.outcome !== 'merged' && ticket.ended?.outcome !== 'closed' && ticket.reviewed?.decision !== 'approved'
   const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket)
     : stage === 'review' ? pending(ticket) : ticketStage(ticket).stage === stage
   const tickets = (stage === 'ended' || stage === 'review' ? store.tickets.list() : store.tickets.open()).filter(shown)
@@ -95,6 +95,7 @@ export function ticketDetail(host: ViewHost, id: string) {
     && settingsPolicy(store.settings(), host.sources).revalidate(ticket.mandate)
   // Ending a ticket's workspace state is offered once it ended, has a review, and was neither merged nor discarded.
   const finish = !liveTicket(ticket) && !!ticket.review?.branch && !ticket.merged && !ticket.discarded
+    && ticket.ended?.outcome !== 'merged' && ticket.ended?.outcome !== 'closed'
   const rebase = finish && !!ticket.execution?.directory
   const check = !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
     && !!ticket.execution?.directory && !!store.settings().executor.check.trim()
