@@ -608,7 +608,7 @@ export class MultiBotDshFeishuController {
       const config = this.#requireBot(botId);
       const account = await this.#deliveryAccount(config);
       this.#assertOpen('capability-unavailable');
-      return { version: 1, botId, channel: 'feishu', account,
+      return { version: 1, botId, channel: 'feishu', domain: config.domain, account,
         connected: isConnected(connectionStatus(this.#runtimes.get(botId))),
         superagent: config.superagent === true,
         superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(botId),

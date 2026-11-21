@@ -13,7 +13,7 @@ import type { SourceRegistry } from './registry.ts'
 export const SOURCE = 'feishu'
 const POLL_MS = 2_000
 let currentConfig: FeishuConfig | undefined
-interface CachedBot { botId: string; fingerprint: string; name: string }
+interface CachedBot { botId: string; fingerprint: string; name: string; brand: 'feishu' | 'lark' }
 let cachedBot: CachedBot | undefined
 /** Sets the config the Channel uses; the watch loop keeps it current, and tests set it directly. */
 export const setFeishuConfig = (value: FeishuConfig | undefined): void => { currentConfig = value }
@@ -35,7 +35,8 @@ export const feishuImConfig = (value: unknown): FeishuConfig => FeishuConfigSche
 const botFor = async (im: DshImService, botId: string): Promise<CachedBot> => {
   if (cachedBot?.botId === botId) return cachedBot
   const described = await im.describeBot(botId)
-  cachedBot = { botId, fingerprint: described.account.fingerprint, name: described.account.name || botId }
+  cachedBot = { botId, fingerprint: described.account.fingerprint, name: described.account.name || botId,
+    brand: described.domain === 'lark' ? 'lark' : 'feishu' }
   return cachedBot
 }
 const routeOf = (address: Record<string, string>): DshImEvent['reply'] => {
@@ -126,7 +127,7 @@ export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, messa
   }
 }
 const feishuLink = (address: Record<string, string>) => ({
-  url: feishuChatLink('feishu', address.chatId ?? ''), label: { zh: '飞书消息', en: 'Feishu message' },
+  url: feishuChatLink(cachedBot?.brand ?? 'feishu', address.chatId ?? ''), label: { zh: '飞书消息', en: 'Feishu message' },
   ...address.messageId ? { triggerId: key(SOURCE, address.messageId) } : {},
 })
 
@@ -274,7 +275,8 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
               ctx.report('feishu', { state: 'error', detail: 'Another consumer already owns this Feishu bot' })
             } else {
               const bot = await im.describeBot(config.botId)
-              cachedBot = { botId: config.botId, fingerprint: bot.account.fingerprint, name: bot.account.name || config.botId }
+              cachedBot = { botId: config.botId, fingerprint: bot.account.fingerprint, name: bot.account.name || config.botId,
+                brand: bot.domain === 'lark' ? 'lark' : 'feishu' }
               botName = cachedBot.name
               controller = new AbortController()
               const lease = AbortSignal.any([signal, controller.signal])

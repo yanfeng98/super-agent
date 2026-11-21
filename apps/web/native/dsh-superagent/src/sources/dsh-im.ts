@@ -27,6 +27,7 @@ export interface DshImBotDescription {
   version: 1
   botId: string
   channel: string
+  domain?: 'feishu' | 'lark'
   account: { fingerprint: string; name?: string }
   connected: boolean
   superagent: boolean
