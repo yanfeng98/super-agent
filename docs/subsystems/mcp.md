@@ -25,7 +25,7 @@ MCP servers are opt-in. Configure one `@deepseek-ai/dsh-mcp-client` entry per se
 
 The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server registers its account with `ctx.mcpAccounts` from [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.md) to show it on the **Plugins** page.
 
-The Web `standard` agent preset additionally mounts [`dsh-rust-anything`](../../packages/mcp/rust-anything/README.md), which connects the rust-anything MCP server with the CLI compiled from the crate vendored at `native/rust-anything`. That preset needs no server configuration; the package README owns its `toolLoading` and timeout fields.
+The Web `standard` agent preset additionally mounts [`dsh-rust-anything`](../../packages/mcp/rust-anything/README.md), which connects the rust-anything MCP server with the CLI compiled from the crate vendored at `native/rust-anything`, together with the bundled [`skill-rust-anything`](../../packages/skill/skill-rust-anything/README.md) provider that carries the porting loop. That preset needs no server configuration; the package README owns its `toolLoading` and timeout fields.
 
 | Choice | Configuration owner |
 |---|---|
@@ -115,6 +115,7 @@ MCP prompt templates, human-input elicitation, task-based execution, and resourc
 - [MCP resources](../../packages/mcp/mcp-resources/README.md) — shared tools and resource-provider semantics.
 - [MCP manager](../../packages/mcp/mcp-manager/README.md) — Settings-configured and plugin-registered servers, status, and Remote operations.
 - [rust-anything](../../packages/mcp/rust-anything/README.md) — the preset-mounted migration server and the CLI built from its vendored crate.
+- [skill-rust-anything](../../packages/skill/skill-rust-anything/README.md) — the bundled skill that drives the server's tools, mounted by the same preset.
 - [Resource visibility reference](../../packages/mcp/mcp-resources/README.md) — shared profile mounting and visibility from configured servers.
 - [Third-party memory servers](../user/guide/mcp-memory.md) — product configuration guide.
 - [Protocol negotiation reference](../../packages/mcp/mcp-client/README.md) — SDK ownership and compatibility decisions.

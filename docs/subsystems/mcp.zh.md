@@ -25,7 +25,7 @@ MCP 服务器需要主动配置。在目标 Cordis 作用域中，为每台服�
 
 Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../packages/mcp/mcp-manager/README.zh.md)。它运行通过 Settings 配置的服务器，以及已安装插件在自身生命周期内注册的服务器，并向 Remote 客户端提供它们的状态、重启与探测操作。注册 OAuth 服务器的插件通过 [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.zh.md) 的 `ctx.mcpAccounts` 注册账号，使其显示在**插件**页面上。
 
-Web 的 `standard` agent preset 另外挂载 [`dsh-rust-anything`](../../packages/mcp/rust-anything/README.zh.md)，用从 `native/rust-anything` vendored 源码编译出的 CLI 连接 rust-anything MCP server。该 preset 不需要任何服务器配置；`toolLoading` 与超时字段由包 README 说明。
+Web 的 `standard` agent preset 另外挂载 [`dsh-rust-anything`](../../packages/mcp/rust-anything/README.zh.md)，用从 `native/rust-anything` vendored 源码编译出的 CLI 连接 rust-anything MCP server；同一个 preset 还挂载携带迁移流程的随包提供方 [`skill-rust-anything`](../../packages/skill/skill-rust-anything/README.zh.md)。该 preset 不需要任何服务器配置；`toolLoading` 与超时字段由包 README 说明。
 
 | 选择 | 配置维护位置 |
 |---|---|
@@ -115,6 +115,7 @@ interface McpResourceProvider {
 - [MCP 资源](../../packages/mcp/mcp-resources/README.zh.md) — 共享工具与资源提供方语义。
 - [MCP 管理器](../../packages/mcp/mcp-manager/README.zh.md) — 通过 Settings 配置与插件注册的服务器、状态及 Remote 操作。
 - [rust-anything](../../packages/mcp/rust-anything/README.zh.md) —— preset 挂载的迁移 server，以及从其 vendored 源码编译的 CLI。
+- [skill-rust-anything](../../packages/skill/skill-rust-anything/README.zh.md) —— 驱动这些工具的随包技能，由同一个 preset 挂载。
 - [资源可见性参考](../../packages/mcp/mcp-resources/README.zh.md) — profile 统一挂载及由已配置服务器决定的可见性。
 - [第三方记忆服务器](../user/guide/mcp-memory.zh.md) — 产品配置指南。
 - [协议协商参考](../../packages/mcp/mcp-client/README.zh.md) — SDK 职责与兼容性决策。

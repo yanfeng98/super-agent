@@ -64,4 +64,6 @@
 
 另外，本地 `pnpm run hygiene` 里的 publint 一度失败，原因是新包只有 `tsc -b` 产出的 `lib/types/`，没有 tsdown 的 `lib/index.js`；跑一次 `npx tsdown --config-loader native`（等价于 `build:lib`）后 `npx publint packages/skill/skill-rust-anything` 全部通过。这是产物状态，不是源码问题，但说明新包确实会被 tsdown 的 workspace 自动发现并构建。
 
+MCP 子系统页（[mcp.md](../docs/subsystems/mcp.md) 与中文版）也补了一句：同一个 preset 还挂载携带迁移流程的随包提供方，并在延伸阅读里指向新包，避免「preset 只挂了 server」的旧印象。
+
 复核后的校验：`verify-runtime-closure`、`check-workspace-constraints`（含 183 个 spec 用例）、`verify-package-paths`、`verify-dsh-package-licenses`、`verify-plugin-entry-exports`、`verify-default-product-isolation`、`publint` 全部通过；`pnpm run hygiene` 的 25 个门禁里，此前唯一失败的 publint 已在构建后通过。
