@@ -100,6 +100,7 @@ const eventView = (event: DshImEvent): ContextMessage => ({
 const messageView = (message: DshImMessage): ContextMessage => ({
   id: message.messageId, from: message.sender.name || message.sender.id, at: message.at, text: message.text,
   ...message.sender.kind === 'bot' ? { bot: true as const } : {},
+  ...message.parentId ? { reply_to: message.parentId } : {},
   ...message.appLink ? { url: message.appLink } : {},
 })
 /** Reads one message of the trigger's chat by id; the retained route proves access to that chat. */
@@ -440,6 +441,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                 const signal = AbortSignal.any([lease, backfill.signal])
                 backfillRun = runFeishuImBackfill({ ctx: full, im, botId: config.botId, fingerprint: bot.account.fingerprint,
                   config: () => ctx.config(SOURCE), toTrigger: imTrigger,
+                  describe: (event, trigger) => describeThreads(full, event, trigger),
                   report: (entry, health) => ctx.report(entry, health), signal })
                 backfillRun.catch(error => {
                   if (!signal.aborted) ctx.report('history', { state: 'error', detail: String(error) })

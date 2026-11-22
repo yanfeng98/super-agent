@@ -19,6 +19,8 @@ export interface BackfillDeps {
   fingerprint: string
   config: () => FeishuConfig | undefined
   toTrigger: (event: DshImEvent) => Trigger
+  /** Publishes the Thread's chat name and link for a recovered message, as the live path does. */
+  describe?: (event: DshImEvent, trigger: Trigger) => void
   report: (entry: 'feishu' | 'history', health: Health) => void
   signal: AbortSignal
 }
@@ -59,7 +61,9 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
       { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
     if (!deps.config()) return count
     for (const event of result.events) {
-      await deps.ctx.receive(deps.toTrigger(event))
+      const trigger = deps.toTrigger(event)
+      await deps.ctx.receive(trigger)
+      deps.describe?.(event, trigger)
       count++
       lastAt = event.at
     }
@@ -98,7 +102,9 @@ async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
       { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
     if (!deps.config()) return count
     for (const event of result.events) {
-      await deps.ctx.receive(deps.toTrigger(event))
+      const trigger = deps.toTrigger(event)
+      await deps.ctx.receive(trigger)
+      deps.describe?.(event, trigger)
       count++
       lastAt = event.at
     }

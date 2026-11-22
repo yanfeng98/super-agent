@@ -114,6 +114,9 @@ export interface DshImMessage {
   messageType?: DshImMessageType
   images?: string[]
   sender: { kind: 'user' | 'bot'; id: string; name?: string }
+  threadId?: string
+  rootId?: string
+  parentId?: string
   appLink?: string
   deleted: boolean
 }

@@ -149,6 +149,7 @@ test('single message read returns its AppLink and refuses a changed route', asyn
  assert.equal(message.appLink, 'https://applink.feishu.cn/client/message/open?message_id=om-anchor');
  assert.equal(message.text, 'hello');
  assert.equal(message.sender.kind, 'user');
+ assert.equal(message.threadId, 'omt-topic');
  await assert.rejects(readExternalMessage(bot, identity,
   { messageId: 'om-anchor', conversationId: 'oc-other', actorId: 'ou-human' }), { code: 'stale-route' });
  await assert.rejects(readExternalMessage(bot, identity,
@@ -185,8 +186,10 @@ test('accepts a bot-authored anchor and reads another message of the same chat b
  const page=await readExternalHistory(bot,identity,botRoute,{scope:'thread',limit:20,includeBots:true});
  assert.equal(page.events[0].text,'hello');
  await assert.rejects(readExternalHistory(bot,identity,route,{scope:'thread',limit:20,includeBots:true}),{code:'stale-route'});
- const parent=await readExternalMessage(bot,identity,route,undefined,'om-parent');
+ const parent=await readExternalMessage(bot,identity,botRoute,undefined,'om-parent');
  assert.equal(parent.messageId,'om-parent');
  assert.equal(parent.appLink,'https://applink/om-parent');
+ // A route that does not name the anchor reaches no message of the chat, not even the anchor itself.
+ await assert.rejects(readExternalMessage(bot,identity,route,undefined,'om-parent'),{code:'stale-route'});
  await assert.rejects(readExternalMessage(bot,identity,route,undefined,'om-anchor'),{code:'stale-route'});
 });

@@ -28,6 +28,18 @@ async function checkedSdkRead(operation, signal) {
   return response;
 }
 
+/**
+ * True when a fetched message is the one a retained route names: same chat, same author, same topic links.
+ * A deleted message never matches, so a route to it stops resolving.
+ */
+function anchorMatches(source, route) {
+  return Boolean(source) && source.deleted !== true && source.chat_id === route.conversationId
+    && senderMatches(source, route.actorId)
+    && (source.thread_id || undefined) === route.threadId
+    && (source.root_id || undefined) === route.rootId
+    && (source.parent_id || undefined) === route.parentId;
+}
+
 // Application-defined checked read: destination is derived from an authenticated source.
 // Lark has Chat/time-range listing and Thread listing, not a native around-message API.
 export async function readExternalHistory(client, identity, route, query, signal) {
@@ -43,10 +55,7 @@ export async function readExternalHistory(client, identity, route, query, signal
   const reference = await checkedSdkRead(() => client.im.v1.message.get({ path: { message_id: route.messageId }, params: { with_sender_name: true } }, { signal }), signal);
   signal?.throwIfAborted();
   const source = (Array.isArray(reference?.data?.items) ? reference.data.items : []).find(item => item?.message_id === route.messageId);
-  if (!source || source.deleted || source.chat_id !== route.conversationId
-    || !senderMatches(source, route.actorId) || (source.thread_id || undefined) !== route.threadId
-    || (source.root_id || undefined) !== route.rootId || (source.parent_id || undefined) !== route.parentId)
-    refuse('stale-route');
+  if (!anchorMatches(source, route)) refuse('stale-route');
   if (query.scope === 'thread' && !route.threadId) refuse('thread-unavailable');
   signal?.throwIfAborted();
   const seconds = Math.floor(Number(source.create_time) / 1000);
@@ -172,25 +181,33 @@ export async function readThreadHistory(client, identity, query, signal) {
 
 /**
  * Reads one message by its retained route, including the AppLink that opens it in Feishu. `targetId` reads another
- * message of the same conversation, such as the message a reply answers; the retained route still proves the caller may
- * read that conversation, and the target must belong to it.
+ * message of the same conversation, such as the message a reply answers: the route must still resolve to its own
+ * message, and the target must belong to the same conversation.
  */
 export async function readExternalMessage(client, identity, route, signal, targetId) {
   if (!route || !identifier(route.messageId) || !identifier(route.conversationId) || !identifier(route.actorId)
     || (targetId !== undefined && !identifier(targetId)))
     refuse('bad-request');
+  const fetch = async id => {
+    const reference = await checkedSdkRead(() => client.im.v1.message.get({
+      path: { message_id: id }, params: { with_sender_name: true },
+    }, { signal }), signal);
+    return (Array.isArray(reference?.data?.items) ? reference.data.items : [])
+      .find(entry => entry?.message_id === id);
+  };
+  // A target read still proves the retained route: a fabricated route must not reach any message of a chat.
+  if (targetId !== undefined && !anchorMatches(await fetch(route.messageId), route)) refuse('stale-route');
   const wanted = targetId ?? route.messageId;
-  const reference = await checkedSdkRead(() => client.im.v1.message.get({
-    path: { message_id: wanted }, params: { with_sender_name: true },
-  }, { signal }), signal);
-  const item = (Array.isArray(reference?.data?.items) ? reference.data.items : [])
-    .find(entry => entry?.message_id === wanted);
+  const item = await fetch(wanted);
   if (!item || item.deleted || item.chat_id !== route.conversationId
-    || (wanted === route.messageId && item.sender?.id !== route.actorId)) refuse('stale-route');
+    || (targetId === undefined && item.sender?.id !== route.actorId)) refuse('stale-route');
   const event = historyEvent(item, identity, { chatId: route.conversationId, includeBots: true });
   if (!event) refuse('message-unavailable');
   return { version: 1, messageId: event.messageId, chatId: event.conversation.id, at: event.at, text: event.text,
     messageType: event.messageType, images: event.images, sender: event.actor,
+    ...(event.reply.threadId ? { threadId: event.reply.threadId } : {}),
+    ...(event.reply.rootId ? { rootId: event.reply.rootId } : {}),
+    ...(event.reply.parentId ? { parentId: event.reply.parentId } : {}),
     ...(identifier(item.message_app_link) ? { appLink: item.message_app_link } : {}), deleted: false };
 }
 

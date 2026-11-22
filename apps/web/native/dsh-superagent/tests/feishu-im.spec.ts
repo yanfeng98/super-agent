@@ -5,6 +5,7 @@ import { sourceLink } from '../src/app/links.ts'
 import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { feishuImKind, imTrigger, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
+import type { SourceContext } from '../src/sources/host.ts'
 import { runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
 
 const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
@@ -181,6 +182,31 @@ describe('the dsh-im-backed Feishu Source', () => {
     await running
     expect(release).toBe(1)
     expect(described).toBe(1)
+  })
+
+  it('describes each Thread with its chat name and link as messages arrive', async () => {
+    let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
+    const described: { key: string; description: Record<string, unknown> }[] = []
+    const imService = service({
+      inboundStatus: async () => ({ version: 1, botId: 'bot_1', superagent: true, superagentActive: false }),
+      consumeInbound: async (_botId, options) => { accept = options.onEvent; return () => {} },
+    })
+    setDshIm(imService)
+    const controller = new AbortController()
+    const ctx: FeishuWatchContext = { ready: Promise.resolve(), config: () => config(), configured: () => true,
+      receive: () => undefined, report: () => {} }
+    const full = { ...ctx,
+      state: { get: () => ({ oc_team: 'Team' }), set: () => undefined, keys: () => [] },
+      threads: { describe: (key: string, description: never) => { described.push({ key, description }) } },
+    } as unknown as SourceContext
+    const running = watchFeishuIm(ctx, () => imService, controller.signal, full)
+    for (let attempt = 0; attempt < 20 && !accept; attempt += 1) await new Promise(resolve => setTimeout(resolve, 0))
+    await accept!(event(), { signal: new AbortController().signal })
+    expect(described[0]?.key).toBe('feishu:oc_team:om_root')
+    expect(described[0]?.description).toMatchObject({
+      url: 'https://applink.feishu.cn/client/chat/open?openChatId=oc_team', facts: { chat: { value: 'Team' } } })
+    controller.abort()
+    await running
   })
 
   it('exposes the bot and chat labels dsh-im owns', async () => {
