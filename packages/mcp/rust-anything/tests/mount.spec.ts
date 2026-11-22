@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { Context } from '@deepseek-ai/cordis'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 
@@ -23,6 +24,7 @@ describe('rust-anything MCP server mount', () => {
 
   it('registers every tool eagerly through the shared MCP client', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await apply(ctx, Config({ toolLoading: 'eager' }))
@@ -35,6 +37,7 @@ describe('rust-anything MCP server mount', () => {
 
   it('leaves agent creation working when the executable is missing', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await apply(ctx, Config({ command: '/nonexistent/rust-anything' }))
@@ -44,6 +47,7 @@ describe('rust-anything MCP server mount', () => {
 
   it('publishes only the loader when tools load on demand', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await apply(ctx, Config({ toolLoading: 'on-demand' }))

@@ -49,6 +49,7 @@ describe('Feishu plugin', () => {
       description: expect.stringContaining('Load it before any Feishu or Lark task') as string,
       invocation: { modelInvocable: true, userInvocable: true },
       provider: 'feishu',
+      owner: 'feishu',
       source: 'bundled',
       resourceBase: { kind: 'opaque', description: 'Embedded lark-cli guides; open them with the skills read command given in the loaded skill.' },
     }])

@@ -9,6 +9,7 @@ exports[`official recommendations > offers the live catalog through a skill, add
       "userInvocable": false,
     },
     "name": "official-plugins",
+    "owner": "PluginRecommendations",
     "provider": "dsh-official-plugins",
     "source": "bundled",
   },

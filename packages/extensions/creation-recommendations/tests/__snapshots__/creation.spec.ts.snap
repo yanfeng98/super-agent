@@ -9,6 +9,7 @@ exports[`interface creation > loads page planning with a live duplicate-check ca
       "userInvocable": false,
     },
     "name": "personalized-pages",
+    "owner": "creation-recommendations",
     "provider": "dsh-personalized-pages",
     "source": "bundled",
   },
