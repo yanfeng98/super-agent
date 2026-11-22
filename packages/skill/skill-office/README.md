@@ -26,7 +26,7 @@ The catalog lists the Office router and three authoring skills. Full instruction
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies skill instructions; Python skills append a Python environment section. The skills direct operations to `office_render`, `office_convert`, and `office_recalculate`, so compose [`tool-office`](../../document/tool-office/README.md) beside this provider.
+Mount the skill provider beside the skill registry and `dsh-tool-skill`. It declares `shipped`, so the composer groups its skills with the rest of the harness. The provider supplies skill instructions; Python skills append a Python environment section. The skills direct operations to `office_render`, `office_convert`, and `office_recalculate`, so compose [`tool-office`](../../document/tool-office/README.md) beside this provider.
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'

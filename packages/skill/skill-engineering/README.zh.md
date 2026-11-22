@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-base bundle 会插入该提供方，因此每个以 base 为基础的 profile（`web`、`headless`、`acp`、`sdk`）都自带这些技能，无需任何配置。该提供方以 provider 名 `dsh-engineering` 注册进全局技能层，排名为随包技能（bundled）的 600。
+base bundle 会插入该提供方，因此每个以 base 为基础的 profile（`web`、`headless`、`acp`、`sdk`）都自带这些技能，无需任何配置。该提供方以 provider 名 `dsh-engineering` 注册进全局技能层，排名为随包技能（bundled）的 600，并声明 `shipped`，使其技能与 harness 其余技能归为一组。
 
 ### 目录包含什么
 

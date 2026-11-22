@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/engineering-skill-prefix/guide.md
+/:
+  en: a83b8eba92cc9fbe
+  zh: 07588a9712e91fa3
+/shipped-engineering-skills-take-an-eng-prefix:
+  en: 62f0f64e273992fc
+  zh: 0fe5bae32e2f186c
+/shipped-engineering-skills-take-an-eng-prefix/change:
+  en: ead71fa139f8c4dd
+  zh: 312cc0f8eef9f352
+/shipped-engineering-skills-take-an-eng-prefix/migration:
+  en: fcf8b3fb703ae22e
+  zh: c04f66e79114a523

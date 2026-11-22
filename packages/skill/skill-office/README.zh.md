@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；加载时，Python 技能追加 Python 环境说明。技能把操作交给 `office_render`、`office_convert` 和 `office_recalculate`，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。它声明 `shipped`，输入框据此把它的技能与 harness 其余技能归为一组。提供者负责技能说明；加载时，Python 技能追加 Python 环境说明。技能把操作交给 `office_render`、`office_convert` 和 `office_recalculate`，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'

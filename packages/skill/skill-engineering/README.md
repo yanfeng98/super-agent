@@ -25,7 +25,7 @@ This provider ships the Harness's built-in engineering workflow skills: 27 skill
 <a id="use-this-package"></a>
 ## Use this package
 
-The base bundle inserts this provider, so every base-backed profile (`web`, `headless`, `acp`, `sdk`) ships the skills and no configuration is required. The provider registers into the global skill layer under the provider name `dsh-engineering` at the bundled skill rank (600).
+The base bundle inserts this provider, so every base-backed profile (`web`, `headless`, `acp`, `sdk`) ships the skills and no configuration is required. The provider registers into the global skill layer under the provider name `dsh-engineering` at the bundled skill rank (600), and declares `shipped` so its skills group with the rest of the harness.
 
 ### What the catalog contains
 
