@@ -1,7 +1,10 @@
 /** The same-Host dsh-im Feishu intake service, typed for the superagent Feishu Source. */
 import type { Context } from '@deepseek-ai/cordis'
 
-/** One authenticated inbound text event delivered by dsh-im's exclusive Feishu consumer. */
+/** How dsh-im rendered a message body: model-readable text, or a placeholder that names the resource and its key. */
+export type DshImMessageType = 'text' | 'post' | 'image' | 'file' | 'audio' | 'media' | 'sticker'
+  | 'interactive' | 'share_chat' | 'share_user' | 'merge_forward' | 'system'
+/** One authenticated inbound event delivered by dsh-im's exclusive Feishu consumer. */
 export interface DshImEvent {
   version: 1
   channel: 'feishu'
@@ -13,13 +16,15 @@ export interface DshImEvent {
   conversation: { kind: 'group' | 'dm'; id: string }
   mentions: { id: string; key: string; name?: string }[]
   mentionedAccount: boolean
-  /** How dsh-im rendered the body: plain text, rich text (post), or an image placeholder carrying its key. */
-  messageType?: 'text' | 'post' | 'image'
+  /** How dsh-im rendered the body: plain text, rich text (post), or a placeholder carrying the resource key. */
+  messageType?: DshImMessageType
   /** Image keys referenced by the message, in order. */
   images?: string[]
   at: string
   text: string
   reply: { messageId: string; conversationId: string; actorId: string; threadId?: string; rootId?: string; parentId?: string }
+  /** Feishu AppLink that opens the message, present on history reads. */
+  appLink?: string
 }
 
 /** A bot dsh-im owns, as listed for a Source picker. */
@@ -73,7 +78,13 @@ export interface DshImService {
     includeBots?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   replyChecked(botId: string, route: DshImEvent['reply'], text: string,
-    options: { expectedFingerprint: string; signal: AbortSignal; uuid?: string }): Promise<{ sent: true; messageId: string }>
+    options: {
+      expectedFingerprint: string; signal: AbortSignal; uuid?: string
+      /** `markdown` sends a rich-text card; `text` (default) sends plain text. */
+      format?: 'text' | 'markdown'
+      /** Answers inside the message's topic, starting one when it has none. */
+      replyInThread?: boolean
+    }): Promise<{ sent: true; messageId: string }>
   /** Reads one chat between two times, oldest first; `direct` marks a direct chat. */
   chatHistoryChecked?(botId: string, query: {
     chatId: string; limit: number; since?: string; until?: string; cursor?: string
@@ -83,8 +94,9 @@ export interface DshImService {
   threadHistoryChecked?(botId: string, query: {
     chatId: string; threadId: string; limit: number; since?: string; until?: string; cursor?: string; includeBots?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
-  /** Reads one retained message plus the AppLink that opens it in Feishu. */
-  messageChecked?(botId: string, route: DshImEvent['reply'], options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImMessage>
+  /** Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat. */
+  messageChecked?(botId: string, route: DshImEvent['reply'],
+    options: { expectedFingerprint: string; signal: AbortSignal; messageId?: string }): Promise<DshImMessage>
   /** Reads one chat's members as open_id plus name. */
   chatMembersChecked?(botId: string, query: { chatId: string },
     options: { expectedFingerprint: string; signal: AbortSignal }): Promise<{ version: 1; chatId: string; users: { id: string; name?: string }[] }>
@@ -99,7 +111,7 @@ export interface DshImMessage {
   chatId: string
   at: string
   text: string
-  messageType?: 'text' | 'post' | 'image'
+  messageType?: DshImMessageType
   images?: string[]
   sender: { kind: 'user' | 'bot'; id: string; name?: string }
   appLink?: string

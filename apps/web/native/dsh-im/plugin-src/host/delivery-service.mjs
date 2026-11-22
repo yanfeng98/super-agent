@@ -739,8 +739,12 @@ export class DeliveryService {
   async replyChecked(botId, route, text, options = {}) {
     const id = botIdOf(botId);
     cancellation(options.signal);
+    const { format = 'text', replyInThread, uuid } = options;
     if (!/^[a-f0-9]{64}$/.test(options.expectedFingerprint ?? '')
-      || typeof text !== 'string' || !text.trim() || text.length > 4000)
+      || typeof text !== 'string' || !text.trim() || text.length > 4000
+      || !['text', 'markdown'].includes(format)
+      || (replyInThread !== undefined && typeof replyInThread !== 'boolean')
+      || (uuid !== undefined && (typeof uuid !== 'string' || !uuid || uuid.length > 50)))
       throw deliveryError('bad-request');
     const registration = await this.#checkedRegistrationFor(id);
     if (typeof registration.adapter.replyChecked !== 'function') throw deliveryError('capability-unavailable');

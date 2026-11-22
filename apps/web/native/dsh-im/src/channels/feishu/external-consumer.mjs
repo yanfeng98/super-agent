@@ -10,6 +10,16 @@ function identifier(value) {
 
 const TEXT_LIMIT = 16000;
 
+/**
+ * Message types a consumer receives. Text, post and image bodies carry model-readable content; the rest are rendered as a
+ * one-line placeholder that names the resource and its key, so a consumer knows the message exists and can read the
+ * resource back instead of the message vanishing from history.
+ */
+export const MESSAGE_TYPES = Object.freeze([
+  'text', 'post', 'image', 'file', 'audio', 'media', 'sticker',
+  'interactive', 'share_chat', 'share_user', 'merge_forward',
+]);
+
 /** Renders one Feishu rich-text (post) element into plain text; image elements also report their keys. */
 function renderPostElement(element, images, mentioned) {
   if (!element || typeof element !== 'object') return '';
@@ -53,22 +63,73 @@ function renderPost(content) {
   return { text: text || (images.length ? '[图片]' : ''), images, mentioned };
 }
 
+const CARD_TEXT_KEYS = new Set(['text', 'content', 'title']);
+/** Collects the human-readable strings of a card body; other card fields are layout and styling. */
+function cardText(value, depth = 0, found = []) {
+  if (depth > 8 || found.length > 200) return found;
+  if (typeof value === 'string') {
+    if (value.trim()) found.push(value.trim());
+    return found;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) cardText(item, depth + 1, found);
+    return found;
+  }
+  if (!value || typeof value !== 'object') return found;
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string') {
+      if (CARD_TEXT_KEYS.has(key) && entry.trim()) found.push(entry.trim());
+    } else cardText(entry, depth + 1, found);
+  }
+  return found;
+}
+
+/** Renders a resource, card, or shared-contact body into one line that names its type and key. */
+function resourceBody(messageType, body) {
+  const fileKey = identifier(body.file_key);
+  const fileName = identifier(body.file_name) ?? identifier(body.name);
+  switch (messageType) {
+    case 'file': return fileKey ? `[文件] ${fileName ?? fileKey} ${fileKey}` : undefined;
+    case 'audio': {
+      const seconds = Math.round(Number(body.duration) / 1000);
+      const length = Number.isFinite(seconds) && seconds > 0 ? `${seconds}s ` : '';
+      return fileKey ? `[语音] ${length}${fileKey}` : undefined;
+    }
+    case 'media': return fileKey ? `[视频] ${fileName ?? fileKey} ${fileKey}` : undefined;
+    case 'sticker': return fileKey ? `[表情] ${fileKey}` : '[表情]';
+    case 'interactive': {
+      const text = cardText(body).join(' ').replace(/\s+/g, ' ').trim().slice(0, 1000);
+      return text ? `[卡片] ${text}` : '[卡片]';
+    }
+    case 'share_chat': return identifier(body.chat_id) ? `[群名片] ${body.chat_id}` : '[群名片]';
+    case 'share_user': return identifier(body.user_id) ? `[个人名片] ${body.user_id}` : '[个人名片]';
+    case 'merge_forward': return '[合并转发]';
+    default: return undefined;
+  }
+}
+
 /** Reads the text, message type and image keys of one Feishu message body. */
 function messageBody(messageType, content) {
   let body;
   try { body = JSON.parse(content); } catch { throw refusal('invalid-inbound'); }
+  if (!body || typeof body !== 'object') throw refusal('invalid-inbound');
   if (messageType === 'text') {
-    if (typeof body?.text !== 'string' || !body.text.trim() || body.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
+    if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
     return { text: body.text, images: [], mentioned: [] };
   }
   if (messageType === 'image') {
-    const key = identifier(body?.image_key);
+    const key = identifier(body.image_key);
     if (!key) throw refusal('invalid-inbound');
     return { text: `[图片] ${key}`, images: [key], mentioned: [] };
   }
-  const rendered = renderPost(content);
-  if (!rendered || !rendered.text || rendered.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
-  return { text: rendered.text, images: rendered.images, mentioned: rendered.mentioned };
+  if (messageType === 'post') {
+    const rendered = renderPost(content);
+    if (!rendered || !rendered.text || rendered.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
+    return { text: rendered.text, images: rendered.images, mentioned: rendered.mentioned };
+  }
+  const text = resourceBody(messageType, body);
+  if (!text || text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
+  return { text, images: [], mentioned: [] };
 }
 
 /**
@@ -88,7 +149,7 @@ export function normalizeExternalText(event, { botId, appId, botOpenId, fingerpr
   if (eventApp !== undefined && eventApp !== appId) throw refusal('account-changed');
   if (senderType !== 'user' && !(includeBots && (senderType === 'app' || senderType === 'bot'))) return null;
   if (!['p2p', 'group'].includes(message?.chat_type)
-    || !['text', 'post', 'image'].includes(message?.message_type)) return null;
+    || !MESSAGE_TYPES.includes(message?.message_type)) return null;
   if (message.chat_type === 'group' && !identifier(botOpenId)) throw refusal('account-unverified');
   if (message.mentions !== undefined && (!Array.isArray(message.mentions) || message.mentions.length > 100))
     throw refusal('invalid-inbound');
@@ -120,8 +181,20 @@ export function normalizeExternalText(event, { botId, appId, botOpenId, fingerpr
       || body.mentioned.includes(botOpenId),
     messageType: message.message_type, images: Object.freeze(body.images),
     at: timestamp.toISOString(), text: body.text, reply: route,
+    ...(identifier(message.message_app_link) ? { appLink: message.message_app_link } : {}),
     replay: Object.freeze({ kind: 'provider-redelivery', resumeCursor: false, gapPossible: true }),
   });
+}
+
+/**
+ * Whether one fetched message's sender is the actor a retained route names. Users are matched by `open_id`; app and bot
+ * messages carry the app id instead, so only the id is compared.
+ */
+export function senderMatches(item, actorId) {
+  const sender = item?.sender;
+  if (!sender || sender.id !== actorId) return false;
+  if (sender.sender_type === 'user') return sender.id_type === 'open_id';
+  return sender.sender_type === 'app' || sender.sender_type === 'bot';
 }
 
 export class ExclusiveInboundConsumers {

@@ -167,3 +167,26 @@ test('chat member read follows pagination and keeps only open_ids with names', a
  assert.equal(calls[1].params.page_token, 'p2');
  assert.deepEqual(result.users, [{ id: 'ou-1', name: 'Alex' }, { id: 'ou-2' }]);
 });
+
+test('renders a file message from history instead of omitting it', async () => {
+ const file={...item('om-file'),msg_type:'file',body:{content:JSON.stringify({file_key:'file_v3_9',file_name:'log.txt'})}};
+ const page=await readExternalHistory(client([file]),identity,route,{scope:'group',limit:20});
+ assert.equal(page.events[0].text,'[文件] log.txt file_v3_9');
+ assert.equal(page.omitted,0);
+});
+
+test('accepts a bot-authored anchor and reads another message of the same chat by id', async () => {
+ const bot=client();
+ const anchor={...item('om-anchor'),sender:{sender_type:'app',id_type:'app_id',id:'cli-1'}};
+ bot.im.v1.message.get=async args=>args.path.message_id==='om-anchor'
+  ?{code:0,data:{items:[anchor]}}
+  :{code:0,data:{items:[{...item('om-parent'),message_app_link:'https://applink/om-parent'}]}};
+ const botRoute={...route,actorId:'cli-1'};
+ const page=await readExternalHistory(bot,identity,botRoute,{scope:'thread',limit:20,includeBots:true});
+ assert.equal(page.events[0].text,'hello');
+ await assert.rejects(readExternalHistory(bot,identity,route,{scope:'thread',limit:20,includeBots:true}),{code:'stale-route'});
+ const parent=await readExternalMessage(bot,identity,route,undefined,'om-parent');
+ assert.equal(parent.messageId,'om-parent');
+ assert.equal(parent.appLink,'https://applink/om-parent');
+ await assert.rejects(readExternalMessage(bot,identity,route,undefined,'om-anchor'),{code:'stale-route'});
+});

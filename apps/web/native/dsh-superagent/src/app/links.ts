@@ -2,7 +2,7 @@
 import type { Candidate, Ticket, Trigger } from '../core/index.ts'
 import type { Commands } from '../infra/commands.ts'
 import { dshIm } from '../sources/dsh-im.ts'
-import { feishuBotFor } from '../sources/feishu-im.ts'
+import { feishuBotFor, feishuSettings as feishuImSettings } from '../sources/feishu-im.ts'
 import { readFeishuLink } from '../sources/feishu-read.ts'
 import { feishuRef, feishuSettings } from '../sources/feishu.ts'
 import type { SourceRegistry } from '../sources/registry.ts'
@@ -40,7 +40,8 @@ export async function sourceLink(host: LinkHost, trigger: Trigger, signal?: Abor
           ...address.rootId ? { rootId: address.rootId } : {},
           ...address.parentId ? { parentId: address.parentId } : {},
         }, { expectedFingerprint: bot.fingerprint,
-          signal: AbortSignal.any([signal ?? host.lifetime, AbortSignal.timeout(5000)]) })
+          signal: AbortSignal.any([signal ?? host.lifetime,
+            AbortSignal.timeout(feishuImSettings(host.sources).linkTimeoutMs)]) })
         if (message.appLink) {
           host.links.set(cacheKey, message.appLink)
           return { source_url: message.appLink }

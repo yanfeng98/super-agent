@@ -37,6 +37,28 @@ test('normalized authenticated text retains causal identities without raw payloa
   assert.equal(normalized({ ...input, message: { ...input.message, chat_type: 'unknown' } }), null);
 });
 
+test('renders resource, card and system bodies instead of dropping them', () => {
+  const body = (messageType, content) => normalized({ ...event(),
+    message: { ...event().message, message_type: messageType, content: JSON.stringify(content) } });
+  assert.equal(body('file', { file_key: 'file_v3_1', file_name: 'report.pdf' }).text, '[文件] report.pdf file_v3_1');
+  assert.equal(body('audio', { file_key: 'file_v3_2', duration: 3200 }).text, '[语音] 3s file_v3_2');
+  assert.equal(body('media', { file_key: 'file_v3_3', file_name: 'demo.mp4' }).text, '[视频] demo.mp4 file_v3_3');
+  assert.equal(body('sticker', { file_key: 'file_v3_4' }).text, '[表情] file_v3_4');
+  assert.equal(body('interactive', { schema: '2.0', body: { elements: [{ tag: 'markdown', content: 'deploy ok' }] } }).text,
+    '[卡片] deploy ok');
+  assert.equal(body('merge_forward', {}).text, '[合并转发]');
+  assert.equal(body('share_chat', { chat_id: 'oc_shared' }).text, '[群名片] oc_shared');
+  assert.equal(body('share_user', { user_id: 'ou_shared' }).text, '[个人名片] ou_shared');
+  assert.throws(() => body('file', {}), { code: 'invalid-inbound' });
+});
+
+test('carries the provider AppLink only when the provider supplies one', () => {
+  const link = 'https://applink.feishu.cn/client/message/open?message_id=message';
+  const withLink = normalized({ ...event(), message: { ...event().message, message_app_link: link } });
+  assert.equal(withLink.appLink, link);
+  assert.equal(normalized(event()).appLink, undefined);
+});
+
 test('exclusive registration waits for durable acceptance and disposal never substitutes another consumer', async () => {
   const consumers = new ExclusiveInboundConsumers();
   let commit;

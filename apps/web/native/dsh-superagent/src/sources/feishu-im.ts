@@ -5,10 +5,10 @@ import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attach
 import type {} from '@deepseek-ai/dsh-llm'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
-import { key, type OutboundMessage, type Trigger } from '../core/index.ts'
+import { key, threadKey, type OutboundMessage, type Trigger } from '../core/index.ts'
 import { checkedImText } from '../infra/text.ts'
 import { admissionImageKeys } from './feishu-image.ts'
-import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImService } from './dsh-im.ts'
+import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImMessage, type DshImService } from './dsh-im.ts'
 import { feishuChatLink } from './feishu-channel.ts'
 import { withMentionNames } from './feishu-trigger.ts'
 import { runFeishuImBackfill } from './feishu-im-loops.ts'
@@ -34,6 +34,7 @@ const FeishuConfigSchema = z.object({
   directMessages: z.boolean().default(true),
   otherChats: z.enum(['none', 'mentions']).default('none'),
   readPageSize: z.number().int().min(1).max(HISTORY_LIMIT).default(HISTORY_LIMIT),
+  linkTimeoutMs: z.number().int().min(1).max(90_000).default(5_000),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
 /** Parses a stored Feishu Source config, ignoring keys the lark-cli Source used. */
@@ -94,7 +95,28 @@ const eventView = (event: DshImEvent): ContextMessage => ({
   text: withMentionNames(event.text, event.mentions),
   ...event.actor.kind === 'bot' ? { bot: true as const } : {},
   ...event.reply.parentId ? { reply_to: event.reply.parentId } : {},
+  ...event.appLink ? { url: event.appLink } : {},
 })
+const messageView = (message: DshImMessage): ContextMessage => ({
+  id: message.messageId, from: message.sender.name || message.sender.id, at: message.at, text: message.text,
+  ...message.sender.kind === 'bot' ? { bot: true as const } : {},
+  ...message.appLink ? { url: message.appLink } : {},
+})
+/** Reads one message of the trigger's chat by id; the retained route proves access to that chat. */
+async function readMessage(im: DshImService, botId: string, bot: CachedBot, route: DshImEvent['reply'],
+  messageId: string): Promise<DshImMessage | undefined> {
+  if (!im.messageChecked) return undefined
+  try {
+    return await im.messageChecked(botId, route, { expectedFingerprint: bot.fingerprint, messageId,
+      signal: AbortSignal.timeout(30_000) })
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code === 'account-changed') cachedBots.delete(botId)
+    // A deleted message, or one whose sender is not a person or bot, has no context to show.
+    if (code === 'stale-route' || code === 'message-unavailable') return undefined
+    throw error
+  }
+}
 const empty = (status: string): ContextPart => ({ messages: [], body: { status }, status })
 /** Media type of an image by its magic bytes; Feishu resources carry no extension the caller can trust. */
 function imageMediaType(data: Uint8Array): ImageMediaType | undefined {
@@ -143,8 +165,13 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
     if (!botId) throw new Error('Choose an IM Feishu bot first')
     const bot = await botFor(im, botId)
     const route = routeOf(trigger.channel?.address ?? {})
-    const scope: 'group' | 'nearby' | 'thread' = (part === 'thread' || part === 'root' || part === 'parent') && route.threadId
-      ? 'thread' : 'nearby'
+    if (part === 'root' || part === 'parent') {
+      const id = part === 'root' ? route.rootId : route.parentId
+      const message = id ? await readMessage(im, botId, bot, route, id) : undefined
+      return message ? { messages: [messageView(message)], body: { status: 'available', ...message } }
+        : empty(`no_${part}`)
+    }
+    const scope: 'nearby' | 'thread' = route.threadId ? 'thread' : 'nearby'
     let page
     try {
       page = await im.historyChecked(botId, route, {
@@ -154,12 +181,6 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
     } catch (error) {
       if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
       throw error
-    }
-    if (part === 'root' || part === 'parent') {
-      const id = part === 'root' ? route.rootId : route.parentId
-      const found = id ? page.events.find(event => event.messageId === id) : undefined
-      return found ? { messages: [eventView(found)], body: { status: 'available', ...page } }
-        : empty(`no_${part}`)
     }
     return { messages: page.events.map(eventView), next: page.nextCursor, body: { status: 'available', ...page }, status: 'available' }
   },
@@ -176,7 +197,8 @@ export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, messa
   const bot = await botFor(im, botId)
   try {
     await im.replyChecked(botId, routeOf(message.channel.address), checkedImText(message.text),
-      { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000), uuid: message.id })
+      { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000), uuid: message.id,
+        format: 'markdown', replyInThread: true })
     return 'sent'
   } catch (error) {
     // `reply-result-unknown` is retryable: the same receipt id is sent as Feishu's `uuid`, so a retry after an
@@ -185,6 +207,16 @@ export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, messa
     if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
     throw error
   }
+}
+/** Publishes the chat name and chat link on each Thread a Trigger opened, so the panel needs no extra read. */
+function describeThreads(full: SourceContext | undefined, event: DshImEvent, trigger: Trigger): void {
+  if (!full?.threads?.describe) return
+  const labels = full.state.get(KV.sources.labels(SOURCE)) ?? {}
+  const chat = event.conversation.kind === 'dm'
+    ? { value: { zh: '私聊', en: 'Direct message' } }
+    : { value: labels[event.conversation.id] ?? event.conversation.id }
+  const url = feishuChatLink(cachedBots.get(event.botId)?.brand ?? 'feishu', event.conversation.id)
+  for (const ref of trigger.threads) full.threads.describe(threadKey(ref), { url, facts: { chat } })
 }
 const feishuLink = (address: Record<string, string>) => ({
   url: feishuChatLink(cachedBots.get(address.botId ?? '')?.brand ?? 'feishu', address.chatId ?? ''),
@@ -211,6 +243,8 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
       hint: { zh: '机器人已加入、但没列在上面的群。“仅 @”接收那里 @ 机器人的消息；谁的消息能发起工作看策略里的准入。', en: 'Chats the bot has joined that are not listed above. "@ only" receives messages there that mention the bot; whose messages may originate work is the Policy\'s admission.' } },
     { key: 'directMessages', type: 'switch', label: { zh: '接收私聊', en: 'Direct messages' } },
     { key: 'readPageSize', type: 'number', advanced: true, min: 1, max: HISTORY_LIMIT, label: { zh: '每页消息数', en: 'Messages per page' }, hint: { zh: '智能体读取线程和群历史时，每页的消息数。', en: 'Messages per page when agents read Threads and chat history.' } },
+    { key: 'linkTimeoutMs', type: 'number', advanced: true, min: 1, max: 90_000, label: { zh: '原消息链接的查询时限 / 毫秒', en: 'Original message link time limit / ms' },
+      hint: { zh: '查询原消息链接最多等待的时间；超时后智能体改为直接读取原消息。', en: 'How long to wait for an original message\'s link; after that, agents read the message itself.' } },
   ],
   health: ['feishu', 'history'],
   scope({ meta }, config) {
@@ -283,9 +317,14 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
       { key: 'DSH_SUPERAGENT_FEISHU_BOT', description: { zh: 'dsh-im 飞书机器人；回复由 dsh-im 发送', en: 'The dsh-im Feishu bot; dsh-im sends the replies' } },
       { key: 'DSH_SUPERAGENT_FEISHU_CHAT', description: { zh: '接下工单的飞书群 chat_id；工单不是从飞书来的时为空', en: 'chat_id of the Feishu chat that started the ticket; empty when the ticket did not start on Feishu' } },
     ],
-    values: ({ config, trigger }) => ({ DSH_SUPERAGENT_FEISHU_BOT: trigger?.source === SOURCE && typeof trigger.meta.botId === 'string'
-      ? trigger.meta.botId : config.botId,
-      DSH_SUPERAGENT_FEISHU_CHAT: trigger?.source === SOURCE ? String(trigger.meta.chatId ?? '') : '' }),
+    values: ({ config, trigger }) => {
+      const botId = trigger?.source === SOURCE && typeof trigger.meta.botId === 'string' ? trigger.meta.botId : config.botId
+      return {
+        // The bot's name reads better in prompts; the id remains the fallback before its account is read.
+        DSH_SUPERAGENT_FEISHU_BOT: cachedBots.get(botId)?.name || botId,
+        DSH_SUPERAGENT_FEISHU_CHAT: trigger?.source === SOURCE ? String(trigger.meta.chatId ?? '') : '',
+      }
+    },
   },
   async refreshLabels(host) {
     const im = dshIm()
@@ -383,7 +422,11 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                 expectedFingerprint: bot.account.fingerprint, signal: lease, superagent: true, includeBots: true,
                 onEvent: async (event: DshImEvent) => {
                   const current = ctx.config(SOURCE)
-                  if (current && ctx.configured()) await ctx.receive(imTrigger(event))
+                  if (current && ctx.configured()) {
+                    const trigger = imTrigger(event)
+                    await ctx.receive(trigger)
+                    describeThreads(full, event, trigger)
+                  }
                   if (full && event.conversation.kind === 'dm') {
                     const chats = full.state.get(KV.feishu.chats) ?? {}
                     if (chats[event.conversation.id] !== true)

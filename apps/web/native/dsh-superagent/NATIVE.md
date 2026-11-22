@@ -334,7 +334,13 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and
     `syncChat` (`chatMembersChecked`), `sourceLink` resolves the message's own AppLink through `messageChecked` with the
     `feishu-im/` resource as fallback, and `sendFeishuIm` passes the receipt id as Feishu's `uuid`, so the outbox can
-    retry an ambiguous (`reply-result-unknown`) send and Feishu deduplicates it instead of producing a second reply. The backfill loop also
+    retry an ambiguous (`reply-result-unknown`) send and Feishu deduplicates it instead of producing a second reply. Replies
+    render as rich-text cards in the source message's topic (`format: 'markdown'`, `replyInThread: true`), so a Ticket answer
+    looks like the removed lark-cli Source's `--markdown --reply-in-thread` reply, and a bot-authored source can be answered
+    because dsh-im accepts bot senders on the retained route. `root` and `parent` context reads the message by id through
+    `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still resolves; events carry
+    `appLink` and context messages keep it as `url`. The live path describes each Thread with its chat name and chat link,
+    `linkTimeoutMs` bounds link resolution, and `DSH_SUPERAGENT_FEISHU_BOT` names the bot once its account is cached. The backfill loop also
     merges dsh-im's group target names into the stored label map every round, and `refreshLabels` persists what it reads.
     The Source declares the `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies, backfill and policy sync.
 

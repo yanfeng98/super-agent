@@ -1,5 +1,6 @@
 import { createConnectionDiagnostics, atConnectionStage } from '../shared/connection-error.mjs';
 import { readChatHistory, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory } from './history-reader.mjs';
+import { senderMatches } from './external-consumer.mjs';
 import { downloadFeishuResourceRanges } from './resource-download.mjs';
 import { randomUUID } from 'node:crypto';
 import { FeishuHarnessBridge } from './bridge.mjs';
@@ -816,9 +817,9 @@ export class FeishuRuntime {
     return this.#checkedRead((client) => readThreadHistory(client, identity, query, signal), signal);
   }
 
-  /** Reads one retained message and the AppLink that opens it in Feishu. */
-  async messageChecked(identity, route, { signal } = {}) {
-    return this.#checkedRead((client) => readExternalMessage(client, identity, route, signal), signal);
+  /** Reads one retained message and the AppLink that opens it in Feishu; `messageId` reads another message of the same chat. */
+  async messageChecked(identity, route, { signal, messageId } = {}) {
+    return this.#checkedRead((client) => readExternalMessage(client, identity, route, signal, messageId), signal);
   }
 
   /** Reads one chat's members as open_id plus name. */
@@ -845,9 +846,15 @@ export class FeishuRuntime {
     }, signal);
   }
 
-  async replyChecked(route, text, { signal, uuid } = {}) {
+  /**
+   * Replies to one retained message as its author's bot. `format` renders the text as a card (`markdown`) or plain text;
+   * `replyInThread` answers inside the message's topic, starting one when the message has none.
+   */
+  async replyChecked(route, text, { signal, uuid, format = 'text', replyInThread } = {}) {
     if (!route || typeof route.messageId !== 'string' || typeof route.conversationId !== 'string'
       || typeof route.actorId !== 'string' || typeof text !== 'string' || !text.trim() || text.length > 4000
+      || !['text', 'markdown'].includes(format)
+      || (replyInThread !== undefined && typeof replyInThread !== 'boolean')
       || (uuid !== undefined && (typeof uuid !== 'string' || !uuid || uuid.length > 50)))
       throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
     const client = this.#client;
@@ -857,8 +864,8 @@ export class FeishuRuntime {
     const current = await client.im.v1.message.get({ path: { message_id: route.messageId } });
     const source = current?.data?.items?.find(item => item.message_id === route.messageId);
     if (current?.code || !source || source.deleted === true || source.chat_id !== route.conversationId
-      || source.sender?.sender_type !== 'user' || source.sender?.id_type !== 'open_id'
-      || source.sender?.id !== route.actorId || (source.thread_id || undefined) !== route.threadId
+      || !senderMatches(source, route.actorId)
+      || (source.thread_id || undefined) !== route.threadId
       || (source.root_id || undefined) !== route.rootId || (source.parent_id || undefined) !== route.parentId)
       throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
     signal?.throwIfAborted();
@@ -867,8 +874,13 @@ export class FeishuRuntime {
     try {
       response = await client.im.v1.message.reply({
         path: { message_id: route.messageId },
-        data: { msg_type: 'text', content: JSON.stringify({ text }),
-          ...(uuid ? { uuid } : {}), reply_in_thread: Boolean(route.threadId) },
+        data: {
+          msg_type: format === 'markdown' ? 'interactive' : 'text',
+          content: JSON.stringify(format === 'markdown'
+            ? { schema: '2.0', body: { elements: [{ tag: 'markdown', content: text }] } }
+            : { text }),
+          ...(uuid ? { uuid } : {}), reply_in_thread: replyInThread ?? Boolean(route.threadId),
+        },
       });
     } catch (cause) {
       // The request may have reached Lark. Do not turn an ambiguous result into

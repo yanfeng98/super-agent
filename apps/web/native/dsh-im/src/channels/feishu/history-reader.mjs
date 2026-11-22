@@ -1,5 +1,5 @@
 import { readNearbyHistory } from './nearby-history.mjs';
-import { normalizeExternalText } from './external-consumer.mjs';
+import { MESSAGE_TYPES, normalizeExternalText, senderMatches } from './external-consumer.mjs';
 
 function refuse(code) { throw Object.assign(new Error(code), { code }); }
 function identifier(value) {
@@ -44,8 +44,7 @@ export async function readExternalHistory(client, identity, route, query, signal
   signal?.throwIfAborted();
   const source = (Array.isArray(reference?.data?.items) ? reference.data.items : []).find(item => item?.message_id === route.messageId);
   if (!source || source.deleted || source.chat_id !== route.conversationId
-    || source.sender?.sender_type !== 'user' || source.sender?.id_type !== 'open_id'
-    || source.sender?.id !== route.actorId || (source.thread_id || undefined) !== route.threadId
+    || !senderMatches(source, route.actorId) || (source.thread_id || undefined) !== route.threadId
     || (source.root_id || undefined) !== route.rootId || (source.parent_id || undefined) !== route.parentId)
     refuse('stale-route');
   if (query.scope === 'thread' && !route.threadId) refuse('thread-unavailable');
@@ -63,7 +62,7 @@ export async function readExternalHistory(client, identity, route, query, signal
     for (const item of items) {
       if (!item || item.chat_id !== route.conversationId
         || (query.scope === 'thread' && item.thread_id !== route.threadId)) refuse('untrusted-source');
-      if (item.deleted || !['text', 'post', 'image'].includes(item.msg_type)
+      if (item.deleted || !MESSAGE_TYPES.includes(item.msg_type)
         || (item.sender?.sender_type !== 'user'
           && !(query.includeBots === true && ['app', 'bot'].includes(item.sender?.sender_type)))) { ++omitted; continue; }
       if (item.mentions !== undefined && (!Array.isArray(item.mentions) || item.mentions.length > 100)) { ++omitted; continue; }
@@ -134,7 +133,7 @@ async function readHistoryPage(client, identity, options, signal) {
   let omitted = 0;
   for (const item of items) {
     if (!item || item.chat_id !== chatId || (threadId !== undefined && item.thread_id !== threadId)) refuse('untrusted-source');
-    if (item.deleted || !['text', 'post', 'image'].includes(item.msg_type)
+    if (item.deleted || !MESSAGE_TYPES.includes(item.msg_type)
       || (item.sender?.sender_type !== 'user'
         && !(includeBots && ['app', 'bot'].includes(item.sender?.sender_type)))) { ++omitted; continue; }
     let event;
@@ -171,17 +170,23 @@ export async function readThreadHistory(client, identity, query, signal) {
   return { version: 1, scope: 'thread', chatId, threadId, ...page, coverage: 'provider-visible-messages' };
 }
 
-/** Reads one message by its retained route, including the AppLink that opens it in Feishu. */
-export async function readExternalMessage(client, identity, route, signal) {
-  if (!route || !identifier(route.messageId) || !identifier(route.conversationId) || !identifier(route.actorId))
+/**
+ * Reads one message by its retained route, including the AppLink that opens it in Feishu. `targetId` reads another
+ * message of the same conversation, such as the message a reply answers; the retained route still proves the caller may
+ * read that conversation, and the target must belong to it.
+ */
+export async function readExternalMessage(client, identity, route, signal, targetId) {
+  if (!route || !identifier(route.messageId) || !identifier(route.conversationId) || !identifier(route.actorId)
+    || (targetId !== undefined && !identifier(targetId)))
     refuse('bad-request');
+  const wanted = targetId ?? route.messageId;
   const reference = await checkedSdkRead(() => client.im.v1.message.get({
-    path: { message_id: route.messageId }, params: { with_sender_name: true },
+    path: { message_id: wanted }, params: { with_sender_name: true },
   }, { signal }), signal);
   const item = (Array.isArray(reference?.data?.items) ? reference.data.items : [])
-    .find(entry => entry?.message_id === route.messageId);
+    .find(entry => entry?.message_id === wanted);
   if (!item || item.deleted || item.chat_id !== route.conversationId
-    || item.sender?.id !== route.actorId) refuse('stale-route');
+    || (wanted === route.messageId && item.sender?.id !== route.actorId)) refuse('stale-route');
   const event = historyEvent(item, identity, { chatId: route.conversationId, includeBots: true });
   if (!event) refuse('message-unavailable');
   return { version: 1, messageId: event.messageId, chatId: event.conversation.id, at: event.at, text: event.text,

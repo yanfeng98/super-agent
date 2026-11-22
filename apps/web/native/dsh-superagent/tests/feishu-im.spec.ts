@@ -17,6 +17,7 @@ const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
 })
 const config = (overrides: Partial<FeishuConfig> = {}): FeishuConfig => ({
   botId: 'bot_1', chats: [{ chatId: 'oc_team', listen: 'mentions' }], directMessages: true, otherChats: 'none', readPageSize: 20,
+  linkTimeoutMs: 5000,
   ...overrides,
 })
 const service = (overrides: Partial<DshImService> = {}): DshImService => ({
@@ -102,25 +103,45 @@ describe('the dsh-im-backed Feishu Source', () => {
     await expect(sendFeishuIm({ commands: {} as never }, message)).resolves.toBe('sent')
     expect(calls[0]?.[0]).toBe('bot_1')
     expect(calls[0]?.[1]).toMatchObject({ messageId: 'om_1', conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_1' })
+    // Replies render as rich text in the source message's topic, and the receipt id deduplicates a retry.
+    expect(calls[0]?.[3]).toMatchObject({ uuid: 'reply_1', format: 'markdown', replyInThread: true })
     setDshIm(service({ replyChecked: async () => { throw Object.assign(new Error('gone'), { code: 'stale-route' }) } }))
     await expect(sendFeishuIm({ commands: {} as never }, message)).resolves.toBe('gone')
   })
 
-  it('reads thread context through dsh-im history and filters a root by its message id', async () => {
+  it('reads thread context through dsh-im history and a root or parent message by its id', async () => {
     setDshIm(service())
     const trigger = imTrigger(event())
     const thread = await feishuImKind.threadContext!.read({} as never, trigger, 'thread', undefined, config())
     expect(thread.messages).toHaveLength(1)
     expect(thread.messages[0]).toMatchObject({ id: 'om_1', from: 'Alice', text: 'fix the login page' })
-    setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'group', events: [event({ messageId: 'om_root' })], omitted: 0, hasMore: false, coverage: 'provider-visible-human-text' }) }))
+    const asked: unknown[][] = []
+    setDshIm(service({ messageChecked: async (...args: unknown[]) => {
+      asked.push(args)
+      return { version: 1, messageId: 'om_root', chatId: 'oc_team', at: '2026-11-20T09:00:00.000Z',
+        text: 'root message', sender: { kind: 'user', id: 'ou_bob', name: 'Bob' }, deleted: false }
+    } }))
     const root = await feishuImKind.threadContext!.read({} as never, trigger, 'root', undefined, config())
-    expect(root.messages[0]?.id).toBe('om_root')
+    expect(root.messages[0]).toMatchObject({ id: 'om_root', from: 'Bob', text: 'root message' })
+    expect(asked[0]?.[2]).toMatchObject({ messageId: 'om_root' })
+    setDshIm(service({ messageChecked: async () => { throw Object.assign(new Error('gone'), { code: 'stale-route' }) } }))
+    const parent = await feishuImKind.threadContext!.read({} as never, trigger, 'parent', undefined, config())
+    expect(parent.status).toBe('no_parent')
+    expect(parent.messages).toEqual([])
     setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'thread', omitted: 0, hasMore: false,
       coverage: 'provider-visible-human-text', events: [event({ actor: { kind: 'bot', id: 'cli_ci', name: 'CI' },
         text: '@_user_1 build ok', mentions: [{ id: 'ou_bot', key: '@_user_1', name: '机器人' }] })] }) }))
     const bots = await feishuImKind.threadContext!.read({} as never, trigger, 'thread', undefined, config())
     expect(bots.messages[0]).toMatchObject({ from: 'CI', bot: true, text: '@机器人 build ok' })
     expect(feishuImKind.threadContext!.images!('see [图片] img_abc and img_def')).toEqual(['img_abc', 'img_def'])
+  })
+
+  it('keeps the message AppLink as the context message URL', async () => {
+    const link = 'https://applink.feishu.cn/client/message/open?message_id=om_1'
+    setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'thread', omitted: 0, hasMore: false,
+      coverage: 'provider-visible-human-text', events: [event({ appLink: link })] }) }))
+    const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event()), 'thread', undefined, config())
+    expect(page.messages[0]?.url).toBe(link)
   })
 
   it('registers the exclusive consumer while the handoff switch is on and releases it on abort', async () => {

@@ -662,7 +662,7 @@ export class MultiBotDshFeishuController {
     }));
   }
 
-  async #checkedConsumerRead(botId, expectedFingerprint, signal, method, args) {
+  async #checkedConsumerRead(botId, expectedFingerprint, signal, method, args, options = {}) {
     this.#assertOpen('capability-unavailable');
     return this.#withBotTransition(botId, async () => {
       this.#assertOpen('capability-unavailable');
@@ -680,7 +680,7 @@ export class MultiBotDshFeishuController {
       const leaseSignal = this.#inboundConsumers.signalFor(botId, expectedFingerprint);
       const readSignal = signal ? AbortSignal.any([signal, leaseSignal]) : leaseSignal;
       const result = await runtime[method]({ botId, appId: config.appId,
-        botOpenId: config.botOpenId, fingerprint: account.fingerprint }, ...args, { signal: readSignal });
+        botOpenId: config.botOpenId, fingerprint: account.fingerprint }, ...args, { ...options, signal: readSignal });
       this.#assertOpen('capability-unavailable');
       readSignal.throwIfAborted();
       return result;
@@ -701,9 +701,10 @@ export class MultiBotDshFeishuController {
     return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'threadHistoryChecked', [query]);
   }
 
-  /** Reads one retained message and its AppLink through the exclusive consumer's bot. */
-  async messageChecked(botId, route, { expectedFingerprint, signal } = {}) {
-    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'messageChecked', [route]);
+  /** Reads one retained message and its AppLink through the exclusive consumer's bot; `messageId` reads another message of the same chat. */
+  async messageChecked(botId, route, { expectedFingerprint, signal, messageId } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'messageChecked', [route],
+      messageId === undefined ? {} : { messageId });
   }
 
   /** Reads one chat's member list through the exclusive consumer's bot. */
@@ -716,7 +717,7 @@ export class MultiBotDshFeishuController {
     return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'resourceChecked', [route, query]);
   }
 
-  async replyChecked(botId, route, text, { expectedFingerprint, signal } = {}) {
+  async replyChecked(botId, route, text, { expectedFingerprint, signal, uuid, format, replyInThread } = {}) {
     this.#assertOpen();
     return this.#withBotTransition(botId, async () => {
       this.#assertOpen();
@@ -731,7 +732,9 @@ export class MultiBotDshFeishuController {
       if (config.consumerMode !== 'external-consumer' || !isConnected(connectionStatus(runtime))
         || typeof runtime.replyChecked !== 'function')
         throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
-      return runtime.replyChecked(route, text, { signal });
+      return runtime.replyChecked(route, text, { signal,
+        ...(uuid === undefined ? {} : { uuid }), ...(format === undefined ? {} : { format }),
+        ...(replyInThread === undefined ? {} : { replyInThread }) });
     });
   }
 

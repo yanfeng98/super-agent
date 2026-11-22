@@ -1799,3 +1799,24 @@ test('external callback can await a checked original-route reply without owning 
   finally { dispose(); await incoming.catch(() => {}); }
   assert.equal(calls, 1);
 });
+
+test('checked replies forward the receipt, format and thread options to the runtime', async t => {
+  const fx = await persistentExternalFixture(t);
+  const dispose = await fx.controller.consumeInbound(fx.existing.id, { expectedFingerprint: fx.fingerprint,
+    onEvent: async () => ({ accepted: true }) });
+  t.after(dispose);
+  const runtime = fx.runtimes.get(fx.existing.id).at(-1);
+  let seen;
+  runtime.replyChecked = async (route, text, options) => {
+    seen = { route, text, options };
+    return { sent: true, messageId: 'external-reply' };
+  };
+  const route = { messageId: 'external-message', conversationId: 'external-chat', actorId: 'external-actor' };
+  await fx.controller.replyChecked(fx.existing.id, route, 'done',
+    { expectedFingerprint: fx.fingerprint, uuid: 'receipt-1', format: 'markdown', replyInThread: true });
+  assert.equal(seen.text, 'done');
+  assert.deepEqual(seen.route, route);
+  assert.equal(seen.options.uuid, 'receipt-1');
+  assert.equal(seen.options.format, 'markdown');
+  assert.equal(seen.options.replyInThread, true);
+});

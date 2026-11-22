@@ -1107,3 +1107,35 @@ test('checked history refuses a result after the runtime stops during SDK listin
  {messageId:'anchor',conversationId:'chat',actorId:'human'},{scope:'group',limit:1});
  await started;await runtime.stop();release();await assert.rejects(pending,{code:'bot-not-connected'});
 });
+
+test('checked replies render markdown cards, answer in the topic, and accept a bot-authored source', async () => {
+  const runtime = new FeishuRuntime({ lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+    consumerMode: 'external-consumer', harness: { async ensureRunning() {} }, state: {} });
+  const starting = runtime.start();
+  await waitFor(() => FakeWSClient.instances.length === 1);
+  FakeWSClient.instances[0].becomeReady(); await starting;
+  const source = { message_id: 'message', chat_id: 'chat', sender: { sender_type: 'app', id_type: 'app_id', id: 'cli_ci' } };
+  const client = FakeClient.instances[0];
+  client.im.v1.message.get = async () => ({ code: 0, data: { items: [source] } });
+  const requests = [];
+  client.im.v1.message.reply = async request => {
+    requests.push(request);
+    return { code: 0, data: { message_id: 'reply' } };
+  };
+  const route = { messageId: 'message', conversationId: 'chat', actorId: 'cli_ci' };
+  await runtime.replyChecked(route, '# done', { format: 'markdown', replyInThread: true, uuid: 'receipt-1' });
+  assert.equal(requests[0].data.msg_type, 'interactive');
+  assert.equal(requests[0].data.reply_in_thread, true);
+  assert.equal(requests[0].data.uuid, 'receipt-1');
+  assert.deepEqual(JSON.parse(requests[0].data.content),
+    { schema: '2.0', body: { elements: [{ tag: 'markdown', content: '# done' }] } });
+  await runtime.replyChecked(route, 'plain');
+  assert.equal(requests[1].data.msg_type, 'text');
+  assert.deepEqual(JSON.parse(requests[1].data.content), { text: 'plain' });
+  assert.equal(requests[1].data.reply_in_thread, false);
+  await assert.rejects(runtime.replyChecked(route, 'x', { format: 'html' }), { code: 'bad-request' });
+  await assert.rejects(runtime.replyChecked(route, 'x', { replyInThread: 'yes' }), { code: 'bad-request' });
+  await assert.rejects(runtime.replyChecked({ ...route, actorId: 'ou_human' }, 'x'), { code: 'stale-route' });
+  assert.equal(requests.length, 2);
+  await runtime.stop();
+});
