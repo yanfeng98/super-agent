@@ -1,7 +1,7 @@
 /** Optional input contributions mount through the real Loader and preserve editor ownership. */
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEntryYaml, stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { chromium, type Browser } from 'playwright'
@@ -36,9 +36,11 @@ it('shows shortcuts, a Plan outline, and Session review steps before restoring t
   const installedReview = await mkdtemp(join(tmpdir(), 'dsh-composer-review-session-'))
   onTestFinished(() => rm(installedReview, { recursive: true, force: true }))
   await cp(reviewBundle, installedReview, { recursive: true })
-  const scopeDir = join(installedReview, 'node_modules', '@deepseek-ai')
-  await mkdir(scopeDir, { recursive: true })
-  await symlink(schemastery, join(scopeDir, 'schemastery'), 'junction')
+  // One literal names the rescoped install path: the repository's vendor codemod rewrites a bare
+  // package token, which would double the scope segment of a `join(scopeDir, '<name>')` target.
+  const scopedModule = join(installedReview, 'node_modules', '@deepseek-ai/schemastery')
+  await mkdir(dirname(scopedModule), { recursive: true })
+  await symlink(schemastery, scopedModule, 'junction')
   const { scaffold, browser, page, tripwire } = await fixture([
     { dir: shortcutsBundle, enabled: true },
     { dir: installedReview, enabled: true },
