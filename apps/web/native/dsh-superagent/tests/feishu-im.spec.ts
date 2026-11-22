@@ -566,6 +566,36 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(state.get(KV.feishu.topic('feishu:oc_team:om_root'))).toMatchObject({ threadId: 'omt_learned' })
   })
 
+  it('remembers a Thread whose source message was recalled as gone instead of rereading it every round', async () => {
+    const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])
+    const asked: string[] = []
+    const page = { version: 1 as const, scope: 'chat' as const, events: [], omitted: 0, hasMore: false, coverage: 'provider-visible-messages' }
+    const im = service({
+      chatHistoryChecked: async () => page,
+      messageChecked: async () => { asked.push('message'); throw Object.assign(new Error('recalled'), { code: 'message-deleted' }) },
+      threadHistoryChecked: async () => { asked.push('thread'); return { ...page, scope: 'thread' as const } },
+    })
+    const createdAt = new Date().toISOString()
+    const thread = { key: 'feishu:oc_team:om_root', ref: { source: 'feishu', id: 'oc_team:om_root' },
+      meta: { chatId: 'oc_team' }, createdAt, subscriptions: [] }
+    const trigger = { meta: {}, channel: { address: { chatId: 'oc_team', messageId: 'om_root', actorId: 'ou_bob' } } }
+    const ctx = {
+      ready: Promise.resolve(), config: () => config(), configured: () => true, receive: async () => {}, report: () => {},
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      threads: { subscribed: () => [thread], patch: () => {}, get: () => undefined, describe: () => {} },
+      triggers: { latest: () => trigger, get: () => undefined },
+      tickets: { get: () => undefined },
+    }
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
+      config: () => config(), toTrigger: imTrigger, report: () => {}, signal: controller.signal })
+    // The recalled message stays gone: the lookup is remembered, so the Thread does not reread it on every round.
+    await vi.waitFor(() => expect(state.get(KV.feishu.topic('feishu:oc_team:om_root'))).toEqual({ at: createdAt }))
+    controller.abort()
+    await run
+    expect(asked).toEqual(['message'])
+  })
+
   it('counts the messages dsh-im could not render in the history health', async () => {
     const reports: { detail?: string }[] = []
     const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])

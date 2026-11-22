@@ -251,7 +251,7 @@ async function learnThreadId(deps: BackfillDeps, thread: Thread, chatId: string)
   } catch (error) {
     const code = (error as { code?: string }).code
     // A source message that is gone stays gone; any other failure is tried again on the next round.
-    if (code === 'stale-route' || code === 'message-unavailable') deps.ctx.state.set(key, { at })
+    if (code === 'stale-route' || code === 'message-unavailable' || code === 'message-deleted') deps.ctx.state.set(key, { at })
     return undefined
   }
 }

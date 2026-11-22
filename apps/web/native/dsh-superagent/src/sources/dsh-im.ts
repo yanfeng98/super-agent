@@ -51,7 +51,7 @@ export interface DshImHistory {
   omitted: number
   hasMore: boolean
   nextCursor?: string
-  /** Inclusive unix-second bounds of a `nearby` window; history beyond them is not in this page. */
+  /** Unix-second bounds of a `nearby` window, `start` inclusive and `end` exclusive; history beyond them is not in this page. */
   window?: { start: number; end: number }
   coverage: string
 }
