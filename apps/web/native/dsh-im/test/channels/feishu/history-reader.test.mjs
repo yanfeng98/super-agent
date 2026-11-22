@@ -37,9 +37,12 @@ test('reports a recalled message apart from one it cannot render', async () => {
   await assert.rejects(
     readExternalMessage(client(record(), record({ message_id: 'system', msg_type: 'system' })), identity, route, signal, 'system'),
     { code: 'message-unavailable' });
-  // The retained route's own message reads the same way when it is the one that was recalled.
+  // Without a target id the route's own message is read directly; a consumer naming it by id gets `stale-route` instead,
+  // because a recalled message never satisfies the route check.
   await assert.rejects(readExternalMessage(client(record({ deleted: true })), identity, route, signal),
     { code: 'message-deleted' });
+  await assert.rejects(readExternalMessage(client(record({ deleted: true })), identity, route, signal, 'anchor'),
+    { code: 'stale-route' });
 });
 
 test('refuses a route that no longer resolves to its own message', async () => {
