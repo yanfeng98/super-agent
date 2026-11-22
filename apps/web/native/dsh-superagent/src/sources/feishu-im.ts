@@ -359,7 +359,8 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
       try {
         for (const target of await im.listTargets(config.botId)) {
           const chatId = target.route?.chatId
-          if (target.kind === 'group' && chatId && target.name) labels[chatId] = target.name
+          // A target without a name still makes its chat selectable, but never replaces a name already read.
+          if (target.kind === 'group' && chatId) labels[chatId] = target.name || labels[chatId] || chatId
         }
       } catch { /* Targets are a display aid. */ }
     }
@@ -392,6 +393,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
   let botName = ''
   // A failing account or consumer read backs off instead of polling the network every couple of seconds.
   let retry: number | undefined
+  // When the current attempt started, so only an attempt that ran for a minute resets the backoff.
   let runningSince = Date.now()
   const stop = (): void => {
     controller?.abort(); backfill?.abort(); release?.()
@@ -419,6 +421,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         continue
       }
       if (botId !== config.botId) { stop(); botId = config.botId; botName = ''; cachedBots.clear() }
+      runningSince = Date.now()
       try {
         // `inboundStatus` is a cheap local read; `describeBot` verifies the account over the network, so only registration pays for it.
         const status = im.inboundStatus ? await im.inboundStatus(config.botId) : await im.describeBot(config.botId)
@@ -479,7 +482,6 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         ctx.report('feishu', { state: 'error', detail: String(error) })
         retry = consumerRetry(retry, Date.now() - runningSince)
       }
-      runningSince = Date.now()
       await delay(retry ?? POLL_MS, undefined, { signal }).catch(() => {})
     }
   } finally {

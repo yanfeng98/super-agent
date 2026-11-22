@@ -100,9 +100,17 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
   return { recovered: count, omitted }
 }
 
-/** Learns a Thread's topic id from its latest Trigger's root message when the Thread was opened before Feishu reported one. */
+/**
+ * Learns a Thread's topic id from its latest Trigger's root message when the Thread was opened before Feishu reported one.
+ * A Thread without a topic stays on chat backfill, so the answer is remembered per Thread activity and read again only
+ * after the Thread moved on.
+ */
 async function learnThreadId(deps: BackfillDeps, thread: Thread, chatId: string): Promise<string | undefined> {
   const read = deps.im.messageChecked
+  const key = KV.feishu.topic(thread.key)
+  const at = thread.lastAt ?? thread.createdAt
+  const known = deps.ctx.state.get(key)
+  if (known?.at === at) return known.threadId
   const address = deps.ctx.triggers.latest(thread.key)?.channel?.address
   if (!read || !address?.messageId || !address.actorId) return undefined
   try {
@@ -111,10 +119,16 @@ async function learnThreadId(deps: BackfillDeps, thread: Thread, chatId: string)
       ...address.threadId ? { threadId: address.threadId } : {}, ...address.rootId ? { rootId: address.rootId } : {},
       ...address.parentId ? { parentId: address.parentId } : {},
     }, { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal), messageId: address.rootId ?? address.messageId })
-    if (!message.threadId) return undefined
-    deps.ctx.threads.patch(thread.key, { threadId: message.threadId })
-    return message.threadId
-  } catch { return undefined /* A Thread without a topic stays on chat backfill. */ }
+    const threadId = message.threadId
+    deps.ctx.state.set(key, { at, ...threadId ? { threadId } : {} })
+    if (threadId) deps.ctx.threads.patch(thread.key, { threadId })
+    return threadId
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    // A source message that is gone stays gone; any other failure is tried again on the next round.
+    if (code === 'stale-route' || code === 'message-unavailable') deps.ctx.state.set(key, { at })
+    return undefined
+  }
 }
 
 /** One subscribed thread's new messages since its stored cursor; thread ids come from the Thread, its latest Trigger, or its root message. */

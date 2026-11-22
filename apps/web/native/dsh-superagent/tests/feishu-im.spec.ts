@@ -277,6 +277,38 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
   })
 
+  it('learns a Thread topic from its root message before polling it', async () => {
+    const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])
+    const asked: string[] = []
+    const patched: unknown[] = []
+    const page = { version: 1 as const, scope: 'chat' as const, events: [], omitted: 0, hasMore: false, coverage: 'provider-visible-messages' }
+    const im = service({
+      chatHistoryChecked: async () => page,
+      messageChecked: async () => { asked.push('message'); return { version: 1 as const, messageId: 'om_root', chatId: 'oc_team',
+        at: '2026-09-01T00:00:00.000Z', text: 'root', sender: { kind: 'user' as const, id: 'ou_bob' }, threadId: 'omt_learned', deleted: false } },
+      threadHistoryChecked: async () => { asked.push('thread'); return { ...page, scope: 'thread' as const } },
+    })
+    const thread = { key: 'feishu:oc_team:om_root', ref: { source: 'feishu', id: 'oc_team:om_root' },
+      meta: { chatId: 'oc_team' }, createdAt: new Date().toISOString(), subscriptions: [] }
+    const trigger = { meta: {}, channel: { address: { chatId: 'oc_team', messageId: 'om_root', actorId: 'ou_bob' } } }
+    const ctx = {
+      ready: Promise.resolve(), config: () => config(), configured: () => true, receive: async () => {}, report: () => {},
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      threads: { subscribed: () => [thread], patch: (_key: string, patch: unknown) => { patched.push(patch) }, get: () => undefined, describe: () => {} },
+      triggers: { latest: () => trigger, get: () => undefined },
+      tickets: { get: () => undefined },
+    }
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
+      config: () => config(), toTrigger: imTrigger, report: () => {}, signal: controller.signal })
+    await vi.waitFor(() => expect(asked).toContain('thread'))
+    controller.abort()
+    await run
+    expect(asked[0]).toBe('message')
+    expect(patched).toContainEqual({ threadId: 'omt_learned' })
+    expect(state.get(KV.feishu.topic('feishu:oc_team:om_root'))).toMatchObject({ threadId: 'omt_learned' })
+  })
+
   it('counts the messages dsh-im could not render in the history health', async () => {
     const reports: { detail?: string }[] = []
     const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])

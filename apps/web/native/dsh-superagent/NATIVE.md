@@ -345,8 +345,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     live path describes each Thread with its chat name and chat link, `linkTimeoutMs` bounds link resolution, and
     `DSH_SUPERAGENT_FEISHU_BOT` names the bot once its account is cached. The backfill loop merges the chats the bot joined
     (`chatListChecked`) and dsh-im's group target names into the stored label map every round, and `refreshLabels` persists
-    what it reads, so the chat picker offers every joined chat. A failing account read backs off from one second to one
-    minute (`consumerRetry` in `poll.ts`), and the Source reports localized health codes rather than raw English details.
+    what it reads, so the chat picker offers every joined chat. A failing attempt backs off from one second to one
+    minute (`consumerRetry` in `poll.ts`), measured from the attempt itself so a long wait does not reset it, and the
+    known states report health codes the panel localizes instead of raw English details.
     The Source declares the `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies,
     backfill and policy sync.
 

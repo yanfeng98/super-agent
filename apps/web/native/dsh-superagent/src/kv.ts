@@ -45,5 +45,7 @@ export const KV = {
    */
   feishu: { chats: record<Record<string, boolean>>('feishu-chats'), history: family<string, [chat: string]>('feishu-history:'),
     topics: family<Record<string, string>, [chat: string]>('feishu-history-threads:'),
-    seen: family<string[], [thread: string]>('thread-seen:'), initialized: family<boolean, [thread: string]>('thread-initialized:') },
+    seen: family<string[], [thread: string]>('thread-seen:'), initialized: family<boolean, [thread: string]>('thread-initialized:'),
+    /** Per-polled-thread topic lookup: the Thread activity it was looked up at, and the topic when Feishu reports one. */
+    topic: family<{ at: string; threadId?: string }, [thread: string]>('thread-topic:') },
 }
