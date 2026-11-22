@@ -59,6 +59,7 @@ Do not investigate implementation files or directories merely to admit a routine
 Use the supplied thread and its images only when necessary to resolve a concrete scope uncertainty.
 A window message lists its images by image_id; read them with orchestrator_eval_read when screenshots hold the wording or visual facts the decision needs, and before concluding that no concrete target or change is identified.
 The read returns the image to this Session.
+A window message lists its files, voice messages and videos by file_id; read one only when its contents decide the scope, and read it with your file tools from the saved path the read returns. Only text-like contents are readable that way.
 Read the root, the parent and later thread pages through orchestrator_eval_read with the ids and cursors it returned, never invented ones.
 Do not claim an image is unreadable without trying this read; report a specific tool or model-capability failure separately from whether an enabled rule matches.
 Use decision=unavailable for missing evidence caused by a tool, permission or model-capability failure; this records a failed assessment, not a rule mismatch.

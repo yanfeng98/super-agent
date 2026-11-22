@@ -113,7 +113,10 @@ export let server: PanelServer
 
 function resolved() {
   const accounts = server.setup.accounts
-  return accounts ? testDeployment(accounts.feishu ? { feishu: { cli: '/bin/false', ...accounts.feishu } } : { feishu: undefined }) : undefined
+  const feishu = accounts?.feishu
+  // A dsh-im bot carries no app id or brand of its own; the fixture only needs a valid Deployment.
+  return accounts ? testDeployment(feishu ? { feishu: { cli: '/bin/false', appId: feishu.appId ?? 'cli_fixture',
+    brand: feishu.brand ?? 'feishu', botId: feishu.botId, name: feishu.name } } : { feishu: undefined }) : undefined
 }
 /** Default source health: paused during setup; Feishu defaults to `socket closed` unless overridden or paused by setup. */
 function healthOf(name: string): Health {
@@ -133,12 +136,13 @@ function sourceSettings(): SourceView[] {
       health: server.health[`sync:${kind.kind}`] }
     const policy = kind.policy && { fields: kind.policy.fields, explicit: kind.policy.explicit, ...kind.policy.rows
       ? { rows: kind.policy.rows(config) } : {}, ...sync ? { sync } : {} }
+    const labels = kind.kind === 'feishu' ? { oc_team: '团队群', oc_other: '另一个群', ...server.joined } : {}
     return { id: kind.kind, kind: kind.kind, title: kind.title, description: kind.description, installed: true,
       value: { enabled: server.settings.sources[kind.kind]?.enabled ?? true, config },
         revision: server.revisions[`source:${kind.kind}`] ?? 0,
-      restarts: SETUP_FIELDS[kind.kind] ?? [], fields: kind.fields, facts: kind.facts?.(resolved()) ?? {},
-      labels: kind.kind === 'feishu' ? { oc_team: '团队群', oc_other: '另一个群', ...server.joined } : {}, ...problem ? { problem } : {},
-      ...policy ? { policy } : {} }
+      restarts: SETUP_FIELDS[kind.kind] ?? [], fields: kind.fields,
+      facts: kind.facts?.({ deployment: resolved(), config, labels }) ?? {},
+      labels, ...problem ? { problem } : {}, ...policy ? { policy } : {} }
   })
 }
 function sourceStatuses(): SourceStatusRow[] {

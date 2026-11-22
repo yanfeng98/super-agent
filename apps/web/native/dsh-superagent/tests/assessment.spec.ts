@@ -158,6 +158,33 @@ it('loads a window without the assessment instructions: the trigger once, cut me
   expect(JSON.stringify(result).length).toBeLessThan(9000)
 })
 
+it('lists a window message\'s files and hands the model the saved file read', async () => {
+  const opened: unknown[] = []
+  const bodies = ['ok', 'see [文件] notes.txt file_x']
+  const context = {
+    messageId: 'm0',
+    read: async () => ({ messages: fixtureMessages(bodies), body: { messages: fixtureMessages(bodies) } }),
+    images: () => [],
+    image: async () => { throw new Error('No images') },
+    files: (text: string) => [...new Set(text.match(/\bfile_[a-zA-Z0-9_-]+\b/g) ?? [])],
+    file: async (_agent: unknown, _commands: unknown, message: { id: string; text: string }, key: string) => {
+      opened.push([message, key])
+      return { source_message_id: message.id, file_key: key, file: { attachmentId: 'sha256:abc' } }
+    },
+  }
+  const s = setup('inferred', bodies, () => context)
+  s.engine.receive(issue(1)); s.engine.evaluateDue()
+  const result = await s.assessor.context('fixture-1', signal) as { thread: { messages: { id: string; files?: string[] }[] } }
+  expect(result.thread.messages.find(message => message.id === 'm1')?.files).toEqual(['m1/file_x'])
+  const read = await s.tools.orchestrator_eval_read!({ trigger_id: 'fixture-1', resource: 'file', file_id: 'm1/file_x' }, signal)
+  expect(read).toMatchObject({ file_key: 'file_x', file: { attachmentId: 'sha256:abc' } })
+  expect(opened).toEqual([[{ id: 'm1', text: bodies[1] }, 'file_x']])
+  // A file id the window never listed is refused instead of being turned into a network read.
+  await expect(s.tools.orchestrator_eval_read!({ trigger_id: 'fixture-1', resource: 'file', file_id: 'm9/file_y' }, signal))
+    .rejects.toThrow('Unknown file reference')
+  expect(EvalReadSchema.safeParse({ trigger_id: 'fixture-1', resource: 'file' }).success).toBe(false)
+})
+
 it('lets the main Session read on from the cursor its loaded window ends with, and points a cut batch message at its whole text', async () => {
   // Every page returns a next cursor so the bounded window ends with a continuation cursor.
   const page = (cursor?: string) => {
@@ -166,7 +193,7 @@ it('lets the main Session read on from the cursor its loaded window ends with, a
     return { messages: [message], next: String(n + 1), body: { messages: [message] } }
   }
   const context = { messageId: 'm0', read: async (_commands: Commands, _part: string, cursor?: string) => page(cursor), images: () => [],
-    image: async () => { throw new Error('No images') } }
+    image: async () => { throw new Error('No images') }, files: () => [], file: async () => { throw new Error('No files') } }
   const s = setup('inferred', undefined, () => context)
   s.engine.receive(issue(1))
   const long = { ...issue(2), id: 'long', threads: issue(1).threads, text: 'a long follow-up. '.repeat(40) }

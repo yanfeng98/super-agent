@@ -21,6 +21,7 @@ import { KV } from '../src/kv.ts'
 import { SettingsSchema, policyVersion, type SettingsOrigin } from '../src/policy.ts'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { feishuKind } from '../src/sources/feishu.ts'
+import { feishuImKind } from '../src/sources/feishu-im.ts'
 import { localKind } from '../src/sources/local.ts'
 import { CliError, Commands } from '../src/infra/commands.ts'
 import { UserError, key, runningAssignment, said, threadKey, waitsForPerson, type Trigger } from '../src/core/index.ts'
@@ -227,6 +228,20 @@ it('relays an explicit member mention as a candidate and creates the ticket, ack
     thread: `feishu:${CHAT}:om_1`, text: trigger.text }) })
   expect(first.trigger).not.toHaveProperty('read')
   expect(await route({ kind: 'accept', trigger_id: trigger.id, title: 'again', worktree_name: worktreeName, acknowledgement: 'x' })).toMatchObject({ ticket: { ticket_id: ticket.id } })
+})
+
+it('renders a tool result\'s file as a saved file block, and its image as an image block', async () => {
+  const tool = tools.get(runtime.masterId)!.get('orchestrator_eval_read')!
+  const file = { attachmentId: 'sha256:abc', name: 'file_x', bytes: 5 }
+  const fileResult = { source_message_id: 'om_1', file_key: 'file_x', file }
+  expect(tool.output.render({}, fileResult)).toEqual([
+    { type: 'text', text: JSON.stringify(fileResult) },
+    { type: 'file', attachment: file },
+  ])
+  const image = { attachmentId: 'sha256:def', mediaType: 'image/png', bytes: 8, width: 1, height: 1 }
+  expect(tool.output.render({}, { image })).toEqual([{ type: 'text', text: JSON.stringify({ image }) }, { type: 'image', attachment: image }])
+  // Plain results stay text only.
+  expect(tool.output.render({}, { status: 'available' })).toEqual([{ type: 'text', text: JSON.stringify({ status: 'available' }) }])
 })
 
 it('fans a person\'s later thread message out to the live worker as context and tells the orchestrator, without an Eval', async () => {
@@ -730,6 +745,19 @@ it('reports a broken Feishu bot as its problem and leaves Feishu out, checking t
   expect(check[0]).toBe('env')
   expect(check[1]!.startsWith('PATH=')).toBe(true)
   expect(check[1]!.slice('PATH='.length).split(':')).not.toContain(join(directory, 'worker-bin'))
+})
+
+it('names the dsh-im bot the Feishu Source is bound to, without a bot CLI of its own', async () => {
+  // A dsh-im-backed Source owns no CLI, so setup leaves Feishu out; the bot comes from the Source's config and its labels.
+  const next = await restart({}, { feishu: null })
+  await next.ready
+  expect(next.deployment.feishu).toBeUndefined()
+  next.sources.register(feishuImKind)
+  next.store.saveSettings({ ...next.store.settings(), sources: { feishu: { enabled: true, config: { botId: 'bot_1' } } } })
+  next.store.set(KV.sources.labels('feishu'), { bot_1: '机器人一' })
+  expect((await api('GET', 'state')).body).toMatchObject({ setup: { accounts: { feishu: { botId: 'bot_1', name: '机器人一' } } } })
+  const settings = (await api('GET', 'settings')).body as { sources: { id: string; facts: Record<string, unknown> }[] }
+  expect(settings.sources.find(source => source.id === 'feishu')?.facts).toEqual({ botId: { zh: '当前机器人 机器人一', en: 'Current bot 机器人一' } })
 })
 
 it('reports a failure to write the agent environment as environmentFailed and leaves this process\'s environment as it was', async () => {

@@ -1,4 +1,4 @@
-/** Downloads Feishu message images and commits them as model-visible attachments during assessment. */
+/** Feishu attachment admission: readable key extraction and image download for assessment. */
 import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -11,6 +11,11 @@ import type { FeishuRef } from './feishu-read.ts'
 /** Extracts Feishu image keys from message text so keys remain paired with the originating message; arbitrary remote IDs are not accepted. */
 export function admissionImageKeys(text: string): string[] {
   return [...new Set(text.match(/\bimg_[a-zA-Z0-9_-]+\b/g) ?? [])]
+}
+
+/** Extracts Feishu file, voice, and video keys from message text, which is where the handoff renders their placeholders. */
+export function admissionFileKeys(text: string): string[] {
+  return [...new Set(text.match(/\bfile_[a-zA-Z0-9_-]+\b/g) ?? [])]
 }
 
 export interface AdmissionImage {

@@ -184,6 +184,36 @@ describe('the dsh-im-backed Feishu Source', () => {
     expect(described).toBe(1)
   })
 
+  it('keeps a message whose handling failed in the Source\'s health until the next message is handled', async () => {
+    let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
+    let active = false
+    let fail = true
+    const reports: Parameters<FeishuWatchContext['report']>[1][] = []
+    const imService = service({
+      inboundStatus: async () => ({ version: 1, botId: 'bot_1', superagent: true, superagentActive: active }),
+      consumeInbound: async (_botId, options) => { accept = options.onEvent; active = true; return () => {} },
+    })
+    setDshIm(imService)
+    const controller = new AbortController()
+    const ctx: FeishuWatchContext = { ready: Promise.resolve(), config: () => config(), configured: () => true,
+      receive: () => { if (fail) throw new Error('store is down') }, report: (_entry, health) => { reports.push(health) } }
+    const running = watchFeishuIm(ctx, () => imService, controller.signal)
+    for (let attempt = 0; attempt < 20 && !accept; attempt += 1) await new Promise(resolve => setTimeout(resolve, 0))
+    // dsh-im logs the rejection; the Source reports it too, because the message is not retried.
+    await expect(accept!(event(), { signal: new AbortController().signal })).rejects.toThrow('store is down')
+    expect(reports.at(-1)).toMatchObject({ state: 'error', detail: expect.stringContaining(`Handling ${key('feishu', 'om_1')} failed: store is down`) })
+    // The loop's ready report repeats it instead of hiding it behind "Listening".
+    await new Promise(resolve => setTimeout(resolve, 2_100))
+    expect(reports.at(-1)).toMatchObject({ state: 'error' })
+    // The next message that is handled clears it, so the Source returns to ready.
+    fail = false
+    await accept!(event({ messageId: 'om_2' }), { signal: new AbortController().signal })
+    await new Promise(resolve => setTimeout(resolve, 2_100))
+    expect(reports.at(-1)?.state).toBe('ready')
+    controller.abort()
+    await running
+  }, 15_000)
+
   it('describes each Thread with its chat name and link as messages arrive', async () => {
     let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
     const described: { key: string; description: Record<string, unknown> }[] = []
@@ -404,6 +434,30 @@ describe('dsh-im Feishu context parts and images', () => {
     expect(asked[0]?.[1]).toMatchObject({ messageId: 'om_1' })
     expect(asked[0]?.[3]).toMatchObject({ messageId: 'om_parent' })
     expect(saved).toHaveLength(1)
+  })
+
+  it('downloads a file, voice message, or video and hands the model a saved path', async () => {
+    const asked: unknown[][] = []
+    setDshIm(service({ resourceChecked: async (...args: unknown[]) => {
+      asked.push(args)
+      return { version: 1, messageId: 'om_parent', fileKey: 'file_x', type: 'file', size: 5, data: new Uint8Array([104, 101, 108, 108, 111]) }
+    } }))
+    const saved: unknown[] = []
+    const agent = { ctx: { get: (name: string) => name === 'attachments'
+      ? { saveFile: async (input: unknown) => { saved.push(input); return { attachmentId: 'sha256:abc', name: 'file_x', bytes: 5 } } } : undefined } }
+    const { readFeishuImFile } = await import('../src/sources/feishu-im.ts')
+    const result = await readFeishuImFile(agent as never, imTrigger(event()), { id: 'om_parent', text: '[文件] notes.txt file_x' },
+      'file_x', new AbortController().signal)
+    expect(asked[0]?.[2]).toMatchObject({ fileKey: 'file_x', type: 'file' })
+    // The route still names the Trigger's own message; the download names the message that carries the file.
+    expect(asked[0]?.[1]).toMatchObject({ messageId: 'om_1' })
+    expect(asked[0]?.[3]).toMatchObject({ messageId: 'om_parent' })
+    expect(saved).toEqual([{ data: new Uint8Array([104, 101, 108, 108, 111]), name: 'file_x' }])
+    expect(result).toMatchObject({ source_message_id: 'om_parent', file_key: 'file_x' })
+    // Only keys the handoff rendered into that message are accepted.
+    await expect(readFeishuImFile(agent as never, imTrigger(event()), { id: 'om_parent', text: 'no attachment here' },
+      'file_x', new AbortController().signal)).rejects.toThrow('Choose a file key')
+    expect(feishuImKind.threadContext!.files!('[文件] notes.txt file_x [图片] img_y')).toEqual(['file_x'])
   })
 
   it('keeps a profile saved with the lark-cli page size usable', () => {

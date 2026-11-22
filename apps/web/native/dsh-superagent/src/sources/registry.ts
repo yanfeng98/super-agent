@@ -119,6 +119,11 @@ export class SourceRegistry implements SourceScope {
         if (!context.image) throw new Error(`The ${kind.kind} Source has no images`)
         return context.image(agent, commands, trigger, message, key, stateDir, signal)
       },
+      files: text => context.files?.(text) ?? [],
+      file: async (agent, commands, message, key, stateDir, signal) => {
+        if (!context.file) throw new Error(`The ${kind.kind} Source has no files`)
+        return context.file(agent, commands, trigger, message, key, stateDir, signal)
+      },
     }
   }
   scope(input: { source: string; meta: Record<string, unknown> }, settings = this.settings()): ScopeResult {

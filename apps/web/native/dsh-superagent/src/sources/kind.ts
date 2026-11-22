@@ -62,7 +62,7 @@ export interface ContextMessage {
 /** The Trigger's own message (`message`), the message its Thread starts from (`root`), the message it answers (`parent`), its Thread, or the chat around it. */
 export type ContextPartName = 'thread' | 'root' | 'parent' | 'message' | 'around'
 export interface ContextPart { messages: ContextMessage[]; next?: string | undefined; body: Record<string, unknown>; status?: string }
-/** Bounded thread context reader used by assessments to inspect messages and images around a trigger. */
+/** Bounded thread context reader used by assessments to inspect messages, images, and files around a trigger. */
 export interface ThreadContext<C> {
   /** The ID of the Trigger's own message among the messages of its Thread. */
   messageId(trigger: Trigger): string
@@ -73,6 +73,11 @@ export interface ThreadContext<C> {
   /** Reads one image of a message in the Trigger's Thread as an attachment for `agent`. */
   image?(agent: Agent, commands: Commands, trigger: Trigger, message: { id: string; text: string }, key: string, stateDir: string,
     signal: AbortSignal): Promise<unknown>
+  /** Extracts file keys from message text that `file` can read; omitted for kinds without file support. */
+  files?(text: string): string[]
+  /** Reads one file of a message in the Trigger's Thread as a saved attachment whose bytes `agent` can read by path. */
+  file?(agent: Agent, commands: Commands, trigger: Trigger, message: { id: string; text: string }, key: string, stateDir: string,
+    signal: AbortSignal): Promise<unknown>
 }
 export interface TriggerContext {
   readonly messageId: string
@@ -81,6 +86,10 @@ export interface TriggerContext {
   /** @throws for a kind without image support. */
   image(agent: Agent, commands: Commands, message: { id: string; text: string }, key: string, stateDir: string,
     signal: AbortSignal): Promise<unknown>
+  files(text: string): string[]
+  /** @throws for a kind without file support. */
+  file(agent: Agent, commands: Commands, message: { id: string; text: string }, key: string, stateDir: string,
+    signal: AbortSignal): Promise<unknown>
 }
 /** Pluggable source kind descriptor registered with SourceRegistry. */
 export interface SourceKind<C extends Record<string, unknown> = Record<string, unknown>> {
@@ -88,8 +97,8 @@ export interface SourceKind<C extends Record<string, unknown> = Record<string, u
   kind: string
   title: Localized
   description: Localized
-  /** Read-only status facts derived from `deployment` (undefined while waiting for setup), keyed by field key. */
-  facts?(deployment: Deployment | undefined): Record<string, Localized | string>
+  /** Read-only status facts keyed by field key, derived from the resolved deployment, this Source's config, and its stored labels. */
+  facts?(input: { deployment: Deployment | undefined; config: Record<string, unknown>; labels: Record<string, string> }): Record<string, Localized | string>
   /** Validates stored and submitted configuration and fills defaults. */
   schema: z.ZodType<C>
   fields: FieldSpec[]

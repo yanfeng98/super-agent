@@ -1,7 +1,7 @@
 /** Lifecycle, prompt/tool/skill decoration, message delivery, and budget retry tracking for orchestrator and worker DSH sessions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { MessageId } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import { scopeParentOf } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { dirname } from 'node:path'
@@ -202,14 +202,24 @@ export class Sessions {
   mayRead(sessionId: string, revision: number): boolean {
     return revision === this.promptVersion(sessionId).revision || (this.host.store.get(KV.sessions.prompts(sessionId)) ?? []).includes(revision)
   }
-  /** Returns a tool registrar for `agent` that renders tool output as JSON text and attaches `output.image` as an image when present. */
+  /**
+   * Returns a tool registrar for `agent` that renders tool output as JSON text and attaches `output.image` as an image
+   * and `output.file` as a saved file whose read path the model receives as handle text.
+   */
   private registerTool(agent: Agent, binding: SessionBinding): RegisterTool {
     return (name, description, schema, execute) => {
       binding.disposers.push(agent.ctx.tools.register({ name, description, parameters: z.toJSONSchema(schema),
         output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => {
-          const text = { type: 'text' as const, text: JSON.stringify(value) }
-          const image = value && typeof value === 'object' && 'image' in value ? (value as { image: never }).image : undefined
-          return image ? [text, { type: 'image' as const, attachment: image }] : [text]
+          const content: ContentBlock[] = [{ type: 'text', text: JSON.stringify(value) }]
+          const object = value && typeof value === 'object'
+          // Only an attachment reference is attached; a tool that names a file by path returns a string and stays text.
+          const image: never | undefined = object && 'image' in value && typeof value.image === 'object' && value.image !== null
+            ? (value as { image: never }).image : undefined
+          const file: never | undefined = object && 'file' in value && typeof value.file === 'object' && value.file !== null
+            ? (value as { file: never }).file : undefined
+          if (image) content.push({ type: 'image', attachment: image })
+          if (file) content.push({ type: 'file', attachment: file })
+          return content
         } },
         execute: (args, execution) => execute(schema.parse(args), execution.signal) }))
     }

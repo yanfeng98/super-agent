@@ -470,7 +470,7 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_eval_read',
-      description: 'Read more of a candidate\'s context, always with its trigger_id: a message or stub whole by message_id, an image by image_id, the root, the parent, or a thread page by cursor.',
+      description: 'Read more of a candidate\'s context, always with its trigger_id: a message or stub whole by message_id, an image by image_id, a file, voice message or video by file_id, the root, the parent, or a thread page by cursor.',
       schema: EvalReadSchema,
       execute: async (read, signal) => host.assessor.read(agent, read, signal),
     }),

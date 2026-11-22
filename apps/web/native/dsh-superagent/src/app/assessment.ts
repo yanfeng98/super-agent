@@ -38,7 +38,8 @@ const FINISHED = 'This assessment has finished: it was decided, timed out or res
 const EXPLICIT = 'This is an explicit request, which is routed instead of assessed: use orchestrator_route with its trigger_id and kind accept, attach, stop or ignore'
 type AssessmentContext = Awaited<ReturnType<typeof admissionContext>>
 type ReadCache = {
-  snapshots: Map<string, string>; images: Map<string, { id: string; text: string }>; messages: Map<string, string>; cursors: Set<string>
+  snapshots: Map<string, string>; images: Map<string, { id: string; text: string }>; files: Map<string, { id: string; text: string }>
+  messages: Map<string, string>; cursors: Set<string>
 }
 /** Per-evaluation state kept while an Eval runs: served reads cache, loaded thread context (or error), and any in-flight initial load. */
 interface EvalReads { cache: ReadCache; context?: AssessmentContext; error?: string; loading?: Promise<void> }
@@ -65,15 +66,17 @@ export interface AssessorHost {
 /** Schema for bounded context read requests during an active evaluation (`orchestrator_eval_read`). */
 export const EvalReadSchema = z.object({
   trigger_id: z.string().min(1).describe('Original candidate ID returned by orchestrator_eval; every reference is scoped to this trigger.'),
-  resource: z.enum(['message', 'root', 'parent', 'thread', 'image']),
+  resource: z.enum(['message', 'root', 'parent', 'thread', 'image', 'file']),
   message_id: z.string().optional().describe('Only for message: omit for the trigger, or the id of a window message or stub.'),
   cursor: z.string().optional().describe('Only for thread: omit on the first page, then the next_cursor of the window or the cursor of next_read. Never a thread or message ID.'),
   image_id: z.string().optional().describe('Only for image: an image id the window or a read lists.'),
-  offset: z.number().int().min(0).default(0).describe('Text pagination: copy next_offset; keep the other arguments unchanged. Images use 0.'),
+  file_id: z.string().optional().describe('Only for file: a file id the window or a read lists; the model receives a saved path it can read.'),
+  offset: z.number().int().min(0).default(0).describe('Text pagination: copy next_offset; keep the other arguments unchanged. Images and files use 0.'),
 }).strict().superRefine((read, ctx) => {
-  if (read.message_id !== undefined && read.resource !== 'message') ctx.addIssue({ code: 'custom', message: 'message_id is only for message; use returned image_id for images.' })
+  if (read.message_id !== undefined && read.resource !== 'message') ctx.addIssue({ code: 'custom', message: 'message_id is only for message; use returned image_id or file_id for attachments.' })
   if (read.cursor !== undefined && read.resource !== 'thread') ctx.addIssue({ code: 'custom', message: 'cursor is only for thread. First page: {resource:"thread"}.' })
   if ((read.resource === 'image') !== (read.image_id !== undefined)) ctx.addIssue({ code: 'custom', message: 'Images require image_id from a returned read reference. Read the thread or root first to discover their images.' })
+  if ((read.resource === 'file') !== (read.file_id !== undefined)) ctx.addIssue({ code: 'custom', message: 'Files require file_id from a returned read reference. Read the thread or root first to discover their files.' })
 })
 /** Validated arguments for `MasterAssessor.read`. */
 export type EvalRead = z.infer<typeof EvalReadSchema>
@@ -119,18 +122,25 @@ export class MasterAssessor implements Assessor {
       if (!this.live(evalId, trigger)) throw new Error(FINISHED)
       const context = this.host.threadContext(trigger)
       const messages = new Map([[context?.messageId ?? '', trigger.text]])
-      reads = { cache: { snapshots: new Map(), images: new Map(), messages, cursors: new Set() } }
+      reads = { cache: { snapshots: new Map(), images: new Map(), files: new Map(), messages, cursors: new Set() } }
       this.evals.set(evalId, reads)
-      this.imageReferences(context, trigger, trigger.text, context?.messageId ?? '', reads.cache)
+      this.attachmentReferences(context, trigger, trigger.text, context?.messageId ?? '', reads.cache)
     }
     return reads
   }
-  private imageReferences(context: TriggerContext | undefined, trigger: Trigger, text: string, messageId: string, cache: ReadCache) {
-    return (context?.images(text) ?? []).map(imageKey => {
+  /** Registers the images and files one message text names, returning the read references the model copies to open them. */
+  private attachmentReferences(context: TriggerContext | undefined, trigger: Trigger, text: string, messageId: string, cache: ReadCache) {
+    const images = (context?.images(text) ?? []).map(imageKey => {
       const imageId = `${messageId}/${imageKey}`
       cache.images.set(imageId, { id: messageId, text })
       return { message_id: messageId, image_key: imageKey, read: { trigger_id: trigger.id, resource: 'image', image_id: imageId } }
     })
+    const files = (context?.files(text) ?? []).map(fileKey => {
+      const fileId = `${messageId}/${fileKey}`
+      cache.files.set(fileId, { id: messageId, text })
+      return { message_id: messageId, file_key: fileKey, read: { trigger_id: trigger.id, resource: 'file', file_id: fileId } }
+    })
+    return { images, files }
   }
   /** Loads and caches the initial bounded thread window once per evaluation (including after a host restart). */
   private async seed(evalId: string, trigger: Trigger, caller?: AbortSignal): Promise<void> {
@@ -156,7 +166,7 @@ export class MasterAssessor implements Assessor {
           if (context.next) reads.cache.cursors.add(context.next)
           for (const message of context.messages) if (!message.deleted) {
             reads.cache.messages.set(message.id, message.text)
-            this.imageReferences(thread, trigger, message.text, message.id, reads.cache)
+            this.attachmentReferences(thread, trigger, message.text, message.id, reads.cache)
           }
         } catch (error) {
           caller?.throwIfAborted()
@@ -185,6 +195,9 @@ export class MasterAssessor implements Assessor {
     const images = (text: string) => source?.images(text) ?? []
     const imageIds = (id: string, text: string) => { const keys = images(text); return keys.length
       ? { images: keys.map(key => `${id}/${key}`) } : {} }
+    const files = (text: string) => source?.files(text) ?? []
+    const fileIds = (id: string, text: string) => { const keys = files(text); return keys.length
+      ? { files: keys.map(key => `${id}/${key}`) } : {} }
     const cut = (text: string, limit: number) => text.length <= limit ? { text } : { text: `${text.slice(0, limit)}…`, chars: text.length }
     const thread = context ? (() => {
       const shown = new Map(context.window.entries.map(entry => [entry.message.id, entry]))
@@ -196,7 +209,8 @@ export class MasterAssessor implements Assessor {
         // The trigger's own text is already included once at the top level.
         if (index === at) return { ...author, at: message.at, trigger: true }
         const near = at >= 0 && Math.abs(index - at) <= 2
-        return { ...author, at: message.at, ...cut(message.text, near ? NEAR_CHARS : WINDOW_CHARS), ...imageIds(message.id, message.text) }
+        return { ...author, at: message.at, ...cut(message.text, near ? NEAR_CHARS : WINDOW_CHARS),
+          ...imageIds(message.id, message.text), ...fileIds(message.id, message.text) }
       })
       return { complete: context.complete, loaded_messages: context.messages.length, source_found: context.window.source_found,
         ...context.next ? { next_cursor: context.next } : {}, messages }
@@ -206,7 +220,7 @@ export class MasterAssessor implements Assessor {
     return { trigger_id: trigger.id, strength: candidate.strength, mode: settings.eval.mode,
       source: { kind: trigger.source, actor: trigger.actor.id, thread: threadKey(trigger.threads[0]!), ...(trigger.url
         ? { url: trigger.url } : {}) },
-      ...cut(trigger.text, TRIGGER_CHARS), ...imageIds(source?.messageId ?? '', trigger.text),
+      ...cut(trigger.text, TRIGGER_CHARS), ...imageIds(source?.messageId ?? '', trigger.text), ...fileIds(source?.messageId ?? '', trigger.text),
       ...others.length ? { batch: others.map(item => {
         const text = cut(item.text, WINDOW_CHARS)
         return { trigger_id: item.id, actor: item.actor.id, at: item.at, ...text, ...'chars' in text ? { read: `trigger/${item.id}` } : {} }
@@ -216,23 +230,26 @@ export class MasterAssessor implements Assessor {
       thread }
   }
   /**
-   * Serves bounded paginated text or image attachments from the evaluation's thread context for
-   * `orchestrator_eval_read`; `agent` is the main Session, which receives images as attachments.
+   * Serves bounded paginated text, images, and files from the evaluation's thread context for `orchestrator_eval_read`;
+   * `agent` is the main Session, which receives an image as an attachment and a file as a saved path it can read.
    */
   async read(agent: Agent, read: EvalRead, signal: AbortSignal) {
       const { candidate, trigger } = this.evalFor(read.trigger_id)
       await this.seed(candidate.evalId, trigger, signal)
       const { cache } = this.reads(candidate.evalId, trigger)
-      const { snapshots, images, messages, cursors } = cache
+      const { snapshots, images, files, messages, cursors } = cache
       const commands = this.host.commands.withSignal(AbortSignal.any([this.controller.signal, signal]))
-      if (read.resource === 'image') {
-        if (read.offset !== 0) throw new Error('Images are not paginated; use offset 0')
-        const image = images.get(read.image_id!)
-        if (!image) throw new Error('Unknown image reference. Read the source/root/thread for this trigger first and copy its image read arguments.')
+      if (read.resource === 'image' || read.resource === 'file') {
+        if (read.offset !== 0) throw new Error('Images and files are not paginated; use offset 0')
         const source = this.host.threadContext(trigger)
         if (!source) throw new Error(NO_CONTEXT)
-        const key = read.image_id!.slice(read.image_id!.indexOf('/') + 1)
-        return source.image(agent, commands, image, key, this.host.deployment.stateDir, signal)
+        const id = (read.resource === 'image' ? read.image_id : read.file_id)!
+        const attachment = (read.resource === 'image' ? images : files).get(id)
+        if (!attachment) throw new Error(`Unknown ${read.resource} reference. Read the source/root/thread for this trigger first and copy its ${read.resource} read arguments.`)
+        const key = id.slice(id.indexOf('/') + 1)
+        return read.resource === 'image'
+          ? source.image(agent, commands, attachment, key, this.host.deployment.stateDir, signal)
+          : source.file(agent, commands, attachment, key, this.host.deployment.stateDir, signal)
       }
       const cacheKey = JSON.stringify([read.resource, read.cursor, read.message_id])
       if (read.offset > 0) {
@@ -251,13 +268,16 @@ export class MasterAssessor implements Assessor {
         if (!source) throw new Error(NO_CONTEXT)
         if (read.cursor !== undefined && !cursors.has(read.cursor)) throw new Error('Unknown thread cursor. First call {resource:"thread"}; then copy the returned next_read exactly.')
         const result = await source.read(commands, read.resource, read.cursor)
-        const references = result.messages.filter(message => !message.deleted).flatMap(message => {
+        const references = { images: [] as unknown[], files: [] as unknown[] }
+        for (const message of result.messages.filter(item => !item.deleted)) {
           messages.set(message.id, message.text)
-          return this.imageReferences(source, trigger, message.text, message.id, cache)
-        })
+          const found = this.attachmentReferences(source, trigger, message.text, message.id, cache)
+          references.images.push(...found.images)
+          references.files.push(...found.files)
+        }
         if (result.next) cursors.add(result.next)
         const next = result.next ? { trigger_id: trigger.id, resource: 'thread', cursor: result.next } : null
-        body = JSON.stringify({ images: references, next_read: next, ...result.body })
+        body = JSON.stringify({ ...references, next_read: next, ...result.body })
       }
       else throw new Error('Unsupported read')
       snapshots.set(cacheKey, body)

@@ -11,6 +11,7 @@ import { sourceSkills } from './context.ts'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { PromptConflict, SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, builtInParts, defaultPrompts, savePrompts, type Prompts }
   from './prompts.ts'
+import { KV } from '../kv.ts'
 import { policyVersion } from '../policy.ts'
 import { SettingsConflict, type Settings } from './settings.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
@@ -171,11 +172,25 @@ function machineView({ stateDir, promptMaxChars, admissionContextMaxPages, admis
   return { stateDir, promptMaxChars: promptMaxChars.get(), admissionContextMaxPages: admissionContextMaxPages.get(),
     admissionContextTimeoutMs: admissionContextTimeoutMs.get() }
 }
+/**
+ * The Feishu account the panel names: the resolved lark-cli bot, or the dsh-im bot the Feishu Source is bound to. The
+ * dsh-im bot has no app id or brand of its own here, because dsh-im owns those credentials.
+ */
+function feishuAccount(runtime: HttpHost) {
+  if (runtime.configured() && runtime.deployment.feishu) {
+    const { appId, brand, botId, name } = runtime.deployment.feishu
+    return { appId, brand, botId, name }
+  }
+  const config = runtime.sources.instance<{ botId?: string }>('feishu')?.config
+  const botId = typeof config?.botId === 'string' ? config.botId : ''
+  if (!botId) return null
+  return { botId, name: runtime.store.get(KV.sources.labels('feishu'))?.[botId] ?? '' }
+}
 function setupView(runtime: HttpHost) {
   const resolved = runtime.configured() ? runtime.deployment : undefined
   return {
     machine: machineView(runtime.machine), problem: runtime.setupProblem ?? null, feishuProblem: runtime.feishuProblem ?? null,
-    accounts: resolved ? { feishu: resolved.feishu ? { appId: resolved.feishu.appId, brand: resolved.feishu.brand, botId: resolved.feishu.botId, name: resolved.feishu.name } : null } : null,
+    accounts: resolved ? { feishu: feishuAccount(runtime) } : null,
   }
 }
 /** Build the `/orchestrator/api/state` response consumed by the management panel and `scripts/dsh-superagent status` (`docs/006-deployment.md`). */

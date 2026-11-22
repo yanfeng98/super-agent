@@ -1,13 +1,13 @@
 /** Feishu Source backed by dsh-im's exclusive text consumer, with no lark-cli or separate bot credentials. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-llm'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { key, threadKey, type OutboundMessage, type Trigger } from '../core/index.ts'
 import { checkedImText } from '../infra/text.ts'
-import { admissionImageKeys } from './feishu-image.ts'
+import { admissionFileKeys, admissionImageKeys } from './feishu-image.ts'
 import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImMessage, type DshImService } from './dsh-im.ts'
 import { feishuChatLink } from './feishu-channel.ts'
 import { withMentionNames } from './feishu-trigger.ts'
@@ -15,11 +15,13 @@ import { runFeishuImBackfill } from './feishu-im-loops.ts'
 import { consumerRetry } from './poll.ts'
 import { KV } from '../kv.ts'
 import { health, sourceContext, type Health, type SourceContext } from './host.ts'
-import type { ContextMessage, ContextPart, SourceKind, ThreadContext } from './kind.ts'
+import type { ContextMessage, ContextPart, Localized, SourceKind, ThreadContext } from './kind.ts'
 import type { SourceRegistry } from './registry.ts'
 
 export const SOURCE = 'feishu'
 const POLL_MS = 2_000
+/** How long a failed message stays visible in the Source's health, cleared earlier by the next message that is handled. */
+const EVENT_FAILURE_MS = 10 * 60_000
 let currentConfig: FeishuConfig | undefined
 interface CachedBot { botId: string; fingerprint: string; name: string; brand: 'feishu' | 'lark' }
 const cachedBots = new Map<string, CachedBot>()
@@ -162,6 +164,27 @@ export async function readFeishuImImage(agent: Agent, trigger: Trigger, message:
   return { source_message_id: message.id, image_key: key, image }
 }
 
+/**
+ * Reads one file, voice message, or video of any message in the Trigger's Thread through dsh-im and commits it verbatim,
+ * so the main Session receives a readable saved path instead of bytes no provider accepts.
+ */
+export async function readFeishuImFile(agent: Agent, trigger: Trigger, message: { id: string; text: string },
+  key: string, signal: AbortSignal): Promise<{ source_message_id: string; file_key: string; file: FileAttachmentRef }> {
+  if (!admissionFileKeys(message.text).includes(key)) throw new Error('Choose a file key from this source message')
+  const im = dshIm()
+  const botId = typeof trigger.meta.botId === 'string' ? trigger.meta.botId : currentConfig?.botId ?? ''
+  if (!im?.resourceChecked || !botId) throw new Error('File reading is unavailable: dsh-im does not expose Feishu resources')
+  const attachments = agent.ctx.get('attachments')
+  if (!attachments) throw new Error('File reading is unavailable: no attachment service is mounted')
+  const bot = await botFor(im, botId)
+  // The file may belong to any message of the Thread, so name it: the retained route still proves access to the chat.
+  const resource = await im.resourceChecked(botId, routeOf(trigger.channel?.address ?? {}),
+    { fileKey: key, type: 'file' },
+    { expectedFingerprint: bot.fingerprint, messageId: message.id, signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]) })
+  const file = await attachments.saveFile({ data: resource.data, name: key })
+  return { source_message_id: message.id, file_key: key, file }
+}
+
 /** Reads Feishu context through dsh-im's bounded, authenticated text history. */
 export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
   messageId: trigger => String(trigger.meta.messageId ?? ''),
@@ -194,6 +217,8 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
   },
   images: text => admissionImageKeys(text),
   image: (agent, _commands, trigger, message, key, _stateDir, signal) => readFeishuImImage(agent, trigger, message, key, signal),
+  files: text => admissionFileKeys(text),
+  file: (agent, _commands, trigger, message, key, _stateDir, signal) => readFeishuImFile(agent, trigger, message, key, signal),
 }
 
 /** Sends one queued reply through dsh-im's checked original-message route. */
@@ -334,6 +359,11 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
       }
     },
   },
+  facts: ({ config, labels }): Record<string, Localized | string> => {
+    const botId = typeof config.botId === 'string' ? config.botId : ''
+    const name = botId ? labels[botId] : undefined
+    return name ? { botId: { zh: `当前机器人 ${name}`, en: `Current bot ${name}` } } : {}
+  },
   async refreshLabels(host) {
     const im = dshIm()
     if (!im) return {}
@@ -395,6 +425,16 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
   let retry: number | undefined
   // When the current attempt started, so only an attempt that ran for a minute resets the backoff.
   let runningSince = Date.now()
+  // A message whose handling failed is lost: keep it visible instead of letting the next ready report hide it.
+  let eventFailure: { at: number; detail: string } | undefined
+  const listening = (name: string): void => {
+    if (eventFailure && Date.now() - eventFailure.at < EVENT_FAILURE_MS) {
+      ctx.report('feishu', { state: 'error', detail: eventFailure.detail, at: new Date(eventFailure.at).toISOString() })
+      return
+    }
+    eventFailure = undefined
+    ctx.report('feishu', { state: 'ready', detail: `Listening for ${name}`, at: new Date().toISOString() })
+  }
   const stop = (): void => {
     controller?.abort(); backfill?.abort(); release?.()
     controller = undefined; backfill = undefined; release = undefined; backfillRun = undefined
@@ -420,7 +460,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         await delay(POLL_MS, undefined, { signal }).catch(() => {})
         continue
       }
-      if (botId !== config.botId) { stop(); botId = config.botId; botName = ''; cachedBots.clear() }
+      if (botId !== config.botId) { stop(); botId = config.botId; botName = ''; eventFailure = undefined; cachedBots.clear() }
       runningSince = Date.now()
       try {
         // `inboundStatus` is a cheap local read; `describeBot` verifies the account over the network, so only registration pays for it.
@@ -447,7 +487,15 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                   const current = ctx.config(SOURCE)
                   if (current && ctx.configured()) {
                     const trigger = imTrigger(event)
-                    await ctx.receive(trigger)
+                    try {
+                      await ctx.receive(trigger)
+                    } catch (error) {
+                      // dsh-im logs the rejection; the Source must show it too, because the message is not retried.
+                      eventFailure = { at: Date.now(), detail: `Handling ${trigger.id} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}` }
+                      ctx.report('feishu', { state: 'error', detail: eventFailure.detail, at: new Date(eventFailure.at).toISOString() })
+                      throw error
+                    }
+                    eventFailure = undefined
                     describeThreads(full, event, trigger)
                   }
                   if (full && event.conversation.kind === 'dm') {
@@ -469,10 +517,10 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                   if (!signal.aborted) ctx.report('history', { state: 'error', detail: String(error) })
                 })
               }
-              ctx.report('feishu', { state: 'ready', detail: `Listening for ${botName}`, at: new Date().toISOString() })
+              listening(botName)
             }
           } else {
-            ctx.report('feishu', { state: 'ready', detail: `Listening for ${botName || config.botId}`, at: new Date().toISOString() })
+            listening(botName || config.botId)
           }
         }
         retry = undefined
