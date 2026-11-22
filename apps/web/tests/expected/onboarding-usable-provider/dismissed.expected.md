@@ -5,16 +5,16 @@
     - button "模型"
     - button "插件管理"
     - button "Agent 预设"
-    - button "IM机器人"
+    - button "远程连接"
   - button "打开配置文件"
   - button "关闭"
   - heading "模型" [level=2]
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: DeepSeek
+      - text: DeepSeek API
       - img "API 密钥缺失"
-      - button "编辑 DeepSeek (deepseek-official)": 编辑
+      - button "编辑 DeepSeek API (deepseek-official)": 编辑
   - tablist "添加方式":
     - tab "第三方模型提供商" [selected]
     - tab "自定义模型 API"
@@ -22,16 +22,46 @@
   - tabpanel "第三方模型提供商":
     - text: 提供商
     - combobox "提供商":
+      - option "amazon-bedrock"
+      - option "ant-ling"
       - option "anthropic"
+      - option "azure"
+      - option "baseten"
+      - option "cerebras"
+      - option "cloudflare-ai-gateway"
+      - option "cloudflare-workers-ai"
       - option "deepseek"
+      - option "fireworks"
       - option "github-copilot"
       - option "google"
+      - option "google-vertex"
+      - option "groq"
+      - option "huggingface"
       - option "kimi-coding"
+      - option "meta"
+      - option "minimax"
       - option "minimax-cn" [selected]
+      - option "mistral"
+      - option "moonshotai"
+      - option "moonshotai-cn"
+      - option "nvidia"
       - option "openai"
       - option "openai-codex"
+      - option "opencode"
       - option "opencode-go"
+      - option "openrouter"
+      - option "qwen-token-plan"
+      - option "qwen-token-plan-cn"
+      - option "qwen-token-plan-individual"
+      - option "radius"
+      - option "together"
+      - option "vercel-ai-gateway"
+      - option "xai"
+      - option "xiaomi"
+      - option "xiaomi-token-plan-ams"
       - option "xiaomi-token-plan-cn"
+      - option "xiaomi-token-plan-sgp"
+      - option "zai"
       - option "zai-coding-cn"
     - text: API 密钥
     - button "认证说明": "?"

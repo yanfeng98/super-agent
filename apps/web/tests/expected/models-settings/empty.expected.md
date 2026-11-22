@@ -6,6 +6,7 @@
     - button "插件管理"
     - button "Agent 预设"
     - button "IM机器人"
+    - button "远程连接"
   - button "打开配置文件"
   - button "关闭"
   - heading "模型" [level=2]
@@ -27,6 +28,7 @@
       - option "openai"
       - option "openai-codex"
       - option "opencode-go"
+      - option "qwen-token-plan-individual-cn"
       - option "xiaomi-token-plan-cn"
       - option "zai-coding-cn"
     - text: API 密钥

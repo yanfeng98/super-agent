@@ -25,7 +25,7 @@ describe('keymap keydown routing', () => {
     })
     editor.setRootElement(first)
     const unregister = registerComposerKeymap(editor, {
-      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {},
+      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => false, submit: () => {}, historyStep: () => false, intakeFiles: () => {}, pasteText: () => {},
     })
     onTestFinished(unregister)
@@ -57,7 +57,7 @@ describe('keymap keydown routing', () => {
     registerComposerKeymap(editor, {
       arbitrate: () => 'pass',
       space: () => false,
-      dismissPopup: () => {},
+      dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => true,
       submit,
       historyStep: () => false,
@@ -89,7 +89,7 @@ describe('keymap keydown routing', () => {
     const submit = vi.fn()
     const arbitrate = vi.fn(() => 'pass' as const)
     onTestFinished(registerComposerKeymap(editor, {
-      arbitrate, space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+      arbitrate, space: () => false, dismissPopup: () => {}, recallHistory: () => false, canSubmit: () => true,
       submit, historyStep: () => false, intakeFiles: () => {}, pasteText: () => {},
     }))
     editor.update(() => {
@@ -126,7 +126,7 @@ describe('keymap keydown routing', () => {
     registerComposerKeymap(editor, {
       arbitrate,
       space: () => false,
-      dismissPopup: () => {},
+      dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => true,
       submit: () => {},
       historyStep: () => false,
@@ -166,7 +166,7 @@ describe('keymap keydown routing', () => {
       editor.setRootElement(root)
       onTestFinished(registerPlainText(editor))
       onTestFinished(registerComposerKeymap(editor, {
-        arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+        arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, recallHistory: () => false, canSubmit: () => true,
         submit: () => {}, historyStep: () => false, intakeFiles: () => {}, pasteText: () => {},
       }))
       return { editor, root, modify }
@@ -246,7 +246,7 @@ describe('composer history arrows', () => {
     const historyStep = vi.fn(overrides.historyStep ?? (() => true))
     const arbitrate = vi.fn(overrides.arbitrate ?? (() => 'pass' as const))
     onTestFinished(registerComposerKeymap(editor, {
-      arbitrate, space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+      arbitrate, space: () => false, dismissPopup: () => {}, recallHistory: () => false, canSubmit: () => true,
       submit: () => {}, historyStep, intakeFiles: () => {}, pasteText: () => {},
     }))
     return { editor, root, historyStep, arbitrate }

@@ -94,6 +94,12 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   '@modelcontextprotocol/server-filesystem': { license: 'MIT / Apache-2.0', repo: 'https://github.com/modelcontextprotocol/servers' },
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
+  // This fork's IM plugin depends on Tencent SDKs published without a repository
+  // field; the npm page is the only published source, and the connector declares
+  // `license: UNLICENSED`.
+  '@tencent-connect/qqbot-connector': { repo: 'https://www.npmjs.com/package/@tencent-connect/qqbot-connector' },
+  '@tencent-connect/qqbot-nodejs': { repo: 'https://www.npmjs.com/package/@tencent-connect/qqbot-nodejs' },
+  '@tencent-qqmail/agently-cli': { repo: 'https://www.npmjs.com/package/@tencent-qqmail/agently-cli' },
   // No `license` field in the published manifest; the tarball's LICENSE.txt is the MIT text.
 }
 
@@ -111,6 +117,7 @@ const PYTHON_METADATA: Record<string, { license: string; repo: string; role?: st
   openpyxl: { license: 'MIT', repo: 'https://foss.heptapod.net/openpyxl/openpyxl' },
   pandas: { license: 'BSD-3-Clause', repo: 'https://github.com/pandas-dev/pandas' },
   pillow: { license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow' },
+  pypdf: { license: 'BSD-3-Clause', repo: 'https://github.com/py-pdf/pypdf' },
   'python-dateutil': { license: 'Apache-2.0 OR BSD-3-Clause', repo: 'https://github.com/dateutil/dateutil' },
   'python-docx': { license: 'MIT', repo: 'https://github.com/python-openxml/python-docx' },
   'python-pptx': { license: 'MIT', repo: 'https://github.com/scanny/python-pptx' },

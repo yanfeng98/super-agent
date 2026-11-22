@@ -252,7 +252,7 @@ describe('llm-pi-ai real dormant composition', () => {
     expect(server.requests[1]).toMatchObject({
       messages: [
         { role: 'assistant', content: 'partial' },
-        { role: 'user', content: 'continue' },
+        { role: 'user', content: [{ type: 'text', text: 'continue' }] },
       ],
     })
     const followup = server.requests[1] as { messages?: unknown[] }
@@ -311,7 +311,7 @@ describe('llm-pi-ai real dormant composition', () => {
     expect(server.requests[0]).toMatchObject({
       messages: [
         { role: 'assistant', content: 'partial' },
-        { role: 'user', content: 'continue' },
+        { role: 'user', content: [{ type: 'text', text: 'continue' }] },
       ],
     })
   })

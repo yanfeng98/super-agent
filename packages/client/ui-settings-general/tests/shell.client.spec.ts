@@ -44,9 +44,10 @@ const CHILD_NAMES = Object.keys(CHILD_SPECS) as Array<keyof typeof CHILD_SPECS>
  * ui-settings-models, ui-plugin-manager, and ui-agent-preset. A plugin
  * adding a section changes this list.
  */
-// `boot-animation` is a shipped feature section (order 40), so the shell lists it after
-// the four built-in sections, which carry lower orders.
-const PRODUCT_SECTIONS: readonly string[] = ['general', 'models', 'plugins', 'agent-presets', 'boot-animation']
+// `xmanrui-dsh-im` (order 21), `remote-connection` (order 25), and
+// `boot-animation` (order 40) are shipped feature sections, so the shell lists
+// them after the four built-in sections, which carry lower orders.
+const PRODUCT_SECTIONS: readonly string[] = ['general', 'models', 'plugins', 'agent-presets', 'xmanrui-dsh-im', 'remote-connection', 'boot-animation']
 /** Onboarding steps the web-app roster registers, in coordinator order; both come from ui-settings-models. */
 const PRODUCT_ONBOARDING: readonly { id: string; order: number }[] = [
   { id: 'welcome-notice', order: -100 },

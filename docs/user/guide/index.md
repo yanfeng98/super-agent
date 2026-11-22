@@ -31,6 +31,7 @@ The composer keeps the newest 100 accepted inputs for the current workspace fold
 - [Use the built-in engineering skills](./engineering-skills.md)
 - [Port code to Rust with rust-anything](./rust-anything.md)
 - [Configure models](./providers.md)
+- [Send messages between Sessions](../session-control.md)
 - [Use the Python SDK](./python-sdk.md)
 - [Publish the Web UI behind a reverse proxy](./public-deployments.md)
 - [Uninstall DSH Desktop](./desktop-uninstall-cleanup.md)
