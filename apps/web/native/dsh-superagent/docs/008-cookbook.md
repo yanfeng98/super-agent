@@ -199,7 +199,7 @@ Proactive assessment needs the conversation around a Trigger. `orchestrator_eval
 
 - `read(commands, trigger, part, cursor, config)` returns a `ContextPart`. Its `messages` use `ContextMessage`: `{id, from, at, text}` plus applicable `bot`, `deleted`, `reply_to`, `url`, `path` and `line` fields. `next` is omitted on the last page. `body` is the content shown to the assessing Session, here the same messages. Optional `status` can describe special results such as Feishu's `chat_neighbours`. `part` is `thread`, `root` or `parent`.
 - `messageId(trigger)` finds the Trigger's own message among them.
-- `images(text)` and `image(…)` are for a kind whose messages carry images, as Feishu's do; the example leaves them out.
+- `images(text)` and `image(…)` are for a kind whose messages carry images, as Feishu's do; `files(text)` and `file(…)` are the same for attachments the model reads from a saved path. The example leaves both out.
 
 A kind without `threadContext` gives assessments no Thread context; the Trigger's own text stays readable.
 

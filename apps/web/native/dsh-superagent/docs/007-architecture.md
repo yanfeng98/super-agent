@@ -366,7 +366,7 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
 | `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
 | `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry; the bundle loads `./feishu-watch` instead, so only its stored triggers and its tests reach it |
-| `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch` |
+| `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch`: its Trigger mapping, checked replies, bounded Thread context, image and file reads, labels, and the handoff consumer that reports a failed message in the Source's health |
 | `src/sources/feishu-im-loops.ts` | The dsh-im-backed Feishu loops: chat history backfill and subscribed-thread polling |
 | `src/sources/dsh-im.ts` | The typed same-Host dsh-im intake service used by the Feishu Source |
 | `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
@@ -374,7 +374,7 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/feishu-channel.ts` | The Feishu Channel: topic replies, `sent` or `gone` |
 | `src/sources/feishu-read.ts` | The `feishu/` reads of a Trigger's message, its root, parent and topic, and `feishuThreadContext`, which gives them to assessments with their images |
 | `src/sources/admission-context.ts` | The bounded window an assessment starts from: the first pages of a Trigger's Thread, read through its kind, and the messages around the Trigger |
-| `src/sources/feishu-image.ts` | Reads a Feishu message's image as an attachment for the assessing Session |
+| `src/sources/feishu-image.ts` | Admits the attachment keys a message text names, and reads a Feishu image as an attachment for the assessing Session |
 | `src/sources/local.ts` | The local ticket kind and plugin entry, exported as `./local`: a request from the panel, or a follow-up on its Thread, becomes a Trigger, and the archive Markdown file receives both the person's messages and the Channel's replies; `seedPolicy` saves the operator the kind's default Policy part names |
 | `src/client/index.tsx` | The client plugin entry: the sidebar entry, the main panel, the desktop-notification watcher and the page in DeepSeek Harness's Plugin Manager |
 | `src/client/notify.ts` | The desktop notifications for a Ticket that starts waiting on a person or ends, and the choice to turn them on |
@@ -420,9 +420,9 @@ Some generic modules still refer directly to Feishu:
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
 | `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
-| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context, the chat around a message, image reads from any message, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
+| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context, the chat around a message, image and file reads from any message, a failed message kept in health, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
 | `tests/feishu-read.spec.ts` | Feishu reads |
-| `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu image reads |
+| `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu attachment keys and image reads |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
 | `tests/background.spec.ts` | Waiting for a worker's shell jobs and subagents: an end that woke it, and a host that stops |
 | `tests/bundle-patch.spec.ts` | The bundle's patch, read as DeepSeek Harness reads it, and the agent preset of Executor Sessions it defines |
@@ -553,10 +553,10 @@ Settings and prompt saves return the saved configuration. Policy sync returns th
 
 `orchestrator_eval` returns context rather than instructions. Assessment instructions live in `runtime/admission` (`prompts/admission.md`), and rules in `runtime/policy`. Its context includes:
 
-- The Trigger text, up to 4,000 characters, with image ids and other Triggers in the batch.
+- The Trigger text, up to 4,000 characters, with image and file ids and other Triggers in the batch.
 - Up to eight `related_tickets`, open ones first, and `tickets_total`.
 - The Eval's `policy_version`.
-- A Thread window: the first five messages and five on either side of the Trigger. Messages use `{id, from, at, text}`, normally limited to 400 characters, or 1,200 for the two on either side. Truncated messages include `chars`; image references use `images`.
+- A Thread window: the first five messages and five on either side of the Trigger. Messages use `{id, from, at, text}`, normally limited to 400 characters, or 1,200 for the two on either side. Truncated messages include `chars`; image references use `images` and file references use `files`, both read by `orchestrator_eval_read`.
 - Other loaded messages as `{id, from, preview}` stubs of 50 characters. `orchestrator_eval_read` expands them by id.
 
 Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open stage such as `person/review` or `working/queued`, or an ended outcome. Acknowledgements are limited to 100 words whether submitted through accept, assessment or `orchestrator_ack`.
