@@ -69,6 +69,7 @@ Web 的 `standard` agent preset 把这个提供方与 rust-anything MCP server �
 | [`src/index.ts`](src/index.ts) | 插件入口、frontmatter 契约、提供方注册与失败上报 |
 | [`assets/dsh-rust-anything/SKILL.md`](assets/dsh-rust-anything/SKILL.md) | 迁移循环、工具清单与安装说明 |
 | [`assets/dsh-rust-anything/whole-app.md`](assets/dsh-rust-anything/whole-app.md) | 正文链接的整应用重写说明 |
+| [`assets/LICENSE`](assets/LICENSE) | 覆盖改编后技能文本的上游 MIT 声明 |
 
 </details>
 
@@ -117,6 +118,6 @@ Web 的 `standard` agent preset 把这个提供方与 rust-anything MCP server �
 2. 重新套用这三处改写，并把 frontmatter 的 `name` 设为 `dsh-rust-anything`。
 3. 跑包测试，它会把资产目录与提供方的技能名对上。
 
-`locale/*.json` 提供各界面语言下的组件标题与描述，供插件清单使用。
+`assets/LICENSE` 带上游 MIT 声明，`locale/*.json` 提供各界面语言下的组件标题与描述，供插件清单使用。
 
 </details>

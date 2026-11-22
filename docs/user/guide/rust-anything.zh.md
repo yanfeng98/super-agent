@@ -56,8 +56,8 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 
 - 16 个工具 schema 加 3 个共享 MCP 资源工具，每个 agent 约 7k 请求 token。
 - 每个挂载该行的会话会各自启动一个 server 进程。
-- 只有 Web 与 Desktop 的 `standard` preset 挂载它；`minimal`、`ptc` 以及 headless、ACP、SDK profile 都不挂。
-- 打包的 Desktop 应用与 Python SDK 可执行文件只装了插件、没带 CLI，因此那里不会出现这些工具。
+- 只有 Web 与 Desktop 的 `standard` preset 挂载它，随包的 `dsh-rust-anything` 技能也由同一个 preset 提供；`minimal`、`ptc` 以及 headless、ACP、SDK profile 两者都没有。
+- 打包的 Desktop 应用与 Python SDK 可执行文件只装了插件、没带 CLI，因此那里不会出现这些工具；技能仍会列出，并要求 Agent 停下来说明，而不是自行安装。
 - 生成的 crate 声明 `rust-version = "1.97"`，请用该版本或更新的工具链构建。
 - 工具会执行被录制的代码并往工作区写 crate：把一次运行当作以 agent 的环境执行那段代码。
 

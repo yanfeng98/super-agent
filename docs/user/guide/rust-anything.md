@@ -56,8 +56,8 @@ Edit the `mcp-rust-anything` row in `packages/bundle/web-app/presets/standard.pa
 
 - The 16 tool schemas plus the three shared MCP resource tools cost about 7k request tokens per agent.
 - Each Session that mounts the row starts its own server process.
-- Only the Web and Desktop `standard` preset mounts it; `minimal`, `ptc`, and the headless, ACP, and SDK profiles do not.
-- The packaged Desktop app and the Python SDK executable stage the plugin without the CLI, so they expose no tools.
+- Only the Web and Desktop `standard` preset mounts it, together with the bundled `dsh-rust-anything` skill; `minimal`, `ptc`, and the headless, ACP, and SDK profiles mount neither.
+- The packaged Desktop app and the Python SDK executable stage the plugin without the CLI, so they expose no tools; the skill is still listed and tells the agent to stop rather than install one.
 - Generated crates declare `rust-version = "1.97"`; build them with that toolchain or newer.
 - The tool executes the code it records and writes crates into the workspace: treat a run as running that code with the agent's environment.
 

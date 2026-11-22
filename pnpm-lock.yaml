@@ -20784,6 +20784,9 @@ importers:
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../packages/skill/skill-office
+      '@deepseek-ai/dsh-skill-rust-anything':
+        specifier: workspace:*
+        version: link:../../packages/skill/skill-rust-anything
       '@deepseek-ai/dsh-spill':
         specifier: workspace:*
         version: link:../../packages/spill/spill

@@ -69,6 +69,7 @@ Failures separate two cases. `ENOENT` and `ENOTDIR` persist until the file appea
 | [`src/index.ts`](src/index.ts) | Plugin entry, frontmatter contract, provider registration, failure reporting |
 | [`assets/dsh-rust-anything/SKILL.md`](assets/dsh-rust-anything/SKILL.md) | The migration loop, its tool list, and the installation notes |
 | [`assets/dsh-rust-anything/whole-app.md`](assets/dsh-rust-anything/whole-app.md) | The whole-app rewrite reference the body links to |
+| [`assets/LICENSE`](assets/LICENSE) | The upstream MIT notice covering the adapted skill text |
 
 </details>
 
@@ -117,6 +118,6 @@ The packaged text is the upstream `skills/rust-anything/SKILL.md` and `whole-app
 2. Re-apply those three adaptations and set the frontmatter `name` to `dsh-rust-anything`.
 3. Run the package tests, which compare the asset directory with the provider's skill name.
 
-`locale/*.json` supplies the component title and description in each UI language for plugin inventories.
+`assets/LICENSE` carries the upstream MIT notice, and `locale/*.json` supplies the component title and description in each UI language for plugin inventories.
 
 </details>
