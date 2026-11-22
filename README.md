@@ -48,7 +48,7 @@ pnpm dsh web
 
 - **直接描述任务**：Agent 会读取和修改工作区文件、运行命令、委派子智能体并维护计划；按当前权限策略需要审批的操作会先询问。
 - **在输入框输入 `/`** 打开技能菜单：随包技能名都带 `eng-` 前缀（`eng-tdd`、`eng-pr`…），27 个工程工作流技能全部可点名，其中 11 个还能由模型按任务自动加载，另外 16 个不进入会话技能目录、只能由你点名，菜单里标着「仅用户」。用上游原名放一份 `tdd` 到 `.dsh/skills`、[`.agents/skills`](.agents/skills) 或用户技能目录，它会与 `eng-tdd` 并存而不是互相覆盖。
-- **技能菜单按来源分组**：标题是「类别 · 来源」，类别按 内置 → 插件 → 项目 → 用户 → 自定义 排列，例如 `内置`（office 4 个）、`内置 · erkamyaman/rust-anything`（rust-anything 技能）、`内置 · mattpocock/skills`（工程技能）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；输入查询后标题收起，改为按名称匹配排序。
+- **技能菜单按来源分组**：标题是「类别 · 来源」，类别按 内置 → 插件 → 项目 → 用户 → 自定义 排列，例如 `内置`（office 4 个）、`内置 · erkamyaman/rust-anything`（rust-anything 技能，只随 `standard` preset 挂载）、`内置 · mattpocock/skills`（工程技能）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；输入查询后标题收起，改为按名称匹配排序。
 - **空草稿时按 ↑** 召回当前文件夹最近 100 条输入，`↑`、`↓` 前后浏览。
 - **插件**页查看已装与实验性插件、添加社区索引，见下一节。
 

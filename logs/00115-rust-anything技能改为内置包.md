@@ -67,3 +67,9 @@
 MCP 子系统页（[mcp.md](../docs/subsystems/mcp.md) 与中文版）也补了一句：同一个 preset 还挂载携带迁移流程的随包提供方，并在延伸阅读里指向新包，避免「preset 只挂了 server」的旧印象。
 
 复核后的校验：`verify-runtime-closure`、`check-workspace-constraints`（含 183 个 spec 用例）、`verify-package-paths`、`verify-dsh-package-licenses`、`verify-plugin-entry-exports`、`verify-default-product-isolation`、`publint` 全部通过；`pnpm run hygiene` 的 25 个门禁里，此前唯一失败的 publint 已在构建后通过。
+
+## 6. 运行时确认与文档补齐
+
+- **宿主重启后确认**：重启 `dsh web` 之后，本会话的模型可见技能目录里出现了 `dsh-rust-anything`，说明 preset 行、包解析与资产读取在真实宿主里都生效；输入框 `/` 菜单归入「内置 · erkamyaman/rust-anything」。这是本次改动唯一新增的模型可见文本——SKILL.md frontmatter 的那段描述。
+- **模块图漏更**：`docs/module-graph.md` 与中文版没有跟着新包更新，`verify-module-graph` 不在 `doc-sync` 的 43 个门禁里，所以前几轮都没有暴露；用 `pnpm run gen-module-graph` 补齐（mermaid 节点、连边与包表各一行）。
+- **用户指南点名分组**：[rust-anything 使用指南](../docs/user/guide/rust-anything.md) 的「提出迁移需求」现在写明 `/` 菜单里的分组名（中文版同步），省得用户只记住技能名却找不到位置。
