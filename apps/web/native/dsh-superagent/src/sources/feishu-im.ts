@@ -21,7 +21,7 @@ export const SOURCE = 'feishu'
 const POLL_MS = 2_000
 let currentConfig: FeishuConfig | undefined
 interface CachedBot { botId: string; fingerprint: string; name: string; brand: 'feishu' | 'lark' }
-let cachedBot: CachedBot | undefined
+const cachedBots = new Map<string, CachedBot>()
 /** Sets the config the Channel uses; the watch loop keeps it current, and tests set it directly. */
 export const setFeishuConfig = (value: FeishuConfig | undefined): void => { currentConfig = value }
 const HISTORY_LIMIT = 20
@@ -42,11 +42,13 @@ export const feishuImConfig = (value: unknown): FeishuConfig => FeishuConfigSche
 /** Returns the cached account facts of one dsh-im Feishu bot, verifying it only when the cache misses. */
 export const feishuBotFor = (im: DshImService, botId: string): Promise<CachedBot> => botFor(im, botId)
 const botFor = async (im: DshImService, botId: string): Promise<CachedBot> => {
-  if (cachedBot?.botId === botId) return cachedBot
+  const cached = cachedBots.get(botId)
+  if (cached) return cached
   const described = await im.describeBot(botId)
-  cachedBot = { botId, fingerprint: described.account.fingerprint, name: described.account.name || botId,
-    brand: described.domain === 'lark' ? 'lark' : 'feishu' }
-  return cachedBot
+  const bot = { botId, fingerprint: described.account.fingerprint, name: described.account.name || botId,
+    brand: described.domain === 'lark' ? 'lark' as const : 'feishu' as const }
+  cachedBots.set(botId, bot)
+  return bot
 }
 const routeOf = (address: Record<string, string>): DshImEvent['reply'] => {
   const messageId = address.messageId ?? ''
@@ -88,7 +90,10 @@ export const imRepliesTo = (trigger: Trigger): string | undefined =>
   typeof trigger.meta.parentId === 'string' ? key(SOURCE, trigger.meta.parentId) : undefined
 
 const eventView = (event: DshImEvent): ContextMessage => ({
-  id: event.messageId, from: event.actor.name || event.actor.id, at: event.at, text: event.text,
+  id: event.messageId, from: event.actor.name || event.actor.id, at: event.at,
+  text: withMentionNames(event.text, event.mentions),
+  ...event.actor.kind === 'bot' ? { bot: true as const } : {},
+  ...event.reply.parentId ? { reply_to: event.reply.parentId } : {},
 })
 const empty = (status: string): ContextPart => ({ messages: [], body: { status }, status })
 /** Media type of an image by its magic bytes; Feishu resources carry no extension the caller can trust. */
@@ -147,7 +152,7 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
         ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
       }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
     } catch (error) {
-      if ((error as { code?: string }).code === 'account-changed') cachedBot = undefined
+      if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
       throw error
     }
     if (part === 'root' || part === 'parent') {
@@ -174,16 +179,16 @@ export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, messa
       { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000), uuid: message.id })
     return 'sent'
   } catch (error) {
-    // dsh-im reports an ambiguous send as `reply-result-unknown`: the reply may already be in Feishu, so retrying would
-    // duplicate it. Treat it as sent and let the receipt settle.
-    if ((error as { code?: string }).code === 'reply-result-unknown') return 'sent'
+    // `reply-result-unknown` is retryable: the same receipt id is sent as Feishu's `uuid`, so a retry after an
+    // ambiguous result is deduplicated instead of producing a second reply.
     if ((error as { code?: string }).code === 'stale-route') return 'gone'
-    if ((error as { code?: string }).code === 'account-changed') cachedBot = undefined
+    if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
     throw error
   }
 }
 const feishuLink = (address: Record<string, string>) => ({
-  url: feishuChatLink(cachedBot?.brand ?? 'feishu', address.chatId ?? ''), label: { zh: '飞书消息', en: 'Feishu message' },
+  url: feishuChatLink(cachedBots.get(address.botId ?? '')?.brand ?? 'feishu', address.chatId ?? ''),
+  label: { zh: '飞书消息', en: 'Feishu message' },
   ...address.messageId ? { triggerId: key(SOURCE, address.messageId) } : {},
 })
 
@@ -354,7 +359,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         await delay(POLL_MS, undefined, { signal }).catch(() => {})
         continue
       }
-      if (botId !== config.botId) { stop(); botId = config.botId; botName = ''; cachedBot = undefined }
+      if (botId !== config.botId) { stop(); botId = config.botId; botName = ''; cachedBots.clear() }
       try {
         // `inboundStatus` is a cheap local read; `describeBot` verifies the account over the network, so only registration pays for it.
         const status = im.inboundStatus ? await im.inboundStatus(config.botId) : await im.describeBot(config.botId)
@@ -368,9 +373,10 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
               ctx.report('feishu', { state: 'error', detail: 'Another consumer already owns this Feishu bot' })
             } else {
               const bot = await im.describeBot(config.botId)
-              cachedBot = { botId: config.botId, fingerprint: bot.account.fingerprint, name: bot.account.name || config.botId,
-                brand: bot.domain === 'lark' ? 'lark' : 'feishu' }
-              botName = cachedBot.name
+              const cached = { botId: config.botId, fingerprint: bot.account.fingerprint, name: bot.account.name || config.botId,
+                brand: bot.domain === 'lark' ? 'lark' as const : 'feishu' as const }
+              cachedBots.set(config.botId, cached)
+              botName = cached.name
               controller = new AbortController()
               const lease = AbortSignal.any([signal, controller.signal])
               release = await im.consumeInbound(config.botId, {
@@ -403,7 +409,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
           }
         }
       } catch (error) {
-        if ((error as { code?: string }).code === 'account-changed') cachedBot = undefined
+        if ((error as { code?: string }).code === 'account-changed') cachedBots.clear()
         stop()
         ctx.report('feishu', { state: 'error', detail: String(error) })
       }
@@ -415,7 +421,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
     await running?.catch(() => {})
     setDshIm(undefined)
     currentConfig = undefined
-    cachedBot = undefined
+    cachedBots.clear()
   }
 }
 

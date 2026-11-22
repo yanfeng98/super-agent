@@ -4,7 +4,7 @@ import { KV } from '../kv.ts'
 import { SOURCE } from './feishu-trigger.ts'
 import type { DshImEvent, DshImService } from './dsh-im.ts'
 import type { FeishuConfig } from './feishu-im.ts'
-import { pause, pollThreads } from './poll.ts'
+import { cursorAt, pause, pollThreads } from './poll.ts'
 import type { Health, SourceContext } from './host.ts'
 
 const HISTORY_INTERVAL_MS = 60_000
@@ -50,6 +50,8 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
   const since = deps.ctx.state.get(key) ?? new Date(Date.now() - FIRST_LOOKBACK_MS).toISOString()
   let cursor: string | undefined
   let count = 0
+  let drained = false
+  let lastAt: string | undefined
   for (let page = 0; page < MAX_PAGES; page++) {
     if (deps.signal.aborted) return count
     const result = await read(deps.botId,
@@ -59,11 +61,16 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
     for (const event of result.events) {
       await deps.ctx.receive(deps.toTrigger(event))
       count++
+      lastAt = event.at
     }
     cursor = result.nextCursor
-    if (!cursor) break
+    if (!cursor) { drained = true; break }
   }
-  if (!deps.signal.aborted) deps.ctx.state.set(key, now)
+  // Advance only as far as this round actually read: a page cap must not skip the rest of the window.
+  if (!deps.signal.aborted) {
+    if (drained) deps.ctx.state.set(key, cursorAt(now))
+    else if (lastAt) deps.ctx.state.set(key, cursorAt(lastAt))
+  }
   return count
 }
 
@@ -82,6 +89,8 @@ async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
   const limit = deps.config()?.readPageSize ?? 20
   let cursor: string | undefined
   let count = 0
+  let drained = false
+  let lastAt: string | undefined
   for (let page = 0; page < MAX_PAGES; page++) {
     if (deps.signal.aborted) return count
     const result = await read(deps.botId,
@@ -91,11 +100,15 @@ async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
     for (const event of result.events) {
       await deps.ctx.receive(deps.toTrigger(event))
       count++
+      lastAt = event.at
     }
     cursor = result.nextCursor
-    if (!cursor) break
+    if (!cursor) { drained = true; break }
   }
-  if (!deps.signal.aborted) deps.ctx.state.set(key, now)
+  if (!deps.signal.aborted) {
+    if (drained) deps.ctx.state.set(key, cursorAt(now))
+    else if (lastAt) deps.ctx.state.set(key, cursorAt(lastAt))
+  }
   return count
 }
 

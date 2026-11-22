@@ -11,16 +11,20 @@ function identifier(value) {
 const TEXT_LIMIT = 16000;
 
 /** Renders one Feishu rich-text (post) element into plain text; image elements also report their keys. */
-function renderPostElement(element, images) {
+function renderPostElement(element, images, mentioned) {
   if (!element || typeof element !== 'object') return '';
   if (element.tag === 'at') {
+    const id = identifier(element.user_id) ?? identifier(element.open_id);
+    if (id) mentioned.push(id);
     const name = identifier(element.user_name) ?? identifier(element.user_id);
     return name ? `@${name}` : '@';
   }
   if (element.tag === 'img') {
     const key = identifier(element.image_key);
-    if (key) images.push(key);
-    return '[图片]';
+    if (!key) return '[图片]';
+    images.push(key);
+    // Keep the key beside the placeholder so a consumer can read the image back from the message.
+    return `[图片] ${key}`;
   }
   if (element.tag === 'a') return [element.text, element.href].filter(identifier).join(' ');
   if (element.tag === 'code_block' || element.tag === 'text' || element.tag === 'md') return identifier(element.text) ?? '';
@@ -38,14 +42,15 @@ function renderPost(content) {
   const post = localized && typeof localized === 'object' && Array.isArray(localized.content) ? localized : body;
   if (!Array.isArray(post.content)) return undefined;
   const images = [];
+  const mentioned = [];
   const lines = [];
   if (identifier(post.title)) lines.push(post.title);
   for (const paragraph of post.content) {
     if (!Array.isArray(paragraph)) continue;
-    lines.push(paragraph.map(element => renderPostElement(element, images)).join(''));
+    lines.push(paragraph.map(element => renderPostElement(element, images, mentioned)).join(''));
   }
   const text = lines.join('\n').trim();
-  return { text: text || (images.length ? '[图片]' : ''), images };
+  return { text: text || (images.length ? '[图片]' : ''), images, mentioned };
 }
 
 /** Reads the text, message type and image keys of one Feishu message body. */
@@ -54,16 +59,16 @@ function messageBody(messageType, content) {
   try { body = JSON.parse(content); } catch { throw refusal('invalid-inbound'); }
   if (messageType === 'text') {
     if (typeof body?.text !== 'string' || !body.text.trim() || body.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
-    return { text: body.text, images: [] };
+    return { text: body.text, images: [], mentioned: [] };
   }
   if (messageType === 'image') {
     const key = identifier(body?.image_key);
     if (!key) throw refusal('invalid-inbound');
-    return { text: `[图片] ${key}`, images: [key] };
+    return { text: `[图片] ${key}`, images: [key], mentioned: [] };
   }
   const rendered = renderPost(content);
   if (!rendered || !rendered.text || rendered.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
-  return { text: rendered.text, images: rendered.images };
+  return { text: rendered.text, images: rendered.images, mentioned: rendered.mentioned };
 }
 
 /**
@@ -72,13 +77,15 @@ function messageBody(messageType, content) {
  */
 export function normalizeExternalText(event, { botId, appId, botOpenId, fingerprint }, { includeBots = false } = {}) {
   const message = event?.message;
-  const actorId = identifier(event?.sender?.sender_id?.open_id);
+  const senderType = event?.sender?.sender_type;
+  const actorId = identifier(event?.sender?.sender_id?.open_id)
+    ?? (includeBots && (senderType === 'app' || senderType === 'bot')
+      ? identifier(event?.sender?.sender_id?.app_id) : undefined);
   const messageId = identifier(message?.message_id);
   const conversationId = identifier(message?.chat_id);
   const eventId = identifier(event?.event_id ?? event?.header?.event_id);
   const eventApp = event?.app_id ?? event?.header?.app_id;
   if (eventApp !== undefined && eventApp !== appId) throw refusal('account-changed');
-  const senderType = event?.sender?.sender_type;
   if (senderType !== 'user' && !(includeBots && (senderType === 'app' || senderType === 'bot'))) return null;
   if (!['p2p', 'group'].includes(message?.chat_type)
     || !['text', 'post', 'image'].includes(message?.message_type)) return null;
@@ -109,7 +116,8 @@ export function normalizeExternalText(event, { botId, appId, botOpenId, fingerpr
     actor: Object.freeze({ kind: senderType === 'user' ? 'user' : 'bot', id: actorId,
       ...(identifier(event.sender.sender_name) ? { name: event.sender.sender_name } : {}) }),
     conversation: Object.freeze({ kind: message.chat_type === 'group' ? 'group' : 'dm', id: conversationId }),
-    mentions, mentionedAccount: mentions.some(mention => mention.id === botOpenId),
+    mentions, mentionedAccount: mentions.some(mention => mention.id === botOpenId)
+      || body.mentioned.includes(botOpenId),
     messageType: message.message_type, images: Object.freeze(body.images),
     at: timestamp.toISOString(), text: body.text, reply: route,
     replay: Object.freeze({ kind: 'provider-redelivery', resumeCursor: false, gapPossible: true }),

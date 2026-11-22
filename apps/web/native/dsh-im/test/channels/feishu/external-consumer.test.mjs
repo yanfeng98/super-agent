@@ -123,7 +123,7 @@ test('post bodies are rendered to text with their image keys, and bot senders ar
     { includeBots: true });
   assert.equal(evidence.actor.kind, 'bot');
   assert.equal(evidence.messageType, 'post');
-  assert.equal(evidence.text, 'Build\nsee @Platform Bot\nlogs https://example.test/logs[图片]');
+  assert.equal(evidence.text, 'Build\nsee @Platform Bot\nlogs https://example.test/logs[图片] img_1');
   assert.deepEqual(evidence.images, ['img_1']);
 });
 
@@ -137,4 +137,28 @@ test('image messages become a placeholder carrying the image key', () => {
   assert.deepEqual(evidence.images, ['img_abc']);
   assert.throws(() => normalized({ ...image, message: { ...image.message, content: '{}' } }), { code: 'invalid-inbound' });
   assert.throws(() => normalized({ ...image, message: { ...image.message, content: 'not-json' } }), { code: 'invalid-inbound' });
+});
+
+test('a bot sender identified only by app_id is admitted on request and keeps that id', () => {
+  const bot = event();
+  bot.sender = { sender_type: 'app', sender_id: { app_id: 'cli_ci' } };
+  bot.message.mentions = [];
+  assert.equal(normalizeExternalText(bot, { botId: 'bot', appId: 'app', botOpenId: 'bot-open-id', fingerprint }), null);
+  const evidence = normalizeExternalText(bot, { botId: 'bot', appId: 'app', botOpenId: 'bot-open-id', fingerprint },
+    { includeBots: true });
+  assert.equal(evidence.actor.kind, 'bot');
+  assert.equal(evidence.actor.id, 'cli_ci');
+  assert.equal(evidence.mentionedAccount, false);
+});
+
+test('a post that @s the bot counts as addressed even without a top-level mention list', () => {
+  const post = event();
+  post.message.mentions = [];
+  post.message.message_type = 'post';
+  post.message.content = JSON.stringify({ zh_cn: { content: [[
+    { tag: 'at', user_id: 'bot-open-id', user_name: 'Platform Bot' }, { tag: 'text', text: ' build failed' },
+  ]] } });
+  const evidence = normalized(post);
+  assert.equal(evidence.mentionedAccount, true);
+  assert.equal(evidence.text, '@Platform Bot build failed');
 });

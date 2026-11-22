@@ -115,6 +115,11 @@ describe('the dsh-im-backed Feishu Source', () => {
     setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'group', events: [event({ messageId: 'om_root' })], omitted: 0, hasMore: false, coverage: 'provider-visible-human-text' }) }))
     const root = await feishuImKind.threadContext!.read({} as never, trigger, 'root', undefined, config())
     expect(root.messages[0]?.id).toBe('om_root')
+    setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'thread', omitted: 0, hasMore: false,
+      coverage: 'provider-visible-human-text', events: [event({ actor: { kind: 'bot', id: 'cli_ci', name: 'CI' },
+        text: '@_user_1 build ok', mentions: [{ id: 'ou_bot', key: '@_user_1', name: '机器人' }] })] }) }))
+    const bots = await feishuImKind.threadContext!.read({} as never, trigger, 'thread', undefined, config())
+    expect(bots.messages[0]).toMatchObject({ from: 'CI', bot: true, text: '@机器人 build ok' })
     expect(feishuImKind.threadContext!.images!('see [图片] img_abc and img_def')).toEqual(['img_abc', 'img_def'])
   })
 
@@ -178,7 +183,7 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(imTrigger(event()).human).toBe(true)
   })
 
-  it('sends an idempotent reply and treats an ambiguous result as sent', async () => {
+  it('retries an ambiguous reply with the same uuid instead of dropping it', async () => {
     const calls: unknown[][] = []
     setFeishuConfig(config())
     setDshIm(service({ replyChecked: async (...args) => {
@@ -187,7 +192,7 @@ describe('dsh-im Feishu recovery and identity', () => {
     } }))
     const message = { id: 'reply_1', channel: { source: 'feishu', thread: 'feishu:oc_team', address: {
       chatId: 'oc_team', messageId: 'om_1', actorId: 'ou_alice', threadId: 'omt_1' } }, text: 'done', kind: 'reply' as const }
-    await expect(sendFeishuIm({} as never, message)).resolves.toBe('sent')
+    await expect(sendFeishuIm({} as never, message)).rejects.toMatchObject({ code: 'reply-result-unknown' })
     expect(calls[0]![3]).toMatchObject({ uuid: 'reply_1' })
   })
 
@@ -220,5 +225,6 @@ describe('dsh-im Feishu recovery and identity', () => {
     await run
     expect(new Set(received)).toEqual(new Set([key('feishu', 'om_1')]))
     expect(state.get(KV.sources.labels('feishu'))).toEqual({ oc_team: 'Team' })
+    expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
   })
 })

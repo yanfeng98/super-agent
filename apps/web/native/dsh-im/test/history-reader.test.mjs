@@ -27,7 +27,7 @@ test('renders post bodies and omits deleted and bot messages unless bots are req
  {...item('bot'),sender:{sender_type:'app',id_type:'app_id',id:'cli-1'}}]);
  const result=await readExternalHistory(bot,identity,route,{scope:'group',limit:20});
  assert.equal(result.events.length,2); assert.equal(result.omitted,2);
- assert.equal(result.events[1].text,'报告\n请看 @机器人\n[图片]');
+ assert.equal(result.events[1].text,'报告\n请看 @机器人\n[图片] img_1');
  assert.deepEqual(result.events[1].images,['img_1']);
  const withBots=await readExternalHistory(bot,identity,route,{scope:'group',limit:20,includeBots:true});
  assert.equal(withBots.events.length,3); assert.equal(withBots.events[2].actor.kind,'bot');
