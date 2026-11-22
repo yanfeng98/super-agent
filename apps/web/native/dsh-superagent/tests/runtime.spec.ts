@@ -938,7 +938,9 @@ it('passes team text with template braces to every Session literally, without re
   const { sessionId } = await acceptedTicket()
   for (const id of [runtime.masterId, sessionId]) {
     const section = sections.get(id)!
-    const text = renderPrompt({ sections: [{ name: section.name, text: section.text({}), interpolate: section.interpolate }], contexts: [], tools: [], variables: {} })
+    // A single section keeps the prompt's order, which the system-prompt package now requires on every assembled section.
+    const text = renderPrompt({ sections: [{ name: section.name, order: 0, text: section.text({}), interpolate: section.interpolate }],
+      contexts: [], tools: [], variables: {}, systemUpdates: () => [] })
     expect(text).toContain(delivery)
   }
 })
