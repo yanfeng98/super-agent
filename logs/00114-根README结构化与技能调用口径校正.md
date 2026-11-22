@@ -50,3 +50,16 @@
 | 文件系统根的标题写成具体的 `.agents/skills` 与 `~/.agents/skills`，像是只有这两个根 | 标题按发现根取名，`ROOT_LABELS` 有四个：`.dsh/skills`、`.agents/skills`、`~/.dsh/skills`、`~/.agents/skills` | `ui-skill` README 与升级指南改成 `项目 · <根目录>` / `用户 · <根目录>` 并列出四个根 |
 
 另外用一次真实组合验证了「全部 27 个都在 `/` 菜单里」：在 `skill-engineering` 的测试目录临时写一个 spec，用 `Context` 挂上真实的 `SkillRegistry`、`skill-engineering` 与 `skill-office`，`ctx.skills.list()` 得到 31 条——27 个 `eng-*` 全部 `userInvocable`（其中 11 个 `modelInvocable`），4 个 office 条目是 `source=bundled`、`shipped=true`、没有 `upstream`。断言通过后删掉该临时文件，工作区无残留。
+
+## 6. 再复核
+
+第二遍核对没有再发现口径错误，改用机械比对把结论钉住：
+
+| 检查 | 做法 | 结果 |
+|---|---|---|
+| 文档里的技能清单 | 用脚本解析四份文档的表格，与 `assets/eng-*` 目录及每份 `SKILL.md` 的 `disable-model-invocation` 逐个比对 | 27 个技能、11 个模型可调用、16 个仅用户，四份文档的名字与顺序都与 assets 一致 |
+| 根 README 的表格 | 用 `marked` 渲染成 HTML 后数表格与行数 | 4 个表格、分别 5/11/3/7 行（表头加数据），没有落在表格外的竖线段落 |
+| 分组标题与顺序 | 跑 `browser-plugin.client.spec.ts` | 35 个用例通过，含「`内置` 排在 `内置 · mattpocock/skills` 之前」与「筛选后不带标题」 |
+| 真实 profile 挂载 | `pnpm dsh web --dump-config` | web profile 挂载 `skill-filesystem`（自定义目录指向 agent-preset 包的 `skills`，即 `dsh-doc`）、`skill-engineering`、`skill-office`，与文档列出的六个标题一一对应 |
+
+顺带把「使用」里那条过长的 `/` 条目拆成两条：一条讲菜单内容与 `eng-` 前缀为什么不会互相覆盖，一条讲分组标题与「输入查询后收起」；「按名称排序」改为更准确的「按名称匹配排序」。
