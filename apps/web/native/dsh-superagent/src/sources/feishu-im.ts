@@ -120,18 +120,30 @@ const messageView = (message: DshImMessage): ContextMessage => ({
   ...message.parentId ? { reply_to: message.parentId } : {},
   ...message.appLink ? { url: message.appLink } : {},
 })
+/**
+ * One history page as the assessing Session sees it: the messages it reads, never dsh-im's event records, account
+ * fingerprint, or replay flags. `window` states the bounds of a neighbouring-chat read.
+ */
+const pageBody = (status: string, page: DshImHistory): Record<string, unknown> => ({
+  status, scope: page.scope, messages: page.events.map(eventView), omitted: page.omitted, hasMore: page.hasMore,
+  ...page.nextCursor ? { nextCursor: page.nextCursor } : {}, ...page.window ? { window: page.window } : {},
+  coverage: page.coverage,
+})
+/** What reading one message by id produced: the record, or why there is none to show. */
+type MessageRead = { status: 'available'; message: DshImMessage } | { status: 'deleted' | 'unavailable' }
 /** Reads one message of the trigger's chat by id; the retained route proves access to that chat. */
 async function readMessage(im: DshImService, botId: string, bot: CachedBot, route: DshImEvent['reply'],
-  messageId: string): Promise<DshImMessage | undefined> {
-  if (!im.messageChecked) return undefined
+  messageId: string): Promise<MessageRead> {
+  if (!im.messageChecked) return { status: 'unavailable' }
   try {
-    return await im.messageChecked(botId, route, { expectedFingerprint: bot.fingerprint, messageId,
-      signal: AbortSignal.timeout(30_000) })
+    return { status: 'available', message: await im.messageChecked(botId, route, { expectedFingerprint: bot.fingerprint,
+      messageId, signal: AbortSignal.timeout(30_000) }) }
   } catch (error) {
     const code = (error as { code?: string }).code
     if (code === 'account-changed') cachedBots.delete(botId)
-    // A deleted message, or one whose sender is not a person or bot, has no context to show.
-    if (code === 'stale-route' || code === 'message-unavailable') return undefined
+    // A recalled message has a record and no body; one dsh-im cannot render, or a route that stopped resolving, has neither.
+    if (code === 'message-deleted') return { status: 'deleted' }
+    if (code === 'stale-route' || code === 'message-unavailable') return { status: 'unavailable' }
     throw error
   }
 }
@@ -207,9 +219,13 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
     const route = routeOf(trigger.channel?.address ?? {})
     if (part === 'root' || part === 'parent' || part === 'message') {
       const id = part === 'root' ? route.rootId : part === 'parent' ? route.parentId : route.messageId
-      const message = id ? await readMessage(im, botId, bot, route, id) : undefined
-      return message ? { messages: [messageView(message)], body: { status: 'available', ...message } }
-        : empty(`no_${part}`)
+      if (!id) return empty(`no_${part}`)
+      const found = await readMessage(im, botId, bot, route, id)
+      // A recalled message reports `deleted` and a message with no body `unavailable`, so a reader does not mistake
+      // either for an empty conversation.
+      if (found.status !== 'available') return empty(found.status)
+      const message = messageView(found.message)
+      return { messages: [message], body: { status: 'available', message }, status: 'available' }
     }
     let page: DshImHistory
     try {
@@ -224,14 +240,18 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
         const scope: 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread' : 'nearby'
         page = await im.historyChecked(botId, route, {
           scope, limit: config.readPageSize, includeBots: true, ...cursor ? { cursor } : {},
-          ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
+          // `around` reads back further than the window an assessment needs: dsh-im caps the preceding count at 20.
+          ...scope === 'nearby' ? { beforeCount: part === 'around' ? 20 : 5, afterCount: 5 } : {},
         }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
       }
     } catch (error) {
       if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
       throw error
     }
-    return { messages: page.events.map(eventView), next: page.nextCursor, body: { status: 'available', ...page }, status: 'available' }
+    // A `thread` read of a message Feishu placed in no Topic is the chat around it, as the chat container holds no
+    // replies; the status says so, so an assessment does not read the window as the whole conversation.
+    const status = part === 'thread' && !route.threadId ? 'chat_neighbours' : 'available'
+    return { messages: page.events.map(eventView), next: page.nextCursor, body: pageBody(status, page), status }
   },
   images: text => admissionImageKeys(text),
   image: (agent, _commands, trigger, message, key, _stateDir, signal) => readFeishuImImage(agent, trigger, message, key, signal),

@@ -12,7 +12,7 @@ const HISTORY_INTERVAL_MS = 60_000
 const HISTORY_PAGE = 50
 /** 2 000 messages per chat per round, so a long outage catches up over a few rounds instead of hours of them. */
 const MAX_PAGES = 40
-/** Topics read per chat per round, most recent first: enough for a busy chat without re-reading every old topic each minute. */
+/** Topics read per chat per round, least recently read first: enough for a busy chat without re-reading every old topic each minute. */
 const TOPIC_READS_PER_ROUND = 20
 /** Topic failures kept in one round's health detail; the rest are counted. */
 const REPORTED_TOPIC_ERRORS = 3

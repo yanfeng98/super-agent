@@ -230,9 +230,10 @@ const ROUTES: readonly Route[] = [
     return sourcePage(read, 'feishu-im', async () => {
       const page = await feishuImPage(read.host, found, part as 'thread' | 'root' | 'parent' | 'message' | 'around',
         cursor ? decodeURIComponent(cursor) : undefined)
-      const { events: _events, ...body } = page.body
-      return { status: page.status ?? 'available', messages: page.messages,
-        ...page.next ? { next_resource: `feishu-im/${triggerId}/${part}/${encodeURIComponent(page.next)}` } : {}, ...body }
+      // The page body carries the mapped messages and the status; a single-message part has only a `message`, so
+      // `messages` stays explicit for every part.
+      return { messages: page.messages, ...page.body,
+        ...page.next ? { next_resource: `feishu-im/${triggerId}/${part}/${encodeURIComponent(page.next)}` } : {} }
     })
   }],
   ['feishu/', async read => {

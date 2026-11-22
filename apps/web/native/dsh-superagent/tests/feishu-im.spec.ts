@@ -124,11 +124,17 @@ describe('the dsh-im-backed Feishu Source', () => {
     } }))
     const root = await feishuImKind.threadContext!.read({} as never, trigger, 'root', undefined, config())
     expect(root.messages[0]).toMatchObject({ id: 'om_root', from: 'Bob', text: 'root message' })
+    // The assessing Session reads a mapped message, not the record dsh-im keeps for its own route checks.
+    expect(root.body).toMatchObject({ status: 'available', message: root.messages[0] })
     expect(asked[0]?.[2]).toMatchObject({ messageId: 'om_root' })
+    // A route that stopped resolving reports no content, which is a different answer from a reply that names no parent.
     setDshIm(service({ messageChecked: async () => { throw Object.assign(new Error('gone'), { code: 'stale-route' }) } }))
     const parent = await feishuImKind.threadContext!.read({} as never, trigger, 'parent', undefined, config())
-    expect(parent.status).toBe('no_parent')
+    expect(parent.status).toBe('unavailable')
     expect(parent.messages).toEqual([])
+    const unparented = imTrigger(event({ reply: { messageId: 'om_1', conversationId: 'oc_team', actorId: 'ou_alice' } }))
+    const absent = await feishuImKind.threadContext!.read({} as never, unparented, 'parent', undefined, config())
+    expect(absent.status).toBe('no_parent')
     setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'thread', omitted: 0, hasMore: false,
       coverage: 'provider-visible-human-text', events: [event({ actor: { kind: 'bot', id: 'cli_ci', name: 'CI' },
         text: '@_user_1 build ok', mentions: [{ id: 'ou_bot', key: '@_user_1', name: '机器人' }] })] }) }))
@@ -625,13 +631,28 @@ describe('dsh-im Feishu context parts and images', () => {
       },
     }))
     const trigger = imTrigger(event())
-    // `around` reads neighbours even when the message belongs to a topic.
+    // `around` reads neighbours even when the message belongs to a topic, and asks for everything a nearby read may
+    // return before the message, since dsh-im cannot page further back than that window.
     const around = await feishuImKind.threadContext!.read({} as never, trigger, 'around', undefined, config())
     expect(around.messages.map(message => message.id)).toEqual(['om_1'])
-    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 5, afterCount: 5 })
+    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 20, afterCount: 5 })
     const own = await feishuImKind.threadContext!.read({} as never, trigger, 'message', undefined, config())
     expect(own.messages[0]).toMatchObject({ id: 'om_1', reply_to: 'om_parent' })
     expect(asked[1]?.[2]).toMatchObject({ messageId: 'om_1' })
+  })
+
+  it('reports a recalled message as deleted and keeps dsh-im internals out of the page body', async () => {
+    const trigger = imTrigger(event())
+    setDshIm(service({ messageChecked: async () => { throw Object.assign(new Error('recalled'), { code: 'message-deleted' }) } }))
+    const root = await feishuImKind.threadContext!.read({} as never, trigger, 'root', undefined, config())
+    expect(root.status).toBe('deleted')
+    expect(root.messages).toEqual([])
+    // The page an assessment reads carries the mapped messages, never dsh-im's event records or the account fingerprint.
+    setDshIm(service())
+    const page = await feishuImKind.threadContext!.read({} as never, trigger, 'thread', undefined, config())
+    expect(page.body).toMatchObject({ status: 'available', scope: 'thread', messages: page.messages })
+    expect(page.body).not.toHaveProperty('events')
+    expect(JSON.stringify(page.body)).not.toContain('f'.repeat(64))
   })
 
   it('reads a topic oldest-first so the message that started it is on the first page', async () => {
@@ -664,6 +685,9 @@ describe('dsh-im Feishu context parts and images', () => {
     const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event({ reply })), 'thread', undefined, config())
     expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 5, afterCount: 5 })
     expect(page.messages).toHaveLength(1)
+    // The window holds no Topic replies, so the status names it instead of letting an assessment read it as the Thread.
+    expect(page.status).toBe('chat_neighbours')
+    expect(page.body).toMatchObject({ status: 'chat_neighbours', scope: 'nearby', messages: page.messages })
   })
 
   it('downloads an image from the message that carries it', async () => {

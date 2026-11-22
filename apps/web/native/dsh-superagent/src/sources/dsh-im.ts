@@ -51,6 +51,8 @@ export interface DshImHistory {
   omitted: number
   hasMore: boolean
   nextCursor?: string
+  /** Inclusive unix-second bounds of a `nearby` window; history beyond them is not in this page. */
+  window?: { start: number; end: number }
   coverage: string
 }
 /** The dsh-im Host service consumed by this plugin; no browser or HTTP surface. */
@@ -95,7 +97,11 @@ export interface DshImService {
     chatId: string; threadId: string; limit: number; since?: string; until?: string; cursor?: string; includeBots?: boolean
     direct?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
-  /** Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat. */
+  /**
+   * Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat.
+   * Throws `message-deleted` when the message was recalled, `message-unavailable` when its body cannot be rendered, and
+   * `stale-route` when the retained route no longer resolves to its own message.
+   */
   messageChecked?(botId: string, route: DshImEvent['reply'],
     options: { expectedFingerprint: string; signal: AbortSignal; messageId?: string }): Promise<DshImMessage>
   /** Reads one chat's members as open_id plus name. */
