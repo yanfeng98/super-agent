@@ -6,7 +6,7 @@ Every base-backed profile ships 27 engineering workflow skills, so a new Session
 
 ## What ships
 
-All 27 appear in the composer's `/` menu. Sixteen of them are user-only, marked as such in the menu and invisible to the model; the other eleven are also model-invoked, so they enter the Session skill catalog and the model loads one when the task fits.
+All 27 appear in the composer's `/` menu. Sixteen of them are user-only: the menu marks them and the model cannot load one on its own; the other eleven are also model-invoked, so they enter the Session skill catalog and the model loads one when the task fits.
 
 | Reachable by | Skills |
 |---|---|
