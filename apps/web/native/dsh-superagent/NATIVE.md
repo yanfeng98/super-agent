@@ -328,8 +328,13 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `tests/bot-general-settings.test.mjs` and `tests/channels/feishu/multi-bot-controller.test.mjs` cover the switch.
 
 30. **Feishu recovery and content through dsh-im.** `src/sources/feishu-im-loops.ts` reads each configured chat and each
-    known direct chat from a stored cursor every 60 seconds and polls subscribed threads, so messages missed while
-    superagent or the Host restarted are recovered; re-received messages deduplicate on their Trigger id. `imTrigger`
+    known direct chat from a stored cursor every 60 seconds, recovering the replies of the Topics those chats show
+    (Feishu returns only the message a Topic was opened on in chat history) and polling subscribed threads, so messages
+    missed while superagent or the Host restarted are recovered; re-received messages deduplicate on their Trigger id.
+    Pages are dsh-im's largest (50) up to 2 000 messages per chat per round, so a long outage catches up in a few
+    rounds; a Topic a subscribed Thread already polls is skipped there, and one quiet for the polling horizon is
+    forgotten. A Topic's own history is read oldest-first through `threadHistoryChecked` (`historyChecked` on an older
+    dsh-im), so the message that opened it anchors the first page an assessment window reads. `imTrigger`
     substitutes mention names, marks bot senders non-human, and records `messageType`/`images`; `readFeishuImImage`
     downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and
     `syncChat` (`chatMembersChecked`), `sourceLink` resolves the message's own AppLink through `messageChecked` with the

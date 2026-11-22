@@ -367,7 +367,7 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
 | `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry; the bundle loads `./feishu-watch` instead, so only its stored triggers and its tests reach it |
 | `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch`: its Trigger mapping, checked replies, bounded Thread context, image and file reads, labels, and the handoff consumer that reports a failed message in the Source's health |
-| `src/sources/feishu-im-loops.ts` | The dsh-im-backed Feishu loops: chat history backfill and subscribed-thread polling |
+| `src/sources/feishu-im-loops.ts` | The dsh-im-backed Feishu loops: chat history backfill, Topic recovery and subscribed-thread polling |
 | `src/sources/dsh-im.ts` | The typed same-Host dsh-im intake service used by the Feishu Source |
 | `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
 | `src/sources/feishu-loops.ts` | The legacy lark-cli loops: the event consumer, history recovery, chat names and polling of subscribed topics |
@@ -420,7 +420,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
 | `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
-| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context, the chat around a message, image and file reads from any message, a failed message kept in health, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
+| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context, the chat around a message, image and file reads from any message, a failed message kept in health, Topic recovery its subscribed Threads do not cover, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
 | `tests/feishu-read.spec.ts` | Feishu reads |
 | `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu attachment keys and image reads |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
