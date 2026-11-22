@@ -6,7 +6,7 @@ import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { feishuImKind, imTrigger, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
 import type { SourceContext } from '../src/sources/host.ts'
-import { runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
+import { backfillChat, runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
 
 const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
   version: 1, channel: 'feishu', botId: 'bot_1', fingerprint: 'f'.repeat(64), eventId: 'event_1',
@@ -310,13 +310,15 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
   })
 
-  /** Runs one backfill round against a fake dsh-im, recording what it delivered and what the history health said. */
-  const backfill = (im: DshImService, state: Map<string, unknown>, threads: { meta: Record<string, string>; createdAt: string }[] = []) => {
-    const received: { id: string; threads?: { id: string }[] }[] = []
+  /** Backfill dependencies for a fake dsh-im, recording what they delivered and what the history health said. */
+  const backfillDeps = (im: DshImService, state: Map<string, unknown>, threads: { meta: Record<string, string>; createdAt: string }[] = []) => {
+    const received: { id: string; threads?: { id: string }[]; channel?: { address: Record<string, string> } }[] = []
     const reports: string[] = []
     const ctx = {
       ready: Promise.resolve(), config: () => config(), configured: () => true,
-      receive: async (trigger: { id: string; threads?: { id: string }[] }) => { received.push(trigger) }, report: () => {},
+      receive: async (trigger: { id: string; threads?: { id: string }[]; channel?: { address: Record<string, string> } }) => {
+        received.push(trigger)
+      }, report: () => {},
       state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
       threads: { subscribed: () => threads.map(thread => ({ ...thread, key: 'feishu:oc_team:om_root',
         ref: { source: 'feishu', id: 'oc_team:om_root' }, subscriptions: [] })),
@@ -325,9 +327,15 @@ describe('dsh-im Feishu recovery and identity', () => {
       tickets: { get: () => undefined },
     }
     const controller = new AbortController()
-    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
-      config: () => config(), toTrigger: imTrigger,
-      report: (_entry: string, value: { detail: string }) => { reports.push(value.detail) }, signal: controller.signal })
+    const deps = { ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64), config: () => config(), toTrigger: imTrigger,
+      report: (_entry: string, value: { detail: string }) => { reports.push(value.detail) }, signal: controller.signal }
+    return { received, reports, deps, controller }
+  }
+  /** Runs one backfill round against a fake dsh-im. */
+  const backfill = (im: DshImService, state: Map<string, unknown>, threads: { meta: Record<string, string>; createdAt: string }[] = []) => {
+    const { received, reports, deps } = backfillDeps(im, state, threads)
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ...deps, signal: controller.signal })
     /** Waits for the round to finish reporting, then stops the loop before its next round. */
     const round = async () => {
       await vi.waitFor(() => expect(reports.some(detail => detail.startsWith('Recovered'))).toBe(true))
@@ -367,8 +375,138 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(new Set(received.map(trigger => trigger.id)))
       .toEqual(new Set([key('feishu', 'om_root'), key('feishu', 'om_reply_1'), key('feishu', 'om_reply_2')]))
     expect(received.find(trigger => trigger.id === key('feishu', 'om_reply_2'))?.threads?.[0]?.id).toBe('oc_team:om_root')
-    expect(state.get(KV.feishu.imTopics('oc_team'))).toEqual({ omt_9: { at: at(20), rootId: 'om_root' } })
+    // The route stays exactly as dsh-im reported it: a fabricated root would make every later read and reply fail.
+    expect(received.find(trigger => trigger.id === key('feishu', 'om_reply_2'))?.channel?.address).not.toHaveProperty('rootId')
+    expect(state.get(KV.feishu.imTopics('oc_team'))).toMatchObject({ omt_9: { at: at(20), rootId: 'om_root' } })
+    // The Topic was read to the end of the round's window, so the next round starts there.
+    expect(Date.parse((state.get(KV.feishu.imTopics('oc_team')) as Record<string, { readThrough: string }>).omt_9!.readThrough))
+      .toBeGreaterThanOrEqual(Date.parse(at(20)))
     expect(reports).toContainEqual(expect.stringContaining('Recovered 3 messages'))
+  })
+
+  it('resumes a topic from the last message it delivered when its page budget runs out', async () => {
+    const start = Date.now() - 7_200_000
+    const at = (minutes: number): string => new Date(start + minutes * 60_000).toISOString()
+    const asked: Record<string, unknown>[] = []
+    const im = service({
+      chatHistoryChecked: async () => chatPage([event({ messageId: 'om_root', at: at(0), reply: { messageId: 'om_root',
+        conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_9', rootId: 'om_root' } })]),
+      threadHistoryChecked: async (_botId: string, query: Record<string, unknown>) => {
+        asked.push(query)
+        // Every page claims another one, so each round stops at its page budget instead of draining the Topic.
+        const page = asked.length
+        return { version: 1 as const, scope: 'thread' as const, chatId: 'oc_team', threadId: 'omt_9', omitted: 0, hasMore: true,
+          nextCursor: `cursor_${page}`, coverage: 'provider-visible-messages', events: [event({ messageId: `om_${page}`, at: at(page) })] }
+      },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', at(-1)]])
+    const { deps } = backfillDeps(im, state)
+    const errors: string[] = []
+    await backfillChat(deps, 'oc_team', false, 50, errors)
+    // The first round delivered the page budget and kept the time of its last message.
+    expect(asked).toHaveLength(40)
+    expect(errors).toEqual([])
+    await backfillChat(deps, 'oc_team', false, 50, errors)
+    // The second round continues from there, five seconds back, instead of the chat's own window.
+    expect(asked).toHaveLength(80)
+    expect(Date.parse(String(asked[40]?.since))).toBe(Date.parse(at(40)) - 5000)
+  })
+
+  it('keeps a topic\u2019s read position when the read fails before delivering anything', async () => {
+    const start = Date.now() - 3_600_000
+    const at = (minutes: number): string => new Date(start + minutes * 60_000).toISOString()
+    const im = service({
+      chatHistoryChecked: async () => chatPage([event({ messageId: 'om_root', at: at(0), reply: { messageId: 'om_root',
+        conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_9', rootId: 'om_root' } })]),
+      threadHistoryChecked: async () => { throw Object.assign(new Error('Feishu is unavailable'), { code: 'history-unavailable' }) },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', at(-1)]])
+    const { deps } = backfillDeps(im, state)
+    const errors: string[] = []
+    await backfillChat(deps, 'oc_team', false, 50, errors)
+    // The window stays where it was, so the next round retries it instead of skipping the Topic's replies.
+    expect(state.get(KV.feishu.imTopics('oc_team'))).toMatchObject({ omt_9: { readThrough: at(-1) } })
+    expect(errors).toEqual([expect.stringContaining('omt_9')])
+  })
+
+  it('keeps a topic\u2019s Thread on the message that opened it', () => {
+    // Feishu names the Topic on the message someone replied to, and its replies name that message as their root.
+    const root = imTrigger(event({ messageId: 'om_root',
+      reply: { messageId: 'om_root', conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_9' } }))
+    expect(root.threads[0]?.id).toBe('oc_team:om_root')
+    const reply = imTrigger(event({ messageId: 'om_reply', reply: { messageId: 'om_reply', conversationId: 'oc_team',
+      actorId: 'ou_bob', threadId: 'omt_9', rootId: 'om_root' } }))
+    expect(reply.threads[0]?.id).toBe(root.threads[0]?.id)
+  })
+
+  it('records a topic before the chat cursor moves past the message that named it', async () => {
+    let stop: (() => void) | undefined
+    const im = service({
+      chatHistoryChecked: async () => chatPage([event({ messageId: 'om_root', reply: { messageId: 'om_root',
+        conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_9', rootId: 'om_root' } })]),
+      threadHistoryChecked: async () => { stop?.(); throw new Error('stopped') },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 300_000).toISOString()]])
+    const { deps, controller } = backfillDeps(im, state)
+    stop = () => controller.abort()
+    await backfillChat(deps, 'oc_team', false, 50, [])
+    // The round stopped inside the Topic read, after the chat cursor moved; the Topic still has to be on disk.
+    expect(state.get(KV.feishu.imTopics('oc_team'))).toMatchObject({ omt_9: { rootId: 'om_root' } })
+  })
+
+  it('advances the topics read longest ago first, so none is starved', async () => {
+    const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 300_000).toISOString()]])
+    const base = Date.now() - 3_600_000
+    const at = (minutes: number): string => new Date(base + minutes * 60_000).toISOString()
+    const topics: Record<string, { at: string; rootId: string; readThrough: string }> = {}
+    for (let index = 0; index < 21; index++) topics[`omt_${index}`] = { at: at(index), rootId: `om_${index}`, readThrough: at(index) }
+    state.set(KV.feishu.imTopics('oc_team'), topics)
+    const asked: Record<string, unknown>[] = []
+    const im = service({
+      chatHistoryChecked: async () => chatPage([]),
+      threadHistoryChecked: async (_botId: string, query: Record<string, unknown>) => {
+        asked.push(query)
+        return { version: 1 as const, scope: 'thread' as const, chatId: 'oc_team', threadId: String(query.threadId), omitted: 0,
+          hasMore: false, coverage: 'provider-visible-messages', events: [] }
+      },
+    })
+    const { deps } = backfillDeps(im, state)
+    await backfillChat(deps, 'oc_team', false, 50, [])
+    // Twenty reads, oldest watermark first; the most recently read Topic waits for the next round.
+    expect(asked.map(query => query.threadId)).toEqual(Array.from({ length: 20 }, (_, index) => `omt_${index}`))
+  })
+
+  it('stops a round at its time budget and keeps its progress', async () => {
+    const asked: unknown[][] = []
+    const im = service({
+      chatHistoryChecked: async (...args: unknown[]) => { asked.push(args); return chatPage([event()]) },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 300_000).toISOString()]])
+    const { deps } = backfillDeps(im, state)
+    const before = state.get(KV.feishu.history('oc_team'))
+    await backfillChat(deps, 'oc_team', false, 50, [], Date.now() - 1)
+    expect(asked).toEqual([])
+    // Nothing was read, so the cursor stays where it was and the next round reads the same window.
+    expect(state.get(KV.feishu.history('oc_team'))).toBe(before)
+  })
+
+  it('reads a topic whose subscribed Thread is past its polling horizon', async () => {
+    const started = new Date(Date.now() - 30 * 86_400_000).toISOString()
+    const asked: unknown[][] = []
+    const im = service({
+      chatHistoryChecked: async () => chatPage([event({ messageId: 'om_root', reply: { messageId: 'om_root',
+        conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_1', rootId: 'om_root' } })]),
+      threadHistoryChecked: async (...args: unknown[]) => {
+        asked.push(args)
+        return { version: 1 as const, scope: 'thread' as const, chatId: 'oc_team', threadId: 'omt_1', events: [], omitted: 0,
+          hasMore: false, coverage: 'provider-visible-messages' }
+      },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 300_000).toISOString()]])
+    const { round } = backfill(im, state, [{ meta: { chatId: 'oc_team', threadId: 'omt_1' }, createdAt: started }])
+    await round()
+    // The Thread poller leaves this Thread alone, so the Topic has to be read here or its replies are never recovered.
+    expect(asked).toHaveLength(1)
   })
 
   it('leaves a topic its subscribed Thread already polls to the Thread poller', async () => {
