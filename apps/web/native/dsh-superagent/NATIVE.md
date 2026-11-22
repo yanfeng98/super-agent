@@ -333,8 +333,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and
     `syncChat` (`chatMembersChecked`), `sourceLink` resolves the message's own AppLink through `messageChecked` with the
     `feishu-im/` resource as fallback, and `sendFeishuIm` passes the receipt id as Feishu's `uuid` and treats
-    `reply-result-unknown` as sent, so an ambiguous send is never retried into a duplicate reply. The Source declares the
-    `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies, backfill and policy sync.
+    `reply-result-unknown` as sent, so an ambiguous send is never retried into a duplicate reply. The backfill loop also
+    merges dsh-im's group target names into the stored label map every round, and `refreshLabels` persists what it reads.
+    The Source declares the `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies, backfill and policy sync.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

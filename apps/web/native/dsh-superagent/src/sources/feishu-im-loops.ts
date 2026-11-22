@@ -1,6 +1,7 @@
 /** dsh-im Feishu background loops: chat history backfill and subscribed-thread polling. */
 import type { Thread, Trigger } from '../core/index.ts'
 import { KV } from '../kv.ts'
+import { SOURCE } from './feishu-trigger.ts'
 import type { DshImEvent, DshImService } from './dsh-im.ts'
 import type { FeishuConfig } from './feishu-im.ts'
 import { pause, pollThreads } from './poll.ts'
@@ -23,6 +24,22 @@ export interface BackfillDeps {
 }
 
 const signalOf = (signal: AbortSignal): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(READ_TIMEOUT_MS)])
+
+/** Merges dsh-im's known group targets into the stored label map; the read is local, so it runs every round. */
+async function refreshChatLabels(deps: BackfillDeps): Promise<void> {
+  if (!deps.im.listTargets) return
+  try {
+    const labels: Record<string, string> = { ...(deps.ctx.state.get(KV.sources.labels(SOURCE)) ?? {}) }
+    let changed = false
+    for (const target of await deps.im.listTargets(deps.botId)) {
+      const chatId = target.route?.chatId
+      if (target.kind !== 'group' || !chatId || !target.name || labels[chatId] === target.name) continue
+      labels[chatId] = target.name
+      changed = true
+    }
+    if (changed) deps.ctx.state.set(KV.sources.labels(SOURCE), labels)
+  } catch { /* Labels are a display aid; the stored map stays until a later read succeeds. */ }
+}
 
 /** One chat's messages since the stored cursor, page by page; the cursor only advances after every page is received. */
 async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean, limit: number): Promise<number> {
@@ -100,6 +117,7 @@ export async function runFeishuImBackfill(deps: BackfillDeps): Promise<void> {
       await pause(HISTORY_INTERVAL_MS, deps.signal)
       continue
     }
+    await refreshChatLabels(deps)
     const errors: string[] = []
     let recovered = 0
     const chats = new Map<string, boolean>()

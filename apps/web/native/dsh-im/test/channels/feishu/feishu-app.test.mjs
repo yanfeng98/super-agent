@@ -62,3 +62,45 @@ test('verifyFeishuApp requires the shared SDK HTTP instance', async () => {
     appSecret: 'secret',
   }), /requires an HTTP instance/);
 });
+
+test('cached verification reuses the tenant token but still reads the bot identity', async () => {
+  const requests = [];
+  let openId = 'ou_one';
+  const httpInstance = {
+    async request(options) {
+      requests.push(options);
+      if (options.method === 'POST') return { code: 0, tenant_access_token: 'tok', expire: 7200 };
+      return { code: 0, bot: { app_name: 'Bot', open_id: openId } };
+    },
+  };
+  const first = await verifyFeishuApp({ appId: 'cli_cache', appSecret: 'secret', httpInstance, cache: true });
+  openId = 'ou_two';
+  const second = await verifyFeishuApp({ appId: 'cli_cache', appSecret: 'secret', httpInstance, cache: true });
+  assert.equal(first.openId, 'ou_one');
+  assert.equal(second.openId, 'ou_two');
+  assert.equal(requests.filter(request => request.method === 'POST').length, 1);
+  assert.equal(requests.filter(request => request.method === 'GET').length, 2);
+  await verifyFeishuApp({ appId: 'cli_cache', appSecret: 'secret', httpInstance });
+  assert.equal(requests.filter(request => request.method === 'POST').length, 2);
+});
+
+test('a revoked cached token is replaced once instead of failing the verification', async () => {
+  let tokens = 0;
+  let botCalls = 0;
+  const httpInstance = {
+    async request(options) {
+      if (options.method === 'POST') {
+        tokens += 1;
+        return { code: 0, tenant_access_token: `tok-${tokens}`, expire: 7200 };
+      }
+      botCalls += 1;
+      if (botCalls === 2) return { code: 99991663, msg: 'invalid access token' };
+      return { code: 0, bot: { open_id: 'ou_x' } };
+    },
+  };
+  await verifyFeishuApp({ appId: 'cli_revoked', appSecret: 'secret', httpInstance, cache: true });
+  const result = await verifyFeishuApp({ appId: 'cli_revoked', appSecret: 'secret', httpInstance, cache: true });
+  assert.equal(result.openId, 'ou_x');
+  assert.equal(tokens, 2);
+  assert.equal(botCalls, 3);
+});

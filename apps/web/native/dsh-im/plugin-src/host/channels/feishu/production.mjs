@@ -116,6 +116,8 @@ export async function createProductionController(ctx, config = {}, internals = {
   const verifyApp = (options) => verify({
     ...options,
     httpInstance: lark.defaultHttpInstance,
+    // Reuse the tenant token between verifications; the bot identity is still read every time.
+    cache: true,
   });
   const createSupervisor = internals.createConnectionSupervisor ?? createConnectionSupervisor;
   const logger = typeof ctx.logger === 'function'

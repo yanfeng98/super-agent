@@ -285,7 +285,8 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
   async refreshLabels(host) {
     const im = dshIm()
     if (!im) return {}
-    const labels: Record<string, string> = {}
+    const state = host.context(feishuImKind).state
+    const labels: Record<string, string> = { ...(state.get(KV.sources.labels(SOURCE)) ?? {}) }
     try {
       for (const bot of (await im.listBots()).filter(bot => bot.channel === 'feishu')) {
         try { const described = await im.describeBot(bot.botId); labels[bot.botId] = described.account.name || bot.botId }
@@ -301,6 +302,7 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
         }
       } catch { /* Targets are a display aid. */ }
     }
+    state.set(KV.sources.labels(SOURCE), labels)
     return labels
   },
 }

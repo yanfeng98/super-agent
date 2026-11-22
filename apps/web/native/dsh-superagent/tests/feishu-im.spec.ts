@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { key } from '../src/core/index.ts'
+import { KV } from '../src/kv.ts'
 import { sourceLink } from '../src/app/links.ts'
 import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
@@ -79,6 +80,16 @@ describe('the dsh-im-backed Feishu Source', () => {
     expect(result.allowed).toEqual([{ id: 'ou_alice', name: 'Alice' }, { id: 'ou_bob', name: '' }])
   })
 
+  it('stores refreshed labels for the chat picker', async () => {
+    setDshIm(service())
+    const state = new Map<string, unknown>()
+    const host = { sources: { instance: () => ({ config: config() }) }, context: () => ({ state: {
+      get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) } } }) }
+    const labels = await feishuImKind.refreshLabels!(host as never)
+    expect(labels).toMatchObject({ bot_1: 'Bot', oc_team: 'Team' })
+    expect(state.get(KV.sources.labels('feishu'))).toEqual(labels)
+  })
+
   it('replies through the checked original-message route and reports a stale route as gone', async () => {
     const calls: [string, Record<string, string>, string, unknown][] = []
     setFeishuConfig(config())
@@ -148,7 +159,10 @@ describe('the dsh-im-backed Feishu Source', () => {
 
   it('exposes the bot and chat labels dsh-im owns', async () => {
     setDshIm(service())
-    const host = { sources: { instance: () => ({ config: config() }) } }
+    const state = new Map<string, unknown>()
+    const host = { sources: { instance: () => ({ config: config() }) },
+      context: () => ({ state: { get: (name: string) => state.get(name),
+        set: (name: string, value: unknown) => { state.set(name, value) } } }) }
     await expect(feishuImKind.refreshLabels!(host as never)).resolves.toEqual({ bot_1: 'Bot', oc_team: 'Team' })
   })
 })
@@ -205,5 +219,6 @@ describe('dsh-im Feishu recovery and identity', () => {
     controller.abort()
     await run
     expect(new Set(received)).toEqual(new Set([key('feishu', 'om_1')]))
+    expect(state.get(KV.sources.labels('feishu'))).toEqual({ oc_team: 'Team' })
   })
 })
