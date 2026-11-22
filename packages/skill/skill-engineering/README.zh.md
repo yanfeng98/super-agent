@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-该提供方提供 Harness 内置的工程工作流技能：27 个技能覆盖拷问、spec 与工单、实现、测试驱动开发、代码评审、领域建模、架构评审，以及围绕它们的较小工作流。一份全新的 checkout 无需单独安装、符号链接或插件下载就能使用它们。其中 11 个由模型调用，出现在会话目录中；16 个由用户调用，只能在输入框里输入 `/` 触达。技能文本取自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `main` 分支 v1.3.2（`abeeaf9`），以 MIT 许可使用，并带有开发备注里列出的少量 Harness 措辞调整。
+该提供方提供 Harness 内置的工程工作流技能：27 个技能覆盖拷问、spec 与工单、实现、测试驱动开发、代码评审、领域建模、架构评审，以及围绕它们的较小工作流。一份全新的 checkout 无需单独安装、符号链接或插件下载就能使用它们。27 个都出现在输入框的 `/` 菜单里；其中 11 个同时由模型调用并出现在会话目录中，另外 16 个仅限用户、模型看不到。技能文本取自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `main` 分支 v1.3.2（`abeeaf9`），以 MIT 许可使用，并带有开发备注里列出的少量 Harness 措辞调整。
 
 ## 目录
 
@@ -29,14 +29,14 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 
 ### 目录包含什么
 
-| 调用方式 | 技能 |
+| 可调用方 | 技能 |
 |---|---|
-| 模型调用，列在会话目录中 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
-| 用户调用，只能输入 `/` 触达 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
+| 模型与用户 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
+| 仅用户 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
 
 随包技能名都带 `eng-` 前缀。项目或用户目录里的技能保留上游原名，若随包副本不加前缀，就会被同名个人副本替换，内置技能从 `/` 菜单里消失；加前缀后两者都能被寻址，菜单也能把随包这一组归到 `mattpocock/skills` 之下。
 
-`eng-ask-matt` 是路由：它把用户调用的技能映射到主流程（`eng-grill-with-docs` → `eng-to-spec` → `eng-to-tickets` → `eng-implement` → `eng-pr` → `eng-retro`）、入口匝道（`eng-triage`、`eng-diagnosing-bugs`、`eng-wayfinder`）与词汇技能（`eng-domain-modeling`、`eng-codebase-design`）。`eng-setup-matt-pocock-skills` 写入工程技能读取的仓库级配置：问题跟踪器、分诊标签与领域文档布局。
+`eng-ask-matt` 是路由：它把仅限用户的技能映射到主流程（`eng-grill-with-docs` → `eng-to-spec` → `eng-to-tickets` → `eng-implement` → `eng-pr` → `eng-retro`）、入口匝道（`eng-triage`、`eng-diagnosing-bugs`、`eng-wayfinder`）与词汇技能（`eng-domain-modeling`、`eng-codebase-design`）。`eng-setup-matt-pocock-skills` 写入工程技能读取的仓库级配置：问题跟踪器、分诊标签与领域文档布局。
 
 来自更近层的同名技能优先：某个 preset 的本地发现（项目的 `.dsh/skills`、项目的 `.agents/skills`、配置的自定义目录或用户技能目录）会取代该提供方提供的目录条目与正文。在同一层内，bundled 排名排在最后。
 
@@ -67,7 +67,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-该提供方持有固定的技能目录名列表，在发现阶段读取 `assets/<name>/SKILL.md`，每次加载时再读一次，并在发布候选前校验 frontmatter 契约。目录名即身份：声明的 `name` 与目录名不一致就是无效元数据。`description` 必填且非空。`disable-model-invocation` 与 `user-invocable` 是可选布尔值，会投影到注册表的调用策略；随包文件对用户调用的集合使用了前者。
+该提供方持有固定的技能目录名列表，在发现阶段读取 `assets/<name>/SKILL.md`，每次加载时再读一次，并在发布候选前校验 frontmatter 契约。目录名即身份：声明的 `name` 与目录名不一致就是无效元数据。`description` 必填且非空。`disable-model-invocation` 与 `user-invocable` 是可选布尔值，会投影到注册表的调用策略；随包文件对那 16 个仅限用户的技能使用了前者。
 
 该提供方通过延迟的 `skills` 注入挂载，因此移除技能注册表的 profile 会让该行保持空闲，而不是报告待处理的依赖。
 
@@ -100,7 +100,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 
 #### KV Cache 影响
 
-11 个模型调用的条目把描述加入会话目录；加载后的正文在加载点进入对话。用户调用的技能在被引用前不贡献任何内容。
+11 个模型调用的条目把描述加入会话目录；加载后的正文在加载点进入对话。仅限用户的技能在被引用前不贡献任何内容。
 
 ## 已知限制与延期工作
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This provider ships the Harness's built-in engineering workflow skills: 27 skills covering grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflows around them. A fresh checkout has them without a separate install, symlink, or plugin download. Eleven are model-invoked and appear in the session catalog; sixteen are user-invoked and reachable only by typing `/` in the composer. The text derives from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`) under the MIT license, with the small Harness wording adjustments listed in the dev note.
+This provider ships the Harness's built-in engineering workflow skills: 27 skills covering grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflows around them. A fresh checkout has them without a separate install, symlink, or plugin download. All twenty-seven appear in the composer's `/` menu; eleven are also model-invoked and appear in the session catalog, while the other sixteen are user-only. The text derives from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`) under the MIT license, with the small Harness wording adjustments listed in the dev note.
 
 ## Table of Contents
 
@@ -29,14 +29,14 @@ The base bundle inserts this provider, so every base-backed profile (`web`, `hea
 
 ### What the catalog contains
 
-| Invocation | Skills |
+| Reachable by | Skills |
 |---|---|
-| Model-invoked, listed in the session catalog | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
-| User-invoked, reachable by typing `/` only | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
+| Model and user | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
+| User only | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
 
 The shipped names carry an `eng-` prefix. A skill directory keeps its upstream name in a project or user root, so an unprefixed shipped copy would be replaced by that personal copy and the built-in would vanish from the `/` menu; the prefix keeps both addressable and lets the menu group the shipped set under `mattpocock/skills`.
 
-`eng-ask-matt` is the router: it maps the user-invoked skills onto the main flow (`eng-grill-with-docs` → `eng-to-spec` → `eng-to-tickets` → `eng-implement` → `eng-pr` → `eng-retro`), the on-ramps (`eng-triage`, `eng-diagnosing-bugs`, `eng-wayfinder`), and the vocabulary skills (`eng-domain-modeling`, `eng-codebase-design`). `eng-setup-matt-pocock-skills` writes the per-repository issue-tracker, triage-label, and domain-doc configuration the engineering skills read.
+`eng-ask-matt` is the router: it maps the user-only skills onto the main flow (`eng-grill-with-docs` → `eng-to-spec` → `eng-to-tickets` → `eng-implement` → `eng-pr` → `eng-retro`), the on-ramps (`eng-triage`, `eng-diagnosing-bugs`, `eng-wayfinder`), and the vocabulary skills (`eng-domain-modeling`, `eng-codebase-design`). `eng-setup-matt-pocock-skills` writes the per-repository issue-tracker, triage-label, and domain-doc configuration the engineering skills read.
 
 A same-name skill from a nearer layer wins: a preset's local discovery (project `.dsh/skills`, project `.agents/skills`, the configured custom directory, or the user skill directories) supplies the catalog entry and body instead of this provider. Within one layer the bundled rank sorts last.
 
@@ -67,7 +67,7 @@ Each packaged skill appears once in the catalog with its description and the `up
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider holds a fixed list of skill directory names, reads `assets/<name>/SKILL.md` during discovery and again on each load, and validates the frontmatter contract before publishing a candidate. The directory name is the identity: a declared `name` that disagrees is invalid metadata. `description` is required and non-empty. `disable-model-invocation` and `user-invocable` are optional booleans and project into the registry's invocation policy; the vendored files use the first for the user-invoked set.
+The provider holds a fixed list of skill directory names, reads `assets/<name>/SKILL.md` during discovery and again on each load, and validates the frontmatter contract before publishing a candidate. The directory name is the identity: a declared `name` that disagrees is invalid metadata. `description` is required and non-empty. `disable-model-invocation` and `user-invocable` are optional booleans and project into the registry's invocation policy; the vendored files use the first for the sixteen user-only skills.
 
 The provider attaches through a deferred `skills` injection, so a profile that removes the skill registry leaves the row idle instead of reporting a pending dependency.
 
@@ -100,7 +100,7 @@ Indirectly, through `dsh-tool-skill`, which renders the provider's catalog entri
 
 #### KV Cache effect
 
-The eleven model-invoked entries add their descriptions to the session catalog; loaded bodies enter the conversation at the load point. A user-invoked skill adds nothing until the user references it.
+The eleven model-invoked entries add their descriptions to the session catalog; loaded bodies enter the conversation at the load point. A user-only skill adds nothing until the user references it.
 
 ## Known Limitations and Deferred Work
 

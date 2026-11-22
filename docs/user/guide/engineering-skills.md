@@ -6,16 +6,16 @@ Every base-backed profile ships 27 engineering workflow skills, so a new Session
 
 ## What ships
 
-Eleven skills are model-invoked and appear in the Session skill catalog; the model loads one when the task fits. Sixteen are user-invoked: type `/` in the composer and pick one.
+All 27 appear in the composer's `/` menu. Sixteen of them are user-only, marked as such in the menu and invisible to the model; the other eleven are also model-invoked, so they enter the Session skill catalog and the model loads one when the task fits.
 
-| Invocation | Skills |
+| Reachable by | Skills |
 |---|---|
-| Model-invoked | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
-| User-invoked | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
+| Model and user | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
+| User only | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
 
 ## Invoke a skill
 
-Type `/` in the composer to list the user-invoked skills and insert one by name. Entries group by where they came from, so these 27 sit under `Built-in · mattpocock/skills` next to headings such as `Project · .agents/skills` and `User · .agents/skills` that supply other skills. `eng-ask-matt` is the router: it recommends the skill or flow for your situation, so start there when you are unsure.
+Type `/` in the composer to list the skills and insert one by name. Entries group by where they came from, so these 27 sit under `Built-in · mattpocock/skills` next to headings such as `Project · .agents/skills` and `User · ~/.agents/skills` that supply other skills. `eng-ask-matt` is the router: it recommends the skill or flow for your situation, so start there when you are unsure.
 
 For a model-invoked skill, describe the task and the model loads the one that fits; name the skill explicitly when you want that one.
 

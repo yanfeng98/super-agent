@@ -47,7 +47,7 @@ pnpm dsh web
 打开页面后先在**设置 → 模型**填入 DeepSeek API 密钥（或选择其他提供方、自定义 OpenAI 兼容端点），保存即生效、无需重启；再用**选择工作区**添加启动 `dsh` 的目录并选中，然后新建会话。未选中工作区时输入框不可用。
 
 - **直接描述任务**：Agent 会读取和修改工作区文件、运行命令、委派子智能体并维护计划；按当前权限策略需要审批的操作会先询问。
-- **在输入框输入 `/`** 打开技能菜单：内置 27 个工程工作流技能（其中 11 个按任务自动加载，16 个从这里点名），随包技能名都带 `eng-` 前缀（`eng-tdd`、`eng-pr`…），所以用上游原名放一份 `tdd` 到 `.dsh/skills`、[`.agents/skills`](.agents/skills) 或用户技能目录，两者会并存而不是互相覆盖。菜单按来源分组，标题是「类别 · 来源」：`内置 · mattpocock/skills`、`插件`、`项目 · .agents/skills`、`用户 · .agents/skills`、`自定义`。
+- **在输入框输入 `/`** 打开技能菜单：随包技能名都带 `eng-` 前缀（`eng-tdd`、`eng-pr`…）。27 个工程工作流技能在这里全部可点名，其中 11 个还能由模型按任务自动加载，另外 16 个模型看不到、在菜单里标着「仅用户」；因为名字带前缀，用上游原名放一份 `tdd` 到 `.dsh/skills`、[`.agents/skills`](.agents/skills) 或用户技能目录会与 `eng-tdd` 并存，而不是互相覆盖。菜单按来源分组，标题是「类别 · 来源」：`内置 · mattpocock/skills`（工程技能）、`内置`（office 4 个）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；输入查询后标题收起，改为按名称排序。
 - **空草稿时按 ↑** 召回当前文件夹最近 100 条输入，`↑`、`↓` 前后浏览。
 - **插件**页查看已装与实验性插件、添加社区索引，见下一节。
 
@@ -57,7 +57,7 @@ pnpm dsh web
 |---|---|
 | IM 机器人 | 设置页「IM 机器人」：微信、飞书、钉钉、企业微信、QQ、iMessage 与邮箱，`/goal`、`/plan` 是原生命令；见 [dsh-im NATIVE.md](apps/web/native/dsh-im/NATIVE.md) |
 | Superagent | 侧栏「Superagent」→「执行」→「新建工单」，默认只用本地工单、不需要远端账号、没有 GitHub 集成；见[快速开始](apps/web/native/dsh-superagent/docs/006-deployment.md#quick-start) |
-| 工程工作流技能 | `/` 菜单可点名 16 个，另 11 个按任务自动加载；见[使用指南](docs/user/guide/engineering-skills.zh.md)与[技能包](packages/skill/skill-engineering/README.zh.md) |
+| 工程工作流技能 | 27 个都在 `/` 菜单里可点名，其中 11 个还能由模型按任务自动加载；见[使用指南](docs/user/guide/engineering-skills.zh.md)与[技能包](packages/skill/skill-engineering/README.zh.md) |
 | 启动片头 | 默认播放，点按钮或按 Esc 跳过；设置页可调序列参数、换用自己的片头视频，见[启动片头包](packages/client/ui-boot-animation/README.zh.md) |
 
 ### 把代码迁移到 Rust
@@ -111,11 +111,8 @@ pnpm dsh plugin --profile <名称> add <包名>   # 给已有 profile 安装插�
 | Markdown 表格收进正文列 | 表格不再突破到 transcript 两侧：4 列及以上表格先按自然宽度排版，超过正文列就换行收敛；只有各列 100px 可读下限之和超过容器时，才在表格内部横向滚动。所有 `MarkdownText` 宿主（对话、工具卡、插件文档等）行为一致。 | [`MarkdownText.module.css`](packages/client/ui-primitives/src/markdown/MarkdownText.module.css) 使用 `width: fit-content; max-width: 100%`；删除聊天侧宽表突破规则；[Agent Note](.agents/notes/implemented/bug-fix/2026-11-15-markdown-tables-fit-the-column.md)。 |
 | 后台 Web 服务 | `make web-bg` 在 tmux 会话 `dsh-web` 中启动 Web UI，日志写入 `/tmp/dsh-web.log`（权限 600，含 token），最多等待 45 秒以打印带 token 的 URL，未出现时提示查看日志；`make web-stop` 结束会话，会话不存在时幂等退出。 | [`Makefile`](Makefile) 的 `web-bg`/`web-stop`；[开发指南](docs/development.zh.md)。 |
 | 提供商登录入口 | 模型设置页对「没有密钥可填」且 Host 提供登录流程的路由（当前为 `openai-codex`）显示登录按钮而不是密钥框：弹窗逐条显示流程通知（要打开的页面、设备码），回答问题（如浏览器登录 / 设备码二选一），凭据写入本地凭据存储后该路由立即可用。每个凭据 key 同时只运行一次登录；关闭弹窗即撤回，刷新页面会接回仍在运行的那次，Host 已不持有的尝试报告为「已结束」并可重试；登录刚确认时取消不会把成功显示成取消。 | [`AuthorizationController`](packages/api/settings-controller/src/authorization.ts)（`authorization` Remote namespace）、[`sign-in.ts`](packages/client/ui-settings-models/src/client/sign-in.ts)、[`ProviderSignIn.tsx`](packages/client/ui-settings-models/src/client/ProviderSignIn.tsx)；[用户指南](docs/user/guide/providers.zh.md)、[包契约](packages/client/ui-settings-models/README.zh.md)、[日志](logs/00035-接通提供商登录入口.md) |
-
-| 内置工程工作流技能 | 每个以 base 为基础的 profile 自带 27 个工程工作流技能：11 个由模型按任务加载，16 个通过输入框的 `/` 菜单选择；技能名统一带 `eng-` 前缀，项目或用户目录里用上游原名的同名技能与它并存，只有同名 `eng-…` 才会覆盖；需要关闭时在 profile patch 里禁用 `skill-engineering` 行。技能文本取自上游 `mattpocock/skills` 的 `main`（MIT），并套用本仓库的 `skill` 工具名与「开新会话」措辞。 | 新包 [`skill-engineering`](packages/skill/skill-engineering/README.zh.md)（随 `dsh-base` 挂载）：[用户指南](docs/user/guide/engineering-skills.zh.md)、[子系统页](docs/subsystems/skills.zh.md)、[日志 00088](logs/00088-内置工程工作流技能.md)。 |
-
+| 内置工程工作流技能 | 每个以 base 为基础的 profile 自带 27 个工程工作流技能：全部可在输入框的 `/` 菜单里点名，其中 11 个还会进入会话技能目录、由模型按任务加载，另外 16 个模型看不到、菜单里标着「仅用户」；技能名统一带 `eng-` 前缀，项目或用户目录里用上游原名的同名技能与它并存，只有同名 `eng-…` 才会覆盖；需要关闭时在 profile patch 里禁用 `skill-engineering` 行。技能文本取自上游 `mattpocock/skills` 的 `main`（MIT），并套用本仓库的 `skill` 工具名与「开新会话」措辞。 | 新包 [`skill-engineering`](packages/skill/skill-engineering/README.zh.md)（随 `dsh-base` 挂载）：[用户指南](docs/user/guide/engineering-skills.zh.md)、[子系统页](docs/subsystems/skills.zh.md)、[日志 00088](logs/00088-内置工程工作流技能.md)。 |
 | rust-anything 迁移能力 | 默认 `standard` preset 的 agent 直接获得 16 个 `mcp__rust-anything__*` 工具与 3 个共享资源工具，用于按单元把 TypeScript/JavaScript、Python、C、Go、Ruby、Java、Kotlin 代码迁移到 Rust：`analyze` → `bridge` → `record` → 写 `port.rs` → `build`/`diff`/`bench`/`gate`（整应用走 `app_*`）。CLI 源码 vendored 在 [`native/rust-anything`](native/rust-anything/NATIVE.md)，`pnpm run build` 现场编译，不需要全局安装、也不需要下载预编译二进制；每次挂载约 7k tokens，`minimal`/`ptc` 不受影响。 | 新包 [`rust-anything`](packages/mcp/rust-anything/README.zh.md)，挂载于 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml)；[使用指南](docs/user/guide/rust-anything.zh.md)；技能 [`dsh-rust-anything`](.agents/skills/dsh-rust-anything/SKILL.md)（输入框 `/` 可点名）；[日志 00099](logs/00099-源码vendored集成rust-anything.md)、[集成报告](rust-anything-integration.zh.md)。 |
-
 | pi-ai 目录升级到 1.6.0 | 模型目录随 `@earendil-works/pi-ai` 1.3.0 → 1.6.0：`openai-codex` 新增 GPT-6.1 Terra 与 GPT-6.2 Astra/Sol，移除被 Codex 后端对 ChatGPT 账号拒绝的 `gpt-5.5` 与 `gpt-5.3-codex-spark`；`openai`、`github-copilot`、`google`、`opencode-go` 等路由的 id 随之增删；服务端 `anthropic` 路由默认改用 message threads；新增 `qwen-token-plan-individual-cn` 路由与若干网关 compat 开关 | [`packages/llm/llm-pi-ai`](packages/llm/llm-pi-ai/README.md)、[`升级指南`](docs/upgrade-guide/v0.2.2-rc.5/pi-ai-catalog-model-removals/guide.zh.md)、[`logs/00110`](logs/00110-pi-ai升级到1.6.0.md) |
 
 ### 移除或收紧的能力

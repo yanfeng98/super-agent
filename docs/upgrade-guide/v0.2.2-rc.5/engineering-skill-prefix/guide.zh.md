@@ -13,7 +13,7 @@ description: "27 个随包工程技能改为 eng- 前缀，`/tdd` 与 `skill({ n
 
 前缀把随包文本与同名个人副本区分开：后者可能位于项目根（`./.dsh/skills`、`./.agents/skills`）或用户根（`~/.dsh/skills`、`~/.agents/skills`）。注册表把重名解析到最近的层，因此改名之前个人副本会替换随包技能，随包技能根本不会出现在 `/` 菜单里；现在两者都能寻址。
 
-输入框的 `/` 菜单还按来源分组：随包一组是 `内置 · mattpocock/skills`，没有上游项目的随包提供方是 `内置`，插件在运行时注册的技能是 `插件 · <插件名>`，文件系统根则是 `项目 · .agents/skills`、`用户 · .agents/skills` 或 `自定义`。输入查询后仍回到共享的名称排序，不显示分组标题。
+输入框的 `/` 菜单还按来源分组：随包一组是 `内置 · mattpocock/skills`，没有上游项目的随包提供方是 `内置`，插件在运行时注册的技能是 `插件 · <插件名>`，文件系统根则是 `项目 · .agents/skills`、`用户 · ~/.agents/skills` 或 `自定义`。输入查询后仍回到共享的名称排序，不显示分组标题。
 
 `skills/list` Remote 另外报告贡献该技能的插件（`owner`）以及该插件是否随 harness 分发（`shipped`）；`SkillProvider` 可以声明 `shipped`，运行时注册在其 scope 没有插件名时可以自行声明 `owner`。
 

@@ -6,16 +6,16 @@
 
 ## 内置内容
 
-11 个技能由模型调用，出现在会话技能目录中，任务合适时由模型加载。16 个由用户调用：在输入框里输入 `/` 后选择。
+27 个技能都出现在输入框的 `/` 菜单里。其中 16 个仅限用户：菜单里标着「仅用户」，模型看不到；另外 11 个同时由模型调用，会进入会话技能目录，任务合适时由模型加载。
 
-| 调用方式 | 技能 |
+| 可调用方 | 技能 |
 |---|---|
-| 模型调用 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
-| 用户调用 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
+| 模型与用户 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
+| 仅用户 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
 
 ## 调用技能
 
-在输入框里输入 `/`，即可列出用户调用的技能并按名称插入。菜单按技能出处分组：这 27 个排在 `内置 · mattpocock/skills` 之下，与 `项目 · .agents/skills`、`用户 · .agents/skills` 这些提供其他技能的分组并列。`eng-ask-matt` 是路由：它会按你的处境推荐技能或流程，拿不准时从它开始。
+在输入框里输入 `/`，即可列出技能并按名称插入。菜单按技能出处分组：这 27 个排在 `内置 · mattpocock/skills` 之下，与 `项目 · .agents/skills`、`用户 · ~/.agents/skills` 这些提供其他技能的分组并列。`eng-ask-matt` 是路由：它会按你的处境推荐技能或流程，拿不准时从它开始。
 
 对于模型调用的技能，描述任务即可，模型会加载合适的那个；想指定某个技能时，在消息里点名。
 
