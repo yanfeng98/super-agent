@@ -310,6 +310,86 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
   })
 
+  /** Runs one backfill round against a fake dsh-im, recording what it delivered and what the history health said. */
+  const backfill = (im: DshImService, state: Map<string, unknown>, threads: { meta: Record<string, string>; createdAt: string }[] = []) => {
+    const received: { id: string; threads?: { id: string }[] }[] = []
+    const reports: string[] = []
+    const ctx = {
+      ready: Promise.resolve(), config: () => config(), configured: () => true,
+      receive: async (trigger: { id: string; threads?: { id: string }[] }) => { received.push(trigger) }, report: () => {},
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      threads: { subscribed: () => threads.map(thread => ({ ...thread, key: 'feishu:oc_team:om_root',
+        ref: { source: 'feishu', id: 'oc_team:om_root' }, subscriptions: [] })),
+      patch: () => {}, get: () => undefined, describe: () => {} },
+      triggers: { latest: () => undefined, get: () => undefined },
+      tickets: { get: () => undefined },
+    }
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
+      config: () => config(), toTrigger: imTrigger,
+      report: (_entry: string, value: { detail: string }) => { reports.push(value.detail) }, signal: controller.signal })
+    /** Waits for the round to finish reporting, then stops the loop before its next round. */
+    const round = async () => {
+      await vi.waitFor(() => expect(reports.some(detail => detail.startsWith('Recovered'))).toBe(true))
+      controller.abort()
+      await run
+    }
+    return { received, reports, round }
+  }
+  const chatPage = (events: DshImEvent[]) => ({ version: 1 as const, scope: 'chat' as const, events, omitted: 0, hasMore: false,
+    coverage: 'provider-visible-messages' })
+
+  it('recovers the replies of a topic chat history leaves out', async () => {
+    const base = Date.now() - 3_600_000
+    const at = (minutes: number): string => new Date(base + minutes * 60_000).toISOString()
+    // The chat container returns the message a topic was opened on and names its topic; the replies are only in the thread.
+    const root = event({ messageId: 'om_root', at: at(0), reply: { messageId: 'om_root', conversationId: 'oc_team',
+      actorId: 'ou_alice', threadId: 'omt_9', rootId: 'om_root' } })
+    const asked: Record<string, unknown>[] = []
+    const im = service({
+      chatHistoryChecked: async () => chatPage([root]),
+      threadHistoryChecked: async (_botId: string, query: Record<string, unknown>) => {
+        asked.push(query)
+        return { version: 1 as const, scope: 'thread' as const, chatId: 'oc_team', threadId: 'omt_9', omitted: 0, hasMore: false,
+          coverage: 'provider-visible-messages', events: [
+            event({ messageId: 'om_reply_1', at: at(10), text: 'it is the lockfile', reply: { messageId: 'om_reply_1',
+              conversationId: 'oc_team', actorId: 'ou_bob', threadId: 'omt_9', rootId: 'om_root' } }),
+            // Feishu may leave root_id off a topic message; its Trigger still joins the Topic's Thread.
+            event({ messageId: 'om_reply_2', at: at(20), text: 'fixed', reply: { messageId: 'om_reply_2',
+              conversationId: 'oc_team', actorId: 'ou_bob', threadId: 'omt_9' } }),
+          ] }
+      },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', at(-600)]])
+    const { received, reports, round } = backfill(im, state)
+    await round()
+    expect(asked).toContainEqual(expect.objectContaining({ chatId: 'oc_team', threadId: 'omt_9', direct: false }))
+    expect(new Set(received.map(trigger => trigger.id)))
+      .toEqual(new Set([key('feishu', 'om_root'), key('feishu', 'om_reply_1'), key('feishu', 'om_reply_2')]))
+    expect(received.find(trigger => trigger.id === key('feishu', 'om_reply_2'))?.threads?.[0]?.id).toBe('oc_team:om_root')
+    expect(state.get(KV.feishu.imTopics('oc_team'))).toEqual({ omt_9: { at: at(20), rootId: 'om_root' } })
+    expect(reports).toContainEqual(expect.stringContaining('Recovered 3 messages'))
+  })
+
+  it('leaves a topic its subscribed Thread already polls to the Thread poller', async () => {
+    const started = new Date().toISOString()
+    const asked: unknown[][] = []
+    const im = service({
+      chatHistoryChecked: async () => chatPage([event({ messageId: 'om_root', at: started, reply: { messageId: 'om_root',
+        conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_1', rootId: 'om_root' } })]),
+      threadHistoryChecked: async (...args: unknown[]) => {
+        asked.push(args)
+        return { version: 1 as const, scope: 'thread' as const, chatId: 'oc_team', threadId: 'omt_1', events: [], omitted: 0,
+          hasMore: false, coverage: 'provider-visible-messages' }
+      },
+    })
+    const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 86_400_000).toISOString()]])
+    const { round } = backfill(im, state, [{ meta: { chatId: 'oc_team', threadId: 'omt_1' }, createdAt: started }])
+    await round()
+    // One read: the Thread poller's. The topic scan skips it instead of reading the same topic twice.
+    expect(asked).toHaveLength(1)
+  })
+
   it('learns a Thread topic from its root message before polling it', async () => {
     const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])
     const asked: string[] = []
@@ -345,7 +425,9 @@ describe('dsh-im Feishu recovery and identity', () => {
   it('counts the messages dsh-im could not render in the history health', async () => {
     const reports: { detail?: string }[] = []
     const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])
-    const page = { version: 1 as const, scope: 'chat' as const, events: [event()], omitted: 2, hasMore: false, coverage: 'provider-visible-messages' }
+    // A message outside a topic, so this round reads one chat page and counts only its unreadable items.
+    const untopiced = event({ reply: { messageId: 'om_1', conversationId: 'oc_team', actorId: 'ou_alice' } })
+    const page = { version: 1 as const, scope: 'chat' as const, events: [untopiced], omitted: 2, hasMore: false, coverage: 'provider-visible-messages' }
     const im = service({ chatHistoryChecked: async () => page,
       threadHistoryChecked: async () => ({ ...page, scope: 'thread' as const }) })
     const ctx = {
@@ -412,6 +494,38 @@ describe('dsh-im Feishu context parts and images', () => {
     const own = await feishuImKind.threadContext!.read({} as never, trigger, 'message', undefined, config())
     expect(own.messages[0]).toMatchObject({ id: 'om_1', reply_to: 'om_parent' })
     expect(asked[1]?.[2]).toMatchObject({ messageId: 'om_1' })
+  })
+
+  it('reads a topic oldest-first so the message that started it is on the first page', async () => {
+    const asked: unknown[][] = []
+    setDshIm(service({
+      historyChecked: async () => { throw new Error('a topic is read through its own history') },
+      threadHistoryChecked: async (...args: unknown[]) => {
+        asked.push(args)
+        return { version: 1, scope: 'thread', chatId: 'oc_team', threadId: 'omt_1', omitted: 0, hasMore: true, nextCursor: 'cursor_2',
+          coverage: 'provider-visible-messages', events: [event({ messageId: 'om_first' })] }
+      },
+    }))
+    const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event()), 'thread', 'cursor_1', config())
+    expect(asked[0]?.[1]).toEqual({ chatId: 'oc_team', threadId: 'omt_1', limit: 20, includeBots: true, cursor: 'cursor_1' })
+    expect(page.messages.map(message => message.id)).toEqual(['om_first'])
+    expect(page.next).toBe('cursor_2')
+  })
+
+  it('reads the chat around a message that sits in no topic', async () => {
+    const asked: unknown[][] = []
+    setDshIm(service({
+      historyChecked: async (...args: unknown[]) => {
+        asked.push(args)
+        return { version: 1, scope: 'nearby', omitted: 0, hasMore: false, coverage: 'provider-visible-human-text', events: [event()] }
+      },
+      threadHistoryChecked: async () => { throw new Error('a message without a topic has no thread to read') },
+    }))
+    // Feishu reported no topic for this message, so `/thread` is the chat around it, not a thread history read.
+    const reply = { messageId: 'om_1', conversationId: 'oc_team', actorId: 'ou_alice' }
+    const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event({ reply })), 'thread', undefined, config())
+    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 5, afterCount: 5 })
+    expect(page.messages).toHaveLength(1)
   })
 
   it('downloads an image from the message that carries it', async () => {
