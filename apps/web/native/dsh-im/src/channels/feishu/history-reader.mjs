@@ -235,3 +235,28 @@ export async function readChatMembers(client, chatId, signal) {
   } while (pageToken);
   return { version: 1, chatId, users };
 }
+
+/** Reads the chats the bot has joined as chat_id plus name, following pagination to the end. */
+export async function readChatList(client, signal) {
+  const chats = [];
+  let pageToken;
+  let pages = 0;
+  do {
+    const response = await checkedSdkRead(() => client.im.v1.chat.list({
+      params: { page_size: 100, user_id_type: 'open_id', ...(pageToken ? { page_token: pageToken } : {}) },
+    }, { signal }), signal);
+    const items = response?.data?.items;
+    if (!Array.isArray(items) || typeof response.data.has_more !== 'boolean') refuse('chats-unavailable');
+    for (const item of items) {
+      const chatId = typeof item?.chat_id === 'string' && identifier(item.chat_id) ? item.chat_id : undefined;
+      if (!chatId) continue;
+      const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 200) : undefined;
+      chats.push({ chatId, ...(name ? { name } : {}) });
+    }
+    pageToken = response.data.has_more && typeof response.data.page_token === 'string'
+      && identifier(response.data.page_token) ? response.data.page_token : undefined;
+    if (response.data.has_more && !pageToken) refuse('chats-unavailable');
+    if (++pages > 50) refuse('chats-unavailable');
+  } while (pageToken);
+  return { version: 1, chats };
+}

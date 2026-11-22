@@ -1820,3 +1820,30 @@ test('checked replies forward the receipt, format and thread options to the runt
   assert.equal(seen.options.format, 'markdown');
   assert.equal(seen.options.replyInThread, true);
 });
+
+test('checked reads forward the target message and the joined-chat list to the runtime', async t => {
+  const fx = await persistentExternalFixture(t);
+  const dispose = await fx.controller.consumeInbound(fx.existing.id, { expectedFingerprint: fx.fingerprint,
+    onEvent: async () => ({ accepted: true }) });
+  t.after(dispose);
+  const runtime = fx.runtimes.get(fx.existing.id).at(-1);
+  const seen = [];
+  runtime.resourceChecked = async (_identity, route, query, options) => {
+    seen.push({ route, query, options });
+    return { messageId: options.messageId ?? route.messageId, size: 4, data: Buffer.from([1, 2, 3, 4]) };
+  };
+  runtime.chatListChecked = async (_identity, options) => {
+    seen.push({ options });
+    return { version: 1, chats: [{ chatId: 'oc_one', name: 'One' }] };
+  };
+  const route = { messageId: 'external-message', conversationId: 'external-chat', actorId: 'external-actor' };
+  await fx.controller.resourceChecked(fx.existing.id, route, { fileKey: 'img_x', type: 'image' },
+    { expectedFingerprint: fx.fingerprint, messageId: 'external-parent' });
+  assert.deepEqual(seen[0].query, { fileKey: 'img_x', type: 'image' });
+  assert.equal(seen[0].options.messageId, 'external-parent');
+  await fx.controller.resourceChecked(fx.existing.id, route, { fileKey: 'img_x', type: 'image' },
+    { expectedFingerprint: fx.fingerprint });
+  assert.equal('messageId' in seen[1].options, false);
+  assert.deepEqual(await fx.controller.chatListChecked(fx.existing.id, { expectedFingerprint: fx.fingerprint }),
+    { version: 1, chats: [{ chatId: 'oc_one', name: 'One' }] });
+});

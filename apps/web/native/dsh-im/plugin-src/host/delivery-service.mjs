@@ -710,6 +710,11 @@ export class DeliveryService {
     return this.#checkedAdapterRead('chatMembersChecked', botId, [query], options);
   }
 
+  /** Forwards one checked joined-chat list read through the registered channel adapter. */
+  async chatListChecked(botId, options = {}) {
+    return this.#checkedAdapterRead('chatListChecked', botId, [], options);
+  }
+
   /** Forwards one checked resource download through the registered channel adapter. */
   async resourceChecked(botId, route, query, options = {}) {
     return this.#checkedAdapterRead('resourceChecked', botId, [route, query], options);

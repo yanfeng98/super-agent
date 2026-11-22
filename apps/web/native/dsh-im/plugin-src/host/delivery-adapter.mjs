@@ -416,6 +416,11 @@ export function createDeliveryAdapter({
         throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
       return coreController.chatMembersChecked(botId, query, options);
     },
+    chatListChecked: (botId, options) => {
+      if (typeof coreController.chatListChecked !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.chatListChecked(botId, options);
+    },
     resourceChecked: (botId, route, query, options) => {
       if (typeof coreController.resourceChecked !== 'function')
         throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });

@@ -712,9 +712,15 @@ export class MultiBotDshFeishuController {
     return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'chatMembersChecked', [query]);
   }
 
-  /** Downloads one image or file of a retained message through the exclusive consumer's bot. */
-  async resourceChecked(botId, route, query, { expectedFingerprint, signal } = {}) {
-    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'resourceChecked', [route, query]);
+  /** Reads the chats the bot has joined through the exclusive consumer's bot. */
+  async chatListChecked(botId, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'chatListChecked', []);
+  }
+
+  /** Downloads one image or file through the exclusive consumer's bot; `messageId` downloads from another message of the same chat. */
+  async resourceChecked(botId, route, query, { expectedFingerprint, signal, messageId } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'resourceChecked', [route, query],
+      messageId === undefined ? {} : { messageId });
   }
 
   async replyChecked(botId, route, text, { expectedFingerprint, signal, uuid, format, replyInThread } = {}) {

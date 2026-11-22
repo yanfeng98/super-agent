@@ -1,5 +1,5 @@
 import { createConnectionDiagnostics, atConnectionStage } from '../shared/connection-error.mjs';
-import { readChatHistory, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory } from './history-reader.mjs';
+import { readChatHistory, readChatList, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory } from './history-reader.mjs';
 import { senderMatches } from './external-consumer.mjs';
 import { downloadFeishuResourceRanges } from './resource-download.mjs';
 import { randomUUID } from 'node:crypto';
@@ -828,20 +828,35 @@ export class FeishuRuntime {
     return this.#checkedRead((client) => readChatMembers(client, query.chatId, signal), signal);
   }
 
-  /** Downloads one image or file of a retained message, bounded by `maxBytes`. */
-  async resourceChecked(identity, route, query, { signal } = {}) {
+  /** Reads the chats the bot has joined, so a caller can name them without a delivery target for each. */
+  async chatListChecked(identity, { signal } = {}) {
+    return this.#checkedRead((client) => readChatList(client, signal), signal);
+  }
+
+  /**
+   * Downloads one image or file of a retained message, bounded by `maxBytes`. `messageId` downloads from another
+   * message of the same conversation: the retained route still proves access, and the target must belong to it.
+   */
+  async resourceChecked(identity, route, query, { signal, messageId } = {}) {
     if (!route || typeof route.messageId !== 'string' || typeof route.conversationId !== 'string'
       || !query || typeof query.fileKey !== 'string' || !['image', 'file'].includes(query.type)
-      || (query.maxBytes !== undefined && (!Number.isInteger(query.maxBytes) || query.maxBytes < 1)))
+      || (query.maxBytes !== undefined && (!Number.isInteger(query.maxBytes) || query.maxBytes < 1))
+      || (messageId !== undefined && (typeof messageId !== 'string' || !messageId)))
       throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
     const maxBytes = Math.min(query.maxBytes ?? 30 * 1024 * 1024, 30 * 1024 * 1024);
     return this.#checkedRead(async (client) => {
       const message = await readExternalMessage(client, identity, route, signal);
       if (message.chatId !== route.conversationId) throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
+      let target = route.messageId;
+      if (messageId !== undefined && messageId !== route.messageId) {
+        const other = await readExternalMessage(client, identity, route, signal, messageId);
+        if (other.chatId !== route.conversationId) throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
+        target = other.messageId;
+      }
       const chunks = [];
       for await (const chunk of downloadFeishuResourceRanges(client,
-        { message_id: route.messageId, file_key: query.fileKey }, query.type, { signal, maxBytes })) chunks.push(chunk);
-      return { version: 1, messageId: route.messageId, fileKey: query.fileKey, type: query.type,
+        { message_id: target, file_key: query.fileKey }, query.type, { signal, maxBytes })) chunks.push(chunk);
+      return { version: 1, messageId: target, fileKey: query.fileKey, type: query.type,
         size: chunks.reduce((total, chunk) => total + chunk.length, 0), data: Buffer.concat(chunks) };
     }, signal);
   }

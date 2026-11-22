@@ -128,6 +128,7 @@ export function createImHostPlugin(internals = {}) {
           threadHistoryChecked: (botId, query, options) => deliveryService.threadHistoryChecked(botId, query, options),
           messageChecked: (botId, route, options) => deliveryService.messageChecked(botId, route, options),
           chatMembersChecked: (botId, query, options) => deliveryService.chatMembersChecked(botId, query, options),
+          chatListChecked: (botId, options) => deliveryService.chatListChecked(botId, options),
           resourceChecked: (botId, route, query, options) => deliveryService.resourceChecked(botId, route, query, options),
           replyChecked: (botId, route, text, options) => deliveryService.replyChecked(botId, route, text, options),
           describeConversation: (sessionId) => describeConversationLogged(sessionId),

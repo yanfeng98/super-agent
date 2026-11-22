@@ -1139,3 +1139,63 @@ test('checked replies render markdown cards, answer in the topic, and accept a b
   assert.equal(requests.length, 2);
   await runtime.stop();
 });
+
+test('checked resources download another message of the retained chat only', async () => {
+  const { Readable } = await import('node:stream');
+  const runtime = new FeishuRuntime({ lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+    consumerMode: 'external-consumer', harness: { async ensureRunning() {} }, state: {} });
+  const starting = runtime.start();
+  await waitFor(() => FakeWSClient.instances.length === 1);
+  FakeWSClient.instances[0].becomeReady(); await starting;
+  const client = FakeClient.instances[0];
+  const anchor = { message_id: 'message', chat_id: 'chat', msg_type: 'text', create_time: '1790830000000',
+    body: { content: '{"text":"hi"}' }, sender: { sender_type: 'user', id_type: 'open_id', id: 'human' } };
+  const parent = { message_id: 'parent', chat_id: 'chat', msg_type: 'image', create_time: '1790820000000',
+    body: { content: '{"image_key":"img_parent"}' }, sender: { sender_type: 'user', id_type: 'open_id', id: 'human' } };
+  const elsewhere = { ...parent, message_id: 'elsewhere', chat_id: 'other' };
+  client.im.v1.message.get = async ({ path }) => ({ code: 0, data: { items:
+    [anchor, parent, elsewhere].filter(item => item.message_id === path.message_id) } });
+  const requests = [];
+  client.request = async config => {
+    requests.push(config.url);
+    config.validateStatus(200);
+    const body = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    return { data: Readable.from([body]), headers: new Map([['content-length', String(body.length)]]) };
+  };
+  const identity = { botId: 'bot', appId: 'app', botOpenId: 'bot', fingerprint: 'a'.repeat(64) };
+  const route = { messageId: 'message', conversationId: 'chat', actorId: 'human' };
+  const downloaded = await runtime.resourceChecked(identity, route,
+    { fileKey: 'img_parent', type: 'image' }, { messageId: 'parent' });
+  assert.equal(downloaded.messageId, 'parent');
+  assert.equal(requests.length, 1);
+  assert.match(requests[0], /messages\/parent\/resources\/img_parent/);
+  // A target outside the retained conversation, or a route that no longer names its own message, reaches nothing.
+  await assert.rejects(runtime.resourceChecked(identity, route, { fileKey: 'img_parent', type: 'image' }, { messageId: 'elsewhere' }),
+    { code: 'stale-route' });
+  await assert.rejects(runtime.resourceChecked(identity, { ...route, actorId: 'someone-else' },
+    { fileKey: 'img_parent', type: 'image' }, { messageId: 'parent' }), { code: 'stale-route' });
+  await assert.rejects(runtime.resourceChecked(identity, route, { fileKey: 'img_parent', type: 'image' }, { messageId: '' }),
+    { code: 'bad-request' });
+  assert.equal(requests.length, 1);
+  await runtime.stop();
+});
+
+test('checked chat list reads every joined chat the bot can see', async () => {
+  const runtime = new FeishuRuntime({ lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+    consumerMode: 'external-consumer', harness: { async ensureRunning() {} }, state: {} });
+  const starting = runtime.start();
+  await waitFor(() => FakeWSClient.instances.length === 1);
+  FakeWSClient.instances[0].becomeReady(); await starting;
+  const client = FakeClient.instances[0];
+  const pages = [
+    { code: 0, data: { items: [{ chat_id: 'oc_one', name: ' 研发群 ' }, { chat_id: 'oc_noname' }], has_more: true, page_token: 'next' } },
+    { code: 0, data: { items: [{ chat_id: 'oc_two', name: '产品群' }], has_more: false } },
+  ];
+  const calls = [];
+  client.im.v1.chat = { list: async request => { calls.push(request); return pages[calls.length - 1]; } };
+  const identity = { botId: 'bot', appId: 'app', botOpenId: 'bot', fingerprint: 'a'.repeat(64) };
+  assert.deepEqual(await runtime.chatListChecked(identity), { version: 1, chats: [
+    { chatId: 'oc_one', name: '研发群' }, { chatId: 'oc_noname' }, { chatId: 'oc_two', name: '产品群' }] });
+  assert.deepEqual(calls.map(call => call.params.page_token ?? null), [null, 'next']);
+  await runtime.stop();
+});
