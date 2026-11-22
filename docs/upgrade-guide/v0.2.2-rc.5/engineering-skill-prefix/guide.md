@@ -13,7 +13,7 @@ Every skill the `skill-engineering` plugin ships is renamed with an `eng-` prefi
 
 The prefix separates the shipped text from a same-named copy in a project root (`./.dsh/skills`, `./.agents/skills`) or a user root (`~/.dsh/skills`, `~/.agents/skills`). The registry resolves a duplicate name to the nearest layer, so before the rename a personal copy replaced the shipped skill and the shipped one never appeared in the `/` menu. Both are addressable now.
 
-The composer's `/` menu also groups entries by where they came from: `Built-in · mattpocock/skills` for the shipped set, `Built-in` for a shipped provider whose text has no upstream project, `Plugin · <plugin>` for skills that a plugin registers at runtime, and `Project · .agents/skills`, `User · ~/.agents/skills`, or `Custom` for filesystem roots. A typed query still returns the shared name ranking without headings.
+The composer's `/` menu also groups entries by where they came from: `Built-in · mattpocock/skills` for the shipped set, `Built-in` for a shipped provider whose text has no upstream project, `Plugin · <plugin>` for skills that a plugin registers at runtime, and `Project · <root>` or `User · <root>` for filesystem discovery roots, and `Custom` for a configured custom directory. A typed query still returns the shared name ranking without headings.
 
 The `skills/list` Remote additionally reports the contributing plugin (`owner`) and whether that plugin's provider ships with the harness (`shipped`); a `SkillProvider` may declare `shipped`, and a runtime registration may declare `owner` when its scope has no plugin name.
 

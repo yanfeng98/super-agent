@@ -39,3 +39,14 @@
 ## 4. 取舍
 
 调用划分保留「11 / 16」这组数字，因为它描述的是模型可见性；但不再暗示菜单只有 16 个。菜单标题照实写全，包括没有来源后缀的 `内置`：office 技能组没有上游项目，标题就只有类别。
+
+## 5. 复核后修正
+
+第一轮提交后按源码复核，改掉两处：
+
+| 问题 | 依据 | 修正 |
+|---|---|---|
+| README 把 `内置 · mattpocock/skills` 写在 `内置`（office）之前 | `compareSections` 先比 rank，再按标题字符串比较；`内置` 是 `内置 · mattpocock/skills` 的前缀，排在前面 | README 先写类别顺序（内置 → 插件 → 项目 → 用户 → 自定义），再按该顺序举出 `内置`（office 4 个）、`内置 · mattpocock/skills`（工程技能）等标题 |
+| 文件系统根的标题写成具体的 `.agents/skills` 与 `~/.agents/skills`，像是只有这两个根 | 标题按发现根取名，`ROOT_LABELS` 有四个：`.dsh/skills`、`.agents/skills`、`~/.dsh/skills`、`~/.agents/skills` | `ui-skill` README 与升级指南改成 `项目 · <根目录>` / `用户 · <根目录>` 并列出四个根 |
+
+另外用一次真实组合验证了「全部 27 个都在 `/` 菜单里」：在 `skill-engineering` 的测试目录临时写一个 spec，用 `Context` 挂上真实的 `SkillRegistry`、`skill-engineering` 与 `skill-office`，`ctx.skills.list()` 得到 31 条——27 个 `eng-*` 全部 `userInvocable`（其中 11 个 `modelInvocable`），4 个 office 条目是 `source=bundled`、`shipped=true`、没有 `upstream`。断言通过后删掉该临时文件，工作区无残留。
