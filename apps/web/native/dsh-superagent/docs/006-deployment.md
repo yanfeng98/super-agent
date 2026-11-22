@@ -315,6 +315,8 @@ Setup problems appear on the overview with a link to the fix, in the panel's lan
 | The Feishu Source says `Choose an IM Feishu bot` | Pick the dsh-im bot under **Settings → Sources → Feishu** |
 | The Feishu Source says `Hand to Superagent is off for this bot` | Turn on **交给 Superagent** in that bot's dsh-im settings |
 | The Feishu Source says `Another consumer already owns this Feishu bot` | Another process owns the dsh-im consumer; stop it, then retry |
+| The Feishu Source says `This dsh-im does not expose Feishu backfill` | The mounted dsh-im predates the checked history reads; upgrade dsh-im, or accept that messages are only received live |
+| A Feishu reply does not appear | Check the Source's dropped messages on the overview: a reply is dropped only when its chat is no longer received, or when dsh-im no longer finds the source message — recalled, deleted, or a route that names another author or topic; otherwise the outbox retries it and the Ticket shows the attempts |
 | `status` exits 2 | A part reports an error, which a restart does not fix: `errors` names each part, as listed under Management API, with its detail; each part clears its own entry once it works again |
 | `status` exits 3 | Setup waits: `setup` says what is missing, and the overview links to the setting that fixes it |
 | `status` exits 1 | The service does not run, runs twice, does not answer, or its runtime reports an error; the output and the newest log say which |

@@ -127,7 +127,7 @@ An Input counts as read after the Session takes it into a step and subsequently 
 
 Threads followed only for context still deliver messages, but do not give the Ticket ownership of human follow-ups or resume ended Tickets. Those messages can be assessed independently.
 
-Sources poll subscribed Threads while a live Ticket subscribes, and for two weeks after the later of the last Trigger and the subscribing Tickets' end. Afterwards a Thread is no longer polled, but the Feishu Source still backfills its configured chats and known direct chats from a stored cursor every minute, and new messages otherwise arrive through the live consumer.
+Sources poll subscribed Threads while a live Ticket subscribes, and for two weeks after the later of the last Trigger and the subscribing Tickets' end. Afterwards a Thread is no longer polled, but the Feishu Source still backfills its configured chats and known direct chats from a stored cursor every minute, and new messages otherwise arrive through the live consumer. The first round for a chat only records where the Source took over, so the conversation dsh-im handled before the handoff does not become Triggers.
 
 ## Failure and recovery
 
@@ -192,7 +192,7 @@ A message with failed attempts is a system problem until it goes out or is withd
 
 A message is dropped only when its Source no longer listens to the conversation, or when the Source answers that the conversation can never receive it; while its Source is off, it waits.
 
-A Source answers that for a recalled message or one Feishu no longer finds on Feishu.
+A Source answers that for a recalled message or one Feishu no longer finds on Feishu; dsh-im also answers it when the retained route no longer names the message, which is another author or a topic the message never opened.
 
 A dropped message keeps its record, with when and why it was dropped and the Ticket it was for, so it is never queued again; a dropped acknowledgement reads as dropped, not sent.
 ### Pause processing
