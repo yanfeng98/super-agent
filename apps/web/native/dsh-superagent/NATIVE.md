@@ -337,12 +337,18 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     retry an ambiguous (`reply-result-unknown`) send and Feishu deduplicates it instead of producing a second reply. Replies
     render as rich-text cards in the source message's topic (`format: 'markdown'`, `replyInThread: true`), so a Ticket answer
     looks like the removed lark-cli Source's `--markdown --reply-in-thread` reply, and a bot-authored source can be answered
-    because dsh-im accepts bot senders on the retained route. `root` and `parent` context reads the message by id through
-    `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still resolves; events carry
-    `appLink` and context messages keep it as `url`. The live path describes each Thread with its chat name and chat link,
-    `linkTimeoutMs` bounds link resolution, and `DSH_SUPERAGENT_FEISHU_BOT` names the bot once its account is cached. The backfill loop also
-    merges dsh-im's group target names into the stored label map every round, and `refreshLabels` persists what it reads.
-    The Source declares the `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies, backfill and policy sync.
+    because dsh-im accepts bot senders on the retained route. `root`, `parent` and `message` context reads the message by id
+    through `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still resolves, and
+    `around` reads the chat around a message even when it sits in a Thread; events carry `appLink`, the Trigger keeps it as
+    `url`, and so do context messages. An image of any message those reads return is downloaded from that message
+    (`resourceChecked({ messageId })`, validated against the retained route), not only from the Trigger's own message. The
+    live path describes each Thread with its chat name and chat link, `linkTimeoutMs` bounds link resolution, and
+    `DSH_SUPERAGENT_FEISHU_BOT` names the bot once its account is cached. The backfill loop merges the chats the bot joined
+    (`chatListChecked`) and dsh-im's group target names into the stored label map every round, and `refreshLabels` persists
+    what it reads, so the chat picker offers every joined chat. A failing account read backs off from one second to one
+    minute (`consumerRetry` in `poll.ts`), and the Source reports localized health codes rather than raw English details.
+    The Source declares the `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies,
+    backfill and policy sync.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

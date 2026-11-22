@@ -53,13 +53,13 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
 The Feishu Source uses a bot that dsh-im already owns; it needs no `lark-cli`, app secret or separate bot in superagent.
 
 1. In dsh-im, configure the Feishu bot under **IM 机器人 → 飞书** and keep it connected.
-2. In superagent, open **Settings → Sources → Feishu**, choose that bot, and set the chats, direct messages and other-chat mode. The chat picker lists chats saved as dsh-im delivery targets; enter a chat ID directly when it is not listed.
+2. In superagent, open **Settings → Sources → Feishu**, choose that bot, and set the chats, direct messages and other-chat mode. **刷新群列表** reads every chat the bot has joined into the picker, which also lists the chats saved as dsh-im delivery targets; while the handoff is off only the delivery targets are named, so enter a chat ID directly if the one you want is missing.
 3. In the same bot's dsh-im settings, open **通用** and turn on **交给 Superagent**. The bot's messages now become Triggers for this Source; superagent acknowledges, works and replies through dsh-im.
 4. Turn the same switch off to release the bot and return it to normal dsh-im conversation. The Source then stays idle until the switch is on again.
 
 Each Ticket keeps the bot that created it, so changing the selected bot later affects new Tickets only. The handoff is exclusive while it is on: dsh-im's own Session bridge, cards and slash commands for that bot do not run.
 
-superagent recovers what the live stream misses: every minute it reads each configured chat and each known direct chat from a stored cursor and polls subscribed threads, so a restart does not drop messages. It receives text, rich-text (`post`) bodies and images, plus a one-line placeholder (with its resource key) for files, voice, video, stickers, cards, merged forwards, and shared chats and users; images are downloaded through dsh-im and shown to the model as attachments. Replies go back as rich-text cards inside the source message's topic. Bots listed under **Policy → Bots** may contribute inferred candidates, **Sync now** copies the chat's member list into the allowed users, and a Ticket's source link opens the original Feishu message. Reading every group message and downloading images needs the app permissions dsh-im's **补全权限** / `/repair` flow adds: `im:message:readonly`, `im:resource`, and the all-messages permission for group messages that do not mention the bot.
+superagent recovers what the live stream misses: every minute it reads each configured chat and each known direct chat from a stored cursor and polls subscribed threads, so a restart does not drop messages. It receives text, rich-text (`post`) bodies and images, plus a one-line placeholder (with its resource key) for files, voice, video, stickers, cards, merged forwards, and shared chats and users; images — of the source message or of any message the context reads return — are downloaded through dsh-im and shown to the model as attachments. Replies go back as rich-text cards inside the source message's Thread. Bots listed under **Policy → Bots** may contribute inferred candidates, **Sync now** copies the chat's member list into the allowed users, and a Ticket's source link opens the original Feishu message. Reading every group message and downloading images needs the app permissions dsh-im's **补全权限** / `/repair` flow adds: `im:message:readonly`, `im:resource`, and the all-messages permission for group messages that do not mention the bot.
 
 ## What runs
 
@@ -244,12 +244,12 @@ A refusal has a status and `error`, its English text:
 
 The blocks:
 
-- `source:local`, `source:feishu`: `{"enabled": true, "config": {…}}`. The local Source's config has `archive` (an absolute path, or empty for `<stateDir>/tickets`), `webhook` (an http(s) URL, or empty) and `projects`, each `{"name", "root", "prepare"}`; Feishu's has `cli`, `chats` as `[{"chatId": "oc_…", "name": "…", "listen": "mentions"}]` (or `"all"`), `directMessages`, and `otherChats` as `"none"` or `"mentions"`.
+- `source:local`, `source:feishu`: `{"enabled": true, "config": {…}}`. The local Source's config has `archive` (an absolute path, or empty for `<stateDir>/tickets`), `webhook` (an http(s) URL, or empty) and `projects`, each `{"name", "root", "prepare"}`; Feishu's has `botId` (a bot configured in dsh-im), `chats` as `[{"chatId": "oc_…", "name": "…", "listen": "mentions"}]` (or `"all"`), `directMessages`, `otherChats` as `"none"` or `"mentions"`, and the advanced `readPageSize` (at most 20, the dsh-im limit) and `linkTimeoutMs`.
 - `policy`: `{"rules": […], "sources": {"local": {"allowed": [{"id": "operator", "name": "Operator"}]}, "feishu": {"allowed": [{"id": "ou_…", "name": "…"}], "syncChat": "oc_…", "admission": {"oc_…": {"unlistedAddressed": "explicit"}}}}}`. `bots` lists the bots whose messages may become inferred candidates. An `admission` row is keyed by chat id, `other` or `direct`; an unset cell takes its default (see [002 Authorization](002-authorization.md)).
 - `eval`: `mode`, `timeoutSeconds` and `model`.
 - `executor`: `model`, `maxWorkers`, `directory`, `prepare`, `check`, `requireReview` and `blockedCommands`. The processing pause is a setting of its own, `paused`, which `POST executor/pause` sets.
 
-Changing the Feishu CLI runs its setup check first. A failed check returns 400 with details in `setup`. A successful account change, or any save while setup is pending, returns `restarting: true`. The API is temporarily unavailable while the application restarts.
+A save while setup is pending returns `restarting: true`, and the API is temporarily unavailable while the application restarts. Changing the Feishu bot needs no restart: the watcher re-registers the consumer on the next poll.
 
 ```sh
 api=http://127.0.0.1:3082/orchestrator/api

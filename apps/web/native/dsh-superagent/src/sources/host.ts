@@ -13,6 +13,11 @@ export const HEALTH_TEXT = {
   sourceOff: 'Off',
   feishuCliUnset: 'The Source is on, and its bot lark-cli is not set',
   feishuBotMissing: 'Waiting for the Feishu bot',
+  imMissing: 'dsh-im is not mounted',
+  imBotUnset: 'Choose an IM Feishu bot',
+  imHandoffOff: 'Hand to Superagent is off for this bot',
+  imConsumerTaken: 'Another consumer already owns this Feishu bot',
+  imBackfillMissing: 'This dsh-im does not expose Feishu backfill',
   pollFailures: '{count} consecutive failed polls; last: {error}',
 } as const
 export type HealthCode = keyof typeof HEALTH_TEXT

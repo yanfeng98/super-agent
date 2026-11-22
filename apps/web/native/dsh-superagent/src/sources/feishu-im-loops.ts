@@ -5,11 +5,10 @@ import { SOURCE } from './feishu-trigger.ts'
 import type { DshImEvent, DshImService } from './dsh-im.ts'
 import type { FeishuConfig } from './feishu-im.ts'
 import { cursorAt, pause, pollThreads } from './poll.ts'
-import type { Health, SourceContext } from './host.ts'
+import { health, type Health, type SourceContext } from './host.ts'
 
 const HISTORY_INTERVAL_MS = 60_000
 const MAX_PAGES = 20
-const FIRST_LOOKBACK_MS = 10 * 60_000
 const READ_TIMEOUT_MS = 30_000
 
 export interface BackfillDeps {
@@ -27,20 +26,32 @@ export interface BackfillDeps {
 
 const signalOf = (signal: AbortSignal): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(READ_TIMEOUT_MS)])
 
-/** Merges dsh-im's known group targets into the stored label map; the read is local, so it runs every round. */
+/** Merges the chats the bot joined and dsh-im's group targets into the stored label map; both reads are cheap, so they run every round. */
 async function refreshChatLabels(deps: BackfillDeps): Promise<void> {
-  if (!deps.im.listTargets) return
-  try {
-    const labels: Record<string, string> = { ...(deps.ctx.state.get(KV.sources.labels(SOURCE)) ?? {}) }
-    let changed = false
-    for (const target of await deps.im.listTargets(deps.botId)) {
-      const chatId = target.route?.chatId
-      if (target.kind !== 'group' || !chatId || !target.name || labels[chatId] === target.name) continue
-      labels[chatId] = target.name
-      changed = true
-    }
-    if (changed) deps.ctx.state.set(KV.sources.labels(SOURCE), labels)
-  } catch { /* Labels are a display aid; the stored map stays until a later read succeeds. */ }
+  const labels: Record<string, string> = { ...(deps.ctx.state.get(KV.sources.labels(SOURCE)) ?? {}) }
+  let changed = false
+  if (deps.im.chatListChecked) {
+    try {
+      const listed = await deps.im.chatListChecked(deps.botId,
+        { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
+      for (const chat of listed.chats) {
+        if (!chat.name || labels[chat.chatId] === chat.name) continue
+        labels[chat.chatId] = chat.name
+        changed = true
+      }
+    } catch { /* Labels are a display aid; the stored map stays until a later read succeeds. */ }
+  }
+  if (deps.im.listTargets) {
+    try {
+      for (const target of await deps.im.listTargets(deps.botId)) {
+        const chatId = target.route?.chatId
+        if (target.kind !== 'group' || !chatId || !target.name || labels[chatId] === target.name) continue
+        labels[chatId] = target.name
+        changed = true
+      }
+    } catch { /* Labels are a display aid; the stored map stays until a later read succeeds. */ }
+  }
+  if (changed) deps.ctx.state.set(KV.sources.labels(SOURCE), labels)
 }
 
 /** One chat's messages since the stored cursor, page by page; the cursor only advances after every page is received. */
@@ -49,7 +60,13 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
   if (!read) return 0
   const key = KV.feishu.history(chatId)
   const now = new Date().toISOString()
-  const since = deps.ctx.state.get(key) ?? new Date(Date.now() - FIRST_LOOKBACK_MS).toISOString()
+  const stored = deps.ctx.state.get(key)
+  // The first round only records where the Source took over: messages before the handoff were dsh-im's own conversation.
+  if (stored === undefined) {
+    deps.ctx.state.set(key, cursorAt(now))
+    return 0
+  }
+  const since = stored
   let cursor: string | undefined
   let count = 0
   let drained = false
@@ -78,15 +95,34 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
   return count
 }
 
-/** One subscribed thread's new messages since its stored cursor; thread ids come from the Thread or its latest Trigger. */
+/** Learns a Thread's topic id from its latest Trigger's root message when the Thread was opened before Feishu reported one. */
+async function learnThreadId(deps: BackfillDeps, thread: Thread, chatId: string): Promise<string | undefined> {
+  const read = deps.im.messageChecked
+  const address = deps.ctx.triggers.latest(thread.key)?.channel?.address
+  if (!read || !address?.messageId || !address.actorId) return undefined
+  try {
+    const message = await read(deps.botId, {
+      messageId: address.messageId, conversationId: address.conversationId ?? chatId, actorId: address.actorId,
+      ...address.threadId ? { threadId: address.threadId } : {}, ...address.rootId ? { rootId: address.rootId } : {},
+      ...address.parentId ? { parentId: address.parentId } : {},
+    }, { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal), messageId: address.rootId ?? address.messageId })
+    if (!message.threadId) return undefined
+    deps.ctx.threads.patch(thread.key, { threadId: message.threadId })
+    return message.threadId
+  } catch { return undefined /* A Thread without a topic stays on chat backfill. */ }
+}
+
+/** One subscribed thread's new messages since its stored cursor; thread ids come from the Thread, its latest Trigger, or its root message. */
 async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
   const read = deps.im.threadHistoryChecked
   if (!read) return 0
   const meta = thread.meta as { chatId?: string; threadId?: string }
   const latest = deps.ctx.triggers.latest(thread.key)
   const chatId = meta.chatId ?? (typeof latest?.meta.chatId === 'string' ? latest.meta.chatId : undefined)
+  if (!chatId) return 0
   const threadId = meta.threadId ?? (typeof latest?.meta.threadId === 'string' ? latest.meta.threadId : undefined)
-  if (!chatId || !threadId) return 0
+    ?? await learnThreadId(deps, thread, chatId)
+  if (!threadId) return 0
   const key = KV.feishu.history(`thread:${thread.key}`)
   const now = new Date().toISOString()
   const since = deps.ctx.state.get(key) ?? new Date(Date.parse(thread.createdAt) - 5000).toISOString()
@@ -126,13 +162,13 @@ async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
 export async function runFeishuImBackfill(deps: BackfillDeps): Promise<void> {
   await deps.ctx.ready
   if (!deps.im.chatHistoryChecked || !deps.im.threadHistoryChecked) {
-    deps.report('history', { state: 'paused', detail: 'This dsh-im does not expose Feishu backfill' })
+    deps.report('history', health('paused', 'imBackfillMissing'))
     return
   }
   while (!deps.signal.aborted) {
     const config = deps.config()
     if (!config) {
-      deps.report('history', { state: 'paused', detail: 'The Feishu Source is off' })
+      deps.report('history', health('paused', 'sourceOff'))
       await pause(HISTORY_INTERVAL_MS, deps.signal)
       continue
     }

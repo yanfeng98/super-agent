@@ -59,13 +59,14 @@ export interface ContextMessage {
   id: string; from: string; at: string; text: string
   bot?: true; deleted?: true; reply_to?: string; url?: string; path?: string; line?: number
 }
-export type ContextPartName = 'thread' | 'root' | 'parent'
+/** The Trigger's own message (`message`), the message its Thread starts from (`root`), the message it answers (`parent`), its Thread, or the chat around it. */
+export type ContextPartName = 'thread' | 'root' | 'parent' | 'message' | 'around'
 export interface ContextPart { messages: ContextMessage[]; next?: string | undefined; body: Record<string, unknown>; status?: string }
 /** Bounded thread context reader used by assessments to inspect messages and images around a trigger. */
 export interface ThreadContext<C> {
   /** The ID of the Trigger's own message among the messages of its Thread. */
   messageId(trigger: Trigger): string
-  /** Reads a page of thread messages (`thread`, first page when `cursor` is omitted), the topic root (`root`), or the replied-to message (`parent`). */
+  /** Reads one page of `part`: the Thread (or, for a kind without one, the chat around the message), the topic root, the replied-to message, the Trigger's own message, or the chat around it. */
   read(commands: Commands, trigger: Trigger, part: ContextPartName, cursor: string | undefined, config: C): Promise<ContextPart>
   /** Extracts image keys from message text that `image` can read; omitted for kinds without image support. */
   images?(text: string): string[]

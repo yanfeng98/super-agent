@@ -100,9 +100,12 @@ export interface DshImService {
   /** Reads one chat's members as open_id plus name. */
   chatMembersChecked?(botId: string, query: { chatId: string },
     options: { expectedFingerprint: string; signal: AbortSignal }): Promise<{ version: 1; chatId: string; users: { id: string; name?: string }[] }>
-  /** Downloads one image or file of a retained message. */
+  /** Reads the chats the bot has joined, as chat_id plus name. */
+  chatListChecked?(botId: string,
+    options: { expectedFingerprint: string; signal: AbortSignal }): Promise<{ version: 1; chats: { chatId: string; name?: string }[] }>
+  /** Downloads one image or file of a retained message; `messageId` downloads from another message of the same chat. */
   resourceChecked?(botId: string, route: DshImEvent['reply'], query: { fileKey: string; type: 'image' | 'file'; maxBytes?: number },
-    options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImResource>
+    options: { expectedFingerprint: string; signal: AbortSignal; messageId?: string }): Promise<DshImResource>
 }
 /** One retained message as dsh-im reads it. */
 export interface DshImMessage {

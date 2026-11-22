@@ -55,7 +55,7 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'models', holds: 'model providers, the DSH default and each role\'s model' },
   { name: 'models/<provider>', holds: 'one provider\'s models' },
   { name: 'feishu/<trigger-id>/…', holds: 'a legacy lark-cli Feishu original' },
-  { name: 'feishu-im/<trigger-id>/…', holds: 'the dsh-im text history around a Feishu trigger, as the dsh-superagent-feishu skill describes', executor: true },
+  { name: 'feishu-im/<trigger-id>/…', holds: 'a Feishu trigger\'s own message, its Thread\'s root, the message it answers, the Thread or the chat around it, as the dsh-superagent-feishu skill describes', executor: true },
 ]
 export const resourceGrammar = (executor: boolean): string => RESOURCES.filter(resource => !executor || resource.executor)
   .map(resource => `${resource.name}: ${resource.holds}`).join('; ')
@@ -133,7 +133,7 @@ async function transcript(host: ResourceHost, ticketId: string) {
 
 /** Reads one dsh-im Feishu history page for the `feishu-im/` resource and its tests. */
 export async function feishuImPage(host: Pick<ResourceHost, 'store' | 'commands'>, found: Trigger,
-  part: 'thread' | 'root' | 'parent', cursor?: string) {
+  part: 'thread' | 'root' | 'parent' | 'message' | 'around', cursor?: string) {
   return feishuImThreadContext.read(host.commands.withSignal(undefined), found, part, cursor,
     feishuImConfig(host.store.settings().sources.feishu?.config))
 }
@@ -223,12 +223,12 @@ const ROUTES: readonly Route[] = [
   }],
   ['feishu-im/', async read => {
     const [triggerId, part, cursor, ...more] = read.rest.split('/')
-    if (!triggerId || !part || more.length || !['thread', 'root', 'parent'].includes(part)) {
-      throw new Error('Use feishu-im/<trigger-id>/thread, /root or /parent; follow next_resource for another page')
+    if (!triggerId || !part || more.length || !['thread', 'root', 'parent', 'message', 'around'].includes(part)) {
+      throw new Error('Use feishu-im/<trigger-id>/thread, /root, /parent, /message or /around; follow next_resource for another page')
     }
     const found = trigger(read.host, triggerId, read.ticketId)
     return sourcePage(read, 'feishu-im', async () => {
-      const page = await feishuImPage(read.host, found, part as 'thread' | 'root' | 'parent',
+      const page = await feishuImPage(read.host, found, part as 'thread' | 'root' | 'parent' | 'message' | 'around',
         cursor ? decodeURIComponent(cursor) : undefined)
       const { events: _events, ...body } = page.body
       return { status: page.status ?? 'available', messages: page.messages,
@@ -238,7 +238,7 @@ const ROUTES: readonly Route[] = [
   ['feishu/', async read => {
     const source = trigger(read.host, read.rest.split('/')[0]!, read.ticketId)
     if (source.channel?.address.actorId) {
-      throw new Error('Use feishu-im/<trigger-id>/thread, /root or /parent for dsh-im Feishu messages')
+      throw new Error('Use feishu-im/<trigger-id>/thread, /root, /parent, /message or /around for dsh-im Feishu messages')
     }
     const ref = feishuRef(source)
     if (!ref) throw new Error('A Feishu source trigger is required')

@@ -245,11 +245,12 @@ describe('dsh-im Feishu recovery and identity', () => {
 
   it('backfills chat history from the stored cursor and polls subscribed threads', async () => {
     const received: string[] = []
-    const state = new Map<string, unknown>()
+    const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])
     const page = { version: 1 as const, scope: 'chat' as const, events: [event()], omitted: 0, hasMore: false, coverage: 'provider-visible-messages' }
     const im = service({
       chatHistoryChecked: async () => page,
       threadHistoryChecked: async () => ({ ...page, scope: 'thread' as const }),
+      chatListChecked: async () => ({ version: 1 as const, chats: [{ chatId: 'oc_other', name: 'Other' }] }),
     })
     const thread = { key: 'feishu:oc_team:om_root', ref: { source: 'feishu', id: 'oc_team:om_root' },
       meta: { chatId: 'oc_team', threadId: 'omt_1' }, createdAt: new Date().toISOString(), subscriptions: [] }
@@ -271,7 +272,93 @@ describe('dsh-im Feishu recovery and identity', () => {
     controller.abort()
     await run
     expect(new Set(received)).toEqual(new Set([key('feishu', 'om_1')]))
-    expect(state.get(KV.sources.labels('feishu'))).toEqual({ oc_team: 'Team' })
+    // Both the chats the bot joined and dsh-im's delivery targets name chats for the picker.
+    expect(state.get(KV.sources.labels('feishu'))).toEqual({ oc_team: 'Team', oc_other: 'Other' })
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
+  })
+
+  it('records where it took over instead of replaying the chat on the first round', async () => {
+    const received: string[] = []
+    const state = new Map<string, unknown>()
+    let reads = 0
+    const page = { version: 1 as const, scope: 'chat' as const, events: [event()], omitted: 0, hasMore: false, coverage: 'provider-visible-messages' }
+    const im = service({ chatHistoryChecked: async () => { reads++; return page },
+      threadHistoryChecked: async () => ({ ...page, scope: 'thread' as const }) })
+    const ctx = {
+      ready: Promise.resolve(), config: () => config(), configured: () => true,
+      receive: async (trigger: { id: string }) => { received.push(trigger.id) }, report: () => {},
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      threads: { subscribed: () => [], patch: () => {}, get: () => undefined, describe: () => {} },
+      triggers: { latest: () => undefined, get: () => undefined },
+      tickets: { get: () => undefined },
+    }
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
+      config: () => config(), toTrigger: imTrigger, report: () => {}, signal: controller.signal })
+    await vi.waitFor(() => expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string'))
+    controller.abort()
+    await run
+    expect(reads).toBe(0)
+    expect(received).toEqual([])
+  })
+})
+
+describe('dsh-im Feishu context parts and images', () => {
+  it('reads the chat around a message and the message itself', async () => {
+    const asked: unknown[][] = []
+    setDshIm(service({
+      historyChecked: async (...args: unknown[]) => {
+        asked.push(args)
+        return { version: 1, scope: 'nearby', omitted: 0, hasMore: false, coverage: 'provider-visible-human-text', events: [event()] }
+      },
+      messageChecked: async (...args: unknown[]) => {
+        asked.push(args)
+        return { version: 1, messageId: 'om_1', chatId: 'oc_team', at: '2026-11-21T10:00:00.000Z', text: 'fix the login page',
+          sender: { kind: 'user', id: 'ou_alice', name: 'Alice' }, parentId: 'om_parent', deleted: false }
+      },
+    }))
+    const trigger = imTrigger(event())
+    // `around` reads neighbours even when the message belongs to a topic.
+    const around = await feishuImKind.threadContext!.read({} as never, trigger, 'around', undefined, config())
+    expect(around.messages.map(message => message.id)).toEqual(['om_1'])
+    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 5, afterCount: 5 })
+    const own = await feishuImKind.threadContext!.read({} as never, trigger, 'message', undefined, config())
+    expect(own.messages[0]).toMatchObject({ id: 'om_1', reply_to: 'om_parent' })
+    expect(asked[1]?.[2]).toMatchObject({ messageId: 'om_1' })
+  })
+
+  it('downloads an image from the message that carries it', async () => {
+    const asked: unknown[][] = []
+    setDshIm(service({ resourceChecked: async (...args: unknown[]) => {
+      asked.push(args)
+      return { version: 1, messageId: 'om_parent', fileKey: 'img_x', type: 'image', size: 8,
+        data: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) }
+    } }))
+    const saved: unknown[] = []
+    const agent = {
+      ctx: { get: (name: string) => name === 'attachments' ? { imageLimits: { maxImageBytes: 1_000, maxMessageImageBytes: 1_000 },
+        saveImage: async (input: unknown) => { saved.push(input); return { id: 'image_1' } } } : name === 'llm'
+        ? { resolveModelInfo: async () => ({ inputModalities: ['image'] }) } : undefined },
+      session: { requestHeader: () => ({ config: { provider: 'p', model: 'm' } }) },
+      options: { provider: 'p', model: 'm' },
+    }
+    const { readFeishuImImage } = await import('../src/sources/feishu-im.ts')
+    const result = await readFeishuImImage(agent as never, imTrigger(event()), { id: 'om_parent', text: '[图片] img_x' },
+      'img_x', new AbortController().signal)
+    expect(result.source_message_id).toBe('om_parent')
+    // The route still names the Trigger's own message; the download names the message that carries the image.
+    expect(asked[0]?.[1]).toMatchObject({ messageId: 'om_1' })
+    expect(asked[0]?.[3]).toMatchObject({ messageId: 'om_parent' })
+    expect(saved).toHaveLength(1)
+  })
+
+  it('keeps a profile saved with the lark-cli page size usable', () => {
+    expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 50 })).toMatchObject({ readPageSize: 20 })
+    expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 7 })).toMatchObject({ readPageSize: 7 })
+  })
+
+  it('keeps the AppLink dsh-im already read on the Trigger', () => {
+    const link = 'https://applink.feishu.cn/client/message/open?message_id=om_1'
+    expect(imTrigger(event({ appLink: link })).url).toBe(link)
   })
 })

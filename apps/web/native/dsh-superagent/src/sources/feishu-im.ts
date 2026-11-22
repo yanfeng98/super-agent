@@ -12,8 +12,9 @@ import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImMessage, type DshI
 import { feishuChatLink } from './feishu-channel.ts'
 import { withMentionNames } from './feishu-trigger.ts'
 import { runFeishuImBackfill } from './feishu-im-loops.ts'
+import { consumerRetry } from './poll.ts'
 import { KV } from '../kv.ts'
-import { sourceContext, type Health, type SourceContext } from './host.ts'
+import { health, sourceContext, type Health, type SourceContext } from './host.ts'
 import type { ContextMessage, ContextPart, SourceKind, ThreadContext } from './kind.ts'
 import type { SourceRegistry } from './registry.ts'
 
@@ -33,7 +34,9 @@ const FeishuConfigSchema = z.object({
     .default([]),
   directMessages: z.boolean().default(true),
   otherChats: z.enum(['none', 'mentions']).default('none'),
-  readPageSize: z.number().int().min(1).max(HISTORY_LIMIT).default(HISTORY_LIMIT),
+  readPageSize: z.number().int().min(1).max(50).default(HISTORY_LIMIT)
+    // A profile saved with the lark-cli Source may carry up to 50; dsh-im refuses more than 20 per page, so clamp it.
+    .transform(value => Math.min(value, HISTORY_LIMIT)),
   linkTimeoutMs: z.number().int().min(1).max(90_000).default(5_000),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
@@ -77,6 +80,8 @@ export function imTrigger(event: DshImEvent): Trigger {
     ...(direct ? { addressed: 'direct' as const } : event.mentionedAccount ? { addressed: 'mention' as const } : {}),
     at: event.at, text: withMentionNames(event.text, event.mentions),
     channel: { source: SOURCE, thread: `feishu:${event.conversation.id}`, address: { ...routeAddress(event), botId: event.botId, ...direct ? { direct: 'true' } : {} } },
+    // dsh-im already read the AppLink, so the link needs no second lookup; an older dsh-im resolves it later.
+    ...event.appLink ? { url: event.appLink } : {},
     meta: { botId: event.botId, chatId: event.conversation.id, messageId: event.messageId, direct, mentioned: event.mentionedAccount,
       ...event.messageType ? { messageType: event.messageType } : {},
       ...event.images?.length ? { images: event.images } : {},
@@ -129,7 +134,7 @@ function imageMediaType(data: Uint8Array): ImageMediaType | undefined {
   return undefined
 }
 
-/** Reads one image of the Trigger's message through dsh-im and commits it as a model-visible attachment. */
+/** Reads one image of any message in the Trigger's Thread through dsh-im and commits it as a model-visible attachment. */
 export async function readFeishuImImage(agent: Agent, trigger: Trigger, message: { id: string; text: string },
   key: string, signal: AbortSignal): Promise<{ source_message_id: string; image_key: string; image: ImageAttachmentRef }> {
   if (!admissionImageKeys(message.text).includes(key)) throw new Error('Choose an image key from this source message')
@@ -147,9 +152,10 @@ export async function readFeishuImImage(agent: Agent, trigger: Trigger, message:
   if (!info.inputModalities?.includes('image')) throw new Error(`Model ${model} does not support image input; the image has not been inspected`)
   const bot = await botFor(im, botId)
   const limit = Math.min(attachments.imageLimits.maxImageBytes, attachments.imageLimits.maxMessageImageBytes)
+  // The image may belong to any message of the Thread, so name it: the retained route still proves access to the chat.
   const resource = await im.resourceChecked(botId, routeOf(trigger.channel?.address ?? {}),
     { fileKey: key, type: 'image', maxBytes: limit },
-    { expectedFingerprint: bot.fingerprint, signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]) })
+    { expectedFingerprint: bot.fingerprint, messageId: message.id, signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]) })
   const mediaType = imageMediaType(resource.data)
   if (!mediaType) throw new Error('The downloaded resource is not a supported PNG/JPEG/WebP/GIF image')
   const image = await attachments.saveImage({ data: resource.data, mediaType, name: `${key}.${mediaType.split('/')[1]}` })
@@ -166,13 +172,14 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
     if (!botId) throw new Error('Choose an IM Feishu bot first')
     const bot = await botFor(im, botId)
     const route = routeOf(trigger.channel?.address ?? {})
-    if (part === 'root' || part === 'parent') {
-      const id = part === 'root' ? route.rootId : route.parentId
+    if (part === 'root' || part === 'parent' || part === 'message') {
+      const id = part === 'root' ? route.rootId : part === 'parent' ? route.parentId : route.messageId
       const message = id ? await readMessage(im, botId, bot, route, id) : undefined
       return message ? { messages: [messageView(message)], body: { status: 'available', ...message } }
         : empty(`no_${part}`)
     }
-    const scope: 'nearby' | 'thread' = route.threadId ? 'thread' : 'nearby'
+    // A topic has its own history; anywhere else — and for the chat around a message — read the neighbouring messages.
+    const scope: 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread' : 'nearby'
     let page
     try {
       page = await im.historyChecked(botId, route, {
@@ -237,7 +244,7 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     { key: 'chats', type: 'rows', label: { zh: '接收的群', en: 'Chats' },
       hint: { zh: '“仅 @”只接收 @ 机器人的消息和已有工单的线程；“全部消息”也接收其余消息，需要 dsh-im 机器人有读取全部消息的权限。', en: '"@ only" receives messages that mention the bot and Threads that have Tickets; "All" also receives the rest and needs the dsh-im bot permission for all messages.' },
       columns: [
-        { key: 'chatId', type: 'text', label: { zh: '群', en: 'Chat' }, pattern: 'oc_[a-zA-Z0-9]+', choose: { zh: '选择 dsh-im 投递目标中的群', en: 'Choose a chat from dsh-im delivery targets' } },
+        { key: 'chatId', type: 'text', label: { zh: '群', en: 'Chat' }, pattern: 'oc_[a-zA-Z0-9]+', choose: { zh: '选择机器人已加入的群', en: 'Choose a chat the bot has joined' }, refresh: { zh: '刷新群列表', en: 'Refresh chats' } },
         { key: 'listen', type: 'select', label: { zh: '接收', en: 'Receive' }, options: [{ value: 'mentions', label: { zh: '仅 @', en: '@ only' } }, { value: 'all', label: { zh: '全部消息', en: 'All' } }] },
       ] },
     { key: 'otherChats', type: 'select', label: { zh: '其他群', en: 'Other chats' }, options: [{ value: 'none', label: { zh: '不接收', en: 'Not received' } }, { value: 'mentions', label: { zh: '仅 @', en: '@ only' } }],
@@ -340,10 +347,19 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     } catch { /* The bot list is a display aid; the Source still shows the saved id. */ }
     const config = host.sources.instance<FeishuConfig>(SOURCE)?.config
     if (config?.botId) {
+      // Every chat the bot joined, so the picker offers more than the chats dsh-im already delivers to.
+      if (im.chatListChecked) {
+        try {
+          const described = await im.describeBot(config.botId)
+          const listed = await im.chatListChecked(config.botId, { expectedFingerprint: described.account.fingerprint,
+            signal: AbortSignal.timeout(30_000) })
+          for (const chat of listed.chats) if (chat.name) labels[chat.chatId] = chat.name
+        } catch { /* A read needs the handoff; the delivery targets below still name chats. */ }
+      }
       try {
         for (const target of await im.listTargets(config.botId)) {
           const chatId = target.route?.chatId
-          if (target.kind === 'group' && chatId) labels[chatId] = target.name || chatId
+          if (target.kind === 'group' && chatId && target.name) labels[chatId] = target.name
         }
       } catch { /* Targets are a display aid. */ }
     }
@@ -374,6 +390,9 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
   let backfillRun: Promise<void> | undefined
   let botId = ''
   let botName = ''
+  // A failing account or consumer read backs off instead of polling the network every couple of seconds.
+  let retry: number | undefined
+  let runningSince = Date.now()
   const stop = (): void => {
     controller?.abort(); backfill?.abort(); release?.()
     controller = undefined; backfill = undefined; release = undefined; backfillRun = undefined
@@ -385,17 +404,17 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
       const config = ctx.config(SOURCE)
       currentConfig = config
       if (!im) {
-        stop(); ctx.report('feishu', { state: 'paused', detail: 'dsh-im is not mounted' })
+        stop(); ctx.report('feishu', health('paused', 'imMissing'))
         await delay(POLL_MS, undefined, { signal }).catch(() => {})
         continue
       }
       if (!config) {
-        stop(); ctx.report('feishu', { state: 'paused', detail: 'The Feishu Source is off' })
+        stop(); ctx.report('feishu', health('paused', 'sourceOff'))
         await delay(POLL_MS, undefined, { signal }).catch(() => {})
         continue
       }
       if (!config.botId) {
-        stop(); ctx.report('feishu', { state: 'paused', detail: 'Choose an IM Feishu bot' })
+        stop(); ctx.report('feishu', health('paused', 'imBotUnset'))
         await delay(POLL_MS, undefined, { signal }).catch(() => {})
         continue
       }
@@ -404,13 +423,13 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
         // `inboundStatus` is a cheap local read; `describeBot` verifies the account over the network, so only registration pays for it.
         const status = im.inboundStatus ? await im.inboundStatus(config.botId) : await im.describeBot(config.botId)
         if (!status.superagent) {
-          stop(); ctx.report('feishu', { state: 'paused', detail: 'Hand to Superagent is off for this bot' })
+          stop(); ctx.report('feishu', health('paused', 'imHandoffOff'))
         } else {
           // dsh-im can release the consumer without aborting our lease (switch off, restart, or a replacement runtime).
           if (release && !status.superagentActive) stop()
           if (!release) {
             if (status.superagentActive) {
-              ctx.report('feishu', { state: 'error', detail: 'Another consumer already owns this Feishu bot' })
+              ctx.report('feishu', health('error', 'imConsumerTaken'))
             } else {
               const bot = await im.describeBot(config.botId)
               const cached = { botId: config.botId, fingerprint: bot.account.fingerprint, name: bot.account.name || config.botId,
@@ -453,12 +472,15 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
             ctx.report('feishu', { state: 'ready', detail: `Listening for ${botName || config.botId}`, at: new Date().toISOString() })
           }
         }
+        retry = undefined
       } catch (error) {
         if ((error as { code?: string }).code === 'account-changed') cachedBots.clear()
         stop()
         ctx.report('feishu', { state: 'error', detail: String(error) })
+        retry = consumerRetry(retry, Date.now() - runningSince)
       }
-      await delay(POLL_MS, undefined, { signal }).catch(() => {})
+      runningSince = Date.now()
+      await delay(retry ?? POLL_MS, undefined, { signal }).catch(() => {})
     }
   } finally {
     const running = backfillRun

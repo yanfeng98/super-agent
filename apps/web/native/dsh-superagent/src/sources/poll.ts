@@ -29,6 +29,12 @@ export async function pollThreads(ctx: SourceContext, source: string, stopped: (
     }
   }
 }
+/**
+ * Wait before restarting a failed consumer: 1 second after a run that stayed up for a minute, otherwise exponential
+ * backoff from 1 second up to 60 seconds, so a broken account or permission stops hammering the remote API.
+ */
+export const consumerRetry = (previous: number | undefined, ranMs: number): number =>
+  previous === undefined || ranMs >= 60_000 ? 1000 : Math.min(previous * 2, 60_000)
 /** Waits `ms` or until `signal` aborts using global `setTimeout` so test fake timers can drive polling loops. */
 export function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {

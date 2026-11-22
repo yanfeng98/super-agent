@@ -967,6 +967,11 @@ const TEXT = {
   'healthCode.sourceOff': ['已关闭', HEALTH_TEXT.sourceOff],
   'healthCode.feishuCliUnset': ['来源已打开，还没有设置机器人的 lark-cli', HEALTH_TEXT.feishuCliUnset],
   'healthCode.feishuBotMissing': ['等待飞书机器人', HEALTH_TEXT.feishuBotMissing],
+  'healthCode.imMissing': ['没有挂载 dsh-im', HEALTH_TEXT.imMissing],
+  'healthCode.imBotUnset': ['还没有选择 IM 飞书机器人', HEALTH_TEXT.imBotUnset],
+  'healthCode.imHandoffOff': ['这个机器人没有打开“交给 Superagent”', HEALTH_TEXT.imHandoffOff],
+  'healthCode.imConsumerTaken': ['另一个消费者已经接管了这个飞书机器人', HEALTH_TEXT.imConsumerTaken],
+  'healthCode.imBackfillMissing': ['这个 dsh-im 不提供飞书补收', HEALTH_TEXT.imBackfillMissing],
   'healthCode.pollFailures': ['连续 {count} 次轮询失败，最近一次：{error}', HEALTH_TEXT.pollFailures],
 } as const satisfies Record<string, readonly [string, string]>
 export type DshSuperagentKey = keyof typeof TEXT
