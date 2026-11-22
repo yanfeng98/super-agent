@@ -6,6 +6,7 @@ import { ApiError, caller, usePoll } from '../src/client/api.ts'
 import { apply } from '../src/client/index.tsx'
 import { zh } from '../src/client/locales.ts'
 import { SettingsSchema } from '../src/policy.ts'
+import { rowChoices } from '../src/client/settings-kit.tsx'
 
 declare global { var IS_REACT_ACT_ENVIRONMENT: boolean }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -57,6 +58,17 @@ it('registers a localized main panel, sidebar entry and Plugin Manager row page,
   expect(main.options).toMatchObject({ key: 'dsh-superagent', locale: 'dshSuperagent' })
   expect(nav.options).toMatchObject({ id: 'dsh-superagent', order: 10, locale: 'dshSuperagent' })
   expect(nav.options.label?.()).toBe('Superagent')
+})
+
+it('offers a chat picker only ids the column accepts, so a Source account never appears as a chat', () => {
+  const labels = { oc_team: '团队群', oc_other: '另一个群', bot_1: '机器人一' }
+  expect(rowChoices(labels, 'oc_[a-zA-Z0-9]+', '', []).map(([id]) => id)).toEqual(['oc_team', 'oc_other'])
+  // The current value stays offered even when it does not match, so its select can show it.
+  expect(rowChoices(labels, 'oc_[a-zA-Z0-9]+', 'bot_1', []).map(([id]) => id)).toEqual(['oc_team', 'oc_other', 'bot_1'])
+  // An id another row already holds is not offered again.
+  expect(rowChoices(labels, 'oc_[a-zA-Z0-9]+', '', ['oc_team']).map(([id]) => id)).toEqual(['oc_other'])
+  // A column without a pattern still offers every name.
+  expect(rowChoices(labels, undefined, '', []).map(([id]) => id)).toEqual(['oc_team', 'oc_other', 'bot_1'])
 })
 
 it('opens a listed Session through the workspace from the main panel', async () => {

@@ -164,6 +164,21 @@ type Row = Record<string, string>
 type Column = Extract<FieldSpec, { type: 'rows' }>['columns'][number]
 const ROWS_SHOWN = 6
 const byName = ([, a]: [string, string], [, b]: [string, string]) => a.localeCompare(b)
+/**
+ * Label options for one rows column: ids the column's `pattern` accepts, so a Source's own account name (such as a
+ * Feishu bot) never appears in a chat picker, minus ids another row already holds.
+ * @param labels - stored display names by id.
+ * @param pattern - the column's validation pattern, when it has one.
+ * @param id - the row's current value, always offered so its select can show it.
+ * @param taken - ids other rows already hold.
+ * @returns the offered entries, in label-map order.
+ */
+export function rowChoices(labels: Record<string, string>, pattern: string | undefined, id: string,
+  taken: readonly string[]): [string, string][] {
+  const accepts = pattern ? new RegExp(`^(?:${pattern})$`) : undefined
+  return Object.entries(labels).filter(([option]) => option === id
+    || (!accepts || accepts.test(option)) && !taken.includes(option))
+}
 function RowsField({ field, value, saved, onChange, labels, refreshLabels }: {
   field: Extract<FieldSpec, { type: 'rows' }>; value: unknown; saved: unknown; onChange: (next: unknown) => void; labels: Record<string,
     string>
@@ -183,9 +198,8 @@ function RowsField({ field, value, saved, onChange, labels, refreshLabels }: {
   const key = field.columns[0]!
   const savedKeys = new Set((Array.isArray(saved) ? saved as Row[] : []).map(row => row[key.key]))
   const choose = key.type === 'text' && key.choose && Object.keys(labels).length ? localized(t, key.choose) : ''
-  // Exclude options already selected in another row.
-  const choices = (id: string) => Object.entries(labels).filter(([option]) => option === id
-    || !rows.some(other => other[key.key] === option)).sort(byName)
+  const choices = (id: string) => rowChoices(labels, key.type === 'text' ? key.pattern : undefined, id,
+    rows.map(row => row[key.key] ?? '')).sort(byName)
   const blank = Object.fromEntries(field.columns.map(column => [column.key, column.type === 'select' ? column.options[0]!.value : '']))
   // Summarize a row by its second column only when that column is free text (e.g., a display name), not a select option.
   const named = field.columns[1]?.type === 'text' ? field.columns[1] : undefined
