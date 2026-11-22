@@ -166,7 +166,7 @@ Check dsh-superagent: run `scripts/dsh-superagent --profile superagent status` i
 Setup must succeed before polling or work starts. Overview lists missing requirements and links to their settings. A settings change runs setup again. If you fix something outside the application, such as CLI authentication, choose **Check again**.
 
 1. **Sources.** The local Source sets the Markdown archive directory, an optional notification webhook and its per-project rows. For Feishu, choose the dsh-im bot, chats, each chat's receive-all or mentions-only mode, and whether to receive direct messages.
-2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the people who may ask for work: the local Source lists the operator, and Feishu lists its users; until a list has someone, no request can become a Ticket. With Feishu, add users manually; dsh-im does not expose a member list to sync from.
+2. **Policy.** The two example rules can be edited or removed. Under **On each Source**, add the people who may ask for work: the local Source lists the operator, and Feishu lists its users; until a list has someone, no request can become a Ticket. With Feishu, **Sync now** copies the chosen chat's members into the list; users can also be added manually.
 3. **Execution.** The directory root, a prepare command, and optionally one check command per line, each named by writing `name: command`. The checks run in the worktree when each Ticket ends, and each keeps its own result beside the combined one; once configured, a merge requires all of them to pass after the Ticket's latest ending. To give each Ticket a checkout of the repository:
 
    ```sh

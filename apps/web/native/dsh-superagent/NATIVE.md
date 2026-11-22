@@ -317,8 +317,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     It consumes `ctx.dshIm`'s exclusive text consumer after the operator turns on **交给 Superagent** in a dsh-im Feishu
     bot's settings; `src/sources/dsh-im.ts` types that service; the watcher polls `inboundStatus` and calls `describeBot` only when registering. It stops using the separate `lark-cli` bot, app secret,
     `FeishuBot` setup and `dsh-superagent-feishu` opt-in: the Source is mounted by default and stays idle until the
-    handoff. Replies go through `replyChecked`, context through `historyChecked`, and the Source remains text-only
-    (no images, bot-authored messages, member sync or old `lark-cli` resource reads). dsh-im owns the switch and the
+    handoff. Replies go through `replyChecked` and context through `historyChecked`; item 30 adds history recovery,
+    images, bot-authored messages, member sync and original-message links on top of dsh-im's native reads, so no
+    `lark-cli` resource read is involved. dsh-im owns the switch and the
     `superagent`/`superagentActive` status; turning it off releases the consumer and restores normal IM chat. Each
     Trigger records its source `botId` so a later Source bot change cannot route an old ticket through the new bot, and
     `describeBot` carries the Feishu/Lark domain for chat links. The watcher polls the cheap `inboundStatus`; `describeBot`
@@ -332,9 +333,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     substitutes mention names, marks bot senders non-human, and records `messageType`/`images`; `readFeishuImImage`
     downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and
     `syncChat` (`chatMembersChecked`), `sourceLink` resolves the message's own AppLink through `messageChecked` with the
-    `feishu-im/` resource as fallback, and `sendFeishuIm` passes the receipt id as Feishu's `uuid` and treats
-    the receipt id as Feishu's `uuid`, so the outbox can retry an ambiguous (`reply-result-unknown`) send and Feishu
-    deduplicates it instead of producing a second reply. The backfill loop also
+    `feishu-im/` resource as fallback, and `sendFeishuIm` passes the receipt id as Feishu's `uuid`, so the outbox can
+    retry an ambiguous (`reply-result-unknown`) send and Feishu deduplicates it instead of producing a second reply. The backfill loop also
     merges dsh-im's group target names into the stored label map every round, and `refreshLabels` persists what it reads.
     The Source declares the `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies, backfill and policy sync.
 
