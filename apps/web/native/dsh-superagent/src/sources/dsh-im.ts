@@ -90,9 +90,10 @@ export interface DshImService {
     chatId: string; limit: number; since?: string; until?: string; cursor?: string
     includeBots?: boolean; direct?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
-  /** Reads one topic thread between two times, oldest first. */
+  /** Reads one topic thread between two times, oldest first; `direct` marks a direct chat. */
   threadHistoryChecked?(botId: string, query: {
     chatId: string; threadId: string; limit: number; since?: string; until?: string; cursor?: string; includeBots?: boolean
+    direct?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   /** Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat. */
   messageChecked?(botId: string, route: DshImEvent['reply'],

@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { key, threadKey, type OutboundMessage, type Trigger } from '../core/index.ts'
 import { checkedImText } from '../infra/text.ts'
 import { admissionFileKeys, admissionImageKeys } from './feishu-image.ts'
-import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImMessage, type DshImService } from './dsh-im.ts'
+import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImHistory, type DshImMessage, type DshImService } from './dsh-im.ts'
 import { feishuChatLink } from './feishu-channel.ts'
 import { withMentionNames } from './feishu-trigger.ts'
 import { runFeishuImBackfill } from './feishu-im-loops.ts'
@@ -201,14 +201,22 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
       return message ? { messages: [messageView(message)], body: { status: 'available', ...message } }
         : empty(`no_${part}`)
     }
-    // A topic has its own history; anywhere else — and for the chat around a message — read the neighbouring messages.
-    const scope: 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread' : 'nearby'
-    let page
+    let page: DshImHistory
     try {
-      page = await im.historyChecked(botId, route, {
-        scope, limit: config.readPageSize, includeBots: true, ...cursor ? { cursor } : {},
-        ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
-      }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
+      // A topic is read oldest-first through its own history, so the message that started it is on the first page — the
+      // anchor an assessment window begins from. An older dsh-im has only the newest-first topic page, and the chat
+      // around a message is always the neighbouring window.
+      if (part === 'thread' && route.threadId && im.threadHistoryChecked) {
+        page = await im.threadHistoryChecked(botId, { chatId: route.conversationId, threadId: route.threadId,
+          limit: config.readPageSize, includeBots: true, ...cursor ? { cursor } : {} },
+          { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
+      } else {
+        const scope: 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread' : 'nearby'
+        page = await im.historyChecked(botId, route, {
+          scope, limit: config.readPageSize, includeBots: true, ...cursor ? { cursor } : {},
+          ...scope === 'nearby' ? { beforeCount: 5, afterCount: 5 } : {},
+        }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
+      }
     } catch (error) {
       if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
       throw error
