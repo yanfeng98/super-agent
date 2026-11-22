@@ -28,11 +28,13 @@ const names = [
   'eng-implement',
   'eng-implement-spec',
   'eng-improve-codebase-architecture',
+  'eng-loop-me',
   'eng-pr',
   'eng-prototype',
   'eng-research',
   'eng-retro',
   'eng-setup-matt-pocock-skills',
+  'eng-setup-ts-deep-modules',
   'eng-tdd',
   'eng-teach',
   'eng-to-questionnaire',
@@ -42,7 +44,10 @@ const names = [
   'eng-wait-what',
   'eng-wayfinder',
   'eng-wizard',
+  'eng-writing-beats',
   'eng-writing-for-agents',
+  'eng-writing-fragments',
+  'eng-writing-shape',
 ] as const
 
 /** Instruction body with the frontmatter block removed, as the provider reports it. */

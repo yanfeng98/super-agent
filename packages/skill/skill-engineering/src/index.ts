@@ -1,4 +1,4 @@
-/** Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling. */
+/** Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, domain modeling, and writing. */
 
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, join, sep } from 'node:path'
@@ -33,11 +33,13 @@ const SKILL_NAMES = [
   'eng-implement',
   'eng-implement-spec',
   'eng-improve-codebase-architecture',
+  'eng-loop-me',
   'eng-pr',
   'eng-prototype',
   'eng-research',
   'eng-retro',
   'eng-setup-matt-pocock-skills',
+  'eng-setup-ts-deep-modules',
   'eng-tdd',
   'eng-teach',
   'eng-to-questionnaire',
@@ -47,7 +49,10 @@ const SKILL_NAMES = [
   'eng-wait-what',
   'eng-wayfinder',
   'eng-wizard',
+  'eng-writing-beats',
   'eng-writing-for-agents',
+  'eng-writing-fragments',
+  'eng-writing-shape',
 ] as const
 
 /** Bundled skill asset location. */

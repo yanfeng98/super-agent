@@ -2,26 +2,26 @@
 
 [English](engineering-skills.md) | 中文
 
-每个以 base 为基础的 profile 都自带 27 个工程工作流技能，因此新建会话即可使用，无需安装插件或复制文件。该组件随 base 组合一起发布，插件元数据里的名称是 **工程工作流技能**；技能文本来自上游 [mattpocock/skills](https://github.com/mattpocock/skills) 项目。
+每个以 base 为基础的 profile 都自带 32 个工程工作流技能，因此新建会话即可使用，无需安装插件或复制文件。该组件随 base 组合一起发布，插件元数据里的名称是 **工程工作流技能**；技能文本来自上游 [mattpocock/skills](https://github.com/mattpocock/skills) 项目。
 
 ## 内置内容
 
-27 个技能都出现在输入框的 `/` 菜单里。其中 16 个仅限用户：菜单里标着「仅用户」，模型无法自行加载；另外 11 个同时由模型调用，会进入会话技能目录，任务合适时由模型加载。
+32 个技能都出现在输入框的 `/` 菜单里。其中 21 个仅限用户：菜单里标着「仅用户」，模型无法自行加载；另外 11 个同时由模型调用，会进入会话技能目录，任务合适时由模型加载。
 
 | 可调用方 | 技能 |
 |---|---|
 | 模型与用户 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
-| 仅用户 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
+| 仅用户 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-loop-me`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-setup-ts-deep-modules`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder`、`eng-writing-beats`、`eng-writing-fragments`、`eng-writing-shape` |
 
 ## 调用技能
 
-在输入框里输入 `/`，即可列出技能并按名称插入。菜单按技能出处分组：这 27 个排在 `内置 · mattpocock/skills` 之下，与 `项目 · .agents/skills`、`用户 · ~/.agents/skills` 这些提供其他技能的分组并列。`eng-ask-matt` 是路由：它会按你的处境推荐技能或流程，拿不准时从它开始。
+在输入框里输入 `/`，即可列出技能并按名称插入。菜单按技能出处分组：这 32 个排在 `内置 · mattpocock/skills` 之下，与 `项目 · .agents/skills`、`用户 · ~/.agents/skills` 这些提供其他技能的分组并列。`eng-ask-matt` 是路由：它会按你的处境推荐技能或流程，拿不准时从它开始。
 
 对于模型调用的技能，描述任务即可，模型会加载合适的那个；想指定某个技能时，在消息里点名。
 
 ## 主流程
 
-这些技能组合成一条从想法到落地的路径：`eng-grill-with-docs` 把想法磨清并记录领域语言，`eng-to-spec` 与 `eng-to-tickets` 把它变成工作，`eng-implement` 驱动 `eng-tdd` 并以 `eng-code-review` 收尾，`eng-pr` 与 `eng-retro` 完成这次改动。`eng-triage`、`eng-diagnosing-bugs` 与 `eng-wayfinder` 分别是外部 issue、难缠 bug 和单会话装不下的大工程的入口。
+这些技能组合成一条从想法到落地的路径：`eng-grill-with-docs` 把想法磨清并记录领域语言，`eng-to-spec` 与 `eng-to-tickets` 把它变成工作，`eng-implement` 驱动 `eng-tdd` 并以 `eng-code-review` 收尾，`eng-pr` 与 `eng-retro` 完成这次改动。`eng-triage`、`eng-diagnosing-bugs` 与 `eng-wayfinder` 分别是外部 issue、难缠 bug 和单会话装不下的大工程的入口。这条主路之外还有两条并行路径：`eng-loop-me` 为反复发生的工作流写 spec，写作技能则先用 `eng-writing-fragments` 挖掘原始素材，再用 `eng-writing-shape` 逐段成形为文章，或用 `eng-writing-beats` 组装成由节拍构成的旅程。
 
 ## 仓库配置
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This provider ships the Harness's built-in engineering workflow skills: 27 skills covering grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, and the smaller workflows around them. A fresh checkout has them without a separate install, symlink, or plugin download. All twenty-seven appear in the composer's `/` menu; eleven are also model-invoked and appear in the session catalog, while the other sixteen are user-only. The text derives from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`) under the MIT license, with the small Harness wording adjustments listed in the dev note.
+This provider ships the Harness's built-in engineering workflow skills: 32 skills covering grilling, specs and tickets, implementation, test-driven development, code review, domain modeling, architecture review, writing, and the smaller workflows around them. A fresh checkout has them without a separate install, symlink, or plugin download. All thirty-two appear in the composer's `/` menu; eleven are also model-invoked and appear in the session catalog, while the other twenty-one are user-only. The text derives from [mattpocock/skills](https://github.com/mattpocock/skills) `main` at v1.3.2 (`abeeaf9`) under the MIT license, with the small Harness wording adjustments listed in the dev note.
 
 ## Table of Contents
 
@@ -32,7 +32,7 @@ The base bundle inserts this provider, so every base-backed profile (`web`, `hea
 | Reachable by | Skills |
 |---|---|
 | Model and user | `eng-code-review`, `eng-codebase-design`, `eng-diagnosing-bugs`, `eng-domain-modeling`, `eng-grilling`, `eng-pr`, `eng-prototype`, `eng-research`, `eng-tdd`, `eng-wizard`, `eng-writing-for-agents` |
-| User only | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder` |
+| User only | `eng-ask-matt`, `eng-grill-me`, `eng-grill-with-docs`, `eng-handoff`, `eng-implement`, `eng-implement-spec`, `eng-improve-codebase-architecture`, `eng-loop-me`, `eng-retro`, `eng-setup-matt-pocock-skills`, `eng-setup-ts-deep-modules`, `eng-teach`, `eng-to-questionnaire`, `eng-to-spec`, `eng-to-tickets`, `eng-triage`, `eng-wait-what`, `eng-wayfinder`, `eng-writing-beats`, `eng-writing-fragments`, `eng-writing-shape` |
 
 The shipped names carry an `eng-` prefix. A skill directory keeps its upstream name in a project or user root, so an unprefixed shipped copy would be replaced by that personal copy and the built-in would vanish from the `/` menu; the prefix keeps both addressable and lets the menu group the shipped set under `mattpocock/skills`.
 
@@ -67,7 +67,7 @@ Each packaged skill appears once in the catalog with its description and the `up
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider holds a fixed list of skill directory names, reads `assets/<name>/SKILL.md` during discovery and again on each load, and validates the frontmatter contract before publishing a candidate. The directory name is the identity: a declared `name` that disagrees is invalid metadata. `description` is required and non-empty. `disable-model-invocation` and `user-invocable` are optional booleans and project into the registry's invocation policy; the vendored files use the first for the sixteen user-only skills.
+The provider holds a fixed list of skill directory names, reads `assets/<name>/SKILL.md` during discovery and again on each load, and validates the frontmatter contract before publishing a candidate. The directory name is the identity: a declared `name` that disagrees is invalid metadata. `description` is required and non-empty. `disable-model-invocation` and `user-invocable` are optional booleans and project into the registry's invocation policy; the vendored files use the first for the twenty-one user-only skills.
 
 The provider attaches through a deferred `skills` injection, so a profile that removes the skill registry leaves the row idle instead of reporting a pending dependency.
 
@@ -109,7 +109,8 @@ The eleven model-invoked entries add their descriptions to the session catalog; 
 These limits define what the bundled provider does not do. They are current package constraints, not a task backlog.
 
 - **English only** — the skill text is the upstream English corpus; the plugin metadata is localized, but the catalog and bodies are not, so a localized catalog needs a local override.
-- **Manual synchronization** — upstream changes arrive by copying the promoted buckets, re-applying the adaptation below, and updating the fixed name list; no build step tracks the upstream repository.
+- **Manual synchronization** — upstream changes arrive by copying the selected skill directories, re-applying the adaptation below, and updating the fixed name list; no build step tracks the upstream repository.
+- **Five skills come from upstream's Beta bucket** — `eng-loop-me`, `eng-setup-ts-deep-modules`, and the three writing skills ship from upstream's `in-progress/` directory, which upstream may rename or drop without notice, so a re-sync can remove one.
 - **No per-skill configuration** — the provider exposes one asset root and always publishes the packaged set; deployments that want a subset author their own provider.
 - **The skills assume a workspace** — engineering skills read `GLOSSARY.md`, ADRs, and an issue tracker; `eng-setup-matt-pocock-skills` writes that configuration, and without it the skills ask for it.
 
@@ -121,7 +122,7 @@ These limits define what the bundled provider does not do. They are current pack
 
 The package is part of this repository; its skill text is synced from [`mattpocock/skills`](https://github.com/mattpocock/skills), branch `main` at `abeeaf9` (v1.3.2), and the `main` branch of `yanfeng98/nano-mattpocock-skills` mirrors the upstream text byte for byte. This package's copies differ by the `eng-` prefix and the adaptations below. To re-sync:
 
-1. Copy each promoted skill directory into `assets/` as `eng-<name>`, excluding the Codex `agents/openai.yaml` files, and set its frontmatter `name` to the same prefixed name.
+1. Copy each skill directory the package ships — the whole `engineering/` and `productivity/` buckets and the five selected `in-progress/` skills — into `assets/` as `eng-<name>`, excluding the Codex `agents/openai.yaml` files, and set its frontmatter `name` to the same prefixed name.
 2. Re-apply the Harness adaptations: name the `skill` tool, replace `/clear` with opening a new session (the Harness has `/compact` but no `/clear`), rewrite every `/name` command and `skill` tool reference to the prefixed name, and drop installers, marketplace manifests, the bucket READMEs, and the Codex `agents/openai.yaml` files.
 3. Update `SKILL_NAMES` in `src/index.ts`; the drift test compares it with the asset directories.
 4. Run the package tests and the package README gates.

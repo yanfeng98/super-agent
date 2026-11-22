@@ -3853,7 +3853,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-engineering`
 
-- `source`: [`packages/skill/skill-engineering/src/index.ts:54`](../packages/skill/skill-engineering/src/index.ts)
+- `source`: [`packages/skill/skill-engineering/src/index.ts:59`](../packages/skill/skill-engineering/src/index.ts)
 
 ```ts config-catalog
 /** Bundled skill asset location. */

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-该提供方提供 Harness 内置的工程工作流技能：27 个技能覆盖拷问、spec 与工单、实现、测试驱动开发、代码评审、领域建模、架构评审，以及围绕它们的较小工作流。一份全新的 checkout 无需单独安装、符号链接或插件下载就能使用它们。27 个都出现在输入框的 `/` 菜单里；其中 11 个同时由模型调用并出现在会话目录中，另外 16 个仅限用户，模型无法自行加载。技能文本取自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `main` 分支 v1.3.2（`abeeaf9`），以 MIT 许可使用，并带有开发备注里列出的少量 Harness 措辞调整。
+该提供方提供 Harness 内置的工程工作流技能：32 个技能覆盖拷问、spec 与工单、实现、测试驱动开发、代码评审、领域建模、架构评审、写作，以及围绕它们的较小工作流。一份全新的 checkout 无需单独安装、符号链接或插件下载就能使用它们。32 个都出现在输入框的 `/` 菜单里；其中 11 个同时由模型调用并出现在会话目录中，另外 21 个仅限用户，模型无法自行加载。技能文本取自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `main` 分支 v1.3.2（`abeeaf9`），以 MIT 许可使用，并带有开发备注里列出的少量 Harness 措辞调整。
 
 ## 目录
 
@@ -32,7 +32,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 | 可调用方 | 技能 |
 |---|---|
 | 模型与用户 | `eng-code-review`、`eng-codebase-design`、`eng-diagnosing-bugs`、`eng-domain-modeling`、`eng-grilling`、`eng-pr`、`eng-prototype`、`eng-research`、`eng-tdd`、`eng-wizard`、`eng-writing-for-agents` |
-| 仅用户 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder` |
+| 仅用户 | `eng-ask-matt`、`eng-grill-me`、`eng-grill-with-docs`、`eng-handoff`、`eng-implement`、`eng-implement-spec`、`eng-improve-codebase-architecture`、`eng-loop-me`、`eng-retro`、`eng-setup-matt-pocock-skills`、`eng-setup-ts-deep-modules`、`eng-teach`、`eng-to-questionnaire`、`eng-to-spec`、`eng-to-tickets`、`eng-triage`、`eng-wait-what`、`eng-wayfinder`、`eng-writing-beats`、`eng-writing-fragments`、`eng-writing-shape` |
 
 随包技能名都带 `eng-` 前缀。项目或用户目录里的技能保留上游原名，若随包副本不加前缀，就会被同名个人副本替换，内置技能从 `/` 菜单里消失；加前缀后两者都能被寻址，菜单也能把随包这一组归到 `mattpocock/skills` 之下。
 
@@ -67,7 +67,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-该提供方持有固定的技能目录名列表，在发现阶段读取 `assets/<name>/SKILL.md`，每次加载时再读一次，并在发布候选前校验 frontmatter 契约。目录名即身份：声明的 `name` 与目录名不一致就是无效元数据。`description` 必填且非空。`disable-model-invocation` 与 `user-invocable` 是可选布尔值，会投影到注册表的调用策略；随包文件对那 16 个仅限用户的技能使用了前者。
+该提供方持有固定的技能目录名列表，在发现阶段读取 `assets/<name>/SKILL.md`，每次加载时再读一次，并在发布候选前校验 frontmatter 契约。目录名即身份：声明的 `name` 与目录名不一致就是无效元数据。`description` 必填且非空。`disable-model-invocation` 与 `user-invocable` 是可选布尔值，会投影到注册表的调用策略；随包文件对那 21 个仅限用户的技能使用了前者。
 
 该提供方通过延迟的 `skills` 注入挂载，因此移除技能注册表的 profile 会让该行保持空闲，而不是报告待处理的依赖。
 
@@ -109,7 +109,8 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 这些限制界定了该随包提供方不做的事。它们是当前的包约束，不是任务清单。
 
 - **只有英文** —— 技能文本是上游英文语料；插件元数据已本地化，但目录与正文没有，因此本地化目录需要本地覆盖。
-- **手动同步** —— 上游变更通过复制晋升桶、重新套用下面的改编步骤并更新固定名称列表进入本包；没有构建步骤跟踪上游仓库。
+- **手动同步** —— 上游变更通过复制选定的技能目录、重新套用下面的改编步骤并更新固定名称列表进入本包；没有构建步骤跟踪上游仓库。
+- **五个技能来自上游的 Beta 桶** —— `eng-loop-me`、`eng-setup-ts-deep-modules` 与三个写作技能来自上游的 `in-progress/` 目录，上游可能不加预告地改名或删除，因此重新同步时可能移除其中一个。
 - **没有按技能配置** —— 该提供方只暴露一个资源根目录，并且总是发布随包集合；想要子集的部署方应自己编写提供方。
 - **这些技能假设存在工作区** —— 工程技能会读取 `GLOSSARY.md`、ADR 与问题跟踪器；`eng-setup-matt-pocock-skills` 写入这些配置，没有它时技能会要求运行它。
 
@@ -121,7 +122,7 @@ base bundle 会插入该提供方，因此每个以 base 为基础的 profile（
 
 该包是本仓库的一部分；技能文本同步自 [`mattpocock/skills`](https://github.com/mattpocock/skills)，分支 `main`，提交 `abeeaf9`（v1.3.2）；`yanfeng98/nano-mattpocock-skills` 的 `main` 与上游文本逐字节一致；本包副本的差异只有 `eng-` 前缀与下面的改编。重新同步时：
 
-1. 把每个晋升技能目录以 `eng-<name>` 之名复制进 `assets/`，排除 Codex 的 `agents/openai.yaml`，并把 frontmatter 的 `name` 改成同一个带前缀的名字。
+1. 把本包发布的每个技能目录（整个 `engineering/`、`productivity/` 两个桶，加上选定的 5 个 `in-progress/` 技能）以 `eng-<name>` 之名复制进 `assets/`，排除 Codex 的 `agents/openai.yaml`，并把 frontmatter 的 `name` 改成同一个带前缀的名字。
 2. 重新套用 Harness 改编：把 `Skill tool` 改名为 `skill` 工具，把 `/clear` 改为开新会话（Harness 有 `/compact` 但没有 `/clear`），把所有 `/名字` 命令与 `skill` 工具引用改成带前缀的名字，并去掉安装器、市场清单、桶 README 与 Codex 的 `agents/openai.yaml`。
 3. 更新 `src/index.ts` 里的 `SKILL_NAMES`；漂移测试会把该列表与资源目录比对。
 4. 运行该包的测试与包 README 门禁。
