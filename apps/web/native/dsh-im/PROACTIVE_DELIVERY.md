@@ -416,6 +416,8 @@ options 必须包含 `expectedFingerprint`、`expectedTargetDigest`，可选 `si
 
 事件 v1 携带平台、账号和可信 fingerprint、eventId/messageId、发送人原始 ID、群/私聊 ID、mentions、mentionedAccount、ISO 时间、原始文本和原消息回复路由（messageId/conversationId/actorId/threadId/rootId/parentId）。平台提供的可选姓名仅用于展示；此切片不提供头像或附件，有界历史读取见下文。应用自行决定收件范围和唤醒策略。
 
+正文按消息类型规范化：文本与富文本渲染成纯文本（图片保留 `img_` key），合并转发读出子消息渲染成 `<发送者>: <正文>` 行（读不到时保留 `[合并转发]` 占位），超过 16000 字符的正文保留前 16000 字并以 `[内容过长，已截断]` 结尾。机器人自己发的消息不会作为入站事件投递；历史读取（`chatHistoryChecked`、`threadHistoryChecked`）同样跳过它们且不计入 `omitted`，上下文读取仍会显示——它们属于对话的一部分。
+
 每个账号只能有一个 Consumer；冲突返回 `consumer-conflict`。`consumerMode: external-consumer` 持久保存后，不创建独立 Session，不执行原生卡片或 slash command。释放 Consumer、Registration 替换、Host 重启均不自动回退独立处理；需重新注册 Consumer，或者明确修改账号模式并重连。应用持久提交需响应取消；已完成的提交不能被释放操作撤销。
 
 `replyChecked` 在发送前读取原消息，核对发送人、群以及 thread/root/parent 路由；同话题回复不回退群主线。来源消失或变化返回 `stale-route`。发送请求已尝试后的 SDK 失败返回 `reply-result-unknown`，应先核对外部会话再决定是否重试。平台重投递可能有缺口、无恢复游标；本契约不保证传输恰好一次，不提供消息已读回执或跨账号回复。去重和持久发送意图归应用管理。

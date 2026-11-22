@@ -348,7 +348,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     the bot joined (`chatListChecked`) and dsh-im's group target names into the stored label map every round, and
     `refreshLabels` persists what it reads, so the chat picker offers every joined chat. A Thread without a topic learns it
     from its root message once per activity, and the lookup is remembered in `KV.feishu.topic` so a topic-less Thread costs
-    one read, not one per round. A failing attempt backs off from one second to one minute (`consumerRetry` in `poll.ts`),
+    one read, not one per round. dsh-im never hands the bot its own replies back as recovered messages, expands a merged
+    forward into its sub-messages, and cuts a body over 16 000 characters with a marker instead of dropping it, so the
+    Source receives the forward's contents and no self-authored Triggers. A failing attempt backs off from one second to one minute (`consumerRetry` in `poll.ts`),
     measured from the attempt itself so a long wait does not reset it, and the known states report health codes the panel
     localizes instead of raw English details. The Source declares the `history` health entry. `tests/feishu-im.spec.ts`
     covers mention rendering, idempotent replies, backfill and policy sync.

@@ -127,7 +127,7 @@ An Input counts as read after the Session takes it into a step and subsequently 
 
 Threads followed only for context still deliver messages, but do not give the Ticket ownership of human follow-ups or resume ended Tickets. Those messages can be assessed independently.
 
-Sources poll subscribed Threads while a live Ticket subscribes, and for two weeks after the later of the last Trigger and the subscribing Tickets' end. Afterwards a Thread is no longer polled, but the Feishu Source still backfills its configured chats and known direct chats from a stored cursor every minute, and new messages otherwise arrive through the live consumer. The first round for a chat only records where the Source took over, so the conversation dsh-im handled before the handoff does not become Triggers.
+Sources poll subscribed Threads while a live Ticket subscribes, and for two weeks after the later of the last Trigger and the subscribing Tickets' end. Afterwards a Thread is no longer polled, but the Feishu Source still backfills its configured chats and known direct chats from a stored cursor every minute, and new messages otherwise arrive through the live consumer. The first round for a chat only records where the Source took over, so the conversation dsh-im handled before the handoff does not become Triggers, and the bot's own messages are never recovered as Triggers.
 
 ## Failure and recovery
 
