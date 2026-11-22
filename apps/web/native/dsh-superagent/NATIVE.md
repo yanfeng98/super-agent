@@ -332,8 +332,12 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     (Feishu returns only the message a Topic was opened on in chat history) and polling subscribed threads, so messages
     missed while superagent or the Host restarted are recovered; re-received messages deduplicate on their Trigger id.
     Pages are dsh-im's largest (50) up to 2 000 messages per chat per round, so a long outage catches up in a few
-    rounds; a Topic a subscribed Thread already polls is skipped there, and one quiet for the polling horizon is
-    forgotten. A Topic's own history is read oldest-first through `threadHistoryChecked` (`historyChecked` on an older
+    rounds; a Topic a subscribed Thread still polls is skipped there, and one quiet for the polling horizon is forgotten.
+    Topics are read least-recently-read first so none starves, each keeps a read watermark and resumes from the message it
+    last delivered, and a read that stopped on its budget or failed keeps the window it did not finish, so a cap, a
+    failure or the round's five-minute time budget never skips replies. A Topic's thread is keyed by the message that
+    opened it — Feishu gives that message a `thread_id` and no `root_id`, while its replies name it as their root — and a
+    recovered reply keeps the route dsh-im reported, because dsh-im refuses a read or reply whose route does not match. A Topic's own history is read oldest-first through `threadHistoryChecked` (`historyChecked` on an older
     dsh-im), so the message that opened it anchors the first page an assessment window reads. `imTrigger`
     substitutes mention names, marks bot senders non-human, and records `messageType`/`images`; `readFeishuImImage`
     downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and
