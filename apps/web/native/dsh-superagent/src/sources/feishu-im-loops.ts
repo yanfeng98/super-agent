@@ -54,29 +54,34 @@ async function refreshChatLabels(deps: BackfillDeps): Promise<void> {
   if (changed) deps.ctx.state.set(KV.sources.labels(SOURCE), labels)
 }
 
+/** What one chat or Thread round delivered and what dsh-im could not render. */
+interface Recovered { recovered: number; omitted: number }
+
 /** One chat's messages since the stored cursor, page by page; the cursor only advances after every page is received. */
-async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean, limit: number): Promise<number> {
+async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean, limit: number): Promise<Recovered> {
   const read = deps.im.chatHistoryChecked
-  if (!read) return 0
+  if (!read) return { recovered: 0, omitted: 0 }
   const key = KV.feishu.history(chatId)
   const now = new Date().toISOString()
   const stored = deps.ctx.state.get(key)
   // The first round only records where the Source took over: messages before the handoff were dsh-im's own conversation.
   if (stored === undefined) {
     deps.ctx.state.set(key, cursorAt(now))
-    return 0
+    return { recovered: 0, omitted: 0 }
   }
   const since = stored
   let cursor: string | undefined
   let count = 0
+  let omitted = 0
   let drained = false
   let lastAt: string | undefined
   for (let page = 0; page < MAX_PAGES; page++) {
-    if (deps.signal.aborted) return count
+    if (deps.signal.aborted) return { recovered: count, omitted }
     const result = await read(deps.botId,
       { chatId, limit, since, until: now, direct, includeBots: true, ...cursor ? { cursor } : {} },
       { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
-    if (!deps.config()) return count
+    if (!deps.config()) return { recovered: count, omitted }
+    omitted += result.omitted
     for (const event of result.events) {
       const trigger = deps.toTrigger(event)
       await deps.ctx.receive(trigger)
@@ -92,7 +97,7 @@ async function backfillChat(deps: BackfillDeps, chatId: string, direct: boolean,
     if (drained) deps.ctx.state.set(key, cursorAt(now))
     else if (lastAt) deps.ctx.state.set(key, cursorAt(lastAt))
   }
-  return count
+  return { recovered: count, omitted }
 }
 
 /** Learns a Thread's topic id from its latest Trigger's root message when the Thread was opened before Feishu reported one. */
@@ -113,30 +118,32 @@ async function learnThreadId(deps: BackfillDeps, thread: Thread, chatId: string)
 }
 
 /** One subscribed thread's new messages since its stored cursor; thread ids come from the Thread, its latest Trigger, or its root message. */
-async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
+async function pollThread(deps: BackfillDeps, thread: Thread): Promise<Recovered> {
   const read = deps.im.threadHistoryChecked
-  if (!read) return 0
+  if (!read) return { recovered: 0, omitted: 0 }
   const meta = thread.meta as { chatId?: string; threadId?: string }
   const latest = deps.ctx.triggers.latest(thread.key)
   const chatId = meta.chatId ?? (typeof latest?.meta.chatId === 'string' ? latest.meta.chatId : undefined)
-  if (!chatId) return 0
+  if (!chatId) return { recovered: 0, omitted: 0 }
   const threadId = meta.threadId ?? (typeof latest?.meta.threadId === 'string' ? latest.meta.threadId : undefined)
     ?? await learnThreadId(deps, thread, chatId)
-  if (!threadId) return 0
+  if (!threadId) return { recovered: 0, omitted: 0 }
   const key = KV.feishu.history(`thread:${thread.key}`)
   const now = new Date().toISOString()
   const since = deps.ctx.state.get(key) ?? new Date(Date.parse(thread.createdAt) - 5000).toISOString()
   const limit = deps.config()?.readPageSize ?? 20
   let cursor: string | undefined
   let count = 0
+  let omitted = 0
   let drained = false
   let lastAt: string | undefined
   for (let page = 0; page < MAX_PAGES; page++) {
-    if (deps.signal.aborted) return count
+    if (deps.signal.aborted) return { recovered: count, omitted }
     const result = await read(deps.botId,
       { chatId, threadId, limit, since, until: now, includeBots: true, ...cursor ? { cursor } : {} },
       { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
-    if (!deps.config()) return count
+    if (!deps.config()) return { recovered: count, omitted }
+    omitted += result.omitted
     for (const event of result.events) {
       const trigger = deps.toTrigger(event)
       await deps.ctx.receive(trigger)
@@ -151,7 +158,7 @@ async function pollThread(deps: BackfillDeps, thread: Thread): Promise<number> {
     if (drained) deps.ctx.state.set(key, cursorAt(now))
     else if (lastAt) deps.ctx.state.set(key, cursorAt(lastAt))
   }
-  return count
+  return { recovered: count, omitted }
 }
 
 /**
@@ -175,6 +182,7 @@ export async function runFeishuImBackfill(deps: BackfillDeps): Promise<void> {
     await refreshChatLabels(deps)
     const errors: string[] = []
     let recovered = 0
+    let omitted = 0
     const chats = new Map<string, boolean>()
     for (const chat of config.chats) chats.set(chat.chatId, false)
     for (const [chatId, direct] of Object.entries(deps.ctx.state.get(KV.feishu.chats) ?? {})) {
@@ -182,18 +190,25 @@ export async function runFeishuImBackfill(deps: BackfillDeps): Promise<void> {
     }
     for (const [chatId, direct] of chats) {
       if (deps.signal.aborted) break
-      try { recovered += await backfillChat(deps, chatId, direct, config.readPageSize) }
-      catch (error) { if (!deps.signal.aborted) errors.push(`${chatId}: ${String(error)}`) }
+      try {
+        const round = await backfillChat(deps, chatId, direct, config.readPageSize)
+        recovered += round.recovered
+        omitted += round.omitted
+      } catch (error) { if (!deps.signal.aborted) errors.push(`${chatId}: ${String(error)}`) }
     }
     if (!deps.signal.aborted) {
       try {
-        await pollThreads(deps.ctx, 'feishu', () => deps.signal.aborted, thread => pollThread(deps, thread).then(count => { recovered += count }))
+        await pollThreads(deps.ctx, 'feishu', () => deps.signal.aborted, thread => pollThread(deps, thread).then(round => {
+          recovered += round.recovered
+          omitted += round.omitted
+        }))
       } catch (error) { if (!deps.signal.aborted) errors.push(`threads: ${String(error)}`) }
     }
     if (!deps.signal.aborted) {
       deps.report('history', errors.length
         ? { state: 'error', detail: errors.join('\n') }
-        : { state: 'ready', detail: `Recovered ${recovered} messages from chat history and subscribed threads`, at: new Date().toISOString() })
+        : { state: 'ready', detail: `Recovered ${recovered} messages from chat history and subscribed threads`
+          + (omitted ? `; ${omitted} unreadable messages skipped` : ''), at: new Date().toISOString() })
     }
     await pause(HISTORY_INTERVAL_MS, deps.signal)
   }

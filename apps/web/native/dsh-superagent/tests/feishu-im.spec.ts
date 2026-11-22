@@ -277,6 +277,28 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
   })
 
+  it('counts the messages dsh-im could not render in the history health', async () => {
+    const reports: { detail?: string }[] = []
+    const state = new Map<string, unknown>([['feishu-history:oc_team', '2026-09-01T00:00:00.000Z']])
+    const page = { version: 1 as const, scope: 'chat' as const, events: [event()], omitted: 2, hasMore: false, coverage: 'provider-visible-messages' }
+    const im = service({ chatHistoryChecked: async () => page,
+      threadHistoryChecked: async () => ({ ...page, scope: 'thread' as const }) })
+    const ctx = {
+      ready: Promise.resolve(), config: () => config(), configured: () => true,
+      receive: async () => {}, report: (_entry: string, value: { detail?: string }) => { reports.push(value) },
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      threads: { subscribed: () => [], patch: () => {}, get: () => undefined, describe: () => {} },
+      triggers: { latest: () => undefined, get: () => undefined },
+      tickets: { get: () => undefined },
+    }
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
+      config: () => config(), toTrigger: imTrigger, report: (_entry, value) => { reports.push(value) }, signal: controller.signal })
+    await vi.waitFor(() => expect(reports.some(report => report.detail?.includes('2 unreadable messages skipped'))).toBe(true))
+    controller.abort()
+    await run
+  })
+
   it('records where it took over instead of replaying the chat on the first round', async () => {
     const received: string[] = []
     const state = new Map<string, unknown>()
