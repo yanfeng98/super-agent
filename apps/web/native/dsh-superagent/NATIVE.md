@@ -350,9 +350,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     message by id through `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still
     resolves, and `around` reads the chat around a message even when it sits in a Thread, asking for the whole preceding
     half of dsh-im's nearby window (20 messages, its cap) and reporting that window's bounds; a `thread` read of a message
-    Feishu placed in no Topic is the surrounding chat and reports `chat_neighbours`, a `/root`, `/parent` or `/message` read
-    reports `deleted` for a recalled message and `unavailable` when its content cannot be read, rather than either looking
-    like an empty conversation; events carry `appLink`, the Trigger keeps it as `url`, and so do context messages, and the
+    Feishu placed in no Topic is the surrounding chat and reports `chat_neighbours`; a `/root` or `/parent` read reports
+    `deleted` when that related message was recalled, and every read of a Trigger whose own message was recalled reports
+    `unavailable`, because dsh-im's route check refuses a route to a recalled message; events carry `appLink`, the
+    Trigger keeps it as `url`, and so do context messages, and the
     page body an assessment reads carries the mapped messages instead of dsh-im's event records and account fingerprint.
     An image of any message those reads return is downloaded from
     that message (`resourceChecked({ messageId })`, validated against the retained route), not only from the Trigger's own

@@ -99,8 +99,9 @@ export interface DshImService {
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   /**
    * Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat.
-   * Throws `message-deleted` when the message was recalled, `message-unavailable` when its body cannot be rendered, and
-   * `stale-route` when the retained route no longer resolves to its own message.
+   * Throws `message-deleted` when that other message was recalled, `message-unavailable` when its body cannot be
+   * rendered, and `stale-route` when the retained route no longer resolves — including when the route's own message,
+   * which every read of it names by id, was recalled.
    */
   messageChecked?(botId: string, route: DshImEvent['reply'],
     options: { expectedFingerprint: string; signal: AbortSignal; messageId?: string }): Promise<DshImMessage>
