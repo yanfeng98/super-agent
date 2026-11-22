@@ -348,8 +348,12 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     answer looks like the removed lark-cli Source's `--markdown --reply-in-thread` reply, and a bot-authored source can be
     answered because dsh-im accepts bot senders on the retained route. `root`, `parent` and `message` context reads the
     message by id through `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still
-    resolves, and `around` reads the chat around a message even when it sits in a Thread; events carry `appLink`, the
-    Trigger keeps it as `url`, and so do context messages. An image of any message those reads return is downloaded from
+    resolves, and `around` reads the chat around a message even when it sits in a Thread, asking for the whole preceding
+    half of dsh-im's nearby window (20 messages, its cap) and reporting that window's bounds; a `thread` read of a message
+    Feishu placed in no Topic is the surrounding chat and reports `chat_neighbours`, a recalled message reads as `deleted`
+    and one dsh-im cannot render as `unavailable` rather than either looking like an empty conversation; events carry
+    `appLink`, the Trigger keeps it as `url`, and so do context messages, and the page body an assessment reads carries
+    the mapped messages instead of dsh-im's event records and account fingerprint. An image of any message those reads return is downloaded from
     that message (`resourceChecked({ messageId })`, validated against the retained route), not only from the Trigger's own
     message. The live path describes each Thread with its chat name and chat link, `linkTimeoutMs` bounds link resolution,
     and `DSH_SUPERAGENT_FEISHU_BOT` names the bot once its account is cached. The first backfill round for a chat records
