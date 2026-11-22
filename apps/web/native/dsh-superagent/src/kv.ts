@@ -45,8 +45,11 @@ export const KV = {
    */
   feishu: { chats: record<Record<string, boolean>>('feishu-chats'), history: family<string, [chat: string]>('feishu-history:'),
     topics: family<Record<string, string>, [chat: string]>('feishu-history-threads:'),
-    /** Topics the dsh-im Source recovers: the last chat-visible activity and the message that roots the topic. */
-    imTopics: family<Record<string, { at: string; rootId: string }>, [chat: string]>('feishu-im-topics:'),
+    /**
+     * Topics the dsh-im Source recovers: a topic's last activity, the message that roots it, and the time up to which it
+     * has been read.
+     */
+    imTopics: family<Record<string, { at: string; rootId: string; readThrough?: string }>, [chat: string]>('feishu-im-topics:'),
     seen: family<string[], [thread: string]>('thread-seen:'), initialized: family<boolean, [thread: string]>('thread-initialized:'),
     /** Per-polled-thread topic lookup: the Thread activity it was looked up at, and the topic when Feishu reports one. */
     topic: family<{ at: string; threadId?: string }, [thread: string]>('thread-topic:') },

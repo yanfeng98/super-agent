@@ -71,13 +71,23 @@ const routeAddress = (event: DshImEvent): Record<string, string> => ({
   ...event.reply.parentId ? { parentId: event.reply.parentId } : {},
 })
 
-/** Converts one authenticated dsh-im event into a domain Trigger; its id is the Feishu message id. */
-export function imTrigger(event: DshImEvent): Trigger {
+/**
+ * Converts one authenticated dsh-im event into a domain Trigger; its id is the Feishu message id.
+ *
+ * The Thread is keyed by the message that opened the conversation's Topic: Feishu gives that message a `thread_id` but no
+ * `root_id`, while its replies name it as their root, so only the root message id keeps both in one Thread. `root` names it
+ * for a reply Feishu left `root_id` off; the reply route itself stays exactly as dsh-im reported it, because dsh-im refuses
+ * a read or reply whose route does not match the message.
+ *
+ * @param event Authenticated inbound or recovered message.
+ * @param root Message that opened the event's Topic, when the event does not name it itself.
+ * @returns The Trigger, whose id is the Feishu message id.
+ */
+export function imTrigger(event: DshImEvent, root = event.reply.rootId): Trigger {
   const direct = event.conversation.kind === 'dm'
-  const root = event.reply.rootId ?? event.reply.threadId ?? event.messageId
   return {
     id: key(SOURCE, event.messageId), source: SOURCE,
-    threads: [{ source: SOURCE, id: `${event.conversation.id}:${root}` }],
+    threads: [{ source: SOURCE, id: `${event.conversation.id}:${root ?? event.messageId}` }],
     actor: { source: SOURCE, id: event.actor.id }, human: event.actor.kind === 'user',
     ...(direct ? { addressed: 'direct' as const } : event.mentionedAccount ? { addressed: 'mention' as const } : {}),
     at: event.at, text: withMentionNames(event.text, event.mentions),
