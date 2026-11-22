@@ -243,10 +243,12 @@ export async function readExternalMessage(client, identity, route, signal, targe
   const wanted = targetId ?? route.messageId;
   const item = await fetch(wanted);
   if (!item) refuse('message-unavailable');
-  // A recalled message keeps its record and loses its body, so a consumer reports it apart from an unreadable one.
-  if (item.deleted) refuse('message-deleted');
+  // The message must belong to the routed conversation before its state is reported, so a caller cannot learn whether
+  // a message of another chat exists.
   if (item.chat_id !== route.conversationId
     || (targetId === undefined && item.sender?.id !== route.actorId)) refuse('stale-route');
+  // A recalled message keeps its record and loses its body, so a consumer reports it apart from an unreadable one.
+  if (item.deleted) refuse('message-deleted');
   const event = historyEvent(await expandMergedForward(client, item, signal), identity, { chatId: route.conversationId, includeBots: true });
   if (!event) refuse('message-unavailable');
   return { version: 1, messageId: event.messageId, chatId: event.conversation.id, at: event.at, text: event.text,

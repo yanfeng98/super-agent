@@ -52,6 +52,9 @@ const DELIVERY_ERROR_CODES = new Set([
   'reply-result-unknown',
   'history-permission-denied',
   'history-unavailable',
+  // A single-message read answers why it has no content: recalled, or unrenderable, or a route that stopped resolving.
+  'message-deleted',
+  'message-unavailable',
   'thread-unavailable',
   'untrusted-source',
 ]);

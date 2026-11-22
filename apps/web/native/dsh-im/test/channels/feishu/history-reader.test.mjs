@@ -46,6 +46,11 @@ test('refuses a route that no longer resolves to its own message', async () => {
   await assert.rejects(
     readExternalMessage(client(record({ chat_id: 'elsewhere' }), record({ message_id: 'reply' })), identity, route, signal, 'reply'),
     { code: 'stale-route' });
+  // A recalled message of another chat stays as opaque as any other refusal, so this cannot probe other chats.
+  await assert.rejects(
+    readExternalMessage(client(record(), record({ message_id: 'gone', chat_id: 'elsewhere', deleted: true })),
+      identity, route, signal, 'gone'),
+    { code: 'stale-route' });
   // An id the provider no longer returns is unreadable rather than deleted.
   await assert.rejects(readExternalMessage(client(record({ message_id: 'other' })), identity, route, signal),
     { code: 'message-unavailable' });

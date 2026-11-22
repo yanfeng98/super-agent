@@ -28,8 +28,8 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ### Changed / 变更
 
-- `messageChecked` 读取已撤回的消息时不再与「读不到」混为一谈：消息本身被撤回（`deleted`）时返回新的 `message-deleted`，正文无法渲染或消息 id 已不存在时仍是 `message-unavailable`，保留的 route 不再指向原消息时仍是 `stale-route`。调用方据此可以把「人撤回了这条消息」和「这条消息读不出来」分开报告。
-  `messageChecked` no longer reports a recalled message the same way as an unreadable one: a message that was recalled (`deleted`) now refuses with `message-deleted`, while a body it cannot render or an id the provider no longer returns stays `message-unavailable`, and a retained route that no longer names its own message stays `stale-route`. A caller can therefore tell "this person recalled the message" from "this message cannot be read".
+- `messageChecked` 读取已撤回的消息时不再与「读不到」混为一谈：消息本身被撤回（`deleted`）时返回新的 `message-deleted`，正文无法渲染或消息 id 已不存在时仍是 `message-unavailable`，保留的 route 不再指向原消息时仍是 `stale-route`。调用方据此可以把「人撤回了这条消息」和「这条消息读不出来」分开报告；交付服务（`DeliveryService`）的公开错误码名单也收下这两个码，否则它们会被折叠成 `history-unavailable`。
+  `messageChecked` no longer reports a recalled message the same way as an unreadable one: a message that was recalled (`deleted`) now refuses with `message-deleted`, while a body it cannot render or an id the provider no longer returns stays `message-unavailable`, and a retained route that no longer names its own message stays `stale-route`. A caller can therefore tell "this person recalled the message" from "this message cannot be read"; the delivery service's public error codes now include both, which would otherwise collapse them into `history-unavailable`.
 
 - `/sessionlist` 与 `/sessionlist --all` 默认不再列出已归档会话，只提示隐藏了几条；新增 `--archived` 把它们列在末尾且不编号。序号只对应可按下标绑定的未归档会话，归档会话仍可用完整 Session ID 绑定。
   `/sessionlist` and `/sessionlist --all` no longer list archived Sessions by default; they report how many were hidden, and the new `--archived` flag appends them unnumbered. Indices only cover the non-archived Sessions that `/session N` can bind; archived Sessions remain bindable by full Session ID.
