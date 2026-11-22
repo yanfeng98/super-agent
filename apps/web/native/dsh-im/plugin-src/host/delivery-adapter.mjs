@@ -396,6 +396,32 @@ export function createDeliveryAdapter({
         throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
       return coreController.replyChecked(botId, route, text, options);
     },
+    chatHistoryChecked: (botId, query, options) => {
+      if (typeof coreController.chatHistoryChecked !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.chatHistoryChecked(botId, query, options);
+    },
+    threadHistoryChecked: (botId, query, options) => {
+      if (typeof coreController.threadHistoryChecked !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.threadHistoryChecked(botId, query, options);
+    },
+    messageChecked: (botId, route, options) => {
+      if (typeof coreController.messageChecked !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.messageChecked(botId, route, options);
+    },
+    chatMembersChecked: (botId, query, options) => {
+      if (typeof coreController.chatMembersChecked !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.chatMembersChecked(botId, query, options);
+    },
+    resourceChecked: (botId, route, query, options) => {
+      if (typeof coreController.resourceChecked !== 'function')
+        throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
+      return coreController.resourceChecked(botId, route, query, options);
+    },
+
     describeAccount: (botId) => {
       if (typeof coreController.describeDeliveryAccount !== 'function') {
         const error = new Error('Verified account capability unavailable');

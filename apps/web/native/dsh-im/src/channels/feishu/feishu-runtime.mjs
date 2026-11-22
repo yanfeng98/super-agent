@@ -1,5 +1,6 @@
 import { createConnectionDiagnostics, atConnectionStage } from '../shared/connection-error.mjs';
-import { readExternalHistory } from './history-reader.mjs';
+import { readChatHistory, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory } from './history-reader.mjs';
+import { downloadFeishuResourceRanges } from './resource-download.mjs';
 import { randomUUID } from 'node:crypto';
 import { FeishuHarnessBridge } from './bridge.mjs';
 import { cardActionProbeCard } from './feishu-cards.mjs';
@@ -790,20 +791,64 @@ export class FeishuRuntime {
     return { sent: true, receipt: { version: 1, messageId, conversationId } };
   }
 
-  async historyChecked(identity, route, query, { signal } = {}) {
+  async #checkedRead(operation, signal) {
     const client = this.#client;
     if (!client || this.#consumerMode !== 'external-consumer')
       throw Object.assign(new Error('bot-not-connected'), { code: 'bot-not-connected' });
-    const result = await readExternalHistory(client, identity, route, query, signal);
+    const result = await operation(client);
     signal?.throwIfAborted();
     if (this.#client !== client)
       throw Object.assign(new Error('bot-not-connected'), { code: 'bot-not-connected' });
     return result;
   }
 
-  async replyChecked(route, text, { signal } = {}) {
+  async historyChecked(identity, route, query, { signal } = {}) {
+    return this.#checkedRead((client) => readExternalHistory(client, identity, route, query, signal), signal);
+  }
+
+  /** Reads one chat's messages between two times; the caller owns the backfill cursor. */
+  async chatHistoryChecked(identity, query, { signal } = {}) {
+    return this.#checkedRead((client) => readChatHistory(client, identity, query, signal), signal);
+  }
+
+  /** Reads one topic thread's messages between two times; the caller owns the polling cursor. */
+  async threadHistoryChecked(identity, query, { signal } = {}) {
+    return this.#checkedRead((client) => readThreadHistory(client, identity, query, signal), signal);
+  }
+
+  /** Reads one retained message and the AppLink that opens it in Feishu. */
+  async messageChecked(identity, route, { signal } = {}) {
+    return this.#checkedRead((client) => readExternalMessage(client, identity, route, signal), signal);
+  }
+
+  /** Reads one chat's members as open_id plus name. */
+  async chatMembersChecked(identity, query, { signal } = {}) {
+    if (!query || typeof query.chatId !== 'string') throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
+    return this.#checkedRead((client) => readChatMembers(client, query.chatId, signal), signal);
+  }
+
+  /** Downloads one image or file of a retained message, bounded by `maxBytes`. */
+  async resourceChecked(identity, route, query, { signal } = {}) {
     if (!route || typeof route.messageId !== 'string' || typeof route.conversationId !== 'string'
-      || typeof route.actorId !== 'string' || typeof text !== 'string' || !text.trim() || text.length > 4000)
+      || !query || typeof query.fileKey !== 'string' || !['image', 'file'].includes(query.type)
+      || (query.maxBytes !== undefined && (!Number.isInteger(query.maxBytes) || query.maxBytes < 1)))
+      throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
+    const maxBytes = Math.min(query.maxBytes ?? 30 * 1024 * 1024, 30 * 1024 * 1024);
+    return this.#checkedRead(async (client) => {
+      const message = await readExternalMessage(client, identity, route, signal);
+      if (message.chatId !== route.conversationId) throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
+      const chunks = [];
+      for await (const chunk of downloadFeishuResourceRanges(client,
+        { message_id: route.messageId, file_key: query.fileKey }, query.type, { signal, maxBytes })) chunks.push(chunk);
+      return { version: 1, messageId: route.messageId, fileKey: query.fileKey, type: query.type,
+        size: chunks.reduce((total, chunk) => total + chunk.length, 0), data: Buffer.concat(chunks) };
+    }, signal);
+  }
+
+  async replyChecked(route, text, { signal, uuid } = {}) {
+    if (!route || typeof route.messageId !== 'string' || typeof route.conversationId !== 'string'
+      || typeof route.actorId !== 'string' || typeof text !== 'string' || !text.trim() || text.length > 4000
+      || (uuid !== undefined && (typeof uuid !== 'string' || !uuid || uuid.length > 50)))
       throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
     const client = this.#client;
     if (!client || this.#consumerMode !== 'external-consumer')
@@ -822,7 +867,8 @@ export class FeishuRuntime {
     try {
       response = await client.im.v1.message.reply({
         path: { message_id: route.messageId },
-        data: { msg_type: 'text', content: JSON.stringify({ text }), reply_in_thread: Boolean(route.threadId) },
+        data: { msg_type: 'text', content: JSON.stringify({ text }),
+          ...(uuid ? { uuid } : {}), reply_in_thread: Boolean(route.threadId) },
       });
     } catch (cause) {
       // The request may have reached Lark. Do not turn an ambiguous result into

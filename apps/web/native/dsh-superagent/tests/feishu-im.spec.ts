@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { key } from '../src/core/index.ts'
 import { sourceLink } from '../src/app/links.ts'
 import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { feishuImKind, imTrigger, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
+import { runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
 
 const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
   version: 1, channel: 'feishu', botId: 'bot_1', fingerprint: 'f'.repeat(64), eventId: 'event_1',
@@ -64,9 +65,18 @@ describe('the dsh-im-backed Feishu Source', () => {
     expect(page.messages.map(message => message.id)).toEqual(['om_1'])
   })
 
-  it('drops legacy policy keys that the lark-cli Source used', () => {
-    const parsed = feishuImKind.policy!.schema.parse({ allowed: [], syncChat: 'oc_team', bots: [{ id: 'ou_bot' }] })
-    expect(parsed).toEqual({ allowed: [] })
+  it('keeps the bot and member-sync policy fields', () => {
+    const parsed = feishuImKind.policy!.schema.parse({ allowed: [], syncChat: 'oc_team', bots: [{ id: 'cli_ci' }] })
+    expect(parsed).toEqual({ allowed: [], syncChat: 'oc_team', bots: [{ id: 'cli_ci' }] })
+  })
+
+  it('syncs the allowed list from dsh-im chat members', async () => {
+    setDshIm(service({ chatMembersChecked: async () => ({ version: 1, chatId: 'oc_team',
+      users: [{ id: 'ou_alice', name: 'Alice' }, { id: 'ou_bob' }] }) }))
+    const host = { sources: { instance: () => ({ config: { botId: 'bot_1' } }) } }
+    const part = { allowed: [{ id: 'ou_alice', name: 'Old' }, { id: 'ou_gone', name: 'Gone' }], syncChat: 'oc_team' }
+    const result = await feishuImKind.policy!.sync!.run(host as never, part as never, new AbortController().signal)
+    expect(result.allowed).toEqual([{ id: 'ou_alice', name: 'Alice' }, { id: 'ou_bob', name: '' }])
   })
 
   it('replies through the checked original-message route and reports a stale route as gone', async () => {
@@ -94,7 +104,7 @@ describe('the dsh-im-backed Feishu Source', () => {
     setDshIm(service({ historyChecked: async () => ({ version: 1, scope: 'group', events: [event({ messageId: 'om_root' })], omitted: 0, hasMore: false, coverage: 'provider-visible-human-text' }) }))
     const root = await feishuImKind.threadContext!.read({} as never, trigger, 'root', undefined, config())
     expect(root.messages[0]?.id).toBe('om_root')
-    expect(feishuImKind.threadContext!.images).toBeUndefined()
+    expect(feishuImKind.threadContext!.images!('see [图片] img_abc and img_def')).toEqual(['img_abc', 'img_def'])
   })
 
   it('registers the exclusive consumer while the handoff switch is on and releases it on abort', async () => {
@@ -140,5 +150,60 @@ describe('the dsh-im-backed Feishu Source', () => {
     setDshIm(service())
     const host = { sources: { instance: () => ({ config: config() }) } }
     await expect(feishuImKind.refreshLabels!(host as never)).resolves.toEqual({ bot_1: 'Bot', oc_team: 'Team' })
+  })
+})
+
+describe('dsh-im Feishu recovery and identity', () => {
+  it('renders mention names and keeps bot and image metadata on the Trigger', () => {
+    const trigger = imTrigger(event({ mentions: [{ id: 'ou_bot', key: '@_user_1', name: '机器人' }],
+      text: '@_user_1 修一下', messageType: 'image', images: ['img_1'] }))
+    expect(trigger.text).toBe('@机器人 修一下')
+    expect(trigger.meta.images).toEqual(['img_1'])
+    expect(trigger.meta.messageType).toBe('image')
+    expect(imTrigger(event({ actor: { kind: 'bot', id: 'cli_ci' } })).human).toBe(false)
+    expect(imTrigger(event()).human).toBe(true)
+  })
+
+  it('sends an idempotent reply and treats an ambiguous result as sent', async () => {
+    const calls: unknown[][] = []
+    setFeishuConfig(config())
+    setDshIm(service({ replyChecked: async (...args) => {
+      calls.push(args)
+      throw Object.assign(new Error('reply-result-unknown'), { code: 'reply-result-unknown' })
+    } }))
+    const message = { id: 'reply_1', channel: { source: 'feishu', thread: 'feishu:oc_team', address: {
+      chatId: 'oc_team', messageId: 'om_1', actorId: 'ou_alice', threadId: 'omt_1' } }, text: 'done', kind: 'reply' as const }
+    await expect(sendFeishuIm({} as never, message)).resolves.toBe('sent')
+    expect(calls[0]![3]).toMatchObject({ uuid: 'reply_1' })
+  })
+
+  it('backfills chat history from the stored cursor and polls subscribed threads', async () => {
+    const received: string[] = []
+    const state = new Map<string, unknown>()
+    const page = { version: 1 as const, scope: 'chat' as const, events: [event()], omitted: 0, hasMore: false, coverage: 'provider-visible-messages' }
+    const im = service({
+      chatHistoryChecked: async () => page,
+      threadHistoryChecked: async () => ({ ...page, scope: 'thread' as const }),
+    })
+    const thread = { key: 'feishu:oc_team:om_root', ref: { source: 'feishu', id: 'oc_team:om_root' },
+      meta: { chatId: 'oc_team', threadId: 'omt_1' }, createdAt: new Date().toISOString(), subscriptions: [] }
+    const ctx = {
+      ready: Promise.resolve(),
+      config: () => config(),
+      configured: () => true,
+      receive: async (trigger: { id: string }) => { received.push(trigger.id) },
+      report: () => {},
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      threads: { subscribed: () => [thread], patch: () => {}, get: () => undefined, describe: () => {} },
+      triggers: { latest: () => undefined, get: () => undefined },
+      tickets: { get: () => undefined },
+    }
+    const controller = new AbortController()
+    const run = runFeishuImBackfill({ ctx: ctx as never, im, botId: 'bot_1', fingerprint: 'f'.repeat(64),
+      config: () => config(), toTrigger: imTrigger, report: () => {}, signal: controller.signal })
+    await vi.waitFor(() => expect(received.length).toBeGreaterThanOrEqual(2))
+    controller.abort()
+    await run
+    expect(new Set(received)).toEqual(new Set([key('feishu', 'om_1')]))
   })
 })

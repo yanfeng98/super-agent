@@ -326,6 +326,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `tests/feishu-im.spec.ts` covers the mapping, scope, policy, replies, history, the `feishu-im/` resource and consumer registration; dsh-im's
     `tests/bot-general-settings.test.mjs` and `tests/channels/feishu/multi-bot-controller.test.mjs` cover the switch.
 
+30. **Feishu recovery and content through dsh-im.** `src/sources/feishu-im-loops.ts` reads each configured chat and each
+    known direct chat from a stored cursor every 60 seconds and polls subscribed threads, so messages missed while
+    superagent or the Host restarted are recovered; re-received messages deduplicate on their Trigger id. `imTrigger`
+    substitutes mention names, marks bot senders non-human, and records `messageType`/`images`; `readFeishuImImage`
+    downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and
+    `syncChat` (`chatMembersChecked`), `sourceLink` resolves the message's own AppLink through `messageChecked` with the
+    `feishu-im/` resource as fallback, and `sendFeishuIm` passes the receipt id as Feishu's `uuid` and treats
+    `reply-result-unknown` as sent, so an ambiguous send is never retried into a duplicate reply. The Source declares the
+    `history` health entry. `tests/feishu-im.spec.ts` covers mention rendering, idempotent replies, backfill and policy sync.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.

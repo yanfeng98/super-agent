@@ -367,6 +367,7 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
 | `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry |
 | `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch` |
+| `src/sources/feishu-im-loops.ts` | The dsh-im-backed Feishu loops: chat history backfill and subscribed-thread polling |
 | `src/sources/dsh-im.ts` | The typed same-Host dsh-im intake service used by the Feishu Source |
 | `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
 | `src/sources/feishu-loops.ts` | The Feishu loops: the event consumer, history recovery, chat names and polling of subscribed topics |

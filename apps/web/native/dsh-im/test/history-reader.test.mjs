@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readExternalHistory } from '../src/channels/feishu/history-reader.mjs';
+import { readChatHistory, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory } from '../src/channels/feishu/history-reader.mjs';
 const identity = {botId:'bot-1', appId:'cli-1', botOpenId:'ou-bot', fingerprint:'a'.repeat(64)};
 const route = {messageId:'om-anchor', conversationId:'oc-team', actorId:'ou-human', threadId:'omt-topic'};
 const item = (id, text='hello') => ({message_id:id, chat_id:'oc-team', thread_id:'omt-topic',
@@ -20,11 +20,17 @@ test('uses authenticated anchor and distinguishes Chat time windows from Thread 
  assert.equal(thread.scope,'thread'); assert.equal(bot.calls[1].params.container_id,'omt-topic');
  assert.equal(bot.calls[1].params.start_time,undefined);
 });
-test('omits unsupported/app/deleted messages explicitly and refuses cross-group content',async()=>{
- const bot=client([item('ok'),{...item('post'),msg_type:'post'}, {...item('deleted'),deleted:true},
+test('renders post bodies and omits deleted and bot messages unless bots are requested',async()=>{
+ const post={...item('om-post'),msg_type:'post',body:{content:JSON.stringify({zh_cn:{title:'报告',
+  content:[[{tag:'text',text:'请看 '},{tag:'at',user_id:'ou-bot',user_name:'机器人'}],[{tag:'img',image_key:'img_1'}]]}})}};
+ const bot=client([item('ok'),post,{...item('deleted'),deleted:true},
  {...item('bot'),sender:{sender_type:'app',id_type:'app_id',id:'cli-1'}}]);
  const result=await readExternalHistory(bot,identity,route,{scope:'group',limit:20});
- assert.equal(result.events.length,1); assert.equal(result.omitted,3);
+ assert.equal(result.events.length,2); assert.equal(result.omitted,2);
+ assert.equal(result.events[1].text,'报告\n请看 @机器人\n[图片]');
+ assert.deepEqual(result.events[1].images,['img_1']);
+ const withBots=await readExternalHistory(bot,identity,route,{scope:'group',limit:20,includeBots:true});
+ assert.equal(withBots.events.length,3); assert.equal(withBots.events[2].actor.kind,'bot');
  await assert.rejects(readExternalHistory(client([{...item('wrong'),chat_id:'oc-other'}]),identity,route,
  {scope:'group',limit:20}),{code:'untrusted-source'});
 });
@@ -105,4 +111,59 @@ test('malformed and oversized text is counted as omitted, never returned unbound
   const bot=client();bot.im.v1.message.list=async()=>({code:0,data});
   await assert.rejects(readExternalHistory(bot,identity,route,{scope:'group',limit:20}),{code:'history-unavailable'});
  }
+});
+
+test('chat history reads a time window oldest first and returns its own cursor', async () => {
+ const bot = client([item('om-1'), item('om-2')]);
+ const page = await readChatHistory(bot, identity, { chatId: 'oc-team', limit: 2,
+  since: '2026-11-22T00:00:00.000Z', until: '2026-11-22T01:00:00.000Z' });
+ assert.equal(bot.calls[0].params.container_id_type, 'chat');
+ assert.equal(bot.calls[0].params.container_id, 'oc-team');
+ assert.equal(bot.calls[0].params.sort_type, 'ByCreateTimeAsc');
+ assert.equal(bot.calls[0].params.start_time, String(Math.floor(Date.parse('2026-11-22T00:00:00.000Z') / 1000)));
+ assert.equal(bot.calls[0].params.end_time, String(Math.ceil(Date.parse('2026-11-22T01:00:00.000Z') / 1000)));
+ assert.equal(page.scope, 'chat'); assert.equal(page.events.length, 2);
+ assert.equal(page.coverage, 'provider-visible-messages');
+ await assert.rejects(readChatHistory(bot, identity, { chatId: 'oc-team', limit: 51 }), { code: 'bad-request' });
+ await assert.rejects(readChatHistory(bot, identity, { chatId: '', limit: 1 }), { code: 'bad-request' });
+ await assert.rejects(readChatHistory(bot, identity, { chatId: 'oc-team', limit: 1, since: 'not-a-time' }),
+  { code: 'bad-request' });
+});
+
+test('thread history reads one thread and refuses messages outside it', async () => {
+ const bot = client([item('om-1'), item('om-2')]);
+ const page = await readThreadHistory(bot, identity, { chatId: 'oc-team', threadId: 'omt-topic', limit: 2 });
+ assert.equal(bot.calls[0].params.container_id_type, 'thread');
+ assert.equal(bot.calls[0].params.container_id, 'omt-topic');
+ assert.equal(page.scope, 'thread');
+ await assert.rejects(readThreadHistory(client([{ ...item('om-1'), thread_id: 'omt-other' }]), identity,
+  { chatId: 'oc-team', threadId: 'omt-topic', limit: 2 }), { code: 'untrusted-source' });
+ await assert.rejects(readThreadHistory(bot, identity, { chatId: 'oc-team', limit: 2 }), { code: 'bad-request' });
+});
+
+test('single message read returns its AppLink and refuses a changed route', async () => {
+ const bot = client();
+ bot.im.v1.message.get = async () => ({ code: 0, data: { items: [{ ...item('om-anchor'), message_app_link: 'https://applink.feishu.cn/client/message/open?message_id=om-anchor' }] } });
+ const message = await readExternalMessage(bot, identity, { messageId: 'om-anchor', conversationId: 'oc-team', actorId: 'ou-human' });
+ assert.equal(message.messageId, 'om-anchor');
+ assert.equal(message.appLink, 'https://applink.feishu.cn/client/message/open?message_id=om-anchor');
+ assert.equal(message.text, 'hello');
+ assert.equal(message.sender.kind, 'user');
+ await assert.rejects(readExternalMessage(bot, identity,
+  { messageId: 'om-anchor', conversationId: 'oc-other', actorId: 'ou-human' }), { code: 'stale-route' });
+ await assert.rejects(readExternalMessage(bot, identity,
+  { messageId: 'om-anchor', conversationId: 'oc-team', actorId: 'ou-other' }), { code: 'stale-route' });
+});
+
+test('chat member read follows pagination and keeps only open_ids with names', async () => {
+ const pages = [
+  { code: 0, data: { items: [{ member_id: 'ou-1', name: 'Alex' }, { member_id: '' }], has_more: true, page_token: 'p2' } },
+  { code: 0, data: { items: [{ member_id: 'ou-2' }], has_more: false } },
+ ];
+ const calls = [];
+ const bot = { im: { v1: { chatMembers: { get: async args => { calls.push(args); return pages.shift(); } } } } };
+ const result = await readChatMembers(bot, 'oc-team');
+ assert.equal(calls.length, 2); assert.equal(calls[0].params.member_id_type, 'open_id');
+ assert.equal(calls[1].params.page_token, 'p2');
+ assert.deepEqual(result.users, [{ id: 'ou-1', name: 'Alex' }, { id: 'ou-2' }]);
 });

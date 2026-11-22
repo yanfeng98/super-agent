@@ -690,6 +690,52 @@ export class DeliveryService {
     }
   }
 
+  /** Forwards one checked chat-history read through the registered channel adapter. */
+  async chatHistoryChecked(botId, query, options = {}) {
+    return this.#checkedAdapterRead('chatHistoryChecked', botId, [query], options);
+  }
+
+  /** Forwards one checked thread-history read through the registered channel adapter. */
+  async threadHistoryChecked(botId, query, options = {}) {
+    return this.#checkedAdapterRead('threadHistoryChecked', botId, [query], options);
+  }
+
+  /** Forwards one checked single-message read through the registered channel adapter. */
+  async messageChecked(botId, route, options = {}) {
+    return this.#checkedAdapterRead('messageChecked', botId, [route], options);
+  }
+
+  /** Forwards one checked chat-member read through the registered channel adapter. */
+  async chatMembersChecked(botId, query, options = {}) {
+    return this.#checkedAdapterRead('chatMembersChecked', botId, [query], options);
+  }
+
+  /** Forwards one checked resource download through the registered channel adapter. */
+  async resourceChecked(botId, route, query, options = {}) {
+    return this.#checkedAdapterRead('resourceChecked', botId, [route, query], options);
+  }
+
+  async #checkedAdapterRead(method, botId, args, options = {}) {
+    const id = botIdOf(botId);
+    cancellation(options.signal);
+    if (!/^[a-f0-9]{64}$/.test(options.expectedFingerprint ?? '')) throw deliveryError('bad-request');
+    const registration = await this.#checkedRegistrationFor(id);
+    if (typeof registration.adapter[method] !== 'function') throw deliveryError('capability-unavailable');
+    this.#assertRegistered(registration);
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, registration.controller.signal]) : registration.controller.signal;
+    try {
+      const result = await registration.adapter[method](id, ...structuredClone(args), { ...options, signal });
+      this.#assertRegistered(registration);
+      cancellation(options.signal);
+      return result;
+    } catch (error) {
+      this.#assertRegistered(registration);
+      if (signal.aborted || error?.name === 'AbortError') throw deliveryError('cancelled');
+      throw publicOperationError(error, 'history-unavailable');
+    }
+  }
+
   async replyChecked(botId, route, text, options = {}) {
     const id = botIdOf(botId);
     cancellation(options.signal);

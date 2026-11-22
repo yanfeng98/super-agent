@@ -626,7 +626,7 @@ export class MultiBotDshFeishuController {
     });
   }
 
-  async consumeInbound(botId, { expectedFingerprint, onEvent, signal, superagent } = {}) {
+  async consumeInbound(botId, { expectedFingerprint, onEvent, signal, superagent, includeBots } = {}) {
     this.#assertOpen();
     return this.#serializeConfig(() => this.#withBotTransition(botId, async () => {
       this.#assertOpen();
@@ -639,7 +639,10 @@ export class MultiBotDshFeishuController {
       signal?.throwIfAborted();
       if (account.fingerprint !== expectedFingerprint)
         throw Object.assign(new Error('account-changed'), { code: 'account-changed' });
-      const dispose = this.#inboundConsumers.register(botId, { fingerprint: expectedFingerprint, onEvent, signal });
+      if (includeBots !== undefined && typeof includeBots !== 'boolean')
+        throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
+      const dispose = this.#inboundConsumers.register(botId,
+        { fingerprint: expectedFingerprint, onEvent, signal, includeBots: includeBots === true });
       try {
         const saved = await this.#configStore.saveBot({ ...config, consumerMode: 'external-consumer' });
         this.#assertOpen('capability-unavailable');
@@ -659,7 +662,7 @@ export class MultiBotDshFeishuController {
     }));
   }
 
-  async historyChecked(botId, route, query, { expectedFingerprint, signal } = {}) {
+  async #checkedConsumerRead(botId, expectedFingerprint, signal, method, args) {
     this.#assertOpen('capability-unavailable');
     return this.#withBotTransition(botId, async () => {
       this.#assertOpen('capability-unavailable');
@@ -672,16 +675,45 @@ export class MultiBotDshFeishuController {
         throw Object.assign(new Error('account-changed'), { code: 'account-changed' });
       const runtime = this.#runtimes.get(botId);
       if (config.consumerMode !== 'external-consumer' || !isConnected(connectionStatus(runtime))
-        || typeof runtime.historyChecked !== 'function')
+        || typeof runtime[method] !== 'function')
         throw Object.assign(new Error('capability-unavailable'), { code: 'capability-unavailable' });
       const leaseSignal = this.#inboundConsumers.signalFor(botId, expectedFingerprint);
       const readSignal = signal ? AbortSignal.any([signal, leaseSignal]) : leaseSignal;
-      const result = await runtime.historyChecked({ botId, appId: config.appId,
-        botOpenId: config.botOpenId, fingerprint: account.fingerprint }, route, query, { signal: readSignal });
+      const result = await runtime[method]({ botId, appId: config.appId,
+        botOpenId: config.botOpenId, fingerprint: account.fingerprint }, ...args, { signal: readSignal });
       this.#assertOpen('capability-unavailable');
       readSignal.throwIfAborted();
       return result;
     });
+  }
+
+  async historyChecked(botId, route, query, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'historyChecked', [route, query]);
+  }
+
+  /** Reads one chat's messages between two times through the exclusive consumer's bot. */
+  async chatHistoryChecked(botId, query, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'chatHistoryChecked', [query]);
+  }
+
+  /** Reads one topic thread's messages between two times through the exclusive consumer's bot. */
+  async threadHistoryChecked(botId, query, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'threadHistoryChecked', [query]);
+  }
+
+  /** Reads one retained message and its AppLink through the exclusive consumer's bot. */
+  async messageChecked(botId, route, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'messageChecked', [route]);
+  }
+
+  /** Reads one chat's member list through the exclusive consumer's bot. */
+  async chatMembersChecked(botId, query, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'chatMembersChecked', [query]);
+  }
+
+  /** Downloads one image or file of a retained message through the exclusive consumer's bot. */
+  async resourceChecked(botId, route, query, { expectedFingerprint, signal } = {}) {
+    return this.#checkedConsumerRead(botId, expectedFingerprint, signal, 'resourceChecked', [route, query]);
   }
 
   async replyChecked(botId, route, text, { expectedFingerprint, signal } = {}) {
@@ -1585,7 +1617,8 @@ export class MultiBotDshFeishuController {
           const account = await this.#deliveryAccount(current);
           assertCurrent();
           return normalizeExternalText(event, { botId: current.id, appId: current.appId,
-            botOpenId: current.botOpenId, fingerprint: account.fingerprint });
+            botOpenId: current.botOpenId, fingerprint: account.fingerprint },
+          { includeBots: this.#inboundConsumers.includeBotsFor(current.id) });
         });
         // Never hold the account queue across application work: onEvent may
         // await a checked read/reply, and stop must be able to abort its signal.

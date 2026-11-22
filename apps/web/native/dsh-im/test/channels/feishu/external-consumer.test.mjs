@@ -109,3 +109,32 @@ test('group evidence requires authenticated account identity and valid mention a
   input.message.create_time = '9e99';
   assert.throws(() => normalized(input), { code: 'invalid-inbound' });
 });
+
+test('post bodies are rendered to text with their image keys, and bot senders are admitted only on request', () => {
+  const post = event();
+  post.sender.sender_type = 'app';
+  post.message.message_type = 'post';
+  post.message.content = JSON.stringify({ zh_cn: { title: 'Build', content: [
+    [{ tag: 'text', text: 'see ' }, { tag: 'at', user_id: 'bot-open-id', user_name: 'Platform Bot' }],
+    [{ tag: 'a', text: 'logs', href: 'https://example.test/logs' }, { tag: 'img', image_key: 'img_1' }],
+  ] } });
+  assert.equal(normalizeExternalText(post, { botId: 'bot', appId: 'app', botOpenId: 'bot-open-id', fingerprint }), null);
+  const evidence = normalizeExternalText(post, { botId: 'bot', appId: 'app', botOpenId: 'bot-open-id', fingerprint },
+    { includeBots: true });
+  assert.equal(evidence.actor.kind, 'bot');
+  assert.equal(evidence.messageType, 'post');
+  assert.equal(evidence.text, 'Build\nsee @Platform Bot\nlogs https://example.test/logs[图片]');
+  assert.deepEqual(evidence.images, ['img_1']);
+});
+
+test('image messages become a placeholder carrying the image key', () => {
+  const image = event();
+  image.message.message_type = 'image';
+  image.message.content = JSON.stringify({ image_key: 'img_abc' });
+  const evidence = normalized(image);
+  assert.equal(evidence.messageType, 'image');
+  assert.equal(evidence.text, '[图片] img_abc');
+  assert.deepEqual(evidence.images, ['img_abc']);
+  assert.throws(() => normalized({ ...image, message: { ...image.message, content: '{}' } }), { code: 'invalid-inbound' });
+  assert.throws(() => normalized({ ...image, message: { ...image.message, content: 'not-json' } }), { code: 'invalid-inbound' });
+});

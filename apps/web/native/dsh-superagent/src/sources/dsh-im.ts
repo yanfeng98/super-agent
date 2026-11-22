@@ -9,10 +9,14 @@ export interface DshImEvent {
   fingerprint: string
   eventId: string
   messageId: string
-  actor: { kind: 'user'; id: string; name?: string }
+  actor: { kind: 'user' | 'bot'; id: string; name?: string }
   conversation: { kind: 'group' | 'dm'; id: string }
   mentions: { id: string; key: string; name?: string }[]
   mentionedAccount: boolean
+  /** How dsh-im rendered the body: plain text, rich text (post), or an image placeholder carrying its key. */
+  messageType?: 'text' | 'post' | 'image'
+  /** Image keys referenced by the message, in order. */
+  images?: string[]
   at: string
   text: string
   reply: { messageId: string; conversationId: string; actorId: string; threadId?: string; rootId?: string; parentId?: string }
@@ -37,7 +41,7 @@ export interface DshImBotDescription {
 /** One page of bounded history, in the same event shape as live intake. */
 export interface DshImHistory {
   version: 1
-  scope: 'group' | 'nearby' | 'thread'
+  scope: 'group' | 'nearby' | 'thread' | 'chat'
   events: DshImEvent[]
   omitted: number
   hasMore: boolean
@@ -58,6 +62,7 @@ export interface DshImService {
     signal: AbortSignal
     onEvent(event: DshImEvent, context: { signal: AbortSignal }): Promise<{ accepted: true }>
     superagent?: true
+    includeBots?: boolean
   }): Promise<() => void>
   historyChecked(botId: string, route: DshImEvent['reply'], query: {
     scope: 'group' | 'nearby' | 'thread'
@@ -65,9 +70,49 @@ export interface DshImService {
     cursor?: string
     beforeCount?: number
     afterCount?: number
+    includeBots?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   replyChecked(botId: string, route: DshImEvent['reply'], text: string,
-    options: { expectedFingerprint: string; signal: AbortSignal }): Promise<{ sent: true; messageId: string }>
+    options: { expectedFingerprint: string; signal: AbortSignal; uuid?: string }): Promise<{ sent: true; messageId: string }>
+  /** Reads one chat between two times, oldest first; `direct` marks a direct chat. */
+  chatHistoryChecked?(botId: string, query: {
+    chatId: string; limit: number; since?: string; until?: string; cursor?: string
+    includeBots?: boolean; direct?: boolean
+  }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
+  /** Reads one topic thread between two times, oldest first. */
+  threadHistoryChecked?(botId: string, query: {
+    chatId: string; threadId: string; limit: number; since?: string; until?: string; cursor?: string; includeBots?: boolean
+  }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
+  /** Reads one retained message plus the AppLink that opens it in Feishu. */
+  messageChecked?(botId: string, route: DshImEvent['reply'], options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImMessage>
+  /** Reads one chat's members as open_id plus name. */
+  chatMembersChecked?(botId: string, query: { chatId: string },
+    options: { expectedFingerprint: string; signal: AbortSignal }): Promise<{ version: 1; chatId: string; users: { id: string; name?: string }[] }>
+  /** Downloads one image or file of a retained message. */
+  resourceChecked?(botId: string, route: DshImEvent['reply'], query: { fileKey: string; type: 'image' | 'file'; maxBytes?: number },
+    options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImResource>
+}
+/** One retained message as dsh-im reads it. */
+export interface DshImMessage {
+  version: 1
+  messageId: string
+  chatId: string
+  at: string
+  text: string
+  messageType?: 'text' | 'post' | 'image'
+  images?: string[]
+  sender: { kind: 'user' | 'bot'; id: string; name?: string }
+  appLink?: string
+  deleted: boolean
+}
+/** One downloaded Feishu resource; `data` is raw bytes. */
+export interface DshImResource {
+  version: 1
+  messageId: string
+  fileKey: string
+  type: 'image' | 'file'
+  size: number
+  data: Uint8Array
 }
 
 let service: DshImService | undefined
