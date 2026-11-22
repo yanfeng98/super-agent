@@ -458,7 +458,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-skill` | yes | Agent skill provider registry for the DeepSeek Harness |
-| `@deepseek-ai/dsh-skill-engineering` | yes | Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling |
+| `@deepseek-ai/dsh-skill-engineering` | yes | Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, domain modeling, and writing |
 | `@deepseek-ai/dsh-skill-filesystem` | yes | Local filesystem skill provider for the DeepSeek Harness |
 | `@deepseek-ai/dsh-skill-office` | yes | Bundled Word, PowerPoint, and Excel workflows and Office operation guidance |
 | `@deepseek-ai/dsh-skill-rust-anything` | yes | Built-in rust-anything skill: profile, plan, bridge, record, port, diff, bench, shadow and gate a verified migration to Rust |

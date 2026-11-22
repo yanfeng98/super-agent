@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-skill-engineering",
-  "description": "Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling",
+  "description": "Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, domain modeling, and writing",
   "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"

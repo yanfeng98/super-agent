@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/engineering-skill-prefix/guide.md
 /:
-  en: a83b8eba92cc9fbe
-  zh: 07588a9712e91fa3
+  en: d734123b80c87fff
+  zh: 7d00caf580e1f1c6
 /shipped-engineering-skills-take-an-eng-prefix:
   en: 62f0f64e273992fc
   zh: 0fe5bae32e2f186c
 /shipped-engineering-skills-take-an-eng-prefix/change:
-  en: 67252d0e3459311f
-  zh: 24761ac01ff1c475
+  en: 70a6aac2862ce159
+  zh: 8fbd89fcf5de24ec
 /shipped-engineering-skills-take-an-eng-prefix/migration:
-  en: fcf8b3fb703ae22e
-  zh: c04f66e79114a523
+  en: 254d37f92b6fd7a0
+  zh: a81c7417e99b2e23
