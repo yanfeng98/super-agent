@@ -115,11 +115,13 @@ test('late cancellation discards anchor and page even when SDK ignores signal', 
  }
 });
 
-test('malformed and oversized text is counted as omitted, never returned unbounded', async () => {
+test('malformed text is omitted and an oversized body is cut rather than dropped', async () => {
  const bad=[{...item('bad-json'),body:{content:'{'}},item('too-large','x'.repeat(16001)),
  {...item('bad-mentions'),mentions:{}}, {...item('bad-time'),create_time:'no'},item('good')];
  const page=await readExternalHistory(client(bad),identity,route,{scope:'thread',limit:20});
- assert.equal(page.events.length,1);assert.equal(page.events[0].messageId,'good');assert.equal(page.omitted,4);
+ assert.equal(page.events.length,2);assert.equal(page.events[0].messageId,'too-large');
+ assert.equal(page.events[0].text,'x'.repeat(16000)+'\n[内容过长，已截断]');
+ assert.equal(page.events[1].messageId,'good');assert.equal(page.omitted,3);
  for(const data of [{items:null,has_more:false},{items:[],has_more:'false'}]) {
   const bot=client();bot.im.v1.message.list=async()=>({code:0,data});
   await assert.rejects(readExternalHistory(bot,identity,route,{scope:'group',limit:20}),{code:'history-unavailable'});
@@ -205,4 +207,42 @@ test('accepts a bot-authored anchor and reads another message of the same chat b
  // A route that does not name the anchor reaches no message of the chat, not even the anchor itself.
  await assert.rejects(readExternalMessage(bot,identity,route,undefined,'om-parent'),{code:'stale-route'});
  await assert.rejects(readExternalMessage(bot,identity,route,undefined,'om-anchor'),{code:'stale-route'});
+});
+
+test('ingest reads skip the bot\'s own messages while context reads still show them', async () => {
+ const own={...item('om-own'),sender:{sender_type:'app',id_type:'app_id',id:'cli-1'}};
+ const other={...item('om-other-bot'),sender:{sender_type:'app',id_type:'app_id',id:'cli-other'}};
+ const page=await readChatHistory(client([item('om-human'),own,other]),identity,
+  {chatId:'oc-team',limit:3,includeBots:true});
+ assert.deepEqual(page.events.map(event=>event.messageId),['om-human','om-other-bot']);
+ assert.equal(page.omitted,0);
+ const context=await readExternalHistory(client([own]),identity,route,{scope:'thread',limit:20,includeBots:true});
+ assert.deepEqual(context.events.map(event=>event.messageId),['om-own']);
+});
+
+test('expands a merged forward into its sub-messages, and keeps the placeholder when they are unreadable', async () => {
+ const forward={...item('om-forward'),msg_type:'merge_forward',body:{content:JSON.stringify({content:'Merged and Forwarded Message'})}};
+ const sub=(id,name,text,extra={})=>({...item(id,text),sender_name:name,upper_message_id:'om-forward',...extra});
+ const bot=client([forward]);
+ bot.im.v1.message.get=async args=>args.path.message_id==='om-forward'
+  ?{code:0,data:{items:[forward,sub('om-sub-1','Alex','ship it'),sub('om-sub-2','Bo','ok',{msg_type:'post',
+    body:{content:JSON.stringify({zh_cn:{content:[[{tag:'text',text:'done'}]]}})}}),
+    sub('om-sub-3','Bo','',{msg_type:'image',body:{content:JSON.stringify({image_key:'img_9'})}}),
+    {...item('om-sub-4','hi'),upper_message_id:'om-forward',sender:{sender_type:'user',id:'ou-cy',sender_name:'Cy'}}]}}
+  :{code:0,data:{items:[item('om-anchor')]}};
+ const page=await readExternalHistory(bot,identity,route,{scope:'group',limit:20});
+ assert.equal(page.events[0].messageId,'om-forward');
+ assert.equal(page.events[0].text,'Alex: ship it\nBo: done\nBo: [图片] img_9\nCy: hi');
+ // An item that names another upper message belongs to that message, not to this forward.
+ const foreign=client([forward]);
+ foreign.im.v1.message.get=async args=>args.path.message_id==='om-anchor'
+  ?{code:0,data:{items:[item('om-anchor')]}}
+  :{code:0,data:{items:[forward,{...item('om-else'),upper_message_id:'om-other'}]}};
+ const misattributed=await readExternalHistory(foreign,identity,route,{scope:'group',limit:20});
+ assert.equal(misattributed.events[0].text,'[合并转发]');
+ const unreadable=client([forward]);
+ unreadable.im.v1.message.get=async args=>args.path.message_id==='om-anchor'
+  ?{code:0,data:{items:[item('om-anchor')]}}:{code:230027};
+ const fallback=await readExternalHistory(unreadable,identity,route,{scope:'group',limit:20});
+ assert.equal(fallback.events[0].text,'[合并转发]');
 });

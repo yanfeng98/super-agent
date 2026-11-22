@@ -47,9 +47,27 @@ test('renders resource, card and system bodies instead of dropping them', () => 
   assert.equal(body('interactive', { schema: '2.0', body: { elements: [{ tag: 'markdown', content: 'deploy ok' }] } }).text,
     '[卡片] deploy ok');
   assert.equal(body('merge_forward', {}).text, '[合并转发]');
+  // A consumer that read the forward's sub-messages hands them back through the same body.
+  assert.equal(body('merge_forward', { text: 'Alex: ship it\nBot: done' }).text, 'Alex: ship it\nBot: done');
   assert.equal(body('share_chat', { chat_id: 'oc_shared' }).text, '[群名片] oc_shared');
   assert.equal(body('share_user', { user_id: 'ou_shared' }).text, '[个人名片] ou_shared');
   assert.throws(() => body('file', {}), { code: 'invalid-inbound' });
+});
+
+test('keeps an over-long body instead of dropping it, and says it was cut', () => {
+  const long = normalized({ ...event(), message: { ...event().message, content: JSON.stringify({ text: 'x'.repeat(20000) }) } });
+  assert.equal(long.text, `${'x'.repeat(16000)}\n[内容过长，已截断]`);
+  const post = normalized({ ...event(), message: { ...event().message, message_type: 'post',
+    content: JSON.stringify({ zh_cn: { content: [[{ tag: 'text', text: 'y'.repeat(20000) }]] } }) } });
+  assert.equal(post.text.endsWith('\n[内容过长，已截断]'), true);
+  assert.equal(post.text.length, 16000 + '\n[内容过长，已截断]'.length);
+});
+
+test('cuts an over-long body without splitting a surrogate pair', () => {
+  const emoji = normalized({ ...event(), message: { ...event().message,
+    content: JSON.stringify({ text: `${'x'.repeat(15999)}😀 tail` }) } });
+  assert.equal(emoji.text, `${'x'.repeat(15999)}\n[内容过长，已截断]`);
+  assert.equal(emoji.text.isWellFormed(), true);
 });
 
 test('carries the provider AppLink only when the provider supplies one', () => {

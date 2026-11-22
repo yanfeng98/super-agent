@@ -1060,6 +1060,35 @@ test('external group handler awaits durable acceptance and cannot start the nati
   await runtime.stop();
 });
 
+test('expands a merged forward for the external consumer and keeps the placeholder when it cannot be read', async () => {
+  const seen = [];
+  const runtime = new FeishuRuntime({
+    lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+    consumerMode: 'external-consumer',
+    acceptExternal: async (event) => { seen.push(event); return { accepted: true }; },
+    harness: { async ensureRunning() {} }, state: {},
+  });
+  const starting = runtime.start();
+  await waitFor(() => FakeWSClient.instances.length === 1);
+  FakeWSClient.instances[0].becomeReady(); await starting;
+  const client = FakeClient.instances[0];
+  const forward = { message_id: 'om-forward', chat_id: 'chat', chat_type: 'group', message_type: 'merge_forward',
+    content: JSON.stringify({ content: 'Merged and Forwarded Message' }), create_time: '1790787600000' };
+  const event = () => ({ message: { ...forward }, sender: { sender_type: 'user', sender_id: { open_id: 'human' } } });
+  client.im.v1.message.get = async () => ({ code: 0, data: { items: [forward,
+    { message_id: 'om-sub', upper_message_id: 'om-forward', msg_type: 'text',
+      sender: { sender_name: 'Alex' }, body: { content: JSON.stringify({ text: 'ship it' }) } }] } });
+  await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](event());
+  assert.deepEqual(JSON.parse(seen[0].message.content), { text: 'Alex: ship it' });
+  assert.equal(seen[0].message.message_type, 'merge_forward');
+  // The event the SDK delivered is not mutated; a later read of it still sees the provider body.
+  assert.equal(forward.content, JSON.stringify({ content: 'Merged and Forwarded Message' }));
+  client.im.v1.message.get = async () => ({ code: 230027 });
+  await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](event());
+  assert.equal(seen[1].message.content, forward.content);
+  await runtime.stop();
+});
+
 test('checked replies validate the original source before sending and retain unknown SDK outcomes', async () => {
   const runtime = new FeishuRuntime({ lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
     consumerMode: 'external-consumer', harness: { async ensureRunning() {} }, state: {} });

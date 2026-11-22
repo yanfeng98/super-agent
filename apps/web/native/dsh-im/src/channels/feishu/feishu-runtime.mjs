@@ -1,6 +1,7 @@
 import { createConnectionDiagnostics, atConnectionStage } from '../shared/connection-error.mjs';
-import { anchorMatches, readChatHistory, readChatList, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory }
-  from './history-reader.mjs';
+import { anchorMatches, readChatHistory, readChatList, readChatMembers, readExternalHistory, readExternalMessage,
+  readMergedForward, readThreadHistory } from './history-reader.mjs';
+import { mergedForwardText } from './external-consumer.mjs';
 import { downloadFeishuResourceRanges } from './resource-download.mjs';
 import { randomUUID } from 'node:crypto';
 import { FeishuHarnessBridge } from './bridge.mjs';
@@ -21,6 +22,8 @@ import {
 import { t } from '../shared/i18n.mjs';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+// Reading a merged forward's sub-messages happens before the event is acknowledged, so it stays far below Feishu's window.
+const MERGED_FORWARD_READ_MS = 2_000;
 const CALLBACK_PROBE_SUCCESS_NOTICE = '✅ 修复完成：已实测收到 card.action.trigger，菜单按钮现在可用。';
 const CALLBACK_PROBE_TIMEOUT_NOTICE = '⚠️ 修复验证超时：未收到测试卡按钮的 card.action.trigger，不能确认按钮已修复。请不要重复授权；先检查飞书开放平台的卡片回调配置，确认后再发送 /repair。';
 const CALLBACK_PROBE_SEND_FAILURE_NOTICE = '⚠️ 修复验证失败：无法发送专用测试卡，不能确认 card.action.trigger 已恢复。请不要重复授权；先检查机器人消息权限和连接状态。';
@@ -416,7 +419,7 @@ export class FeishuRuntime {
             assertCurrentStart();
             if (typeof this.#acceptExternal !== 'function')
               throw Object.assign(new Error('consumer-unavailable'), { code: 'consumer-unavailable' });
-            return this.#acceptExternal(event, { signal });
+            return this.#withMergedForward(event, signal).then(expanded => this.#acceptExternal(expanded, { signal }));
           }
           if (isCurrentStart()) void bridge.accept(event);
         },
@@ -790,6 +793,22 @@ export class FeishuRuntime {
     if (typeof messageId !== 'string' || !messageId || messageId.length > 512 || conversationId !== receiveId)
       throw Object.assign(new Error('send-result-unknown'), { code: 'send-result-unknown' });
     return { sent: true, receipt: { version: 1, messageId, conversationId } };
+  }
+
+  /**
+   * Replaces a merged forward's fixed placeholder body with its sub-messages, so the consumer reads the contents rather
+   * than only the fact that a forward arrived. An unreadable forward keeps the placeholder.
+   */
+  async #withMergedForward(event, signal) {
+    if (event?.message?.message_type !== 'merge_forward') return event;
+    // Feishu wants the event callback answered within seconds, so the extra read gets its own short deadline.
+    const read = signal ? AbortSignal.any([signal, AbortSignal.timeout(MERGED_FORWARD_READ_MS)])
+      : AbortSignal.timeout(MERGED_FORWARD_READ_MS);
+    let items;
+    try { items = await readMergedForward(this.#client, event.message.message_id, read); }
+    catch { signal?.throwIfAborted(); return event; }
+    const text = mergedForwardText(items);
+    return text ? { ...event, message: { ...event.message, content: JSON.stringify({ text }) } } : event;
   }
 
   async #checkedRead(operation, signal) {

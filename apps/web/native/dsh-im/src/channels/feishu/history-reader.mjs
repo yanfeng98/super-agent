@@ -1,5 +1,5 @@
 import { readNearbyHistory } from './nearby-history.mjs';
-import { MESSAGE_TYPES, normalizeExternalText, senderMatches } from './external-consumer.mjs';
+import { MESSAGE_TYPES, mergedForwardText, normalizeExternalText, senderMatches } from './external-consumer.mjs';
 
 function refuse(code) { throw Object.assign(new Error(code), { code }); }
 function identifier(value) {
@@ -51,6 +51,33 @@ export function anchorMatches(source, route) {
   return threadId === route.threadId && rootId === route.rootId && parentId === route.parentId;
 }
 
+/**
+ * Reads the sub-messages of one merged forward. Feishu returns only a fixed placeholder body for the message itself, so
+ * the contents are the items of a second read that name it as their `upper_message_id`.
+ */
+export async function readMergedForward(client, messageId, signal) {
+  if (!identifier(messageId)) return [];
+  const response = await checkedSdkRead(() => client.im.v1.message.get({
+    path: { message_id: messageId }, params: { with_sender_name: true },
+  }, { signal }), signal);
+  const items = Array.isArray(response?.data?.items) ? response.data.items : [];
+  const linked = items.filter(item => item?.upper_message_id === messageId);
+  if (linked.length) return linked;
+  // An item linked to another upper message belongs to that one, not to this forward; only an unlinked response is taken.
+  if (items.some(item => item?.message_id !== messageId && item?.upper_message_id !== undefined)) return [];
+  return items.filter(item => item?.message_id !== messageId);
+}
+
+/** Replaces a merged forward's placeholder body with its sub-messages; an unreadable one keeps the placeholder. */
+async function expandMergedForward(client, item, signal) {
+  if (item?.msg_type !== 'merge_forward') return item;
+  let items;
+  try { items = await readMergedForward(client, item.message_id, signal); }
+  catch { signal?.throwIfAborted(); return item; }
+  const text = mergedForwardText(items);
+  return text ? { ...item, body: { ...(item.body ?? {}), content: JSON.stringify({ text }) } } : item;
+}
+
 // Application-defined checked read: destination is derived from an authenticated source.
 // Lark has Chat/time-range listing and Thread listing, not a native around-message API.
 export async function readExternalHistory(client, identity, route, query, signal) {
@@ -87,7 +114,8 @@ export async function readExternalHistory(client, identity, route, query, signal
           && !(query.includeBots === true && ['app', 'bot'].includes(item.sender?.sender_type)))) { ++omitted; continue; }
       if (item.mentions !== undefined && (!Array.isArray(item.mentions) || item.mentions.length > 100)) { ++omitted; continue; }
       let event;
-      try { event = historyEvent(item, identity, { chatId: route.conversationId, includeBots: query.includeBots === true }); } catch (error) {
+      try { event = historyEvent(await expandMergedForward(client, item, signal), identity,
+        { chatId: route.conversationId, includeBots: query.includeBots === true }); } catch (error) {
         if (error?.code !== 'invalid-inbound') throw error;
         ++omitted; continue;
       }
@@ -153,11 +181,15 @@ async function readHistoryPage(client, identity, options, signal) {
   let omitted = 0;
   for (const item of items) {
     if (!item || item.chat_id !== chatId || (threadId !== undefined && item.thread_id !== threadId)) refuse('untrusted-source');
+    // A bot's own messages are never inbound work for its consumer: skip them without counting them as unreadable.
+    const senderId = item.sender?.id;
+    if (senderId && ((senderId === identity.appId && item.sender?.sender_type === 'app')
+      || (senderId === identity.botOpenId && item.sender?.sender_type === 'bot'))) continue;
     if (item.deleted || !MESSAGE_TYPES.includes(item.msg_type)
       || (item.sender?.sender_type !== 'user'
         && !(includeBots && ['app', 'bot'].includes(item.sender?.sender_type)))) { ++omitted; continue; }
     let event;
-    try { event = historyEvent(item, identity, { chatId, threadId, direct, includeBots }); } catch (error) {
+    try { event = historyEvent(await expandMergedForward(client, item, signal), identity, { chatId, threadId, direct, includeBots }); } catch (error) {
       if (error?.code !== 'invalid-inbound') throw error;
       ++omitted; continue;
     }
@@ -212,7 +244,7 @@ export async function readExternalMessage(client, identity, route, signal, targe
   const item = await fetch(wanted);
   if (!item || item.deleted || item.chat_id !== route.conversationId
     || (targetId === undefined && item.sender?.id !== route.actorId)) refuse('stale-route');
-  const event = historyEvent(item, identity, { chatId: route.conversationId, includeBots: true });
+  const event = historyEvent(await expandMergedForward(client, item, signal), identity, { chatId: route.conversationId, includeBots: true });
   if (!event) refuse('message-unavailable');
   return { version: 1, messageId: event.messageId, chatId: event.conversation.id, at: event.at, text: event.text,
     messageType: event.messageType, images: event.images, sender: event.actor,

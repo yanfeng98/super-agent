@@ -9,6 +9,16 @@ function identifier(value) {
 }
 
 const TEXT_LIMIT = 16000;
+const TRUNCATED = '\n[内容过长，已截断]';
+
+/** Keeps a body bounded: a message longer than the limit keeps its beginning and says it was cut, instead of vanishing. */
+function bounded(text) {
+  if (text.length <= TEXT_LIMIT) return text;
+  let cut = text.slice(0, TEXT_LIMIT);
+  // The cut must not split a surrogate pair, or the kept text ends with half an emoji.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  return `${cut}${TRUNCATED}`;
+}
 
 /**
  * Message types a consumer receives. Text, post and image bodies carry model-readable content; the rest are rendered as a
@@ -19,6 +29,9 @@ export const MESSAGE_TYPES = Object.freeze([
   'text', 'post', 'image', 'file', 'audio', 'media', 'sticker',
   'interactive', 'share_chat', 'share_user', 'merge_forward',
 ]);
+
+/** Human-readable rich-text values are unbounded; `identifier` bounds ids, not paragraphs. */
+const textValue = value => (typeof value === 'string' && value.length > 0 ? value : undefined);
 
 /** Renders one Feishu rich-text (post) element into plain text; image elements also report their keys. */
 function renderPostElement(element, images, mentioned) {
@@ -36,8 +49,8 @@ function renderPostElement(element, images, mentioned) {
     // Keep the key beside the placeholder so a consumer can read the image back from the message.
     return `[图片] ${key}`;
   }
-  if (element.tag === 'a') return [element.text, element.href].filter(identifier).join(' ');
-  if (element.tag === 'code_block' || element.tag === 'text' || element.tag === 'md') return identifier(element.text) ?? '';
+  if (element.tag === 'a') return [textValue(element.text), identifier(element.href)].filter(Boolean).join(' ');
+  if (element.tag === 'code_block' || element.tag === 'text' || element.tag === 'md') return textValue(element.text) ?? '';
   if (element.tag === 'emotion') return '[表情]';
   return '';
 }
@@ -54,7 +67,7 @@ function renderPost(content) {
   const images = [];
   const mentioned = [];
   const lines = [];
-  if (identifier(post.title)) lines.push(post.title);
+  if (textValue(post.title)) lines.push(post.title);
   for (const paragraph of post.content) {
     if (!Array.isArray(paragraph)) continue;
     lines.push(paragraph.map(element => renderPostElement(element, images, mentioned)).join(''));
@@ -114,8 +127,8 @@ function messageBody(messageType, content) {
   try { body = JSON.parse(content); } catch { throw refusal('invalid-inbound'); }
   if (!body || typeof body !== 'object') throw refusal('invalid-inbound');
   if (messageType === 'text') {
-    if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
-    return { text: body.text, images: [], mentioned: [] };
+    if (typeof body.text !== 'string' || !body.text.trim()) throw refusal('invalid-inbound');
+    return { text: bounded(body.text), images: [], mentioned: [] };
   }
   if (messageType === 'image') {
     const key = identifier(body.image_key);
@@ -124,12 +137,42 @@ function messageBody(messageType, content) {
   }
   if (messageType === 'post') {
     const rendered = renderPost(content);
-    if (!rendered || !rendered.text || rendered.text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
-    return { text: rendered.text, images: rendered.images, mentioned: rendered.mentioned };
+    if (!rendered || !rendered.text) throw refusal('invalid-inbound');
+    return { text: bounded(rendered.text), images: rendered.images, mentioned: rendered.mentioned };
   }
+  // A merged forward arrives with its fixed placeholder body; a consumer that read the sub-messages replaces it with their text.
+  if (messageType === 'merge_forward' && typeof body.text === 'string' && body.text.trim())
+    return { text: bounded(body.text), images: [], mentioned: [] };
   const text = resourceBody(messageType, body);
-  if (!text || text.length > TEXT_LIMIT) throw refusal('invalid-inbound');
-  return { text, images: [], mentioned: [] };
+  if (!text) throw refusal('invalid-inbound');
+  return { text: bounded(text), images: [], mentioned: [] };
+}
+
+/**
+ * Renders the sub-messages of a merged forward as `sender: text` lines. Feishu returns only a fixed placeholder body
+ * for a merged forward, so the contents come from a second read of the same message; an unreadable sub-message is skipped.
+ */
+export function mergedForwardText(items) {
+  const lines = [];
+  let length = 0;
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item || item.deleted === true) continue;
+    let text = '';
+    try {
+      const body = JSON.parse(item.body?.content ?? '');
+      if (item.msg_type === 'text') text = typeof body?.text === 'string' ? body.text : '';
+      else if (item.msg_type === 'post') text = renderPost(item.body.content)?.text ?? '';
+      else if (item.msg_type === 'image') text = `[图片] ${identifier(body?.image_key) ?? ''}`.trim();
+      else if (MESSAGE_TYPES.includes(item.msg_type)) text = resourceBody(item.msg_type, body) ?? '';
+    } catch { continue; }
+    if (!text) continue;
+    const sender = identifier(item.sender_name) ?? identifier(item.sender?.sender_name) ?? '';
+    const line = sender ? `${sender}: ${text}` : text;
+    if (length + line.length > TEXT_LIMIT) break;
+    lines.push(line);
+    length += line.length + 1;
+  }
+  return lines.join('\n').trim();
 }
 
 /**
