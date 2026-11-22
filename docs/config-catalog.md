@@ -3932,6 +3932,22 @@ export type PythonEnvironment = 'workspace-dependencies' | 'user'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-rust-anything -->
+<a id="deepseek-aidsh-skill-rust-anything"></a>
+
+## `@deepseek-ai/dsh-skill-rust-anything`
+
+- `source`: [`packages/skill/skill-rust-anything/src/index.ts:26`](../packages/skill/skill-rust-anything/src/index.ts)
+
+```ts config-catalog
+/** Bundled skill asset location. */
+export interface Config {
+  /** Absolute assets directory containing the skill directory; defaults to the packaged assets. */
+  assetRoot?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-rust-anything -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-spill-local -->
 <a id="deepseek-aidsh-spill-local"></a>
 

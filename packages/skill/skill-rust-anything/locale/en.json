@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rust migration skill",
+    "description": "Provide the built-in rust-anything workflow: profile, plan, and port code to Rust one verified unit at a time."
+  }
+}

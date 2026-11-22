@@ -5,7 +5,7 @@ with this checkout. It is compiled here rather than installed from npm, and it i
 
 The crate is a CLI plus an MCP server: it records what the original TypeScript/JavaScript, Python, C, Go, Ruby, Java or Kotlin code does,
 bridges and ports one unit at a time into Rust, and refuses to call a port done until `gate` passes against that recording. The Web bundle's
-`standard` agent preset mounts the MCP side; the [skill](../../.agents/skills/dsh-rust-anything/SKILL.md) drives the loop.
+`standard` agent preset mounts the MCP side; the [skill](../../packages/skill/skill-rust-anything/assets/dsh-rust-anything/SKILL.md) drives the loop.
 
 ## Baseline
 

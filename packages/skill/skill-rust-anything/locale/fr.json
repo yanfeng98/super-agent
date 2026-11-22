@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Compétence de migration vers Rust",
+    "description": "Fournit le flux rust-anything intégré : profiler, planifier et porter le code vers Rust, une unité vérifiée à la fois."
+  }
+}

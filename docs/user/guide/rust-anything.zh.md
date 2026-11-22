@@ -18,7 +18,7 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 
 ## 提出迁移需求
 
-描述任务即可，匹配的[技能](../../../.agents/skills/dsh-rust-anything/SKILL.md)会自动加载；也可以在输入框里输入 `/` 选 `dsh-rust-anything`，先加载再描述任务。例如：
+描述任务即可，匹配的[技能](../../../packages/skill/skill-rust-anything/assets/dsh-rust-anything/SKILL.md)会自动加载；也可以在输入框里输入 `/` 选 `dsh-rust-anything`，先加载再描述任务。例如：
 
 - 「给这个仓库做一份迁移到 Rust 的计划，按顺序列出单元。」
 - 「把 `src/parser/` 里的解析器迁到 Rust，一次一个函数。」

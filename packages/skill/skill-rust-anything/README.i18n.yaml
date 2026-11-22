@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/skill/skill-rust-anything/README.md
+/:
+  en: 974692f55f1feb82
+  zh: baa96c93c4d3c5d0
+/deepseek-ai-dsh-skill-rust-anything:
+  en: af1e6846b9564f22
+  zh: 0c16b52d92fdfd17
+/deepseek-ai-dsh-skill-rust-anything/summary:
+  en: b7af1c0211f15f91
+  zh: a6feb5c82d4de623
+/deepseek-ai-dsh-skill-rust-anything/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 901d52e8cf1fed05
+/deepseek-ai-dsh-skill-rust-anything/use-this-package:
+  en: 5fc623cc076e5f3d
+  zh: 7eea4fd586255319
+/deepseek-ai-dsh-skill-rust-anything/use-this-package/what-the-catalog-contains:
+  en: b53dd7aaa7a49bfa
+  zh: 20453da0c3b01bfd
+/deepseek-ai-dsh-skill-rust-anything/use-this-package/observable-success-and-failures:
+  en: 815223f996c75191
+  zh: 9d304225b5c3f414
+/deepseek-ai-dsh-skill-rust-anything/understand-the-implementation:
+  en: f445c6d733b3bb7d
+  zh: 879366bc0ba1a751
+/deepseek-ai-dsh-skill-rust-anything/further-exploration:
+  en: 44b0fa118561b5b6
+  zh: 70b968fcaa88d397
+/deepseek-ai-dsh-skill-rust-anything/model-experience:
+  en: 7fc5b6545bf476ac
+  zh: ec5c8cf9e71bb598
+/deepseek-ai-dsh-skill-rust-anything/model-experience/kv-cache-effect:
+  en: efd3e47c8c32a185
+  zh: 528e9bbff9c038fb
+/deepseek-ai-dsh-skill-rust-anything/known-limitations-and-deferred-work:
+  en: 1fb703948e84addb
+  zh: 136f73a977f2c8b6
+/deepseek-ai-dsh-skill-rust-anything/known-limitations-and-deferred-work/dev-note:
+  en: 821e015c5a37a077
+  zh: 617e1328b276e94c

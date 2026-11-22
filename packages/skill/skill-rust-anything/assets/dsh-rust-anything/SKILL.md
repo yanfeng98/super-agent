@@ -26,10 +26,10 @@ the same way: record a built app (`dotnet out/app.dll`, servers with
 Tools: the `rust-anything` CLI, or the same steps as MCP tools (`rust-anything mcp`): `profile`,
 `analyze`, `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `shadow`, `gate`, and for a
 whole app `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift`.
-If the MCP tools are not available, use the CLI this checkout builds at
-`native/rust-anything/bin/rust-anything` (`pnpm run build:rust-anything`); do not install a global
-copy. When a step fails because a runtime or the MCP server is missing or out of date, run
-`rust-anything doctor`: it checks each one and prints the command that fixes it.
+If the MCP tools are not available, use the installation's `rust-anything` CLI; this repository
+builds it into `native/rust-anything/bin/rust-anything` (see below). Do not install a global copy.
+When a step fails because a runtime, the installation or the MCP server is missing or out of date,
+run `rust-anything doctor`: it checks each one and prints the command that fixes it.
 
 ## 0. Profile: find what is worth moving
 
@@ -203,13 +203,15 @@ Then report to the user, and **wait for their go-ahead before the next unit**:
 - behavior differences or risks left (e.g. error messages differ, a napi `String` refuses lone
   surrogates), and what is left in the plan.
 
-## In this checkout
+## This installation
 
 - The MCP server is mounted by the Web `standard` agent preset: tools are
-  `mcp__rust-anything__*` (eager, so no `load_tools` step). The CLI is compiled
-  from the crate vendored at `native/rust-anything`: `pnpm run build` (or
-  `pnpm run build:rust-anything`) stages `native/rust-anything/bin/rust-anything`,
-  which is the executable the plugin spawns.
+  `mcp__rust-anything__*` (eager, so no `load_tools` step). In this repository
+  the CLI compiles from the crate vendored at `native/rust-anything`: `pnpm run
+  build` (or `pnpm run build:rust-anything`) stages
+  `native/rust-anything/bin/rust-anything`, which is the executable the plugin
+  spawns. When neither the tools nor that executable is present, tell the user
+  rather than installing a global copy.
 - Pass **absolute** crate paths to `build`, `diff`, `gate` and `bench`: 2.1.0
   re-parents its child process to a temp directory while passing a relative
   `--manifest-path`, so a relative path fails with `manifest path ... does not

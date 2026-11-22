@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rust 迁移技能",
+    "description": "提供内置的 rust-anything 工作流：先 profile 与规划，再按单元把代码验证性地迁移到 Rust。"
+  }
+}

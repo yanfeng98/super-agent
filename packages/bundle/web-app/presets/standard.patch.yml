@@ -138,7 +138,11 @@
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
           # rust-anything: verified, unit-by-unit ports to Rust. `pnpm run build`
-          # compiles the CLI from the crate vendored at native/rust-anything.
+          # compiles the CLI from the crate vendored at native/rust-anything. The
+          # bundled skill carries the porting loop and is mounted beside the tools,
+          # so an agent that has one has the other.
+          - id: skill-rust-anything
+            name: '@deepseek-ai/dsh-skill-rust-anything'
           - id: mcp-rust-anything
             name: '@deepseek-ai/dsh-rust-anything'
             config:

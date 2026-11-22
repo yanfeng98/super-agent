@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Skill für die Migration nach Rust",
+    "description": "Bietet den eingebauten rust-anything-Ablauf: profilen, planen und Code Einheit für Einheit verifiziert nach Rust portieren."
+  }
+}

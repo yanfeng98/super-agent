@@ -18,7 +18,7 @@ The Web `standard` agent preset mounts the [rust-anything](https://github.com/er
 
 ## Ask for a port
 
-Describe the work and the matching [skill](../../../.agents/skills/dsh-rust-anything/SKILL.md) loads, or type `/` in the composer and pick `dsh-rust-anything` to load it first. For example:
+Describe the work and the matching [skill](../../../packages/skill/skill-rust-anything/assets/dsh-rust-anything/SKILL.md) loads, or type `/` in the composer and pick `dsh-rust-anything` to load it first. For example:
 
 - "Plan a migration of this repository to Rust and list the units in order."
 - "Port the parser in `src/parser/` to Rust, one function at a time."
