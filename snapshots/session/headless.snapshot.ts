@@ -74,6 +74,18 @@ function snapshotMode(value: string | undefined): SnapshotMode {
   }
 }
 
+/** `git worktree list --porcelain -z` needs Git 2.36; older hosts cannot scan or remove worktrees. */
+function worktreeScanSupported(): boolean {
+  const result = spawnSync('git', ['--version'], { encoding: 'utf8' })
+  const match = /git version (\d+)\.(\d+)/u.exec(result.stdout)
+  if (match === null) return false
+  const major = Number(match[1])
+  const minor = Number(match[2])
+  return major > 2 || major === 2 && minor >= 36
+}
+
+const hasWorktreeScan = worktreeScanSupported()
+
 const mode = snapshotMode(process.env.DSH_SNAPSHOT)
 const RUNTIME_WORKSPACE_ENTRIES = ['.agents', '.dsh', '.snapshot-patches'] as const
 
@@ -1358,6 +1370,8 @@ describe('headless recorded-session snapshots', () => {
       || scenario.manifest.workspace?.setup === 'readonly-patch-directory' && process.getuid?.() === 0
       || mode === 'record' && scenario.manifest.recording === 'authored'
       || mode === 'record' && scenario.manifest.sessionFormat !== undefined
+      // The worktree scenario scans with `worktree list --porcelain -z`, which older Git cannot parse.
+      || scenario.name === 'worktree' && !hasWorktreeScan
     const scenarioTest = skipped ? it.skip : mode === 'replay' ? it.concurrent : it
     const inputLabel = retainedToolInput === undefined ? '' : ' from retained V3 input'
     scenarioTest(`${mode}s ${scenario.name}${inputLabel} through dsh --profile headless`, async () => {
