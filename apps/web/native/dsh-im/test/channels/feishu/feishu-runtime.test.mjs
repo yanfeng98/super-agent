@@ -1086,9 +1086,15 @@ test('checked replies validate the original source before sending and retain unk
   await assert.rejects(runtime.replyChecked(route, 'hello'), { code: 'stale-route' });
   assert.equal(sends, 1);
   source.chat_id = 'chat';
+  // Feishu opens a topic on a top-level message after the route was captured; the route still names that message.
+  source.thread_id = 'omt_new'; source.root_id = undefined; source.parent_id = undefined;
+  assert.deepEqual(await runtime.replyChecked({ messageId: 'message', conversationId: 'chat', actorId: 'human' }, 'hello',
+    { replyInThread: true }), { sent: true, messageId: 'reply' });
+  assert.equal(sends, 2);
+  source.thread_id = 'thread'; source.root_id = 'root'; source.parent_id = 'parent';
   client.im.v1.message.reply = async () => { sends++; throw new Error('ambiguous timeout'); };
   await assert.rejects(runtime.replyChecked(route, 'hello'), { code: 'reply-result-unknown' });
-  assert.equal(sends, 2);
+  assert.equal(sends, 3);
   await runtime.stop();
 });
 

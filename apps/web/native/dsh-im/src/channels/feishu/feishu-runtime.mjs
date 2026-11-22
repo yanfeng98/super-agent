@@ -1,6 +1,6 @@
 import { createConnectionDiagnostics, atConnectionStage } from '../shared/connection-error.mjs';
-import { readChatHistory, readChatList, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory } from './history-reader.mjs';
-import { senderMatches } from './external-consumer.mjs';
+import { anchorMatches, readChatHistory, readChatList, readChatMembers, readExternalHistory, readExternalMessage, readThreadHistory }
+  from './history-reader.mjs';
 import { downloadFeishuResourceRanges } from './resource-download.mjs';
 import { randomUUID } from 'node:crypto';
 import { FeishuHarnessBridge } from './bridge.mjs';
@@ -845,18 +845,14 @@ export class FeishuRuntime {
       throw Object.assign(new Error('bad-request'), { code: 'bad-request' });
     const maxBytes = Math.min(query.maxBytes ?? 30 * 1024 * 1024, 30 * 1024 * 1024);
     return this.#checkedRead(async (client) => {
-      const message = await readExternalMessage(client, identity, route, signal);
+      // The read validates the retained route and returns the message that carries the resource, so one call covers both.
+      const message = await readExternalMessage(client, identity, route, signal,
+        messageId !== undefined && messageId !== route.messageId ? messageId : undefined);
       if (message.chatId !== route.conversationId) throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
-      let target = route.messageId;
-      if (messageId !== undefined && messageId !== route.messageId) {
-        const other = await readExternalMessage(client, identity, route, signal, messageId);
-        if (other.chatId !== route.conversationId) throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
-        target = other.messageId;
-      }
       const chunks = [];
       for await (const chunk of downloadFeishuResourceRanges(client,
-        { message_id: target, file_key: query.fileKey }, query.type, { signal, maxBytes })) chunks.push(chunk);
-      return { version: 1, messageId: target, fileKey: query.fileKey, type: query.type,
+        { message_id: message.messageId, file_key: query.fileKey }, query.type, { signal, maxBytes })) chunks.push(chunk);
+      return { version: 1, messageId: message.messageId, fileKey: query.fileKey, type: query.type,
         size: chunks.reduce((total, chunk) => total + chunk.length, 0), data: Buffer.concat(chunks) };
     }, signal);
   }
@@ -878,10 +874,8 @@ export class FeishuRuntime {
     signal?.throwIfAborted();
     const current = await client.im.v1.message.get({ path: { message_id: route.messageId } });
     const source = current?.data?.items?.find(item => item.message_id === route.messageId);
-    if (current?.code || !source || source.deleted === true || source.chat_id !== route.conversationId
-      || !senderMatches(source, route.actorId)
-      || (source.thread_id || undefined) !== route.threadId
-      || (source.root_id || undefined) !== route.rootId || (source.parent_id || undefined) !== route.parentId)
+    // The same anchor rule the reads use: a topic Feishu opened on the source after the route was captured still matches.
+    if (current?.code || !anchorMatches(source, route))
       throw Object.assign(new Error('stale-route'), { code: 'stale-route' });
     signal?.throwIfAborted();
     if (this.#client !== client) throw Object.assign(new Error('bot-not-connected'), { code: 'bot-not-connected' });

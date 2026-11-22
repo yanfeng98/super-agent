@@ -38,7 +38,20 @@ test('fails closed on stale reference, permission denial, nonexistent Thread and
  const bot=client();
  await assert.rejects(readExternalHistory(bot,identity,{...route,actorId:'wrong'}, {scope:'group',limit:20}),{code:'stale-route'});
  assert.equal(bot.calls.length,0);
- await assert.rejects(readExternalHistory(bot,identity,{...route,threadId:undefined},{scope:'thread',limit:20}),{code:'stale-route'});
+ // A topic Feishu opened on the source after the route was captured still resolves the same message, and a route
+ // that names no topic cannot list the Thread it does not name.
+ await assert.rejects(readExternalHistory(bot,identity,{...route,threadId:undefined},{scope:'thread',limit:20}),{code:'thread-unavailable'});
+ assert.equal((await readExternalHistory(bot,identity,{...route,threadId:undefined},{scope:'group',limit:20})).events.length,1);
+ // A message that was itself a reply can become the root of a topic opened on it; its parent still names it.
+ bot.im.v1.message.get=async()=>({code:0,data:{items:[{...item('om-anchor'),parent_id:'om-parent',root_id:'om-anchor'}]}});
+ const becameRoot=await readExternalHistory(bot,identity,{...route,threadId:undefined,rootId:undefined,parentId:'om-parent'},
+  {scope:'group',limit:20});
+ assert.equal(becameRoot.events.length,1);
+ // A route without a topic for a message that already sits inside one is stale: the route lost what it named.
+ const inside={...item('om-anchor'),root_id:'om-root',parent_id:'om-parent'};
+ bot.im.v1.message.get=async()=>({code:0,data:{items:[inside]}});
+ await assert.rejects(readExternalHistory(bot,identity,{...route,threadId:undefined,rootId:undefined,parentId:undefined},
+  {scope:'group',limit:20}),{code:'stale-route'});
  bot.im.v1.message.get=async()=>({code:230027});
  await assert.rejects(readExternalHistory(bot,identity,route,{scope:'group',limit:20}),{code:'history-permission-denied'});
  const controller=new AbortController();controller.abort();

@@ -31,13 +31,24 @@ async function checkedSdkRead(operation, signal) {
 /**
  * True when a fetched message is the one a retained route names: same chat, same author, same topic links.
  * A deleted message never matches, so a route to it stops resolving.
+ *
+ * Feishu opens a topic on a message after it was sent — a reply inside the Thread, including the bot's own, does it —
+ * so a route captured before that keeps naming the same message even though the message now reports a `thread_id`.
+ * Only that one-way transition is tolerated, and only when the message became the topic's own root; a route that names a
+ * different topic, or a route without one for a message inside someone else's topic, still fails.
  */
-function anchorMatches(source, route) {
-  return Boolean(source) && source.deleted !== true && source.chat_id === route.conversationId
-    && senderMatches(source, route.actorId)
-    && (source.thread_id || undefined) === route.threadId
-    && (source.root_id || undefined) === route.rootId
-    && (source.parent_id || undefined) === route.parentId;
+export function anchorMatches(source, route) {
+  if (!source || source.deleted === true || source.chat_id !== route.conversationId
+    || !senderMatches(source, route.actorId)) return false;
+  const threadId = source.thread_id || undefined;
+  const rootId = source.root_id || undefined;
+  const parentId = source.parent_id || undefined;
+  // Feishu opens a topic on a message after it was sent — a reply inside the Thread, including the bot's own, does it.
+  // A route captured before that still names the same message as long as the message became that topic's own root.
+  const topicOpened = threadId !== undefined && route.threadId === undefined && route.rootId === undefined
+    && (rootId === undefined || rootId === source.message_id);
+  if (topicOpened) return parentId === route.parentId;
+  return threadId === route.threadId && rootId === route.rootId && parentId === route.parentId;
 }
 
 // Application-defined checked read: destination is derived from an authenticated source.
