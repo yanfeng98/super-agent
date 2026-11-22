@@ -177,9 +177,9 @@ Relays to the main Session keep their order, and so do notices; a failed one hol
 
 A Source that polls reads each subscribed Thread on its own: a failed read keeps its error on its Thread, is read again on the next poll, and counts towards an error of the Source, which it reports after three failed polls in a row by default; any successful poll resets the count. Its read position stays where it was, so a later poll of its Thread reads what the failed reads missed.
 
-The Feishu event consumer reports every failure, and polling of subscribed topics keeps each failure on its Thread.
+The Feishu Source reports every failure it sees — a live consumer that stopped, a failed history round, a failed Thread poll — and keeps a failed Thread poll's error on its Thread.
 
-A malformed item in a Feishu page is skipped, and the Source's state counts it.
+A malformed item in a Feishu page is skipped and counted as omitted by the read that returned it.
 ### Channel failure
 
 Outgoing messages are stored and sent as stored work, retried with backoff from 5 seconds, doubling up to 300.

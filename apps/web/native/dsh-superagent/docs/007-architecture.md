@@ -365,12 +365,12 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/registry.ts` | `SourceRegistry` |
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
 | `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
-| `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry |
+| `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry; the bundle loads `./feishu-watch` instead, so only its stored triggers and its tests reach it |
 | `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch` |
 | `src/sources/feishu-im-loops.ts` | The dsh-im-backed Feishu loops: chat history backfill and subscribed-thread polling |
 | `src/sources/dsh-im.ts` | The typed same-Host dsh-im intake service used by the Feishu Source |
 | `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
-| `src/sources/feishu-loops.ts` | The Feishu loops: the event consumer, history recovery, chat names and polling of subscribed topics |
+| `src/sources/feishu-loops.ts` | The legacy lark-cli loops: the event consumer, history recovery, chat names and polling of subscribed topics |
 | `src/sources/feishu-channel.ts` | The Feishu Channel: topic replies, `sent` or `gone` |
 | `src/sources/feishu-read.ts` | The `feishu/` reads of a Trigger's message, its root, parent and topic, and `feishuThreadContext`, which gives them to assessments with their images |
 | `src/sources/admission-context.ts` | The bounded window an assessment starts from: the first pages of a Trigger's Thread, read through its kind, and the messages around the Trigger |
