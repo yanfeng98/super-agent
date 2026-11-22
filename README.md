@@ -97,7 +97,7 @@ pnpm dsh plugin --profile <名称> add <包名>   # 给已有 profile 安装插�
 
 ## 与上游的差异
 
-对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-22 的 `master`（`0.2.3-alpha.2` 发布线），对比时间为 2026-11-22。`main` 相对该基线有 2,298 个文件（+376,556/−3,216 行），差异全部来自本仓库自有能力，行数主要由两个内置原生包 `apps/web/native/dsh-im` 与 `apps/web/native/dsh-superagent` 构成。本次同步的过程、冲突处理与验证见 [`logs/00118`](logs/00118-同步上游0.2.3-alpha.2.md)，上一次同步见 [`logs/00063`](logs/00063-同步上游0.2.2-rc.5.md)；逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
+对比基线为上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 2026-11-22 的 `master`（`0.2.3-alpha.2` 发布线），对比时间为 2026-11-22。本次同步完成时，`main` 相对该基线有 2,298 个文件（+376,556/−3,216 行），差异全部来自本仓库自有能力，行数主要由两个内置原生包 `apps/web/native/dsh-im` 与 `apps/web/native/dsh-superagent` 构成。本次同步的过程、冲突处理与验证见 [`logs/00118`](logs/00118-同步上游0.2.3-alpha.2.md)，上一次同步见 [`logs/00063`](logs/00063-同步上游0.2.2-rc.5.md)；逐项实现与校验记录见 `logs/`；需要迁移的破坏性变更另有升级指南。
 
 上述统计已包含原生 IM 机器人（含 `/goal`、`/plan`）与 Slack/Telegram/Discord/WhatsApp 四渠道的移除，见 [`logs/00027`](logs/00027-原生集成dsh-im.md)、[`logs/00028`](logs/00028-移除四渠道.md)、[`logs/00033`](logs/00033-移除Matrix与Office.md) 与 [`logs/00037`](logs/00037-移除企业微信应用渠道.md)。
 
