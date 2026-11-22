@@ -202,14 +202,17 @@ describe('the dsh-im-backed Feishu Source', () => {
     // dsh-im logs the rejection; the Source reports it too, because the message is not retried.
     await expect(accept!(event(), { signal: new AbortController().signal })).rejects.toThrow('store is down')
     expect(reports.at(-1)).toMatchObject({ state: 'error', detail: expect.stringContaining(`Handling ${key('feishu', 'om_1')} failed: store is down`) })
+    // Poll instead of sleeping a fixed poll interval, so a loaded machine does not decide the outcome.
+    const until = async (done: () => boolean) => {
+      for (let attempt = 0; attempt < 100 && !done(); attempt += 1) await new Promise(resolve => setTimeout(resolve, 50))
+      expect(done()).toBe(true)
+    }
     // The loop's ready report repeats it instead of hiding it behind "Listening".
-    await new Promise(resolve => setTimeout(resolve, 2_100))
-    expect(reports.at(-1)).toMatchObject({ state: 'error' })
+    await until(() => reports.filter(report => report.state === 'error').length > 1)
     // The next message that is handled clears it, so the Source returns to ready.
     fail = false
     await accept!(event({ messageId: 'om_2' }), { signal: new AbortController().signal })
-    await new Promise(resolve => setTimeout(resolve, 2_100))
-    expect(reports.at(-1)?.state).toBe('ready')
+    await until(() => reports.at(-1)?.state === 'ready')
     controller.abort()
     await running
   }, 15_000)

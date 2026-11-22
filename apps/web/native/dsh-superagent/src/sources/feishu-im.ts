@@ -479,6 +479,11 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                 brand: bot.domain === 'lark' ? 'lark' as const : 'feishu' as const }
               cachedBots.set(config.botId, cached)
               botName = cached.name
+              // The panel names the bot from the label map; store the name the account read returned so it needs no manual refresh.
+              if (full) {
+                const labels = full.state.get(KV.sources.labels(SOURCE)) ?? {}
+                if (labels[config.botId] !== botName) full.state.set(KV.sources.labels(SOURCE), { ...labels, [config.botId]: botName })
+              }
               controller = new AbortController()
               const lease = AbortSignal.any([signal, controller.signal])
               release = await im.consumeInbound(config.botId, {
@@ -490,7 +495,7 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                     try {
                       await ctx.receive(trigger)
                     } catch (error) {
-                      // dsh-im logs the rejection; the Source must show it too, because the message is not retried.
+                      // dsh-im only logs the rejection, so the Source reports it too instead of letting the next ready report hide it.
                       eventFailure = { at: Date.now(), detail: `Handling ${trigger.id} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}` }
                       ctx.report('feishu', { state: 'error', detail: eventFailure.detail, at: new Date(eventFailure.at).toISOString() })
                       throw error

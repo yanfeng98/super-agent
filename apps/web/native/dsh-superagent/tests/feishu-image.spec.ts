@@ -7,7 +7,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest'
 import { Commands } from '../src/infra/commands.ts'
 import { testDeployment } from './fixtures/deployment.ts'
-import { admissionImageKeys, readAdmissionImage } from '../src/sources/feishu-image.ts'
+import { admissionFileKeys, admissionImageKeys, readAdmissionImage } from '../src/sources/feishu-image.ts'
 import type { FeishuRef } from '../src/sources/feishu-read.ts'
 
 let directory: string
@@ -36,6 +36,12 @@ beforeEach(() => {
   })
 })
 afterEach(() => { vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) })
+it('admits only the file keys the handoff rendered into a message, beside its image keys', () => {
+  expect(admissionFileKeys('[文件] report.pdf file_v2_a1 [语音] 3s file_v2_b2 [视频] demo.mp4 file_v2_c3')).toEqual(['file_v2_a1', 'file_v2_b2', 'file_v2_c3'])
+  // A key inside a word, or an image key, is not a file this Source may read.
+  expect(admissionFileKeys('myfile_v2_a1 and [图片] img_v2_a1')).toEqual([])
+})
+
 it('retains the source-message pairing, commits an image reference and removes temporary files', async () => {
   expect(admissionImageKeys('![Image](img_source) {"image_key":"img_second"} img_source')).toEqual(['img_source', 'img_second'])
   expect(await readAdmissionImage(agent, commands, source, text, 'img_source', directory, signal())).toEqual({ source_message_id: 'om_source', image_key: 'img_source', image: ref })
