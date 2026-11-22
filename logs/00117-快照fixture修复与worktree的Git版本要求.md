@@ -28,7 +28,7 @@
 
 | 命令 | 结果 |
 |---|---|
-| `pnpm run test:snapshot` | 275 通过 / 0 失败 / 3 跳过（2 个平台跳过 + `worktree`），连跑两次一致 |
+| `pnpm run test:snapshot` | 275 通过 / 0 失败 / 3 跳过（2 个 `pwsh` 场景因本机没有 `pwsh`，加上 `worktree`），连跑两次一致 |
 | `npx vitest run packages/skill/skill-filesystem` | 40/40（此前受 `/tmp/.git` 影响） |
 | `npx vitest run packages/experimental/worktree` | 本机 Git 2.34 下 42 失败（既有问题，本次未改产品代码） |
 | `pnpm run test:docs` | 21/21 |
