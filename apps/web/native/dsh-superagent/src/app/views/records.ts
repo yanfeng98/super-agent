@@ -124,7 +124,10 @@ export function ticketSummary(ticket: Ticket, number?: number) {
   const note = ticketNote(ticket, stage)
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
   const cleanup = !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
+  // A revert newer than the merge undoes it, so the row shows the ticket as it stands rather than the merged state.
+  const merged = !!ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at)
   return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, tags: [] as string[], state, ...stage, ...note ? { note } : {},
+    ...merged ? { merged: true as const } : {},
     actions: { retry: canRetry(ticket), stop: liveTicket(ticket), ...cleanup ? { cleanup: true as const } : {} },
     strength: ticket.mandate.strength, ended: ticket.ended,
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },

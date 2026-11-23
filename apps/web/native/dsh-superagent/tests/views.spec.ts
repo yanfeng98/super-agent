@@ -333,6 +333,19 @@ it('numbers tickets in creation order and keeps the number across edits', () => 
   expect(ticketDetail(host, 't1')!.number).toBe(1)
 })
 
+it('marks a merged Ticket on its row, and drops the mark once a revert undoes the merge', () => {
+  live('t1')
+  const ended = { ...store.tickets.get('t1')!, ended: { at, by: 'executor' as const, outcome: 'completed' as const },
+    merged: { at: '2026-09-23T00:00:00.000Z', branch: 'agent/t1', target: 'main' } }
+  store.tickets.save(ended)
+  expect(ticketSummary(store.tickets.get('t1')!)).toMatchObject({ state: 'ended', merged: true })
+  // A revert older than the merge is history; a newer one is the ticket's current state.
+  store.tickets.save({ ...ended, reverted: { at: '2026-09-22T00:00:00.000Z', commit: 'c', target: 'main', merge: 'b' } })
+  expect(ticketSummary(store.tickets.get('t1')!).merged).toBe(true)
+  store.tickets.save({ ...ended, reverted: { at: '2026-09-24T00:00:00.000Z', commit: 'c', target: 'main', merge: 'b' } })
+  expect(ticketSummary(store.tickets.get('t1')!).merged).toBeUndefined()
+})
+
 it('offers merge, discard and rebase only on an ended ticket with a review branch, and cleanup once merged', () => {
   const host = views()
   live('t1')

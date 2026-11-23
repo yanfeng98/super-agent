@@ -80,7 +80,7 @@ function SearchResults({ result, query, onClose, onMore, loadingMore }: { result
     {!empty && <ul className="dt-list">
       {result.tickets.map(ticket => <Result key={ticket.id} name={<Highlight text={ticket.title} query={query} />}
         open={go({ page: 'execution', id: ticket.id })}>
-        <span>{t('term.ticket')}</span><span>{ticket.stage === 'ended' ? t('ticket.ended') : ticketMark(t, ticket).label}</span>
+        <span>{t('term.ticket')}</span><span>{ticketMark(t, ticket).label}</span>
       </Result>)}
       {result.threads.map(thread => <Result key={thread.key} name={readableMarkers(t, thread.title)} open={go({ page: 'trigger',
         id: thread.key })}>

@@ -202,7 +202,7 @@ export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ 
 const ticketDetail = (): TicketPageView => ({
   ...ticketSummary(), actions: { ...TICKET.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false,
     cleanup: false, check: false, reviewDecision: false, revert: false, push: false, dequeue: false }, review: undefined, merged: undefined, discarded: undefined,
-  reverted: undefined, cleaned: undefined, paused: false,
+  reverted: undefined, cleaned: undefined, paused: false, workspace: undefined,
   history: [], related: [], blockedBy: [], notes: [],
   request: { text: '修复登录页回归', at: '2026-09-22T00:00:00Z' }, decision: acceptDecision(),
   threads: [threadSummary()],

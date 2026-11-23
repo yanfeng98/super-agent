@@ -295,7 +295,7 @@ export function TicketPage({ id }: { id: string }) {
   if (!data) return <><PageHead
     title={t('term.ticket')} />{error instanceof ApiError && error.missing ? <Hint>{t('ticketNotFound')}</Hint> : <LoadState
       error={error} loading />}</>
-  const status = ticketMark(t, data)
+  const status = ticketMark(t, { ...data, merged: !!data.merged && !data.reverted })
   const actor = actorName(t, data.mandate.actor)
   const { legacy } = data.basis
   const undelivered = data.inputs.filter(input => !input.delivered)
@@ -309,6 +309,18 @@ export function TicketPage({ id }: { id: string }) {
   })()
   const channel = data.channels[0]
   const review = data.review
+  const directory = data.workspace?.directory ?? data.directory ?? t('empty')
+  // A removed worktree leaves its captured review readable, but no diff to load; a failed capture has neither.
+  const workspaceGone = !!data.cleaned || !!data.discarded || data.workspace?.exists === false
+  const reviewUnavailable = !!review?.error || workspaceGone
+  const workspaceNote = review?.error || workspaceGone
+    ? data.cleaned ? t('reviewWorkspaceCleaned', { target: data.merged?.target ?? t('empty'), directory })
+      : data.discarded ? t('reviewWorkspaceDiscarded', { directory })
+        : data.workspace?.exists === false ? data.merged
+          ? t('reviewWorkspaceMergedMissing', { target: data.merged.target, directory })
+          : t('reviewWorkspaceMissing', { directory })
+          : t('reviewWorkspaceNotRepository', { directory })
+    : undefined
   // Only the Ticket's own local Thread takes a reply; a context-only Thread belongs to another Ticket.
   const localThread = data.threads.find(thread => thread.source === 'local' && !thread.context)
   const notes = data.notes
@@ -473,30 +485,35 @@ export function TicketPage({ id }: { id: string }) {
       <LocalReply thread={localThread.key} onDone={reload} />
     </Section>}
     {review && <Section title={t('reviewTitle')} hint={t('reviewHint')}>
-      {review.error && <Hint>{review.error}</Hint>}
-      <KeyValues rows={[[t('reviewBranch'), <span className="dt-mono">{review.branch ?? t('empty')}</span>],
-        [t('reviewBase'), <span className="dt-mono">{review.base?.slice(0, 12) ?? t('empty')}</span>],
-        [t('reviewHead'), <span className="dt-mono">{review.head?.slice(0, 12) ?? t('empty')}</span>],
-        ...review.stat ? [[t('reviewDiffstat'), <span className="dt-mono">{review.stat}</span>] as [string, ReactNode]] : []]} />
-      {review.commits.length > 0 && <>
-        <p className="dt-hint">{t('reviewCommits', { count: review.commits.length })}</p>
-        <ul className="dt-plain-list dt-mono">{review.commits.map((commit, index) => <li key={`${commit.sha}:${index}`}>{commit.sha} {commit.subject}</li>)}</ul>
-      </>}
-      {review.files.length > 0 && <>
-        <p className="dt-hint">{t('reviewFiles', { count: review.files.length })}</p>
-        <ul className="dt-plain-list dt-mono">{review.files.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
-      </>}
-      {review.dirty.length > 0 && <>
-        <p className="dt-hint">{t('reviewDirty', { count: review.dirty.length })}</p>
-        <ul className="dt-plain-list dt-mono">{review.dirty.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
-      </>}
+      {review.error
+        ? <Hint>{workspaceNote}</Hint>
+        : <>
+          {workspaceGone && <Hint>{workspaceNote}</Hint>}
+          <KeyValues rows={[[t('reviewBranch'), <span className="dt-mono">{review.branch ?? t('empty')}</span>],
+            [t('reviewBase'), <span className="dt-mono">{review.base?.slice(0, 12) ?? t('empty')}</span>],
+            [t('reviewHead'), <span className="dt-mono">{review.head?.slice(0, 12) ?? t('empty')}</span>],
+            ...review.stat ? [[t('reviewDiffstat'), <span className="dt-mono">{review.stat}</span>] as [string, ReactNode]] : []]} />
+          {review.commits.length > 0 && <>
+            <p className="dt-hint">{t('reviewCommits', { count: review.commits.length })}</p>
+            <ul className="dt-plain-list dt-mono">{review.commits.map((commit, index) => <li key={`${commit.sha}:${index}`}>{commit.sha} {commit.subject}</li>)}</ul>
+          </>}
+          {review.files.length > 0 && <>
+            <p className="dt-hint">{t('reviewFiles', { count: review.files.length })}</p>
+            <ul className="dt-plain-list dt-mono">{review.files.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
+          </>}
+          {review.dirty.length > 0 && <>
+            <p className="dt-hint">{t('reviewDirty', { count: review.dirty.length })}</p>
+            <ul className="dt-plain-list dt-mono">{review.dirty.map((file, index) => <li key={`${file.path}:${index}`}>{file.status} {file.path}</li>)}</ul>
+          </>}
+        </>}
       <div className="dt-row-actions">
-        <Button variant="outline" size="sm" onClick={() => loadDiff()} disabled={diffBusy}>{t('reviewViewDiff')}</Button>
-        {showDelta && <Button variant="outline" size="sm" onClick={() => loadDiff(reviewedHead)} disabled={diffBusy}>
+        {!reviewUnavailable && <Button variant="outline" size="sm" onClick={() => loadDiff()} disabled={diffBusy}>
+          {t('reviewViewDiff')}</Button>}
+        {!reviewUnavailable && showDelta && <Button variant="outline" size="sm" onClick={() => loadDiff(reviewedHead)} disabled={diffBusy}>
           {t('reviewDiffSince', { commit: reviewedHead!.slice(0, 8) })}</Button>}
       </div>
       {diffSince && diff && !diff.error && <Hint>{t('reviewDiffSinceHint', { commit: diffSince.slice(0, 8) })}</Hint>}
-      {diff?.error && <Hint>{diff.error}</Hint>}
+      {diff?.error && <Hint>{workspaceNote ? `${workspaceNote} ${diff.error}` : diff.error}</Hint>}
       {diff && !diff.error && (diff.files.length
         ? <>
           <p className="dt-hint">{t('diffFileCount', { count: diff.files.length })}</p>

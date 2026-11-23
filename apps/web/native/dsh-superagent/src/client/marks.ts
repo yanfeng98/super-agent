@@ -6,9 +6,14 @@ import type { DotState, IconName, TagTone } from './controls.tsx'
 
 export interface Mark { label: string; tone: TagTone; dot: DotState; icon: IconName }
 
-export function ticketMark(t: T, ticket: TicketStage & Pick<TicketSummary, 'ended'>): Mark {
+export function ticketMark(t: T, ticket: TicketStage & Pick<TicketSummary, 'ended'> & { merged?: unknown }): Mark {
   switch (ticket.stage) {
-    case 'ended': return { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop' }
+    // A merge is the Ticket's strongest end state, so it labels the row even when the work itself was reported completed first.
+    case 'ended': return ticket.merged || ticket.ended?.outcome === 'merged'
+      ? { label: t('outcome.merged'), tone: 'success', dot: 'done', icon: 'pull' }
+      : ticket.ended?.outcome === 'completed'
+        ? { label: t('outcome.completed'), tone: 'success', dot: 'done', icon: 'decision' }
+        : { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop' }
     case 'person': {
       const action = ticket.action
       const icon: IconName = action === 'review' ? 'review' : action === 'failed' ? 'alert' : action === 'blocked' ? 'blocked'

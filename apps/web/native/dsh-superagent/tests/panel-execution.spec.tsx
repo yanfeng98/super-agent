@@ -532,6 +532,51 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   expect(all('.dt-hint').map(hint => hint.textContent).find(line => line?.includes(en['outcome.stopped']))).toMatch(/Stopped by a person: 不需要了$/)
 })
 
+it('marks a merge ahead of the completed outcome, and explains the worktree a cleanup removed', async () => {
+  const endedAt = '2026-09-21T00:00:00Z'
+  const completed = { id: 't7', title: '清理的工单', state: 'ended' as const, actions: { retry: false, stop: false },
+    ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const } }
+  server.tickets.ended = [ticketSummary({ ...completed, merged: true }, { stage: 'ended' }), ticketSummary(
+    { ...completed, id: 't8', title: '完成的工单' }, { stage: 'ended' }), ...server.tickets.ended]
+  server.ticketDetails.t7 = { ...server.ticketDetails.t1!, ...completed, stage: 'ended',
+    actions: { ...completed.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false, cleanup: false,
+      check: false, reviewDecision: false, revert: true, push: false, dequeue: false },
+    merged: { at: endedAt, branch: 'agent/t7', target: 'main' },
+    cleaned: { at: '2026-09-22T00:00:00Z' }, workspace: { directory: '/w/t7', exists: false },
+    review: { capturedAt: endedAt, branch: 'agent/t7', base: 'a'.repeat(40), head: 'b'.repeat(40),
+      commits: [{ sha: 'b'.repeat(7), subject: '修复窄屏' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] } }
+  await mount()
+  await click(zh['tab.execution'])
+  await click(zh['ticket.ended'])
+  // A merged Ticket is labelled merged even though its worker reported the work completed first.
+  expect(all('.dt-ticket-stage').map(stage => stage.textContent)).toEqual(expect.arrayContaining([zh['outcome.merged'],
+    zh['outcome.completed']]))
+  await click('清理的工单')
+  expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.merged'])
+  // The captured changes stay readable, and the section says the worktree is gone instead of asking git again.
+  expect(text()).toContain(zh.reviewWorkspaceCleaned.replace('{target}', 'main').replace('{directory}', '/w/t7'))
+  expect(text()).toContain('src/a.ts')
+  expect(text()).not.toContain('The workspace is not a git repository')
+  expect(text()).not.toContain(zh.reviewViewDiff)
+})
+
+it('explains an unreadable worktree in the Changes section instead of showing the git error', async () => {
+  const endedAt = '2026-09-21T00:00:00Z'
+  const fields = { id: 't9', title: '无工作区的工单', state: 'ended' as const, actions: { retry: false, stop: false },
+    ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const } }
+  server.ticketDetails.t9 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended',
+    actions: { ...fields.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false, cleanup: false,
+      check: false, reviewDecision: false, revert: false, push: false, dequeue: false },
+    workspace: { directory: '/w/t9', exists: true },
+    review: { capturedAt: endedAt, commits: [], files: [], dirty: [], error: 'The workspace is not a git repository, or git could not read it' } }
+  at({ page: 'execution', id: 't9' })
+  await mount()
+  expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.completed'])
+  expect(text()).toContain(zh.reviewWorkspaceNotRepository.replace('{directory}', '/w/t9'))
+  expect(text()).not.toContain('The workspace is not a git repository')
+  expect(text()).not.toContain(zh.reviewViewDiff)
+})
+
 it('offers a push after a merge that was not pushed, and after a revert', async () => {
   const base = server.ticketDetails.t1!
   server.ticketDetails.t1 = { ...base, actions: { ...base.actions, push: true },

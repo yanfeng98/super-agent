@@ -1,6 +1,7 @@
 /** Management HTTP routes for the web panel: they follow the bound Web host and enforce same-origin requests. */
 import { isLoopbackHost } from '@deepseek-ai/dsh-host-webserver'
 import type { Context } from '@deepseek-ai/cordis'
+import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { z } from 'zod'
 import type { Notification } from './notifications.ts'
@@ -205,7 +206,11 @@ export type StateView = ReturnType<typeof stateView>
 function ticketPage(runtime: HttpHost, id: string) {
   const detail = ticketDetail(views(runtime), id), ticket = runtime.store.tickets.get(id)
   if (!detail || !ticket) throw new RouteError(404, 'Ticket not found')
-  return { ...detail, environment: runtime.configured() ? runtime.ticketEnvironment(ticket) : [] }
+  const directory = ticket.execution?.directory
+  // The panel needs to tell a worktree that still exists from one a cleanup or discard removed, so a missing diff reads as
+  // the workspace's state rather than as a git failure.
+  return { ...detail, workspace: directory ? { directory, exists: existsSync(directory) } : undefined,
+    environment: runtime.configured() ? runtime.ticketEnvironment(ticket) : [] }
 }
 export type TicketPageView = ReturnType<typeof ticketPage>
 function promptsView(runtime: HttpHost, revision: number | undefined, offset: number) {
