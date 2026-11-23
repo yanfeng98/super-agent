@@ -185,6 +185,8 @@ export class Runtime extends Service implements SourceHost {
               try { if (notified) recordNotification(store, { at: event.at, kind, ticketId: notified.id, title: notified.title, text }) }
               catch (error) { ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
               this.notifyWebhook(event)
+              // A structured request reaches the person without waiting for the main Session to relay it.
+              if (event.type === 'ticket.attention' && notified) this.askInChannel(notified)
             })
           }
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
@@ -290,6 +292,25 @@ export class Runtime extends Service implements SourceHost {
    * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
    * failure is logged and the ticket is unaffected.
    */
+  /**
+   * Posts a ticket's open question in the conversation that raised it, so the person is asked without waiting for the main
+   * Session. The message ID is the one an attention reply uses, so that reply reuses this message instead of queueing the
+   * question twice.
+   */
+  private askInChannel(ticket: Ticket): void {
+    const attention = ticket.attention
+    if (!attention) return
+    const asker = attention.triggerId ? this.store.triggers.get(attention.triggerId) : undefined
+    const channel = asker?.channel ?? ticket.channels[0]
+    if (!channel) return
+    try {
+      this.outbox.send({ id: key('attention-reply', attention.id), channel, text: attention.question, kind: 'reply', ticketId: ticket.id })
+    } catch (error) {
+      // A question the IM text limit refuses stays for the main Session to deliver in its own words.
+      this.ctx.logger.warn('dsh-superagent: asking ticket %s\'s question in its conversation failed: %s', ticket.id, String(error))
+    }
+  }
+
   private notifyWebhook(event: Extract<DomainEvent, { type: 'ticket.attention' } | { type: 'ticket.ended' }>): void {
     const ticket = this.store.tickets.get(event.data.ticketId)
     if (!ticket) return

@@ -16,7 +16,7 @@ Do not expand a request's scope, add implementation plans, acceptance criteria o
 When a worker reports a ready result or a concrete question requiring the ticket owner's decision, complete the handoff in the ticket’s originating conversation.
 A structured human_action request may arrive while the worker is still working; deliver it promptly without waiting for a blocked report.
 Read ticket routing metadata and the concise worker report.
-For a pending attention request, use orchestrator_reply purpose=attention with ticket_id and copy the stored question into human_action; the host routes it to the conversation of the human message that raised it, else to the original ticket source.
+For a pending attention request, the host posts the stored question to the conversation of the human message that raised it, else to the original ticket source; orchestrator_reply purpose=attention with ticket_id and the same human_action reuses that message.
 Ordinary progress remains internal.
 Do not substitute a comment on another Source for the IM delivery of an IM-origin ticket's result, wait for a merge, or investigate technical details yourself.
 Do not repeat a previously communicated milestone merely because another report or notification arrived.

@@ -1,5 +1,6 @@
 The reply tool enforces a purpose: result requires ticket readiness; attention requires the ticket's current structured request (ticket_id plus its exact question in human_action), even while running; answer must reference an original human question.
 For a structured request, pass ticket_id and copy the current ticket.attention.question into human_action.
+The host posts a new structured request itself in the conversation that raised it, so the person is asked without waiting for this Session; an attention reply reuses that message instead of queueing a second one.
 The host replies where the person who raised the question wrote, else to the original ticket source.
 An ordinary progress report without a request never authorizes attention.
 For an assigned ticket, answer also requires the worker to have reported reply_to_trigger_id for that question; the permission is consumed by one message, with identical transport retries deduplicated.

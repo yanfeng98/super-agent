@@ -119,6 +119,8 @@ A Source whose Thread lifecycle determines whether work is done can make a Ticke
 
 "Awaiting review" therefore means a `ready` Report with local changes ready for review.
 
+When a worker asks a person a question, the host posts it in the conversation that raised it as soon as the question is raised, using the same outbox message an attention reply would use, so the person is asked without waiting for a main Session turn and the question never arrives twice. A question the IM text limit refuses stays for the main Session to deliver in its own words.
+
 ### Follow-ups and context Threads
 
 The Executor decides human follow-ups on its Ticket's own Threads. It handles in-scope requests and hands back requests beyond its scope or for another Ticket. Once no Executor owns the message, it becomes a candidate for the main Session. The main Session may otherwise act on the follow-up only to stop work at the person's request. A person can end that work without waiting for Eval by sending `/stop` in the chat: the Source stops the Thread's live Ticket itself and answers with the Ticket it stopped, or says that nothing was running there.

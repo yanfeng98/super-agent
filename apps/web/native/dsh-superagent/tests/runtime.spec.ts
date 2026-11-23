@@ -1792,6 +1792,20 @@ it('records a panel notification when a worker asks a person and when the ticket
   expect(runtime.notifications().unread).toBe(2)
 })
 
+it('posts a worker\'s question where the person wrote, and an attention reply reuses that message', async () => {
+  const { ticket, sessionId } = await acceptedTicket()
+  await runTool(sessionId, 'orchestrator_report', { state: 'progress', summary: 'need a decision', human_action: 'Which color?' })
+  const asked = runtime.store.receipts.ofTicket(ticket.id).filter(receipt => receipt.text === 'Which color?')
+  expect(asked).toHaveLength(1)
+  expect(asked[0]).toMatchObject({ kind: 'reply', id: key('attention-reply', runtime.store.tickets.get(ticket.id)!.attention!.id) })
+  expect(['pending', 'sent']).toContain(asked[0]?.status)
+  expect(asked[0]?.channel).toMatchObject({ source: 'feishu' })
+  // The main Session's own attention reply reuses that message, so the person is asked once.
+  const reply = runtime.engine.reply({ purpose: 'attention', ticketId: ticket.id, question: 'Which color?', text: 'Which color?' })
+  expect(reply).toMatchObject({ reused: true, id: asked[0]?.id })
+  expect(runtime.store.receipts.ofTicket(ticket.id).filter(receipt => receipt.text === 'Which color?')).toHaveLength(1)
+})
+
 it('records a panel notification when an ending needs the review a deployment requires', async () => {
   const { ticket, sessionId } = await acceptedTicket()
   const settings = runtime.store.settings()
