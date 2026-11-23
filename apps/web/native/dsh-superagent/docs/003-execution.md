@@ -180,8 +180,8 @@ A Source that polls reads each subscribed Thread on its own: a failed read keeps
 The Feishu Source reports every failure it sees — a live consumer that stopped, a failed history round, a failed Thread poll — and keeps a failed Thread poll's error on its Thread.
 
 A malformed item in a Feishu page is skipped and counted as omitted by the read that returned it.
-A recalled message stays in a context window as a bodiless `deleted` entry, so the window still shows that something was withdrawn, and the Source's own answers stay in it as bot messages while they are never taken as new work.
-A read of a recalled related message by id reports it instead: `deleted` when a `/root` or `/parent` target was recalled, and `unavailable` once the Trigger's own message was recalled, since dsh-im's route check then refuses every read of it.
+A recalled message stays in a context window as a bodiless `deleted` entry, so the window still shows that something was withdrawn, and the Source's own answers stay in it as bot messages while they are never taken as new work. The initial window's payload also carries the read's `status`, so an empty fallback window is not read as an empty discussion.
+A read of a recalled related message by id reports it instead: `deleted` when a `/root` or `/parent` target was recalled, and `unavailable` once the Trigger's own message was recalled, since dsh-im's route check then refuses every read of it; `/around` answers `unavailable` for the same reason, while a `/thread` read of a message inside a Topic lists the Topic by its thread id without that check and still reads.
 ### Channel failure
 
 Outgoing messages are stored and sent as stored work, retried with backoff from 5 seconds, doubling up to 300.

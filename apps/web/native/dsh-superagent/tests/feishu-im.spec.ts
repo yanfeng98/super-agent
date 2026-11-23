@@ -378,6 +378,10 @@ describe('dsh-im Feishu recovery and identity', () => {
     const { received, reports, round } = backfill(im, state)
     await round()
     expect(asked).toContainEqual(expect.objectContaining({ chatId: 'oc_team', threadId: 'omt_9', direct: false }))
+    // Recovery is inbound work only: it never asks for the bot's own messages or recalled placeholders, so a reply
+    // cannot come back as a new Trigger and a withdrawal cannot open one.
+    expect(asked[0]).not.toHaveProperty('includeSelf')
+    expect(asked[0]).not.toHaveProperty('includeDeleted')
     expect(new Set(received.map(trigger => trigger.id)))
       .toEqual(new Set([key('feishu', 'om_root'), key('feishu', 'om_reply_1'), key('feishu', 'om_reply_2')]))
     expect(received.find(trigger => trigger.id === key('feishu', 'om_reply_2'))?.threads?.[0]?.id).toBe('oc_team:om_root')
@@ -669,6 +673,20 @@ describe('dsh-im Feishu context parts and images', () => {
     const own = await feishuImKind.threadContext!.read({} as never, trigger, 'message', undefined, config())
     expect(own.messages[0]).toMatchObject({ id: 'om_1', reply_to: 'om_parent' })
     expect(asked[1]?.[2]).toMatchObject({ messageId: 'om_1' })
+  })
+
+  it('answers a neighbouring window whose source message no longer resolves with unavailable', async () => {
+    setDshIm(service({ historyChecked: async () => { throw Object.assign(new Error('gone'), { code: 'stale-route' }) } }))
+    const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event()), 'around', undefined, config())
+    // The window names the Trigger's own message, so refusing its route means that message cannot be read: an answer
+    // with no messages, not a failed read.
+    expect(page.status).toBe('unavailable')
+    expect(page.messages).toEqual([])
+    expect(page.body).toEqual({ status: 'unavailable' })
+    // A provider failure stays a failure instead of looking like a message that was withdrawn.
+    setDshIm(service({ historyChecked: async () => { throw Object.assign(new Error('unreadable'), { code: 'history-unavailable' }) } }))
+    await expect(feishuImKind.threadContext!.read({} as never, imTrigger(event()), 'around', undefined, config()))
+      .rejects.toThrow('unreadable')
   })
 
   it('reports a recalled message as deleted and keeps dsh-im internals out of the page body', async () => {

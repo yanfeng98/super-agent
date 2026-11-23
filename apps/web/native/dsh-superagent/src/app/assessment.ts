@@ -213,6 +213,7 @@ export class MasterAssessor implements Assessor {
           ...imageIds(message.id, message.text), ...fileIds(message.id, message.text) }
       })
       return { complete: context.complete, loaded_messages: context.messages.length, source_found: context.window.source_found,
+        ...context.status ? { status: context.status } : {},
         ...context.next ? { next_cursor: context.next } : {}, messages }
     })() : { error: error ?? 'Call orchestrator_eval to load initial context', complete: false }
     const settings = this.host.settings()

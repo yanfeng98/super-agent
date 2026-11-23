@@ -123,6 +123,23 @@ it('routes an explicit candidate instead of assessing it: each eval tool names t
   await expect(s.tools.orchestrator_eval_decide!(decision, signal)).rejects.toThrow(routed)
 })
 
+it('names a fallback window in the assessment payload', async () => {
+  // An empty window is not an empty discussion: the payload says why it holds nothing, so an assessment of a recalled
+  // source or of a chat with no Thread replies is not read as a message with no context.
+  const threadContext: AssessorHost['threadContext'] = () => ({
+    messageId: 'm0',
+    read: async () => ({ messages: [], status: 'unavailable', body: { status: 'unavailable' } }),
+    images: () => [],
+    files: () => [],
+    image: async () => { throw new Error('no image') },
+    file: async () => { throw new Error('no file') },
+  })
+  const s = setup('inferred', [], threadContext)
+  s.engine.receive(issue(1)); s.engine.evaluateDue()
+  expect((await s.assessor.context('fixture-1', signal)).thread)
+    .toMatchObject({ complete: true, loaded_messages: 0, source_found: false, status: 'unavailable' })
+})
+
 it('asks the assessment only for decisions its tool accepts, which no longer include reopen or stop', () => {
   expect(mainAdmissionPolicy).not.toMatch(/reopen|decision=stop/)
   const direction = { implementation_requested: true, target_basis: 'specified', requires_design_decision: false, evidence: 'e' }

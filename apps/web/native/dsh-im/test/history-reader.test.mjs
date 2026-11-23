@@ -156,6 +156,14 @@ test('thread history reads one thread and refuses messages outside it', async ()
  await assert.rejects(readThreadHistory(bot, identity, { chatId: 'oc-team', limit: 2 }), { code: 'bad-request' });
 });
 
+test('thread history lists a Topic without reading the retained route', async () => {
+ const bot = client([item('om-1')]);
+ bot.im.v1.message.get = async () => { throw new Error('a thread listing names the thread, not the message route'); };
+ // A Topic listing therefore still reads after the message a Trigger retained was recalled, unlike a neighbouring read.
+ const page = await readThreadHistory(bot, identity, { chatId: 'oc-team', threadId: 'omt-topic', limit: 20 });
+ assert.deepEqual(page.events.map(event => event.messageId), ['om-1']);
+});
+
 test('a context read keeps the bot own messages and recalled placeholders a backfill leaves out', async () => {
  const own = { ...item('om-own'), sender: { sender_type: 'app', id_type: 'app_id', id: 'cli-1' } };
  const recalled = { ...item('om-recalled'), deleted: true };
@@ -197,6 +205,16 @@ test('a nearby window shows a recalled message in place only when it asks and th
  assert.equal(hidden.omitted, 1);
  await assert.rejects(readExternalHistory(bot, identity, route, { scope: 'nearby', limit: 20, includeDeleted: 'yes' }),
   { code: 'bad-request' });
+});
+
+test('a recalled message without the ids or time an event needs is only counted', async () => {
+ const nameless = { ...item('om-nameless'), deleted: true, sender: undefined };
+ const untimed = { ...item('om-untimed'), deleted: true, create_time: 'no' };
+ const bot = client([item('om-human'), nameless, untimed]);
+ const page = await readThreadHistory(bot, identity, { chatId: 'oc-team', threadId: 'omt-topic', limit: 20,
+  includeBots: true, includeDeleted: true });
+ assert.deepEqual(page.events.map(event => event.messageId), ['om-human']);
+ assert.equal(page.omitted, 2);
 });
 
 test('single message read returns its AppLink and refuses a changed route', async () => {

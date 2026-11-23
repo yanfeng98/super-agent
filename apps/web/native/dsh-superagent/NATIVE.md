@@ -351,12 +351,15 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     resolves, and `around` reads the chat around a message even when it sits in a Thread, asking for the whole preceding
     half of dsh-im's nearby window (20 messages, its cap) and reporting that window's bounds; a `thread` read of a message
     Feishu placed in no Topic is the surrounding chat and reports `chat_neighbours`; a `/root` or `/parent` read reports
-    `deleted` when that related message was recalled, and every read of a Trigger whose own message was recalled reports
-    `unavailable`, because dsh-im's route check refuses a route to a recalled message; a window keeps the Source's own
+    `deleted` when that related message was recalled, and a `/message`, `/root`, `/parent` or `/around` read of a Trigger
+    whose own message was recalled answers `unavailable`, because dsh-im's route check refuses a route to a recalled
+    message, while a `/thread` read of a message inside a Topic lists it by thread id without that check and still reads,
+    showing the recalled message in place; a window keeps the Source's own
     answers (`includeSelf`) and a recalled message's place as a bodiless `deleted` entry (`includeDeleted`), while a
     backfill asks for neither; events carry `appLink`, the
     Trigger keeps it as `url`, and so do context messages, and the
-    page body an assessment reads carries the mapped messages instead of dsh-im's event records and account fingerprint.
+    page body an assessment reads carries the mapped messages instead of dsh-im's event records and account fingerprint,
+    and the initial window's payload carries the window's `status`, so a fallback window is not read as an empty discussion.
     An image of any message those reads return is downloaded from
     that message (`resourceChecked({ messageId })`, validated against the retained route), not only from the Trigger's own
     message. The live path describes each Thread with its chat name and chat link, `linkTimeoutMs` bounds link resolution,

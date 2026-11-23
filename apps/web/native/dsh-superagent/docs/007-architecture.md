@@ -556,7 +556,7 @@ Settings and prompt saves return the saved configuration. Policy sync returns th
 - The Trigger text, up to 4,000 characters, with image and file ids and other Triggers in the batch.
 - Up to eight `related_tickets`, open ones first, and `tickets_total`.
 - The Eval's `policy_version`.
-- A Thread window: the first five messages and five on either side of the Trigger. Messages use `{id, from, at, text}`, normally limited to 400 characters, or 1,200 for the two on either side. Truncated messages include `chars`; image references use `images` and file references use `files`, both read by `orchestrator_eval_read`.
+- A Thread window: the first five messages and five on either side of the Trigger. Messages use `{id, from, at, text}`, normally limited to 400 characters, or 1,200 for the two on either side. Truncated messages include `chars`; image references use `images` and file references use `files`, both read by `orchestrator_eval_read`; its `status` names a fallback window (`chat_neighbours`, `unavailable`), so an empty window is not read as an empty discussion.
 - Other loaded messages as `{id, from, preview}` stubs of 50 characters. `orchestrator_eval_read` expands them by id.
 
 Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open stage such as `person/review` or `working/queued`, or an ended outcome. Acknowledgements are limited to 100 words whether submitted through accept, assessment or `orchestrator_ack`.

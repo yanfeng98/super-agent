@@ -250,7 +250,11 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
         }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
       }
     } catch (error) {
-      if ((error as { code?: string }).code === 'account-changed') cachedBots.delete(botId)
+      const code = (error as { code?: string }).code
+      if (code === 'account-changed') cachedBots.delete(botId)
+      // A neighbouring window names the Trigger's own message, so dsh-im refusing its route means that message was
+      // recalled or no longer resolves: the window cannot be read, which is an answer rather than a failure.
+      if (code === 'stale-route') return empty('unavailable')
       throw error
     }
     // A `thread` read of a message Feishu placed in no Topic is the chat around it, as the chat container holds no
