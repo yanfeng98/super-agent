@@ -1,4 +1,6 @@
-# Upstream fixtures live under directories the checkout root ignores by name
-# (`lib/`). They are part of the vendored crate, and `analyze` walks them with
-# gitignore semantics, so they must stay visible here.
-!tests/fixtures/**
+# The checkout root ignores every directory named `lib/`, which covers the upstream fixtures under
+# tests/fixtures/*/lib. `analyze` walks fixtures with gitignore semantics, so those units must stay
+# visible to git and to the walkers. Keep the negation on `lib` alone: a blanket
+# `!tests/fixtures/**` would also re-include `tests/fixtures/**/node_modules`, which the tests create.
+!tests/fixtures/**/lib/
+!tests/fixtures/**/lib/**

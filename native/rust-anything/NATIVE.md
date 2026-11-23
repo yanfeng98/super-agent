@@ -55,10 +55,11 @@ under the platform cache directory (`~/.cache` on Linux). That folder is outside
 
 2. **Two trailing blank lines removed.** `docs/how-it-works.md` and `tests/fixtures/python/src/textkit/stack.py` end with a blank line upstream; both now end with one newline, because the repository's staged whitespace check rejects a blank line at end of file. No other byte differs.
 
-3. **`.gitignore` (new file) with `!tests/fixtures/**`.** The checkout root ignores every directory named `lib/`, which covers ten upstream fixture files
-   (`tests/fixtures/ruby/lib/`, `tests/fixtures/lib/`, `tests/fixtures/aliases/src/lib/`). `analyze` and the whole-app flow walk fixtures with gitignore
-   semantics, so those units disappeared: `cargo test` failed in `tests/analyze.rs`, `tests/app.rs` and `tests/loop.rs`. The negation keeps them visible to
-   git and to the walkers; `target/` and `bin/` stay ignored.
+3. **`.gitignore` (new file) with `!tests/fixtures/**/lib/` and `!tests/fixtures/**/lib/**`.** The checkout root ignores every directory named `lib/`,
+   which covers ten upstream fixture files (`tests/fixtures/ruby/lib/`, `tests/fixtures/lib/`, `tests/fixtures/aliases/src/lib/`). `analyze` and the
+   whole-app flow walk fixtures with gitignore semantics, so those units disappeared: `cargo test` failed in `tests/analyze.rs`, `tests/app.rs` and
+   `tests/loop.rs`. The two negations re-include the `lib` directories and their contents and nothing else — a blanket `!tests/fixtures/**` would also
+   re-include `tests/fixtures/**/node_modules`, which the tests create. `target/` and `bin/` stay ignored.
 
 ## Checks
 
