@@ -57,7 +57,7 @@ it('asks DSH to read its settings entry again once a restart it started finished
 it('refuses keys of the previous configuration before registering anything', async () => {
   const { ctx } = context()
   await expect(apply(ctx as never, Config({ stateDir: '/srv/state', repository: 'acme/widgets' } as never)))
-    .rejects.toThrow(/repository \(now .*removed\)/)
+    .rejects.toThrow(/repository \(now derived from the checkout this installation runs from\)/)
   expect(ctx.on).not.toHaveBeenCalled()
   expect(ctx.inject).not.toHaveBeenCalled()
 })

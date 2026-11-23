@@ -88,6 +88,9 @@ const subprocess = { spawn: vi.fn((spec: { argv: readonly string[]; env?: Record
   const answer = answers[argv.join(' ')] ?? ''
   // A successful prepare command creates the checkout it was asked for, as a real one does.
   if (argv[0] === 'sh' && !(answer instanceof Error) && spec.env?.DSH_SUPERAGENT_DIR) prepareEffect(spec.env)
+  // A successful `git worktree add` creates the linked worktree it was asked for, as a real one does.
+  const worktree = argv[0] === 'git' && argv[1] === 'worktree' && argv[2] === 'add' ? argv[3] : undefined
+  if (worktree && !(answer instanceof Error)) { mkdirSync(worktree, { recursive: true }); writeFileSync(join(worktree, '.prepared'), '') }
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
   return { done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
 }) }
@@ -998,6 +1001,52 @@ it('prepares a ticket directory that exists but is empty, so an empty leftover i
   await runtime.engine.retryTicket(ticket.id)
   await runtime.idle()
   expect(prepared()).toBe(before + 1)
+  expect(readdirSync(ticket.execution!.directory)).toContain('.prepared')
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'running' })
+})
+
+it('prepares each Ticket as a linked worktree of this installation\'s repository when no prepare command is set', async () => {
+  runtime = await restart({ repository: '/srv/widgets' })
+  await runtime.ready
+  runtime.sources.register(feishuImKind)
+  answers['git worktree list --porcelain'] = 'worktree /srv/widgets\nHEAD 0123456789abcdef\nbranch refs/heads/main\n'
+  answers['git rev-parse --abbrev-ref HEAD'] = 'main'
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  const added = subprocess.spawn.mock.calls.map(([spec]) => spec as { argv: string[] })
+    .find(spec => spec.argv[0] === 'git' && spec.argv[1] === 'worktree' && spec.argv[2] === 'add')
+  expect(added?.argv).toEqual(['git', 'worktree', 'add', ticket.execution!.directory, '-b', `agent/${ticket.execution!.name}`, 'main'])
+  expect(readdirSync(ticket.execution!.directory)).toContain('.prepared')
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'running' })
+})
+
+it('fails a Ticket at once, naming the branch to check out, when the installation repository is on a detached HEAD', async () => {
+  runtime = await restart({ repository: '/srv/widgets' })
+  await runtime.ready
+  runtime.sources.register(feishuImKind)
+  answers['git worktree list --porcelain'] = 'worktree /srv/widgets\nHEAD 0123456789abcdef\ndetached\n'
+  answers['git rev-parse --abbrev-ref HEAD'] = 'HEAD'
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  const report = runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report!
+  expect(report.state).toBe('failed')
+  expect(report.summary).toContain('Preparing the Ticket directory automatically from the repository at /srv/widgets failed:')
+  expect(report.summary).toContain('detached HEAD')
+  expect(waitsForPerson(runtime.store.tickets.get(ticket.id)!)).toBe(true)
+})
+
+it('prepares an empty ticket directory again on retry, using this installation\'s repository', async () => {
+  runtime = await restart({ repository: '/srv/widgets' })
+  await runtime.ready
+  runtime.sources.register(feishuImKind)
+  answers['git worktree list --porcelain'] = 'worktree /srv/widgets\nHEAD 0123456789abcdef\nbranch refs/heads/main\n'
+  answers['git rev-parse --abbrev-ref HEAD'] = new Error('fatal: no branch')
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('fatal: no branch') })
+  answers['git rev-parse --abbrev-ref HEAD'] = 'main'
+  await runtime.engine.retryTicket(ticket.id)
+  await runtime.idle()
   expect(readdirSync(ticket.execution!.directory)).toContain('.prepared')
   expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'running' })
 })

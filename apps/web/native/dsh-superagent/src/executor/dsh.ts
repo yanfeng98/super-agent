@@ -71,7 +71,7 @@ export interface ExecutorHost {
   readonly effects: Pick<Effects, 'enqueue' | 'handle'>
   /** The `worker` health entry, which reports whether background worker event handling failed. */
   readonly health: HealthEntry
-  readonly machine: Pick<Machine, 'stateDir'>
+  readonly machine: Pick<Machine, 'stateDir' | 'repository'>
   readonly lifetime: AbortSignal
   /** Session manager for worker sessions and for relaying worker reports to the main Session. */
   readonly sessions: Pick<Sessions, 'ensure' | 'prompt' | 'promptedId' | 'relay' | 'holds'>
@@ -253,17 +253,47 @@ export class DshExecutor implements Executor {
     return { ...ticket, execution: ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, project),
       ...hold ? { hold: { at: now() } } : {} }
   }
-  /** The prepare command a Ticket's workspace uses: its project's, else the deployment's. */
+  /** The prepare command a Ticket's workspace uses: its project's, else the deployment's; empty means the automatic worktree. */
   private prepareCommand(ticket: Ticket): string {
     return (ticket.execution?.prepare ?? this.host.store.settings().executor.prepare).trim()
   }
   /**
-   * Runs the configured `executor.prepare` command for a new ticket workspace in its parent directory with the ticket's
-   * execution environment variables, then verifies the directory as the worker sees it.
+   * Prepares a new Ticket directory as a linked worktree of the repository this installation runs from: the branch the
+   * repository's main working tree checks out, under the Ticket's own `agent/<name>` branch. An installation outside every
+   * git repository prepares nothing, leaving the Ticket its empty directory.
+   * @param ticket - The Ticket whose workspace is being prepared.
+   * @param directory - The Ticket directory to create the worktree at.
+   * @param signal - Aborts the git commands when the Ticket stops or preparation times out.
+   * @throws PrepareFailed naming the repository when its main working tree is on a detached HEAD or `git worktree add` fails.
+   */
+  private async prepareWorktree(ticket: Ticket, directory: string, signal: AbortSignal): Promise<void> {
+    const checkout = this.host.machine.repository
+    if (!checkout) return
+    const git = (cwd: string, args: string[]): Promise<string> => runAsWorker(this.host.context.subprocess, ['git', ...args], cwd, signal)
+      .then(output => output.trim())
+    const fail = (detail: string): PrepareFailed => new PrepareFailed(
+      `Preparing the Ticket directory automatically from the repository at ${checkout} failed: ${detail} `
+      + 'Set a prepare command in Execution settings to choose another repository.')
+    try {
+      // The main working tree holds the branch a merge moves, even when this installation runs from a linked worktree.
+      const listing = await git(checkout, ['worktree', 'list', '--porcelain'])
+      const main = listing.split('\n').find(line => line.startsWith('worktree '))?.slice('worktree '.length)
+      if (!main) throw fail(`${checkout} is not a git working tree.`)
+      // Name the branch that holds the repository's commit, so the Ticket branch contains it without a rebase first.
+      const target = await git(main, ['rev-parse', '--abbrev-ref', 'HEAD'])
+      if (!target || target === 'HEAD') throw fail(`the repository at ${main} is on a detached HEAD; check out the branch Tickets should start from.`)
+      await git(main, ['worktree', 'add', directory, '-b', `agent/${ticket.execution?.name ?? ''}`, target])
+    } catch (error) {
+      throw error instanceof PrepareFailed ? error : fail(error instanceof Error ? error.message : String(error))
+    }
+  }
+  /**
+   * Prepares a new ticket workspace: the configured command with the ticket's execution environment variables, or a linked
+   * worktree of this installation's repository when no command is set, then verifies the directory as the worker sees it.
    * An empty directory left by an earlier attempt is removed first: it is not a prepared workspace, and `git worktree add`
    * refuses a path that already exists. A configured command that leaves the directory empty fails the Ticket, because the
    * worker would otherwise start in no checkout and could work in one the Ticket does not own.
-   * A failed prepare command throws `PrepareFailed`, which is not retried automatically; a non-empty directory it left is kept.
+   * A failed prepare throws `PrepareFailed`, which is not retried automatically; a non-empty directory it left is kept.
    * @throws PrepareFailed with the command's output when the prepare command fails or creates no checkout.
    */
   private async prepareDirectory(ticket: Ticket): Promise<void> {
@@ -282,6 +312,10 @@ export class DshExecutor implements Executor {
           await rmdir(directory).catch(() => { /* Absent, or holding what the command wrote, which the output explains. */ })
           throw new PrepareFailed(`The prepare command failed: ${error instanceof Error ? error.message : String(error)}`)
         })
+    } else if (this.host.machine.repository) {
+      // An empty directory left by an earlier attempt is not a prepared workspace; `git worktree add` needs the path free.
+      await rmdir(directory).catch(() => { /* Absent, or holding files a previous attempt left, which preparation keeps. */ })
+      await this.prepareWorktree(ticket, directory, signal)
     }
     await mkdir(directory, { recursive: true })
     // A configured command must leave a checkout; an empty directory would let the worker run outside the repository it needs.
@@ -498,9 +532,10 @@ export class DshExecutor implements Executor {
     const workspace = ticket.execution?.directory ?? ''
     if (!current()) return
     // Prepare the workspace directory once; an existing non-empty directory counts as already prepared, including worktrees
-    // created before `prepare` commands existed. An empty one is not prepared when a command can create its checkout.
+    // created before `prepare` commands existed. An empty one is not prepared when a command or the installation's
+    // repository can create its checkout.
     const exists = await stat(workspace).then(() => true, () => false)
-    if (!exists || !!this.prepareCommand(ticket) && await emptyDirectory(workspace)) {
+    if (!exists || (!!this.prepareCommand(ticket) || !!this.host.machine.repository) && await emptyDirectory(workspace)) {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }

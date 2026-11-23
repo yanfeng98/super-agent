@@ -311,18 +311,18 @@ export async function workspaceProblem(subprocess: SubprocessRuntime, directory:
   const entries = await readdir(directory).then(files => files.length, () => undefined)
   if (entries === undefined) {
     return `The ticket workspace ${directory} does not exist, so it is not a git repository: its prepare command created no checkout. `
-      + 'Fix the prepare command in Execution settings, then retry the Ticket.'
+      + 'Set a prepare command in Execution settings that checks one out, then retry the Ticket.'
   }
   if (entries === 0) {
     return `The ticket workspace ${directory} is empty, so it is not a git repository: its prepare command created no checkout. `
-      + 'Fix the prepare command in Execution settings, then retry the Ticket.'
+      + 'Set a prepare command in Execution settings that checks one out, then retry the Ticket.'
   }
   const git = (cwd: string, args: string[]) => runAsWorker(subprocess, ['git', ...args], cwd,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
   const branch = await git(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
   if (!branch) {
     return `The ticket workspace ${directory} is not a git repository, or git could not read it. `
-      + 'A Ticket needs its own checkout of the repository it changes; fix the prepare command in Execution settings.'
+      + 'A Ticket needs its own checkout of the repository it changes; set a prepare command in Execution settings that creates one.'
   }
   if (branch === 'HEAD') {
     return `The ticket workspace ${directory} is on a detached HEAD, not on its Ticket branch. `
@@ -338,7 +338,7 @@ export async function workspaceProblem(subprocess: SubprocessRuntime, directory:
   }
   if (gitDir === common) {
     return `The ticket workspace ${directory} is the repository's main working tree, not a linked worktree. `
-      + 'A Ticket works in its own git worktree so the main checkout keeps its branch; fix the prepare command in Execution settings.'
+      + 'A Ticket works in its own git worktree so the main checkout keeps its branch; set a prepare command in Execution settings that creates one.'
   }
   return `The ticket workspace ${directory} is not a git repository on a branch.`
 }

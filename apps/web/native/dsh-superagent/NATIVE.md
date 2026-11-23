@@ -424,6 +424,16 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `src/app/repair.ts` keeps its idempotent Feishu Topic re-key, because a schema 11 database can still hold the Threads it
     rewrites.
 
+33. **A worktree per Ticket without a prepare command.** `src/installed.ts` finds the git working tree containing this
+    installation, and `src/index.ts` passes it to `machineOf` as `Machine.repository` (`src/deployment.ts`). When neither
+    the project row nor the Execution settings set a prepare command, `DshExecutor.prepareWorktree`
+    (`src/executor/dsh.ts`) runs `git worktree add` for the Ticket at `$DSH_SUPERAGENT_DIR`, on branch `agent/<name>`
+    from the branch the repository's main working tree checks out; a checkout on a detached HEAD, or a refused worktree,
+    fails the Ticket with the repository named. An installation outside every git repository keeps the earlier empty
+    directory. The tests are `tests/installed.spec.ts`, the three worktree cases in `tests/runtime.spec.ts`, and `tests/deployment.spec.ts`.
+    `docs/003-execution.md`, `docs/005-panel.md`, `docs/006-deployment.md`, `README.md`, `SETUP.md` and the Execution
+    settings hint (`src/client/locales.ts`) describe the default.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.
@@ -435,7 +445,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,304 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,327 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a

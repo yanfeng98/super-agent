@@ -288,7 +288,8 @@ Some generic modules still refer directly to Feishu:
 | Path | Responsibility |
 | --- | --- |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
-| `src/deployment.ts` | The plugin `Config` and `Machine`; `machineOf` reads them and names where a key an older version used has moved. The code names no person, account or organization |
+| `src/deployment.ts` | The plugin `Config` and `Machine`; `machineOf` reads them, records the repository this installation runs from, and names where a key an older version used has moved. The code names no person, account or organization |
+| `src/installed.ts` | The directory this installation runs from and the git working tree that contains it, which is the repository a Ticket gets a worktree of when no prepare command is set |
 | `src/setup.ts` | Setup problems: `SetupError`, with a code, the place that fixes it and the English text the log, the main Session and the panel share |
 | `src/policy.ts` | The Policy: the settings schemas by block, the Policy version, the gate and Mandate revalidation |
 | `src/admission.ts` | The admission table's values, each cell's options and defaults, shared with the panel |
@@ -353,7 +354,7 @@ Some generic modules still refer directly to Feishu:
 | `src/app/views/sources.ts` | The Source status: each Source instance's state, its last day's counts, and what it filtered and dropped in that day |
 | `src/app/views/settings.ts` | The settings page's view: each block with its revision, each Source's settings with its kind's form, and the execution environment |
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
-| `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
+| `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions`; a new Ticket directory is prepared by its configured command or as a linked worktree of this installation's repository |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
 | `src/infra/commands.ts` | `Commands`, the CLI transport: `run` and `git`, with the time limit and abort signal of the deployment; `CliError` carries the code a command's output reports, and a command that prints nothing fails with how it ended, never with its arguments |
 | `src/infra/environment.ts` | The agent's process environment: command shims, the isolated git configuration and its empty credential helper, `runAsWorker`, and the checks of the environment and of a Ticket's directory |
@@ -441,7 +442,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/prompts.spec.ts` | Prompt validation, assembly and versions |
 | `tests/cards.spec.ts` | The rules the built-in text must state, file by file |
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
-| `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration, the agent's process environment, the plugin entry |
+| `tests/deployment.spec.ts`, `tests/installed.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration, the repository the installation sits in, the agent's process environment, the plugin entry |
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
 | `tests/client.spec.tsx`, `tests/navigation.spec.ts`, `tests/controls.spec.tsx` | The client plugin's registration and polling, Session navigation and route memory, the local controls, and the panel's imports, which have no cycle |
 | `tests/panel-overview.spec.tsx`, `panel-source.spec.tsx`, `panel-trigger.spec.tsx`, `panel-eval.spec.tsx`, `panel-execution.spec.tsx` | Each page of the panel, against a fake management API answered by route; the Execution page also covers the file-by-file review diff with its viewed marks and line comments, the changed-since-review view, the merge queue's pause and retry, the push a merge or a revert offers, the merge's own push option, the per-check results, and a refusal worded by its code |

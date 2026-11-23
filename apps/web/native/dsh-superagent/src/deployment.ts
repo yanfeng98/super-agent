@@ -28,24 +28,34 @@ export const Config = s.object({
 export type DeploymentConfig = ReturnType<typeof Config>
 export interface Machine {
   stateDir: string
+  /**
+   * Working tree of the git repository containing this installation, from which a Ticket gets a linked worktree when
+   * neither its project nor the Execution settings configure a prepare command. Absent when the installation is
+   * outside every git repository, which leaves a Ticket's directory empty.
+   */
+  repository?: string
   promptMaxChars: Volatile<number>
   admissionContextMaxPages: Volatile<number>
   admissionContextTimeoutMs: Volatile<number>
 }
 const MOVED: Record<string, string> = {
-  repository: 'this key was removed', branchPrefix: 'in the prepare command of the Execution settings',
+  repository: 'derived from the checkout this installation runs from', branchPrefix: 'in the prepare command of the Execution settings',
   feishu: 'on the Feishu Source', author: 'prompt text',
   repositoryPath: 'in the prepare command of the Execution settings',
   worktreeRoot: 'the ticket directory of the Execution settings', blockedCommands: 'in the Execution settings',
 }
 
-/** Read machine settings and reject unknown configuration keys (naming where deprecated keys moved). */
-export function machineOf(config: DeploymentConfig): Machine {
+/**
+ * Read machine settings and reject unknown configuration keys (naming where deprecated keys moved).
+ * @param config - The plugin configuration.
+ * @param repository - The working tree containing this installation, from which Tickets get a worktree by default.
+ */
+export function machineOf(config: DeploymentConfig, repository?: string): Machine {
   const unknown = Object.keys(config).filter(key => !(key in (Config.dict ?? {})))
   if (unknown.length) throw new Error(`dsh-superagent configuration has keys it does not use: ${unknown.map(key => MOVED[key] ? `${key} (now ${MOVED[key]})` : key).join(', ')}; docs/006-deployment.md lists the keys`)
   const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs } = config
   if (!isAbsolute(stateDir)) throw new Error(`stateDir must be an absolute path: ${stateDir}`)
-  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs }
+  return { stateDir, ...repository ? { repository } : {}, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs }
 }
 
 /** What startup resolved: the machine settings the Sources and Sessions run with. */

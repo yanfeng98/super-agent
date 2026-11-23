@@ -22,8 +22,13 @@ describe('configuration schema', () => {
     expect(() => Config(minimal({ stateDir: 'relative/dir' }))).toThrow()
     expect(() => Config(minimal({ stateDir: '~/dir' }))).toThrow()
   })
+  it('records the repository Tickets get a worktree of when the installation is inside one', () => {
+    expect(machineOf(Config({ stateDir: join(dir, 'state') }), '/srv/widgets').repository).toBe('/srv/widgets')
+    // An installation outside every git repository leaves Tickets their empty directory.
+    expect(machineOf(Config({ stateDir: join(dir, 'state') })).repository).toBeUndefined()
+  })
   it('names keys the configuration does not define, and where the values of older keys live now', () => {
     const raw = minimal({ repository: 'acme/widgets', repositoryPath: '/srv/widgets', blockedCommands: [], author: { name: 'Alice' }, extra: 1 })
-    expect(() => machineOf(Config(raw))).toThrow('keys it does not use: repository (now this key was removed), repositoryPath (now in the prepare command of the Execution settings), blockedCommands (now in the Execution settings), author (now prompt text), extra;')
+    expect(() => machineOf(Config(raw))).toThrow('keys it does not use: repository (now derived from the checkout this installation runs from), repositoryPath (now in the prepare command of the Execution settings), blockedCommands (now in the Execution settings), author (now prompt text), extra;')
   })
 })
