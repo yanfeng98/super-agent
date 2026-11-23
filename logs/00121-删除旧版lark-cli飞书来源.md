@@ -70,3 +70,17 @@
 | 007 的 `feishu-im/…` 资源行没说旧工单会怎样 | 补「every part answers `unavailable`」 |
 
 `migration.ts` 的 `Key`、`runtime.ts` 的 `reasonText`/`allowedSender`/`triggerMessage`、`host.ts` 的 `ChannelRef` 在改动前就没有使用者（对照 `HEAD~2` 确认），不在本次范围内，未动。
+
+## 7. 文档与日志同步
+
+| 文件 | 改了什么 |
+|---|---|
+| `docs/006-deployment.md` | 升级一节补一段：旧版只存了 `cli` 的飞书来源升级后要重新选 dsh-im 机器人；它的旧工单保留正文，但原文读为 `unavailable`、回复以 `channelGone` 丢弃（dsh-im 不为接管前读到的消息保留回复路由） |
+| `docs/005-panel.md` | Source 页不再有每来源的 setup problem；部署检查问题只在列表上方显示一次 |
+| `docs/007-architecture.md` | 测试表补 `tests/outbox.spec.ts` 的 `channelGone` 覆盖与 `tests/feishu-im.spec.ts` 的接管前 Trigger 覆盖 |
+| `skills/dsh-superagent-feishu/SKILL.md` | 给模型的说明补一句：接管前写的 Trigger 的 `feishu-im/` 各部分一律 `unavailable`、附件读不了，应当如实说明而不是重试 |
+| `SETUP.md` | `restarting: true` 只在 setup 未完成时出现；setup 完成后的来源设置保存不重启 |
+| `NATIVE.md` | 测试计数 1,327；第 31 条断句修正 |
+| `examples/profile.cordis.patch.yml` | 提示改为「choose the dsh-im bot」 |
+
+校验：`pnpm run test:docs` 21 通过；app 内 `tests/docs.spec.ts` 6 通过（模块表与测试表一致）；全量 1,324 通过 / 3 个既有 `role-models` 失败。

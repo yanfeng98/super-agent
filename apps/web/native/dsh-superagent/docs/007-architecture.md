@@ -415,14 +415,14 @@ Some generic modules still refer directly to Feishu:
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
 | `tests/commands.spec.ts` | CLI calls with the deployment's environment, and the errors they report |
-| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context with its statuses, own answers and recalled placeholders in the window, the chat around a message (including one whose source no longer resolves), image and file reads from any message, a failed message kept in health, the `/stop` control message and what it answers, Topic recovery its subscribed Threads do not cover, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
+| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context with its statuses, own answers and recalled placeholders in the window, the chat around a message (including one whose source no longer resolves), image and file reads from any message, a failed message kept in health, the `/stop` control message and what it answers, Topic recovery its subscribed Threads do not cover, bot/chat labels, the `feishu-im/` resource page, a Trigger written before the handoff answering `unavailable` and settling its replies as `gone`, and handoff consumer registration and release |
 | `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and the Feishu attachment keys a message text names |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
 | `tests/background.spec.ts` | Waiting for a worker's shell jobs and subagents: an end that woke it, and a host that stops |
 | `tests/bundle-patch.spec.ts` | The bundle's patch, read as DeepSeek Harness reads it, and the agent preset of Executor Sessions it defines |
 | `tests/effects.spec.ts` | The effect queue: coalescing, limits, retries with backoff, health and shutdown |
 | `tests/passes.spec.ts` | Passes: one at a time, the ones asked for during a pass run as one after it, and the runtime health a failed pass reports |
-| `tests/outbox.spec.ts` | The Outbox on a running Runtime: messages wait while processing is paused or their Source is not installed |
+| `tests/outbox.spec.ts` | The Outbox on a running Runtime: messages wait while processing is paused or their Source is not installed, and a reply to a Trigger written before the handoff is dropped as `channelGone` |
 | `tests/cache.spec.ts` | `TextCache` |
 | `tests/queue.spec.ts` | The Runtime's work through the effect queue, and what earlier versions stored |
 | `tests/followups.spec.ts` | A person's follow-up on a Ticket's Thread: its notice to the main Session, the tools that act on it, what a burst costs; a worker's hand-back and context follow, and the main Session's note |
