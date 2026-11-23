@@ -8,6 +8,9 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ### Added / 新增
 
+- 接管期间机器人自己的设置继续生效：external-consumer 路径在手把前先用**机器人自己的访问策略**（安全模式/白名单）判定，被拒绝的消息不再送进消费者（与独立模式一样只记日志、不打扰人）；群消息也照旧写进 dsh-im 自己的群记录归档，接管不会让这两项悄悄停摆。
+  The bot's own settings keep working while it is handed over: the external-consumer path applies the bot's **access policy** (safe mode / allowlist) before handing a message over, so a refused message no longer reaches the consumer (it is logged without a reply, as in standalone mode), and a group message is still recorded in dsh-im's own group archive, so the handoff stops neither.
+
 - 接管回来补收不再重复回答：`chatHistoryChecked`/`threadHistoryChecked` 新增 `excludeHandled`，为 `true` 时把「托管前机器人自己已经处理过的消息」（状态存储里的 seen 记录）从页面里去掉。superagent 的补收与话题轮询都带这个选项，所以 dsh-im 在独立模式下已经回答过、或按策略决定不处理的消息，不会再被当成新工作回答一次（此前 Host 重启后消费者尚未注册的那段时间会重复作答）。
   A takeover no longer answers twice: `chatHistoryChecked`/`threadHistoryChecked` take `excludeHandled`, which drops the messages this bot already handled before the handoff (its seen record) from the page. A consumer's backfill and topic polling pass it, so what dsh-im answered — or decided not to handle — while it was not handed over is not answered a second time (previously a Host restart whose consumer had not registered yet could produce a duplicate answer).
 

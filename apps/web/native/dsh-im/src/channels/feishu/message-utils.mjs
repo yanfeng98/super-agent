@@ -632,6 +632,12 @@ export function stripLocalImageMarkdown(text) {
   });
 }
 
+/** The sender's Feishu open_id, falling back to the user_id a few tenant events still carry. */
+export function senderOpenId(event) {
+  return nonEmptyString(event?.sender?.sender_id?.open_id)
+    ?? nonEmptyString(event?.sender?.sender_id?.user_id);
+}
+
 export function isBotSender(event) {
   return event?.sender?.sender_type === 'bot';
 }
@@ -641,4 +647,25 @@ export function isAllowedSender(event, allowedOpenIds) {
   if (allowedOpenIds.has('*')) return true;
   const senderOpenId = event?.sender?.sender_id?.open_id;
   return typeof senderOpenId === 'string' && allowedOpenIds.has(senderOpenId);
+}
+
+/**
+ * The group-history record of one inbound Feishu message: the extracted message plus the entry `captureGroupHistory`
+ * stores. The standalone bridge and the handed-over consumer both record groups this way, so the archive is the same
+ * whichever way the bot is running.
+ * @param event - The Feishu message event as the SDK delivered it.
+ * @param client - The Lark client, used for the attachment sources the entry carries.
+ * @param scope - The channel scope recorded with each entry.
+ * @returns The message to capture and its history entry.
+ */
+export function feishuGroupCapture(event, client, scope) {
+  const content = extractInboundMessage({ ...event, message: { ...event.message, mentions: [] } }, client);
+  const message = { ...content, kind: 'group', senderId: senderOpenId(event), senderIsBot: isBotSender(event) };
+  return { message, entry: {
+    channel: 'feishu', scope, groupId: event.message.chat_id,
+    messageId: event.message.message_id, sentAt: Number(event.message.create_time),
+    type: event.message.message_type, text: content.content,
+    threadId: event.message.thread_id, replyToMessageId: event.message.parent_id,
+    capability: '需授权 im:message.group_msg；授权采集不改变群回复模式。',
+  } };
 }

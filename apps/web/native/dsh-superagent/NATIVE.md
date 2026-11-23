@@ -373,7 +373,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     the bot joined (`chatListChecked`) and dsh-im's group target names into the stored label map every round, and
     `refreshLabels` persists what it reads, so the chat picker offers every joined chat. A Thread without a topic learns it
     from its root message once per activity, and the lookup is remembered in `KV.feishu.topic` so a topic-less Thread costs
-    one read, not one per round. The backfill asks dsh-im for messages it has not handled yet (`excludeHandled`), so a
+    one read, not one per round. The bot owner's own access policy still gates a handed-over message, and dsh-im's group
+    archive keeps recording the groups it receives, so the bot's own settings are not bypassed by the handoff; a message
+    that policy refuses never reaches the Source, while the Policy still decides what an admitted message may become. The
+    backfill asks dsh-im for messages it has not handled yet (`excludeHandled`), so a
     takeover does not answer again what the bot answered while it was not handed over. dsh-im never hands the bot its own
     replies back as recovered messages, expands a merged
     forward into its sub-messages, transcribes a voice message with the bot's voice capability when that is on (so the

@@ -6,6 +6,7 @@ import { FeishuRuntime } from '../../../src/channels/feishu/feishu-runtime.mjs';
 import { FeishuHarnessBridge } from '../../../src/channels/feishu/bridge.mjs';
 import { rememberConnectionTestTarget } from '../../../src/channels/shared/connection-test.mjs';
 import { createSessionSyncCoordinator } from '../../../plugin-src/host/session-sync-coordinator.mjs';
+import { DENY_ALL_ACCESS_POLICY, createAccessPolicy, createAccessPolicyScope } from '../../../src/channels/shared/access-policy.mjs';
 
 class FakeClient {
   static instances = [];
@@ -1060,6 +1061,45 @@ test('external group handler awaits durable acceptance and cannot start the nati
   committed.resolve(); await pending;
   assert.equal(acknowledged, true);
   await runtime.stop();
+});
+
+test('the bot access policy still gates a handed-over message, and the group archive still records it', async () => {
+  const captured = [];
+  const seen = [];
+  const start = async (accessPolicy) => {
+    const runtime = new FeishuRuntime({
+      lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+      consumerMode: 'external-consumer',
+      acceptExternal: async (event) => { seen.push(event); return { accepted: true }; },
+      accessPolicy,
+      groupHistory: { capture: async (entry) => { captured.push(entry); return null; } },
+      harness: { async ensureRunning() {} }, state: {}, logger: { info() {}, warn() {} },
+    });
+    const starting = runtime.start();
+    await waitFor(() => FakeWSClient.instances.length === 1);
+    FakeWSClient.instances[0].becomeReady(); await starting;
+    return runtime;
+  };
+  const event = (id) => ({ message: { message_id: id, chat_id: 'chat', chat_type: 'group', message_type: 'text',
+    content: JSON.stringify({ text: 'hello' }), create_time: '1790787600000' },
+  sender: { sender_type: 'user', sender_id: { open_id: 'human' } } });
+  // The owner's policy refuses this sender, so the consumer never sees the message; the group archive still records it.
+  const denied = await start({ getSettings: () => DENY_ALL_ACCESS_POLICY });
+  const result = await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](event('om_denied'));
+  assert.deepEqual(result, { accepted: true, ignored: true });
+  assert.equal(seen.length, 0);
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].groupId, 'chat');
+  assert.equal(captured[0].text, 'hello');
+  await denied.stop();
+  // An open group policy admits the same message, so the consumer receives it.
+  const open = createAccessPolicy({ group: createAccessPolicyScope({ mode: 'open',
+    open: { defaultCanExecuteCommands: false, commandPermissionOverrides: [] }, allowlist: { users: [] } }) });
+  const admitted = await start({ getSettings: () => open });
+  await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](event('om_allowed'));
+  assert.equal(seen.length, 1);
+  assert.equal(captured.length, 2);
+  await admitted.stop();
 });
 
 test('expands a merged forward for the external consumer and keeps the placeholder when it cannot be read', async () => {

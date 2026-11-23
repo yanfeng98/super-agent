@@ -1,4 +1,9 @@
 import { createConnectionDiagnostics, atConnectionStage } from '../shared/connection-error.mjs';
+import { captureGroupHistory } from '../shared/group-history.mjs';
+import { evaluateInboundAccess } from '../shared/inbound-access.mjs';
+import { hasInboundImages } from '../shared/image-prompt.mjs';
+import { hasInboundFiles } from '../shared/inbound-file.mjs';
+import { extractInboundMessage, feishuGroupCapture, senderOpenId } from './message-utils.mjs';
 import { anchorMatches, readChatHistory, readChatList, readChatMembers, readExternalHistory, readExternalMessage,
   readMergedForward, readThreadHistory } from './history-reader.mjs';
 import { mergedForwardText } from './external-consumer.mjs';
@@ -419,8 +424,7 @@ export class FeishuRuntime {
             assertCurrentStart();
             if (typeof this.#acceptExternal !== 'function')
               throw Object.assign(new Error('consumer-unavailable'), { code: 'consumer-unavailable' });
-            return Promise.resolve(this.#preparedForConsumer(event, signal))
-              .then(ready => this.#acceptExternal(ready, { signal }));
+            return this.#consumerFlow(event, signal);
           }
           if (isCurrentStart()) void bridge.accept(event);
         },
@@ -810,6 +814,42 @@ export class FeishuRuntime {
     catch { signal?.throwIfAborted(); return event; }
     const text = mergedForwardText(items);
     return text ? { ...event, message: { ...event.message, content: JSON.stringify({ text }) } } : event;
+  }
+
+  /**
+   * Runs one inbound message through the handed-over path: the bot's group archive records it, the bot's own access
+   * policy admits or refuses it, and only an admitted message reaches the consumer.
+   */
+  async #consumerFlow(event, signal) {
+    if (this.#groupHistory && event?.message?.chat_type === 'group') await this.#captureGroupMessage(event);
+    if (!this.#consumable(event)) return { accepted: true, ignored: true };
+    const ready = await this.#preparedForConsumer(event, signal);
+    return this.#acceptExternal(ready, { signal });
+  }
+
+  /**
+   * Whether the bot owner's access policy admits this message while the bot is handed over. It is the first gate: a
+   * sender it refuses never reaches the consumer, whose own Policy still decides what an admitted message may become.
+   * The handed-over channel carries no dsh-im commands, so every message is judged as plain conversation.
+   */
+  #consumable(event) {
+    if (!this.#accessPolicy) return true;
+    const message = extractInboundMessage(event, this.#client);
+    const conversationType = event?.message?.chat_type === 'p2p' ? 'direct'
+      : event?.message?.chat_type === 'group' ? 'group' : null;
+    const access = evaluateInboundAccess(this.#accessPolicy, {
+      conversationType, senderIds: senderOpenId(event), text: message?.content ?? '',
+      hasImages: hasInboundImages(message), hasFiles: hasInboundFiles(message), isCommand: false,
+    });
+    if (access.allowed) return true;
+    this.#logger.info?.('[dsh-feishu] a handed-over message was refused by the bot access policy:', access.reason ?? 'denied');
+    return false;
+  }
+
+  /** Records one group message in the bot's own group archive, as the standalone bridge does. */
+  async #captureGroupMessage(event) {
+    const { message, entry } = feishuGroupCapture(event, this.#client, this.#domain);
+    await captureGroupHistory(this.#groupHistory, message, entry, { logger: this.#logger });
   }
 
   /**

@@ -11,11 +11,13 @@ import {
   conversationScope,
   extractInboundMessage,
   extractText,
+  feishuGroupCapture,
   isAllowedSender,
   isBotSender,
   isTopicKey,
   managedTopicKey,
   managedTopicRoot,
+  senderOpenId,
   splitText,
   stripLocalImageMarkdown,
 } from './message-utils.mjs';
@@ -526,11 +528,6 @@ function orderedHistoryEvents(history) {
     .map((entry) => entry?.event ?? entry)
     .filter((entry) => entry && typeof entry === 'object' && validEventSeq(entry.seq))
     .sort((left, right) => left.seq - right.seq);
-}
-
-function senderOpenId(event) {
-  return nonEmptyString(event?.sender?.sender_id?.open_id)
-    ?? nonEmptyString(event?.sender?.sender_id?.user_id);
 }
 
 function strictSenderOpenId(event) {
@@ -1194,16 +1191,9 @@ export class FeishuHarnessBridge {
 
   accept(event) {
     if (!this.#groupHistory || event?.message?.chat_type !== 'group') return this.#accept(event);
-    const content = extractInboundMessage({ ...event, message: { ...event.message, mentions: [] } }, this.#client);
-    const message = { ...content, kind: 'group', senderId: senderOpenId(event),
-      senderIsBot: isBotSender(event) };
-    return captureGroupHistory(this.#groupHistory, message, {
-      channel: 'feishu', scope: this.#groupHistoryScope, groupId: event.message.chat_id,
-      messageId: event.message.message_id, sentAt: Number(event.message.create_time),
-      type: event.message.message_type, text: content.content,
-      threadId: event.message.thread_id, replyToMessageId: event.message.parent_id,
-      capability: '需授权 im:message.group_msg；授权采集不改变群回复模式。',
-    }, { logger: this.#logger }).then(() => { event.groupHistory = message.groupHistory; return this.#accept(event); });
+    const { message, entry } = feishuGroupCapture(event, this.#client, this.#groupHistoryScope);
+    return captureGroupHistory(this.#groupHistory, message, entry, { logger: this.#logger })
+      .then(() => { event.groupHistory = message.groupHistory; return this.#accept(event); });
   }
 
   #accept(event) {
