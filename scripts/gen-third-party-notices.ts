@@ -58,6 +58,15 @@ const FIRST_PARTY = new Set([
 
 /** Official SDK identity covered by the project's narrow owner authorization. */
 export const CLAUDE_AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
+
+/**
+ * The official QQ bot SDK the bundled IM plugin uses for its QQ channel. Tencent
+ * publishes it with `license: UNLICENSED`; the project owner accepted that
+ * identity for this fork, and
+ * [the notices note](../../.agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md)
+ * records the basis.
+ */
+export const QQ_BOT_CONNECTOR_PACKAGE = '@tencent-connect/qqbot-connector'
 const CLAUDE_PLATFORM_PACKAGE_PREFIX = `${CLAUDE_AGENT_SDK_PACKAGE}-`
 const CLAUDE_PLATFORM_DECLARED_LICENSE = 'SEE LICENSE IN LICENSE.md'
 const LIBREOFFICE_KIT_PACKAGE = '@deepseek-ai/libreoffice-kit'
@@ -74,10 +83,11 @@ const LIBREOFFICE_PACKAGES = new Set([
  * Whether a non-permissive runtime declaration has an identity-scoped owner
  * authorization. This does not reclassify its terms as permissive.
  * @param name - exact npm package identity.
- * @returns true only for the official Claude Agent SDK package.
+ * @returns true only for the two authorized identities: the official Claude
+ *   Agent SDK and the QQ bot connector.
  */
 export function isOwnerAuthorizedRuntime(name: string): boolean {
-  return name === CLAUDE_AGENT_SDK_PACKAGE
+  return name === CLAUDE_AGENT_SDK_PACKAGE || name === QQ_BOT_CONNECTOR_PACKAGE
 }
 
 /**
@@ -670,8 +680,8 @@ function collectPatched(): { spec: string; patch: string }[] {
   return Object.entries(workspace.patchedDependencies ?? {}).map(([spec, patch]) => ({ spec, patch }))
 }
 
-/** SPDX identifiers this project may ship without further review. */
-const PERMISSIVE_LICENSES = new Set(['MIT', 'MIT-CMU', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0', 'PSF-2.0'])
+/** SPDX identifiers this project may ship without further review. `MIT-0` is MIT without the attribution requirement. */
+const PERMISSIVE_LICENSES = new Set(['MIT', 'MIT-0', 'MIT-CMU', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0', 'PSF-2.0'])
 
 /** Evaluate a parsed SPDX expression under the repository's license policy. */
 function isPermissiveSpdx(expression: ReturnType<typeof parseSpdx>): boolean {
@@ -730,6 +740,23 @@ function renderNonPermissiveNote(deps: ExternalDep[]): string {
   const named = deps.map(dep => `\`${dep.name}\` (${dep.license})`)
   const subject = named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`
   return `\n${subject} ${named.length === 1 ? 'runs' : 'run'} only as development tooling; their code is not linked into or distributed with any DeepSeek Harness artifact.\n`
+}
+
+/**
+ * Render the paragraph that names a non-permissive runtime package the project
+ * owner authorized (the Claude SDK carries its own section), or nothing when
+ * none is disclosed.
+ * @param deps - disclosed runtime dependencies.
+ * @returns the paragraph to place after the runtime table.
+ */
+function renderOwnerAuthorizedRuntimeNote(deps: ExternalDep[]): string {
+  const authorized = deps.filter(dep => !isPermissive(dep.license)
+    && isOwnerAuthorizedRuntime(dep.name)
+    && dep.name !== CLAUDE_AGENT_SDK_PACKAGE)
+  if (authorized.length === 0) return ''
+  const named = authorized.map(dep => `\`${dep.name}\` (${dep.license})`)
+  const subject = named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`
+  return `\n${subject} ${named.length === 1 ? 'declares' : 'declare'} terms outside the permissive-license allowlist. The project owner accepted ${named.length === 1 ? 'this identity' : 'these identities'} for the bundled IM plugin; the [notices decision](.agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md) records the basis. No other runtime package inherits the authorization.\n`
 }
 
 /** Render one npm dependency table. */
@@ -813,7 +840,7 @@ ${vendored.map(row => `| \`${row.npmName}\` | \`${row.upstreamName}\` | [${row.s
 External packages installed for runtime use or embedded in distributed Host or browser artifacts. Browser inputs are resolved through the shipping tsdown and Vite configurations, independently of npm dependency sections. Host embedding declarations identify the distributing package and its embedded dependencies. The tier covers every plugin a user can mount from \`cordis.yml\` — not only what the \`dsh\` CLI, Web UI, and Python SDK runtime load by default.
 
 ${renderNpmTable(runtimeDeps)}
-
+${renderOwnerAuthorizedRuntimeNote(runtimeDeps)}
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
 ${patchedLines.join('\n')}

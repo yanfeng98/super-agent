@@ -11,6 +11,7 @@ import {
   collectBundledPythonDependencies,
   isOwnerAuthorizedRuntime,
   isPermissive,
+  QQ_BOT_CONNECTOR_PACKAGE,
   type Manifest,
   manifestPatterns,
   parsePyprojectRequirements,
@@ -426,6 +427,11 @@ describe('isPermissive', () => {
     expect(isPermissive('GPL-2.0-only WITH Classpath-exception-2.0')).toBe(false)
   })
 
+  it('accepts MIT-0, which drops the attribution requirement rather than adding one', () => {
+    expect(isPermissive('MIT-0')).toBe(true)
+    expect(isPermissive('MIT-0 AND GPL-3.0-only')).toBe(false)
+  })
+
   it('honors grouping and SPDX precedence', () => {
     expect(isPermissive('MIT OR (GPL-3.0-only AND GPL-2.0-only)')).toBe(true)
     expect(isPermissive('(MIT OR Apache-2.0) AND ISC')).toBe(true)
@@ -445,6 +451,13 @@ describe('official Claude distribution authorization', () => {
       .toBe(false)
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
+  })
+
+  it('authorizes the QQ bot connector identity and nothing beside it', () => {
+    expect(isOwnerAuthorizedRuntime(QQ_BOT_CONNECTOR_PACKAGE)).toBe(true)
+    expect(isOwnerAuthorizedRuntime(`${QQ_BOT_CONNECTOR_PACKAGE}-extra`)).toBe(false)
+    expect(isOwnerAuthorizedRuntime('@tencent-connect/qqbot-nodejs')).toBe(false)
+    expect(isPermissive('UNLICENSED')).toBe(false)
   })
 
   it('derives version-independent platform payloads from the official SDK manifest', () => {
