@@ -244,7 +244,7 @@ Each model request binds the Session to the current prompt revision. The revisio
 
 | Glue | Translates |
 | --- | --- |
-| `src/app/runtime.ts` | The composition root: builds the parts with the interfaces they use, registers the routes and the Source host, and starts and stops dsh-superagent |
+| `src/app/runtime.ts` | The composition root: builds the parts with the interfaces they use, registers the routes and the Source host, posts a Ticket's question where the person wrote, ends the Thread's live Tickets for a Source's `/stop`, runs the startup repair, and starts and stops dsh-superagent |
 | `src/app/notices.ts` | Domain events and worker reports into notices and relays for the main Session |
 | `src/app/review.ts` | A Ticket's workspace into the git facts of its review: branch, commits since its launch base, changed and uncommitted files, the lines a later commit changed for a review note; and its merge, rebase, push and cleanup operations |
 | `src/app/tools/main.ts`, `src/app/tools/executor.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards |

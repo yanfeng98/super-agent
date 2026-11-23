@@ -6,6 +6,8 @@ DSH-IM automatically saves group messages and attachments it receives. Mention a
 
 Recording is enabled by default, with no initial mention or per-group switch required. Saving a message does not call the model or create an AI Session. Existing mention rules, reply modes, and access settings still determine when the bot answers.
 
+While a bot is handed over to Superagent, group history keeps recording and its access settings still apply; the consumer decides what becomes a Ticket and answers, and the bot itself no longer does.
+
 ## Quick start
 
 1. Use a DSH-IM build that includes group history, connect your bot to DSH, and add it to the target group or channel.

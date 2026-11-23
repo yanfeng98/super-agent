@@ -54,7 +54,7 @@ The Feishu Source uses a bot that dsh-im already owns; it needs no `lark-cli`, a
 
 1. In dsh-im, configure the Feishu bot under **IM 机器人 → 飞书** and keep it connected.
 2. In superagent, open **Settings → Sources → Feishu**, choose that bot, and set the chats, direct messages and other-chat mode. **刷新群列表** reads every chat the bot has joined into the picker, which also lists the chats saved as dsh-im delivery targets; while the handoff is off only the delivery targets are named, so enter a chat ID directly if the one you want is missing.
-3. In the same bot's dsh-im settings, open **通用** and turn on **交给 Superagent**. The bot's messages now become Triggers for this Source; superagent acknowledges, works and replies through dsh-im.
+3. In the same bot's dsh-im settings, open **通用** and turn on **交给 Superagent**. The bot's messages now become Triggers for this Source; superagent acknowledges, works and replies through dsh-im. Check that bot's **访问设置** too: the handoff keeps that policy, and a bot migrated from an older version starts with an empty allowlist that admits only its owner, so switch it to allow all users or list the team.
 4. Turn the same switch off to release the bot and return it to normal dsh-im conversation. The Source then stays idle until the switch is on again.
 
 Each Ticket keeps the bot that created it, so changing the selected bot later affects new Tickets only. The handoff is exclusive while it is on: dsh-im's own Session bridge, cards and slash commands for that bot do not run.
