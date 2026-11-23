@@ -153,4 +153,4 @@ pnpm dsh plugin --profile <名称> add <包名>   # 给已有 profile 安装插�
 
 ## 许可证
 
-第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。其中 QQ 渠道依赖的 `@tencent-connect/qqbot-connector` 在 npm 上声明为 `UNLICENSED`，仅在本检出的个人研究范围内使用；对外分发前请先评估该依赖，决定记录见 [`logs/00120`](logs/00120-第三方依赖声明恢复与QQ渠道许可决策.md)。
