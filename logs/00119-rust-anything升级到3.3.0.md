@@ -66,4 +66,4 @@
 
 自查同时确认了几条容易被当成「改坏了」的判断：`git archive <tag> .mcp.json` 可用（同步步骤写法成立）；`native/rust-anything/` 确实在 `translation-pairing.manifest.json` 的排除项里；仓库的 skill 提供方只扫 `<project>/.agents/skills`，新增的 `plugin/skills/` 不会冒充第二个技能。
 
-另外把这次踩到的坑写成标准指令：根 `AGENTS.md` 的「Run relevant checks locally」新增一条「共享主机压低并发」（`DSH_GATE_CONCURRENCY=2`、Vitest `--maxWorkers=2`、重活逐个跑），`verify-doc-budgets` 的根 `AGENTS.md` 上限从 2,080 提到 2,200，`docs/AGENTS.md` 的 target 同步更新。
+另外把这次踩到的坑写成标准指令：根 `AGENTS.md` 的「Run relevant checks locally」新增一条「共享主机压低并发」（`DSH_GATE_CONCURRENCY=2`、Vitest `--maxWorkers=2`、重活逐个跑），`verify-doc-budgets` 的根 `AGENTS.md` 上限从 2,080 提到 2,220（2,101 词，留出 5% 余量），`docs/AGENTS.md` 的 target 同步更新。
