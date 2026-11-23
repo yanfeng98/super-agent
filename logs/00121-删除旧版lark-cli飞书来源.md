@@ -33,7 +33,7 @@
 | 命令 | 结果 |
 |---|---|
 | `npx tsc --noEmit`（dsh-superagent，含测试） | 通过 |
-| `npx vitest run --maxWorkers=1 --no-file-parallelism`（dsh-superagent 全量） | 1,322 通过、3 失败；3 个都是 `tests/role-models.spec.ts` 的既有失败（`Cannot read properties of undefined (reading 'assemble')`），与本改动无关 |
+| `npx vitest run --maxWorkers=1 --no-file-parallelism`（dsh-superagent 全量） | 1,324 通过、3 失败；3 个都是 `tests/role-models.spec.ts` 的既有失败（`Cannot read properties of undefined (reading 'assemble')`），与本改动无关 |
 | `npm run build`（dsh-superagent） | 通过；`lib/` 重建后不再含 `event consume`、`chat-members-list`、`messages-mget` 等旧 lark-cli 字符串 |
 | `pnpm run test:docs` | 21 通过、0 失败 |
 
@@ -57,4 +57,16 @@
 | 每个来源的 setup `problem` 字段（`views/sources.ts`、`views/settings.ts`、客户端卡片、panel fixture、006 的 `GET sources`）永远不可能再有值 | 删除该字段与渲染路径，`SourceState` 只看 health |
 | 文档与示例残留：007 的 `setupChanged`、008 的 `validItems`、NATIVE 第 6 与第 28 条、`examples/profile.cordis.patch.yml` 的「set the bot's lark-cli」 | 改写为当前事实 |
 
-审计后的校验：`npx tsc --noEmit` 通过；全量 **1,322 通过 / 3 失败**（同样只有 `role-models` 的既有失败，总数 1,325）；`npm run build` 通过；`pnpm run test:docs` 21 通过。
+审计后的校验：`npx tsc --noEmit` 通过；全量 **1,324 通过 / 3 失败**（同样只有 `role-models` 的既有失败，总数 1,327）；`npm run build` 通过；`pnpm run test:docs` 21 通过。
+
+## 6. 第二轮审计：上一轮修复的复查
+
+| 发现 | 处理 |
+|---|---|
+| 旧工单读附件时仍落到 `routeOf` 的旧错误 `The Feishu reply route is incomplete`，看不出原因 | `routeOf` 对缺 `actorId` 的地址单独报「This Feishu message was recorded before the handoff to dsh-im, so it has no reply route」；补一条图片读取用例 |
+| 上一轮只做了函数级测试，没有验证旧工单回复在投递链上的落点 | 补 outbox 用例：旧工单回复以 `dropped`/`channelGone` 落库，且没有调用 dsh-im |
+| 文档残留：008 的 `link(address, links)` 示例、示例里的 `pollFailures`、`kind.ts` 的 `link` JSDoc 仍写 `links`、006 `GET settings` 的 per-source `problem`、NATIVE 第 31 条断句 | 逐处改写 |
+| 上一轮删除后新增的未使用导入：`route.ts` 的 `SetupPlace`、`source.tsx` 的 `navigate`、`deployment.tsx` 的 `setupText` | 删除 |
+| 007 的 `feishu-im/…` 资源行没说旧工单会怎样 | 补「every part answers `unavailable`」 |
+
+`migration.ts` 的 `Key`、`runtime.ts` 的 `reasonText`/`allowedSender`/`triggerMessage`、`host.ts` 的 `ChannelRef` 在改动前就没有使用者（对照 `HEAD~2` 确认），不在本次范围内，未动。

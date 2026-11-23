@@ -58,7 +58,9 @@ const routeOf = (address: Record<string, string>): DshImEvent['reply'] => {
   const messageId = address.messageId ?? ''
   const conversationId = address.conversationId ?? address.chatId ?? ''
   const actorId = address.actorId ?? ''
-  if (!messageId || !conversationId || !actorId) throw new Error('The Feishu reply route is incomplete')
+  if (!messageId || !conversationId) throw new Error('The Feishu reply route is incomplete')
+  // A Trigger recorded before the handoff retained no author, and dsh-im resolves a route only for the author it was read as.
+  if (!actorId) throw new Error('This Feishu message was recorded before the handoff to dsh-im, so it has no reply route')
   return { messageId, conversationId, actorId, ...address.threadId ? { threadId: address.threadId } : {},
     ...address.rootId ? { rootId: address.rootId } : {}, ...address.parentId ? { parentId: address.parentId } : {} }
 }

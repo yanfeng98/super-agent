@@ -177,7 +177,7 @@ export async function sendWebhook(host: Pick<SourceContext, 'commands'>, message
 - **Idempotent sends.** Outbox calls `SourceRegistry.send`, which invokes `channel.send`. Messages wait while the Source plugin is unloaded. A send may fail after the remote service received it, so retries must not duplicate messages. Use `message.id` as an idempotency key: `hookq` supports `--key`, and Feishu accepts one too.
 - **Permanent versus retryable failure.** Return `sent` on success and `gone` only when delivery is permanently impossible, such as the example's 410. A gone message is retained as dropped and never queued again; it appears in `GET sources` and on the Source page. Throw for other failures so Outbox retries after 5 seconds, doubling to 300 seconds. `CliError.code` is the code reported by the CLI output.
 - **Allowed destinations.** `allowed(address, config)` checks only the saved address and current configuration. Put every required fact in the address; for example, Feishu records whether the chat is direct. A destination no longer listened to is dropped, while a disabled Source leaves messages waiting. Without `allowed`, all addresses are permitted while the Source is enabled.
-- **Links.** `link(address, links)` returns the URL and label the panel displays through `SourceRegistry.link`.
+- **Links.** `link(address)` returns the URL and label the panel displays through `SourceRegistry.link`.
 
 ### 6. Thread context for assessments
 
@@ -288,7 +288,7 @@ async function watch(ctx: SourceContext, signal: AbortSignal): Promise<void> {
         failures += 1
         // One network failure is retried on the next round; three in a row need a person.
         if (!signal.aborted && failures >= 3) {
-          ctx.report('webhook', health('error', 'pollFailures', { count: String(failures), error: String(error) }))
+          ctx.report('webhook', { state: 'error', detail: `${failures} consecutive failed polls; last: ${String(error)}` })
         }
       }
     }
@@ -324,7 +324,7 @@ export async function pollQueue(ctx: SourceContext, signal: AbortSignal): Promis
   Advance a cursor only after every covered Trigger has been stored. An interrupted round leaves the cursor unchanged; stable ids make replay safe. For timestamp cursors, `cursorAt(started)` from `src/sources/poll.ts` subtracts five seconds to allow for late remote writes.
 - **Thread metadata.** After receiving a Trigger, call `ctx.threads.describe(key, {label, url, facts})` to populate its display information. `ctx.threads.patch(key, meta)` delegates to `threads.patchMeta`, setting Source-owned keys or removing them when the value is `undefined`. Both ignore absent Threads, including those of filtered Triggers.
 - **Per-item errors.** Count malformed items and continue rather than failing the entire batch: parse each item with a schema's `safeParse` and keep the successes. For independently polled Threads, use `pollThreads` from `src/sources/poll.ts`; it records each failure as `pollError`. Its `polled` predicate keeps live subscriptions and a two-week window after the later of the last Trigger and Ticket end.
-- **Health.** Write only declared entries through `ctx.report`. `health(state, code, values)` provides fixed messages such as `setupPending`, `sourceOff` and `pollFailures`. Count consecutive failures before reporting `error`.
+- **Health.** Write only declared entries through `ctx.report`. A reported entry is `{ state, detail }`, and the fixed codes of `HEALTH_TEXT` (`src/sources/host.ts`) give the panel a localized message where one fits, such as `setupPending` or `sourceOff`. Count consecutive failures before reporting `error`.
 - **Abort.** Pass the signal to `ctx.commands.withSignal(signal)` and to `delay`, and check it between items, so a stop or a restart ends the loop at once.
 
 This example does not send Source-originated notices. A Source that needs them calls `ctx.notify`; Outbox delivers them like other replies.

@@ -11,7 +11,7 @@ import { InfoTip, Input } from './controls.tsx'
 import { SaveBar, useDraft } from './draft.tsx'
 import { PanelProvider, usePanel, usePanelData } from './provider.tsx'
 import { Field, Fields } from './settings-kit.tsx'
-import { setupText, type T } from './text.ts'
+import { type T } from './text.ts'
 import { CheckSetupButton, Hint, KeyValues, Section, SetupMessage } from './widgets.tsx'
 
 export type DeploymentForm = ConfigPageForm | undefined

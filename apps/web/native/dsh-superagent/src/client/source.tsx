@@ -90,7 +90,7 @@ function DroppedReplies({ items }: { items: DroppedReply[] }) {
   </DisclosureRow>
 }
 function SourceRow({ source }: { source: SourceStatusRow }) {
-  const { t, navigate } = usePanel()
+  const { t } = usePanel()
   const { setup } = usePanelData()
   const [filteredOpen, setFilteredOpen] = useState(false)
   const { dropped } = source

@@ -571,7 +571,7 @@ Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open
 | `settings`, `settings/<block>` | Revisions and summaries, or a complete block ready to save |
 | `prompts`, `prompts/<revision>`, `prompts/current`, `prompts/defaults`, `prompt-preview/<id>` | Prompt configurations and composed text |
 | `models`, `models/<provider>` | Available models |
-| `feishu-im/<trigger id>/…` | The dsh-im Feishu Trigger's own message, its Thread's root, the message it answers, the Thread and the chat around it, described in the Feishu skill |
+| `feishu-im/<trigger id>/…` | The dsh-im Feishu Trigger's own message, its Thread's root, the message it answers, the Thread and the chat around it, described in the Feishu skill; a Trigger recorded before the handoff has no reply route, so every part answers `unavailable` |
 
 `/diff` is the main Session's read of the committed change the panel shows as View diff; a Ticket's details also list `blocked_by`, the Tickets whose merge comes first. Ticket Threads are marked `context` for context-only follows and `bound` for Source bindings. Assignment pages are newest first and include report previews. Continue lists with `next_offset`. `/input/<id>` accepts an Input's name or id. `settings` includes small blocks in full and summarizes Policy and Source blocks.
 

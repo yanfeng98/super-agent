@@ -399,9 +399,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `validItems`/`Tally`, the `panelOnlyAccounts` refusal and the `feishu/<trigger id>/…` context resource. `Deployment`
     is the machine settings alone; `GET state` and `scripts/dsh-superagent status` carry `setup.problem` only;
     `accounts.feishu` names the dsh-im bot the Source is bound to; a settings save restarts dsh-superagent only while
-    setup waits. A Trigger recorded before the removal keeps its text but resolves to no link, and its original message is
-    reads as `unavailable` and its replies settle as `channelGone`, because no reply route for it was retained. The worker's `lark-cli` shim stays and fails with that
-    reason, so a worker reaches Feishu only through the orchestrator tools. `tests/feishu-read.spec.ts` is gone,
+    setup waits. A Trigger recorded before the removal keeps its text but resolves to no link; its original message and
+    context read as `unavailable`, and its replies settle as `channelGone`, because no reply route for it was retained.
+    The worker's `lark-cli` shim stays and fails with that reason, so a worker reaches Feishu only through the
+    orchestrator tools. `tests/feishu-read.spec.ts` is gone,
     `tests/sources.spec.ts` keeps only the Source-context coverage, and the fixtures build Triggers through `imTrigger`
     over a fake dsh-im service.
 
@@ -416,7 +417,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,325 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,327 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a

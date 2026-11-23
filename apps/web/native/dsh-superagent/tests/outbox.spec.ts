@@ -25,6 +25,16 @@ it('holds every message while processing is paused, and sends it once processing
   expect(h.replies.map(reply => reply.text)).toContain('已合并。')
 })
 
+it('drops a reply to a Trigger recorded before the handoff, without asking dsh-im', async () => {
+  h.replies.length = 0
+  h.runtime.outbox.send({ id: 'legacy', kind: 'reply', text: '已修好。', channel: { source: 'feishu', thread: 'feishu:oc_team',
+    address: { chatId: 'oc_team', messageId: 'om_old' } } })
+  await h.runtime.pump(); await h.runtime.sendReplies()
+  expect([h.runtime.outbox.status('legacy'), h.replies.length]).toEqual(['dropped', 0])
+  expect(h.runtime.store.read.droppedReplies(h.runtime.store.read.droppedSince('1970-01-01T00:00:00.000Z')))
+    .toEqual([expect.objectContaining({ id: 'legacy', dropped: expect.objectContaining({ reason: 'channelGone' }) })])
+})
+
 it('keeps a message for a Source that is not installed waiting, and sends it once the Source\'s kind registers', async () => {
   const sent: OutboundMessage[] = []
   const probe: SourceKind<Record<string, never>> = { kind: 'probe', title: { zh: '探针', en: 'Probe' }, description: { zh: '', en: '' }, health: [],

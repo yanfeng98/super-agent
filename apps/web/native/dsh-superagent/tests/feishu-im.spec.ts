@@ -884,6 +884,26 @@ describe('dsh-im Feishu context parts and images', () => {
     setDshIm(service({ historyChecked: async () => { throw new Error('should not read') } }))
     await expect(feishuImKind.threadContext!.read({} as never, old as never, 'thread', undefined, config()))
       .resolves.toMatchObject({ status: 'unavailable', messages: [] })
+    // The resource route answers the same way instead of failing on a route dsh-im cannot resolve.
+    const host = { commands: { withSignal: () => ({}) }, store: { settings: () => ({ sources: { feishu: { config: { botId: 'bot_1' } } } }) } }
+    await expect(feishuImPage(host as never, old as never, 'thread')).resolves.toMatchObject({ messages: [], status: 'unavailable' })
+  })
+
+  it('refuses to read an attachment of a Trigger recorded before the handoff, and says why', async () => {
+    setDshIm(service({ resourceChecked: async () => { throw new Error('should not download') } }))
+    const agent = {
+      ctx: { get: (name: string) => name === 'attachments' ? { imageLimits: { maxImageBytes: 1_000, maxMessageImageBytes: 1_000 },
+        saveImage: async () => ({ id: 'image_1' }) } : name === 'llm' ? { resolveModelInfo: async () => ({ inputModalities: ['image'] }) } : undefined },
+      session: { requestHeader: () => ({ config: { provider: 'p', model: 'm' } }) },
+      options: { provider: 'p', model: 'm' },
+    }
+    const old = { id: key('feishu', 'om_old'), source: 'feishu', threads: [{ source: 'feishu', id: 'oc_team:om_old' }],
+      actor: { source: 'feishu', id: 'ou_alice' }, human: true, at: '2026-09-01T00:00:00.000Z', text: '[图片] img_x',
+      channel: { source: 'feishu', thread: 'feishu:oc_team', address: { chatId: 'oc_team', messageId: 'om_old' } },
+      meta: { botId: 'bot_1', chatId: 'oc_team', messageId: 'om_old' } }
+    const { readFeishuImImage } = await import('../src/sources/feishu-im.ts')
+    await expect(readFeishuImImage(agent as never, old as never, { id: 'om_old', text: '[图片] img_x' }, 'img_x',
+      new AbortController().signal)).rejects.toThrow('recorded before the handoff to dsh-im')
   })
 
   it('settles a reply to a Trigger recorded before the handoff as gone, without asking dsh-im', async () => {
