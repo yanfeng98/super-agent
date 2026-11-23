@@ -63,7 +63,7 @@ fn values_close_with_order(
 }
 
 /// A line split into number tokens and the text between them.
-fn split_numbers(line: &str) -> (Vec<&str>, Vec<&str>) {
+pub(crate) fn split_numbers(line: &str) -> (Vec<&str>, Vec<&str>) {
     let bytes = line.as_bytes();
     let (mut numbers, mut text) = (Vec::new(), Vec::new());
     let (mut i, mut last) = (0, 0);

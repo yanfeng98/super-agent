@@ -146,7 +146,7 @@
           - id: mcp-rust-anything
             name: '@deepseek-ai/dsh-rust-anything'
             config:
-              # Eager keeps the tool list stable and needs no load step; the 16
-              # schemas (plus the 3 shared resource tools) cost about 7k request
+              # Eager keeps the tool list stable and needs no load step; the 22
+              # schemas (plus the 3 shared resource tools) cost about 8k request
               # tokens per agent that mounts it.
               toolLoading: eager

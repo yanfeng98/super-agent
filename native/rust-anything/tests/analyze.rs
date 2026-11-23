@@ -169,6 +169,26 @@ fn numpy_array_parameters_are_flagged() {
 }
 
 #[test]
+fn a_c_unit_depends_on_what_its_own_header_includes() {
+    let root = std::env::temp_dir().join(format!("rust-anything-c-header-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    for (name, text) in [
+        ("src/a.c", "#include \"a.h\"\nint a(void) { return b(); }\n"),
+        ("src/a.h", "#pragma once\n#include \"b.h\"\nint a(void);\n"),
+        ("src/b.c", "#include \"b.h\"\nint b(void) { return 42; }\n"),
+        ("src/b.h", "#pragma once\nint b(void);\n"),
+    ] {
+        std::fs::write(root.join(name), text).unwrap();
+    }
+    let report = rust_anything::analyze::analyze_lang(&root, rust_anything::lang::Lang::C).unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
+    let a = unit(&report, "src/a.c");
+    assert_eq!(a.internal_deps, ["src/b.c"], "{:?}", a.internal_deps);
+    assert!(a.wave > unit(&report, "src/b.c").wave);
+}
+
+#[test]
 fn json_output_is_versioned() {
     let json = serde_json::to_value(mini()).unwrap();
     assert_eq!(json["schema"], "rust-anything/analyze@1");
@@ -392,6 +412,58 @@ fn platform_specific_c_stays_in_c_and_compiled_apps_are_refused() {
 }
 
 #[test]
+fn a_c_library_folder_reads_like_ffmpegs_libavutil() {
+    let root = std::env::temp_dir()
+        .join(format!("ra-libavutil-{}", std::process::id()))
+        .join("libavutil");
+    let _ = std::fs::remove_dir_all(&root);
+    let write = |path: &str, text: &str| {
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    };
+    write(
+        "base64.h",
+        "#include <stdint.h>\nint b64_decode(uint8_t *out, const char *in, int out_size);\n",
+    );
+    write(
+        "base64.c",
+        "#include \"base64.h\"\n\
+         int b64_decode(uint8_t *out, const char *in, int out_size) {\n\
+         \x20   if (!out) goto check;\n    return out_size;\ncheck:\n    return in[0] == 0 ? 0 : -1;\n}\n",
+    );
+    write(
+        "tests/base64.c",
+        "#include \"libavutil/base64.h\"\nint main(void) { return b64_decode(0, \"\", 0); }\n",
+    );
+    write("x86/cpu.c", "int cpu_flags(void) { return 1; }\n");
+    let report = analyze(&root).unwrap();
+    let ids: Vec<&str> = report.units.iter().map(|u| u.id.as_str()).collect();
+    let base64 = report
+        .units
+        .iter()
+        .find(|u| u.id == "base64.c")
+        .unwrap_or_else(|| panic!("{ids:?}"));
+    assert_ne!(
+        base64.status,
+        Status::Blocked,
+        "goto is control flow: {base64:?}"
+    );
+    assert_eq!(
+        base64.direct_tests, 1,
+        "`libavutil/base64.h` from inside libavutil: {base64:?}"
+    );
+    assert_eq!(base64.bridgeable, 1, "{base64:?}");
+    let cpu = report
+        .units
+        .iter()
+        .find(|u| u.id.starts_with("x86/"))
+        .unwrap_or_else(|| panic!("{ids:?}"));
+    assert_eq!(cpu.status, Status::Keep, "{cpu:?}");
+    std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn electron_apps_get_a_main_process_decision() {
     let root = std::env::temp_dir().join(format!("ra-electron-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
@@ -482,4 +554,409 @@ fn kotlin_units_export_jvm_statics_and_map_gradle_packages() {
         .unwrap();
     assert!(gson.declared);
     assert_eq!(gson.fit, "good");
+    assert!(
+        w.dependencies
+            .iter()
+            .all(|d| d.name != "com.example:legacy"),
+        "a commented-out dependency is not declared: {:?}",
+        w.dependencies
+    );
+}
+
+#[test]
+fn a_comment_inside_a_require_block_is_not_a_module() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/go-reqs");
+    let declared = rust_anything::whole_app::declared(&root, Lang::Go);
+    for name in [
+        "github.com/spf13/cobra",
+        "github.com/google/uuid",
+        "github.com/mattn/go-sqlite3",
+    ] {
+        assert!(declared.contains(name), "{name}: {declared:?}");
+    }
+    for bogus in ["//", "pinned", "until"] {
+        assert!(
+            !declared.contains(bogus),
+            "{bogus} is not a module: {declared:?}"
+        );
+    }
+}
+
+#[test]
+fn a_gem_group_ends_at_its_own_end() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ruby-gems");
+    let declared = rust_anything::whole_app::declared(&root, Lang::Ruby);
+    assert!(
+        declared.contains("rack"),
+        "a Gemfile gem is a runtime dependency: {declared:?}"
+    );
+    assert!(
+        !declared.contains("rspec"),
+        "a gem inside `group :test do` is not: {declared:?}"
+    );
+    assert!(
+        !declared.contains("debug"),
+        "a gem inside a nested block in a group is not: {declared:?}"
+    );
+}
+
+#[test]
+fn a_commented_out_maven_dependency_is_not_declared() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/java-pom");
+    let declared = rust_anything::whole_app::declared(&root, Lang::Java);
+    assert!(
+        declared.contains("com.google.guava:guava"),
+        "a live dependency is declared: {declared:?}"
+    );
+    for commented in ["com.example:legacy", "com.example:older"] {
+        assert!(
+            !declared.contains(commented),
+            "{commented} is commented out: {declared:?}"
+        );
+    }
+    assert!(
+        !declared.iter().any(|d| d.contains("junit")),
+        "a test-scope dependency is not a runtime one: {declared:?}"
+    );
+}
+
+#[test]
+fn a_commented_out_test_package_does_not_hide_a_csharp_project() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/csharp-comments");
+    let text = std::fs::read_to_string(root.join("App.csproj")).unwrap();
+    assert!(
+        !rust_anything::lang::csharp::is_test_project(&text),
+        "a project whose test package is commented out is not a test project"
+    );
+    let declared = rust_anything::whole_app::declared(&root, Lang::Csharp);
+    for name in ["Newtonsoft.Json", "Serilog"] {
+        assert!(declared.contains(name), "{name}: {declared:?}");
+    }
+    assert!(
+        !declared.iter().any(|d| d.to_lowercase().contains("xunit")),
+        "a commented-out package is not declared: {declared:?}"
+    );
+}
+
+#[test]
+fn a_requirements_file_names_packages_not_urls() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/python-reqs");
+    let declared = rust_anything::whole_app::declared(&root, Lang::Python);
+    for name in ["requests", "flask", "myapp", "six"] {
+        assert!(declared.contains(name), "{name}: {declared:?}");
+    }
+    for bogus in ["git", ".", "foo"] {
+        assert!(
+            !declared.contains(bogus),
+            "{bogus} is not a package a registry serves: {declared:?}"
+        );
+    }
+}
+
+#[test]
+fn a_requirements_include_is_followed_once() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/python-includes");
+    let declared = rust_anything::whole_app::declared(&root, Lang::Python);
+    for name in ["flask", "six", "pytest", "ruff"] {
+        assert!(declared.contains(name), "{name}: {declared:?}");
+    }
+}
+
+#[test]
+fn a_java_import_names_the_library_the_table_knows() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/java-guava");
+    let report = analyze(&root).unwrap();
+    assert_eq!(report.language, Lang::Java);
+    let unit = &report.units[0];
+    for library in ["com.google.common", "org.apache.commons"] {
+        assert!(
+            unit.external_deps.contains(&library.to_string()),
+            "{library}: {:?}",
+            unit.external_deps
+        );
+    }
+    for prefix in ["com.google", "org.apache"] {
+        assert!(
+            !unit.external_deps.contains(&prefix.to_string()),
+            "a two-segment prefix is not a library: {:?}",
+            unit.external_deps
+        );
+    }
+}
+
+#[test]
+fn a_function_import_does_not_name_a_composer_package() {
+    use rust_anything::lang::Lang;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/php-namespace");
+    let report = analyze(&root).unwrap();
+    assert_eq!(report.language, Lang::Php);
+    let user = report
+        .units
+        .iter()
+        .find(|u| u.id == "src/User.php")
+        .unwrap_or_else(|| {
+            panic!(
+                "units: {:?}",
+                report.units.iter().map(|u| &u.id).collect::<Vec<_>>()
+            )
+        });
+    assert!(
+        user.external_deps.contains(&"monolog/monolog".to_string()),
+        "{:?}",
+        user.external_deps
+    );
+    assert!(
+        !user.external_deps.contains(&"Acme".to_string()),
+        "the project's own namespace is not a Composer package: {:?}",
+        user.external_deps
+    );
+    assert!(
+        user.external_deps.contains(&"Stripe".to_string()),
+        "a vendor namespace the table cannot place stays external: {:?}",
+        user.external_deps
+    );
+    assert!(
+        user.internal_deps.contains(&"src/Greeter.php".to_string()),
+        "{:?}",
+        user.internal_deps
+    );
+}
+
+fn scratch(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("ra-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (path, text) in files {
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+    root
+}
+
+#[test]
+fn the_plugin_and_whole_app_read_a_manifest_the_same_way() {
+    use rust_anything::lang::{Lang, discover};
+    let fixture = |dir: &str| {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(dir)
+    };
+
+    let ws = discover(Lang::Ruby, &fixture("ruby-gems")).unwrap();
+    let gemfile = ws.packages.iter().find(|p| p.dir.is_empty()).unwrap();
+    assert_eq!(gemfile.deps, ["rack"]);
+    assert_eq!(gemfile.dev_deps, ["rspec", "byebug", "debug"]);
+    let declared: Vec<String> =
+        rust_anything::whole_app::declared(&fixture("ruby-gems"), Lang::Ruby)
+            .into_iter()
+            .collect();
+    assert_eq!(declared, gemfile.deps);
+
+    let ws = discover(Lang::Python, &fixture("python-includes")).unwrap();
+    let mut deps = ws.packages[0].deps.clone();
+    deps.sort();
+    deps.dedup();
+    assert_eq!(deps, ["flask", "pytest", "ruff", "six"]);
+
+    let ws = discover(Lang::Java, &fixture("java-pom")).unwrap();
+    assert!(
+        ws.packages[0]
+            .deps
+            .iter()
+            .all(|d| !d.starts_with("com.example:")),
+        "a commented-out dependency is not one: {:?}",
+        ws.packages[0].deps
+    );
+}
+
+#[test]
+fn a_python_library_imported_as_yaml_and_declared_as_pyyaml_is_one_dependency() {
+    let root = scratch(
+        "yaml-join",
+        &[
+            (
+                "pyproject.toml",
+                "[project]\nname = \"conf\"\ndependencies = [\"PyYAML>=6\", \"orjson\"]\n",
+            ),
+            (
+                "conf/load.py",
+                "import yaml\nimport left_pad_but_new\n\ndef load(text: str) -> dict:\n    return yaml.safe_load(text)\n",
+            ),
+        ],
+    );
+    let report = analyze(&root).unwrap();
+    let w = rust_anything::whole_app::whole_app(&root, &report);
+    std::fs::remove_dir_all(&root).unwrap();
+    let yaml: Vec<_> = w
+        .dependencies
+        .iter()
+        .filter(|d| d.names.iter().any(|n| n == "yaml" || n == "pyyaml"))
+        .collect();
+    assert_eq!(yaml.len(), 1, "{:?}", w.dependencies);
+    assert_eq!(yaml[0].names, ["pyyaml", "yaml"]);
+    assert_eq!(yaml[0].name, "pyyaml");
+    assert!(yaml[0].declared);
+    assert_eq!(yaml[0].used_by, 1);
+    let unknown = w
+        .dependencies
+        .iter()
+        .find(|d| d.name == "left-pad-but-new")
+        .unwrap_or_else(|| panic!("{:?}", w.dependencies));
+    assert_eq!((unknown.names.len(), unknown.declared), (1, false));
+    let json = w.dependencies.iter().find(|d| d.name == "orjson").unwrap();
+    assert_eq!((json.used_by, json.declared), (0, true));
+}
+
+#[test]
+fn a_kotlin_import_and_its_gradle_coordinates_are_one_dependency() {
+    let root = scratch(
+        "room-join",
+        &[
+            (
+                "build.gradle.kts",
+                "plugins { kotlin(\"jvm\") version \"2.0.21\" }\n\
+                 dependencies { implementation(\"androidx.room:room-runtime:2.6.1\") }\n",
+            ),
+            (
+                "src/main/kotlin/com/acme/G.kt",
+                "package com.acme\nimport androidx.room.RoomDatabase\nobject G { @JvmStatic fun f(): String = \"x\" }\n",
+            ),
+        ],
+    );
+    let report = analyze(&root).unwrap();
+    let w = rust_anything::whole_app::whole_app(&root, &report);
+    std::fs::remove_dir_all(&root).unwrap();
+    let room: Vec<_> = w
+        .dependencies
+        .iter()
+        .filter(|d| d.names.iter().any(|n| n.starts_with("androidx.room")))
+        .collect();
+    assert_eq!(room.len(), 1, "{:?}", w.dependencies);
+    assert_eq!(
+        room[0].names,
+        ["androidx.room", "androidx.room:room-runtime"]
+    );
+    assert_eq!(room[0].name, "androidx.room:room-runtime");
+    assert!(room[0].declared);
+    assert_eq!(room[0].used_by, 1);
+    let json = serde_json::to_value(room[0]).unwrap();
+    assert_eq!(json["name"], "androidx.room:room-runtime");
+    assert_eq!(json["names"][0], "androidx.room");
+    let plan = rust_anything::report::markdown(
+        &rust_anything::analyze::Report {
+            whole_app: Some(w),
+            ..report
+        },
+        "room",
+    );
+    assert!(
+        plan.contains("`androidx.room:room-runtime` (also `androidx.room`)"),
+        "{plan}"
+    );
+}
+
+#[test]
+fn a_unit_importing_another_workspace_package_is_not_a_leaf() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/monorepo");
+    let report = analyze(&root).unwrap();
+    let b = report
+        .units
+        .iter()
+        .find(|u| u.id == "packages/b/src/titles.ts")
+        .unwrap();
+    assert_eq!(b.workspace_deps, ["@m/a"]);
+    assert!(
+        !b.notes.iter().any(|n| n.starts_with("Leaf:")),
+        "a workspace import is an import: {:?}",
+        b.notes
+    );
+    assert!(
+        b.notes.iter().any(|n| n.contains("@m/a")),
+        "the note should name the package: {:?}",
+        b.notes
+    );
+}
+
+#[test]
+fn map_names_a_path_that_does_not_exist() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rust-anything"))
+        .args(["map", "/no/such/rust-anything-path"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("/no/such/rust-anything-path"), "{err}");
+}
+
+#[test]
+fn bridgeable_exports_are_counted_as_bridge_judges_them() {
+    let root = std::env::temp_dir().join(format!("ra-analyze-dts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let write = |path: &str, text: &str| std::fs::write(root.join(path), text).unwrap();
+    write(
+        "package.json",
+        r#"{"name":"t","version":"1.0.0","type":"module"}"#,
+    );
+    write(
+        "src/plug.js",
+        "export function use(plugin) { return plugin(1); }\n",
+    );
+    write(
+        "src/plug.d.ts",
+        "export declare function use(plugin: (x: number) => number): number;\n",
+    );
+    write(
+        "src/sum.js",
+        "export function sum(a, b) { return a + b; }\n",
+    );
+    write(
+        "src/sum.d.ts",
+        "export declare function sum(a: number, b: number): number;\n",
+    );
+    write(
+        "src/bus.ts",
+        "export class Bus {\n  on(h: (x: number) => void): void { h(1); }\n}\n",
+    );
+    write(
+        "src/pat.ts",
+        "type Pat = RegExp;\nexport function test(p: Pat, s: string): boolean { return p.test(s); }\n",
+    );
+    let report = analyze(&root).unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
+    for (id, why) in [
+        (
+            "src/bus.ts",
+            "`bridge` keeps a class with a callback method in JS",
+        ),
+        (
+            "src/pat.ts",
+            "`bridge` resolves `Pat` to RegExp and keeps `test` in JS",
+        ),
+    ] {
+        let u = unit(&report, id);
+        assert_eq!((u.exports, u.bridgeable), (1, 0), "{why}: {u:?}");
+        assert_eq!(u.status, Status::Caution, "{u:?}");
+    }
+    let plug = unit(&report, "src/plug.js");
+    assert_eq!(
+        (plug.exports, plug.bridgeable),
+        (1, 0),
+        "`bridge` reads plug.d.ts and keeps `use` in JS: {plug:?}"
+    );
+    assert_eq!(plug.status, Status::Caution, "{plug:?}");
+    assert!(
+        report.start_here == ["src/sum.js"],
+        "{:?}",
+        report.start_here
+    );
+    let sum = unit(&report, "src/sum.js");
+    assert_eq!((sum.exports, sum.bridgeable), (1, 1), "{sum:?}");
 }

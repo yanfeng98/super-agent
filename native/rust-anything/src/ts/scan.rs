@@ -71,27 +71,45 @@ const BROWSER_GLOBALS: &[&str] = &[
 const NODE_GLOBALS: &[&str] = &["process", "Buffer", "__dirname", "__filename"];
 const NODE_BUILTINS: &[&str] = &[
     "assert",
+    "async_hooks",
     "buffer",
     "child_process",
+    "cluster",
+    "console",
+    "constants",
     "crypto",
+    "dgram",
+    "diagnostics_channel",
+    "dns",
+    "domain",
     "events",
     "fs",
-    "fs/promises",
     "http",
+    "http2",
     "https",
+    "inspector",
     "module",
     "net",
     "os",
     "path",
     "perf_hooks",
     "process",
+    "punycode",
+    "querystring",
     "readline",
+    "repl",
     "stream",
+    "string_decoder",
+    "sys",
+    "timers",
+    "tls",
+    "trace_events",
     "tty",
     "url",
     "util",
     "v8",
     "vm",
+    "wasi",
     "worker_threads",
     "zlib",
 ];
@@ -108,9 +126,12 @@ const UI_PACKAGES: &[&str] = &[
     "vue-router",
 ];
 
-/// The platform an import specifier pins a file to, if any.
+/// The platform an import specifier pins a file to, if any. A Node subpath is the same builtin
+/// (`stream/web`, `util/types`, `fs/promises`), so the builtin list is matched on the package root;
+/// a subpath of anything else stays what its root says it is.
 pub fn platform_of(specifier: &str) -> Option<Platform> {
-    if specifier.starts_with("node:") || NODE_BUILTINS.contains(&specifier) {
+    let root = specifier.split('/').next().unwrap_or(specifier);
+    if specifier.starts_with("node:") || NODE_BUILTINS.contains(&root) {
         Some(Platform::Node)
     } else if specifier == "vscode" {
         Some(Platform::Editor)
@@ -247,6 +268,11 @@ impl<'a> Visit<'a> for Collector {
                     )
                     | (Some("Reflect"), _) => self.add(Risk::Reflection, it.span),
                     (Some("Promise"), _) => self.add(Risk::Async, it.span),
+                    (Some("Math"), "random")
+                    | (Some("Date" | "performance"), "now")
+                    | (Some("crypto"), "randomUUID" | "getRandomValues") => {
+                        self.add(Risk::ClockAndRandom, it.span);
+                    }
                     (Some("Math"), "round") | (_, "toFixed") => {
                         self.add(Risk::NumberSemantics, it.span);
                     }
@@ -259,6 +285,7 @@ impl<'a> Visit<'a> for Collector {
             }
             Expression::Identifier(id) => match id.name.as_str() {
                 "eval" => self.add(Risk::DynamicCode, it.span),
+                "Date" => self.add(Risk::ClockAndRandom, it.span),
                 "parseInt" | "parseFloat" => self.add(Risk::NumberSemantics, it.span),
                 "require" => match string_arg(it.arguments.first()) {
                     Some(specifier) => self.import(specifier, false, true),
@@ -280,6 +307,7 @@ impl<'a> Visit<'a> for Collector {
                 self.regexp_constructor(it.arguments.first(), it.arguments.get(1), it.span);
             }
             Some("Map" | "Set") => self.add(Risk::OrderedCollections, it.span),
+            Some("Date") if it.arguments.is_empty() => self.add(Risk::ClockAndRandom, it.span),
             Some("Function") => self.add(Risk::DynamicCode, it.span),
             Some("Proxy" | "WeakRef" | "FinalizationRegistry") => {
                 self.add(Risk::Reflection, it.span);
@@ -461,5 +489,32 @@ mod tests {
         );
         assert_eq!(facts.risks[&Risk::RegexSyntax], [1]);
         assert_eq!(facts.risks[&Risk::NumberSemantics], [2, 3]);
+    }
+
+    #[test]
+    fn a_subpath_names_the_same_builtin() {
+        // A Node subpath is the same module, and every builtin counts, not the ones a fixture
+        // happened to import.
+        for spec in [
+            "stream/web",
+            "util/types",
+            "dns/promises",
+            "fs/promises",
+            "node:fs/promises",
+            "tls",
+            "http2",
+            "querystring",
+            "string_decoder",
+            "wasi",
+        ] {
+            assert_eq!(platform_of(spec), Some(Platform::Node), "{spec}");
+        }
+        // A subpath of a third-party or UI package stays what its root says it is.
+        assert_eq!(platform_of("react/jsx-runtime"), None);
+        assert_eq!(platform_of("@scope/pkg/sub"), None);
+        assert_eq!(platform_of("path-to-regexp"), None);
+        assert_eq!(platform_of("left-pad"), None);
+        assert_eq!(platform_of("vscode"), Some(Platform::Editor));
+        assert_eq!(platform_of("svelte/store"), None);
     }
 }

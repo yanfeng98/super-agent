@@ -32,6 +32,11 @@ formatter with unported syntax) had no way to decline after reading stdin. Glue 
 doc trees. Case and input lines are read with `unbounded_depth` and the limit disabled, in the
 harness and in generated `from_json`; a test reads a 200-deep line.
 
+**`analyze` suggested a unit `bridge` refused.** It judged exports with its own copy of
+`bridge`'s rules, which lacked the sibling `.d.ts`, alias resolution and the class-method check,
+so a unit `bridge` keeps in JS went into `start_here`. Both now call `bridge::ts_functions` and
+`bridge::class_reason`; a new rule for what crosses the bridge goes there, not into one command.
+
 **A bridge found no functions in a module that exports a list.** `export { a, b as c }` was not
 read. `ts/exports.rs` reads export lists; check `bridge` on a unit written that way.
 
@@ -44,11 +49,31 @@ the original counted against Jest's limit. Wrap anything added to user files in
 **A test command's output corrupted the MCP stream.** The child wrote to the server's stdout.
 Send every child's stdout to stderr or a pipe, never to the MCP server's stdout.
 
+**A project header shadowed the C library's.** ffmpeg ships `libavutil/time.h`, and with that
+folder on the `-I` path, `#include <time.h>` in `parseutils.c` found it instead of the system's.
+A header folder holding a file named like a C standard header goes on `-iquote`; check that a
+C project's originals compile before reading anything into a failed `record`.
+
+**A relative crate path pointed nowhere.** The compiler and cargo run in a scratch folder, so
+`rust-anything build .` looked for `./Cargo.toml` there. The CLI makes crate paths absolute;
+anything new that passes a path to a child process should take it absolute too.
+
 **A test runner in watch mode never ends.** Run every outside program through `crate::process`,
 which closes stdin and stops it at a time limit; `from_tests` also sets `CI=1`.
 
 **Coverage listed one file three times.** Paths from import walking kept `..` segments. Compare
 and print canonical paths.
+
+**A CLI's recorded writes were invisible because the fixture already held them.** A CLI that
+regenerates project files was recorded on a project it had just generated, so every case rewrote
+files with the bytes they already had, and a front door that wrote nothing passed. Record such
+CLIs from a fixture whose generated files are stale (overwrite them with a marker first), and
+check that the `*.out` folders are not empty.
+
+**A front door could not find the original through a symlinked `rust/`.** The generated
+`original.rs` resolved the repository as `CARGO_MANIFEST_DIR/../..`, which is the link target's
+parent. Builds by rust-anything now set `RUST_ANYTHING_REPO`; set it yourself when you build such
+a front door with `cargo`.
 
 **A server's recording carried state from its previous run.** json-server rewrites its database
 on every POST, so the second recording run started from the first one's writes. Record servers
@@ -67,6 +92,12 @@ recording against the number of input lines.
 `/tmp/hsperfdata_<user>/<pid>` file locked and printed `[warning][perf,memops] Cannot use file`
 to stdout, so the replay's stdout differed. Java test apps run with `-XX:-UsePerfData`; an app
 recorded on a busy machine needs it too.
+
+**A broken port passed because its case was never recorded.** Recording drops a case whose
+result JSON cannot hold (a PHP string that is not UTF-8). The only `html_entity_decode` input with
+`&#39;` also decoded `&nbsp;` to a lone Latin-1 byte, so a port that wrongly decoded `&#39;` passed.
+After writing inputs for a behavior, check that `cases.jsonl` holds them, and break the port once
+to see `diff` fail.
 
 ## Numbers and claims
 
@@ -119,9 +150,55 @@ timed run covered as many files as the list it was given.
 `config-` to leave out the config cases, and four real files (`vitest.config.ts`, ...) went with
 them. Match the exact prefix you mean, and check a group's total against the corpus.
 
+**A harvester dropped whole rules.** ESLint's tests for no-unused-vars, prefer-const and
+no-useless-assignment give their `RuleTester` a test-only plugin, and the script that turned
+RuleTester cases into CLI runs skipped every case of a tester with plugins: 715 cases of three
+of the most used rules were missing, and the rules showed "0 cases" instead of an error. Skip
+only the cases that use what you cannot express, and check every unit's case count after
+harvesting.
+
+**A copy of a crate built into the same target folder replaced it.** A scratch copy of the port,
+with the same package name and version, was built with the same `CARGO_TARGET_DIR`; cargo gave
+both the same artifact name, and examples of the real crate linked the copy's library and
+reported stale numbers. Give a copy its own package name or its own target folder.
+
 **A grep hid the bug it was meant to show.** Filtering diffs with a pattern that drops comment-like
 lines removed the one line that differed (`/* name */ value`). Write the expected and actual
 output to files and diff them whole.
+
+**An exhaustive check covered a different input set from the one the port builds.** The Prettier
+doc printer was checked on every doc up to size 5, read from JSON through `from_value`, which
+turns `align: ""` into a no-op as Prettier does. The YAML and Markdown printers build
+`Align::Text("")` directly, and the printer indented for it. Enumerate the values the code really
+passes (native `Doc` values), not a serialised form of them.
+
+**Mutation jobs tested each other's binaries.** With `CARGO_TARGET_DIR` set, every
+`cargo mutants -j N` job built into one target dir, so 401 of 693 logs ran a binary another job
+had built. Run cargo-mutants with `CARGO_TARGET_DIR` unset, and check that every log under
+`mutants.out/log` compiles the mutated crate.
+
+**Recorded crash messages held Prettier's install path.** Prettier prints a stack trace when it
+crashes, so cases recorded with one copy of Prettier fail when the front door falls back to
+another. Record with the copy the front door's `ROOT` resolves to.
+
+**Sorting cannot pair lines that are matched loosely.** An `unordered` output was compared by
+sorting both sides as text and pairing the lines by position, while the lines were then matched
+within `float_tolerance`: `10.0` sorts before `2.0`, so it met `2.0` instead of the
+`9.999999999999999` it matched, and the weaker check failed output the ordered one accepted.
+Sorting by value instead only moved the problem -- `[..]` and `2` against `2.0` then paired wrong,
+because a loose match is not transitive and no order agrees with it. Pair the lines against each
+other (identical ones first, then a search that gives a line up when another needs it), and keep
+the sort for showing the diff.
+
+**A demo's lockfile missed a dependency.** The Prettier front door gained `ignore` for config
+resolution, but its `Cargo.lock` was not updated: the next plain build rewrote it, and a
+`cargo build --locked`, as the release workflow runs, would have failed. After adding a dependency
+to a demo crate, build it and keep the lockfile it writes.
+
+**An installed CLI failed replays on paths it prints about itself.** ESLint's stack traces and
+"There was a problem loading formatter" name the file ESLint was loaded from, so 93 recorded runs
+differed once ESLint lived in an install prefix. Replay the original from the same install too:
+a run that fails both ways is the path, not the port.
 
 ## Language plugins
 
@@ -160,6 +237,15 @@ newer directory with only `source.properties`, which must not shadow a working N
 the NDK's clang, so `cargo-ndk` is not needed, and cargo runs in the crate's directory so the
 caller's `.cargo/config.toml` cannot leak into the generated crate.
 
+**Two parsers for one manifest drifted apart.** `whole_app::declared()` re-read go.mod, pom.xml,
+Gradle files, Gemfiles and requirements files with its own code, and five comment fixes landed
+there while the plugins' `discover()` kept the bugs. Read a manifest in one place, the plugin's
+`discover()`, and have every other consumer take `Package.deps` from it.
+
+**A name join split one library in two.** `--whole-app` matched imported names (`yaml`) against
+declared ones (`PyYAML`) as strings, so most libraries showed up twice. Join spellings by the crate
+table row they resolve to (`CrateMatch::row`), not by the name or the `crates` text.
+
 ## Repository
 
 **A local path reached a committed manifest.** Demo manifests keep a placeholder `root`; check
@@ -174,5 +260,12 @@ CONTRIBUTING.md).
 a separate worktree and bring the change over when its files do not overlap.
 
 **The Ruby tests failed on a clean macOS shell.** `/usr/bin/ruby` is Ruby 2.6, which rb-sys's
-stable API does not support (`Stable API is needed but could not find a candidate`). Put a current
-Ruby first on `PATH` (Homebrew's `/opt/homebrew/opt/ruby/bin`) before `cargo test`.
+stable API does not support (`Stable API is needed but could not find a candidate`). A test that
+builds a Ruby extension checks for Ruby 3 with `common::have_ruby_3()`, not `common::have("ruby")`,
+and skips without it; to run those tests, put a current Ruby first on `PATH` (Homebrew's
+`/opt/homebrew/opt/ruby/bin`) before `cargo test`.
+
+**A test failed on Linux CI with "Text file busy".** It wrote a fake `nm` script and ran it while
+other tests were starting processes; a child forked during the write still held the file open for
+writing, so exec failed. Write a script that a test runs from a separate process (`cp` from a text
+file) and never rewrite one that already ran.

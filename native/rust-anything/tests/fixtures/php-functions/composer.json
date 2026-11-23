@@ -1,0 +1,10 @@
+{
+    "name": "acme/textfns",
+    "description": "Top-level PHP functions used to test rust-anything's PHP unit bridge.",
+    "require": {
+        "php": ">=8.1"
+    },
+    "autoload": {
+        "files": ["src/text.php", "src/numbers.php"]
+    }
+}

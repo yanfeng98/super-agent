@@ -37,32 +37,6 @@ const SKIP_DIRS: &[&str] = &[
 
 // ---- discovery -------------------------------------------------------------------------------
 
-/// `group:name` coordinates from Gradle Kotlin DSL dependency declarations.
-fn dependencies(text: &str) -> (Vec<String>, Vec<String>) {
-    let (mut deps, mut dev) = (Vec::new(), Vec::new());
-    for line in text.lines() {
-        let line = line.trim();
-        let Some((config, rest)) = line.split_once(['(', ' ']) else {
-            continue;
-        };
-        let coords = rest
-            .split(['"', '\''])
-            .nth(1)
-            .filter(|c| c.matches(':').count() >= 1);
-        let Some(coords) = coords else { continue };
-        let name = coords.split(':').take(2).collect::<Vec<_>>().join(":");
-        match config.trim() {
-            "implementation" | "api" | "compile" | "compileOnly" | "runtimeOnly" => deps.push(name),
-            "testImplementation"
-            | "testCompile"
-            | "testRuntimeOnly"
-            | "androidTestImplementation" => dev.push(name),
-            _ => {}
-        }
-    }
-    (deps, dev)
-}
-
 pub fn discover(root: &Path) -> Result<Workspace> {
     let mut packages: Vec<Package> = Vec::new();
     let mut files = Vec::new();
@@ -94,7 +68,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             .map_or(String::new(), |(d, _)| d.to_string());
         if matches!(name, "pom.xml" | "build.gradle" | "build.gradle.kts") {
             let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
-            let (deps, dev) = dependencies(&text);
+            let (deps, dev) = super::java::dependencies(&text);
             packages.push(Package {
                 name: if dir.is_empty() {
                     root.file_name()
@@ -112,6 +86,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
                 dir,
                 deps,
                 dev_deps: dev,
+                namespaces: Vec::new(),
             });
         } else if name.ends_with(".kt") {
             let is_test = rel.contains("src/test/")
@@ -142,10 +117,18 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             },
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     packages.sort_by(|a, b| a.dir.cmp(&b.dir));
-    packages.dedup_by(|a, b| a.dir == b.dir);
+    packages.dedup_by(|a, b| {
+        let same = a.dir == b.dir;
+        if same {
+            b.deps.append(&mut a.deps);
+            b.dev_deps.append(&mut a.dev_deps);
+        }
+        same
+    });
     files.sort_by(|a, b| a.0.cmp(&b.0));
     let files = files
         .into_iter()

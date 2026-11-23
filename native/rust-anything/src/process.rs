@@ -61,8 +61,27 @@ pub fn status(cmd: &mut Command, default: Duration) -> Result<ExitStatus> {
     wait(&mut child, cmd, limit(default))
 }
 
+/// Runs `cmd` with `input` on its stdin and the output streams it was given (an agent reading
+/// its prompt).
+pub fn status_with_input(cmd: &mut Command, input: &[u8], default: Duration) -> Result<ExitStatus> {
+    let mut child = spawn_with(cmd, Stdio::piped())?;
+    let mut stdin = child.stdin.take().context("no stdin")?;
+    let input = input.to_vec();
+    let writer = std::thread::spawn(move || {
+        use std::io::Write as _;
+        let _ = stdin.write_all(&input);
+    });
+    let status = wait(&mut child, cmd, limit(default));
+    let _ = writer.join();
+    status
+}
+
 fn spawn(cmd: &mut Command) -> Result<Child> {
-    cmd.stdin(Stdio::null());
+    spawn_with(cmd, Stdio::null())
+}
+
+fn spawn_with(cmd: &mut Command, stdin: Stdio) -> Result<Child> {
+    cmd.stdin(stdin);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt as _;

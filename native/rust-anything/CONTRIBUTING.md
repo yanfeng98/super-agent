@@ -37,6 +37,11 @@ git config core.hooksPath .githooks
 cargo test
 ```
 
+With [mise](https://mise.jdx.dev), `mise install` gets the same Rust, Node, Python, Go, Ruby and
+Java versions CI uses, and installs the [hk](https://hk.jdx.dev) hooks in `hk.pkl` (the secrets
+check above, plus `cargo fmt` and `cargo clippy` before each commit). Use it instead of the
+`core.hooksPath` line.
+
 `cargo run -- doctor` lists which of these runtimes you have, their versions, and the command
 that installs or updates each one. To make a missing runtime fail its tests instead of skipping
 them (CI does this), name it in `RUST_ANYTHING_REQUIRE`, e.g.

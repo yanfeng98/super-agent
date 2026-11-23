@@ -1,0 +1,97 @@
+<!doctype html>
+<!-- v3: install prettier-rs, then Prettier and prettier-rs on every formattable file of a real
+     project (analogjs, with its .prettierrc, .editorconfig and .prettierignore), one process per
+     file. Every number is measured: docs/packaging.md#a-whole-cli-front-door.
+     Render with node scripts/gifs.mjs install -->
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; background: #ffffff; }
+  .frame { width: 1100px; height: 470px; padding: 26px 30px 22px; box-sizing: border-box; background: #ffffff; font-family: Inter, -apple-system, sans-serif; color: #14171a; position: relative; }
+  .title { font-size: 22px; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+  .title .v { padding: 2px 10px; border-radius: 999px; border: 1.5px solid #e8642a; color: #c4501b; font-size: 15px; }
+  .title span.o { color: #e8642a; }
+  .term { background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 14px; padding: 20px 24px; height: 330px; box-sizing: border-box;
+          font: 19px/1.7 "JetBrains Mono", Menlo, monospace; white-space: pre; overflow: hidden; }
+  .p { color: #8c959f; } .dim { color: #57606a; } .ok { color: #1a7f37; }
+  .cursor { display: inline-block; width: 10px; height: 21px; background: #14171a; vertical-align: -3px; }
+  .cols { display: flex; gap: 22px; }
+  .panel { flex: 1; border: 1.5px solid #d8dee4; border-radius: 16px; padding: 20px 22px 18px; height: 280px; box-sizing: border-box; }
+  .rs.panel { border-color: #f0b393; background: #fffaf6; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .name { font-size: 21px; font-weight: 700; }
+  .tag { font-size: 14px; color: #57606a; }
+  .cmd { margin-top: 12px; font: 15px "JetBrains Mono", Menlo, monospace; color: #57606a; }
+  .cmd b { color: #14171a; font-weight: 400; }
+  .time { font: 700 56px "JetBrains Mono", Menlo, monospace; margin-top: 14px; letter-spacing: -1px; }
+  .rs .time { color: #e8642a; }
+  .files { margin-top: 4px; font-size: 16px; color: #3d444d; height: 22px; }
+  .bar { margin-top: 14px; height: 16px; background: #eaeef2; border-radius: 8px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 8px; background: #8c959f; }
+  .rs .fill { background: #e8642a; }
+  .done { margin-top: 14px; height: 24px; font-size: 17px; font-weight: 600; color: #1a7f37; }
+  .foot { margin-top: 18px; text-align: center; font-size: 19px; color: #3d444d; height: 28px; }
+  .foot b { color: #c4501b; }
+  .note { margin-top: 4px; text-align: center; font-size: 13px; color: #8c959f; }
+</style></head><body><div class="frame" id="f"></div>
+<script>
+// Measured (see the comment above); nothing here is estimated.
+// Apple M4 (10 cores), Node 24.15.0, two runs: Prettier 132.5 s and 143.2 s, prettier-rs 49.8 s and 51.3 s;
+// the first run is shown, at SPEED times real time.
+const FILES = 1610, IN_RUST = 1150, PRETTIER = 132.5, RUST = 49.8, SPEEDUP = '2.66x', ADDED = 'added 3 packages'
+const SPEED = 12
+const VERSION = '3.6.2'
+const fps = 15
+const lines = [
+  { cmd: 'npm i -g prettier-rs', out: [ADDED] },
+  { cmd: 'prettier-rs --version', out: [VERSION] },
+]
+const typeFrames = c => Math.ceil(c.length / 2)
+const scene1 = lines.reduce((n, l) => n + typeFrames(l.cmd) + 10, 8) + 22
+const run = Math.ceil(PRETTIER / SPEED * fps), hold = 60
+window.frameCount = scene1 + 10 + run + hold
+function terminal(i) {
+  let t = i - 8, html = ''
+  for (const l of lines) {
+    if (t < 0) break
+    const n = typeFrames(l.cmd)
+    const typed = l.cmd.slice(0, Math.min(l.cmd.length, t * 2))
+    html += '<span class="p">$</span> ' + typed
+    if (t < n) { html += '<span class="cursor"></span>'; t = -1; break }
+    html += '\n'
+    t -= n
+    if (t >= 4) html += l.out.map(o => '<span class="dim">' + o + '</span>').join('\n') + '\n'
+    t -= 10
+  }
+  if (t >= 0) html += '<span class="p">$</span> <span class="cursor"></span>'
+  return '<div class="term">' + html + '</div>'
+}
+function panel(cls, name, tag, cmd, elapsed, total) {
+  const t = Math.min(elapsed, total)
+  const finished = elapsed >= total
+  const files = finished ? FILES : Math.floor(FILES * t / total)
+  return '<div class="panel ' + cls + '"><div class="head"><span class="name">' + name + '</span><span class="tag">' + tag + '</span></div>' +
+    '<div class="cmd">$ <b>' + cmd + '</b></div>' +
+    '<div class="time">' + t.toFixed(1) + ' s</div>' +
+    '<div class="files">' + files.toLocaleString('en') + ' / ' + FILES.toLocaleString('en') + ' files</div>' +
+    '<div class="bar"><div class="fill" style="width:' + (100 * t / total) + '%"></div></div>' +
+    '<div class="done">' + (finished ? '✓ done' : '') + '</div></div>'
+}
+window.render = i => {
+  const title = '<div class="title">rust-anything <span class="v">v3</span> Rust ports you can <span class="o">install</span></div>'
+  let body
+  if (i < scene1) {
+    body = terminal(i)
+  } else {
+    const elapsed = Math.max(0, (i - scene1 - 10) / fps * SPEED)
+    const over = elapsed >= PRETTIER
+    const foot = over
+      ? 'Same output on all ' + FILES.toLocaleString('en') + ' files, ' + IN_RUST.toLocaleString('en') + ' of them in Rust: <b>' + SPEEDUP + ' faster</b>'
+      : elapsed >= RUST ? 'prettier-rs is done. Prettier is still going…' : 'Every file of analogjs, with its own .prettierrc, .editorconfig and .prettierignore'
+    body = '<div class="cols">' +
+      panel('ts', 'Prettier 3.6.2', 'Node 24', 'prettier --stdin-filepath &lt;file&gt;', elapsed, PRETTIER) +
+      panel('rs', 'prettier-rs', 'installed package', 'prettier-rs --stdin-filepath &lt;file&gt;', elapsed, RUST) +
+      '</div><div class="foot">' + foot + '</div><div class="note">One process per file, shown at ' + SPEED + 'x speed</div>'
+  }
+  document.getElementById('f').innerHTML = title + body
+}
+render(0)
+</script></body></html>

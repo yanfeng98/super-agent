@@ -62,9 +62,10 @@ fn fix_for(check: &Check, crate_dir: &Path) -> Option<String> {
 }
 
 /// Bindings `bridge` writes into `src/`; everything else there is the port.
-const GENERATED: [&str; 7] = [
+const GENERATED: [&str; 8] = [
     "lib.rs",
     "js.rs",
+    "pinned.rs",
     "pyconv.rs",
     "pynum.rs",
     "rbconv.rs",
@@ -166,6 +167,14 @@ fn size_check(crate_dir: &Path, manifest: &Manifest) -> Option<Check> {
     if manifest.language == crate::lang::Lang::Ts {
         files = with_local_imports(&manifest.root, files);
     }
+    if manifest.language == crate::lang::Lang::C {
+        let ported: Vec<&str> = manifest.exports.iter().map(|f| f.name.as_str()).collect();
+        files.extend(crate::lang::c::called_implementations(
+            &manifest.root,
+            &manifest.unit,
+            &ported,
+        ));
+    }
     let source: usize = files
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -213,7 +222,7 @@ pub struct GateOutcome {
 pub fn gate(crate_dir: &Path, node_args: &[String]) -> Result<GateOutcome> {
     let manifest = Manifest::load(crate_dir)?;
     let lockfile = lockfile_check(crate_dir);
-    let mut checks = rust_checks(crate_dir, &crate_dir.join("target"));
+    let mut checks = rust_checks(crate_dir, &crate::cache::target_for(crate_dir)?.dir);
     checks.extend(lockfile);
     checks.extend(advisories_check(crate_dir));
     checks.push(ported_check(crate_dir));

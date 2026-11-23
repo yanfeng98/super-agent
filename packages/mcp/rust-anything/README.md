@@ -1,5 +1,5 @@
 ---
-description: "Mounts the rust-anything MCP server so an agent can port TypeScript/JavaScript, Python, C, Go, Ruby, Java or Kotlin code to Rust one verified unit at a time."
+description: "Mounts the rust-anything MCP server so an agent can port TypeScript/JavaScript, Python, C, Go, Ruby, Java, Kotlin, PHP or C# code to Rust one verified unit at a time."
 kind: "package-reference"
 ---
 
@@ -25,12 +25,12 @@ Connect an agent to [rust-anything](https://github.com/erkamyaman/rust-anything)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mounted by the Web `standard` agent preset as row `mcp-rust-anything`; the tools appear in that agent as `mcp__rust-anything__*` with no setup step. A task shaped like "rewrite this CLI in Rust", "move this hot loop to Rust", or "plan a migration of `src/parser/`" reaches the matching [`dsh-rust-anything`](../../skill/skill-rust-anything/assets/dsh-rust-anything/SKILL.md) skill, which drives the loop: `analyze`, `bridge`, `record`, write `port.rs`, `build`, `diff`, `bench`, `gate`, and `app_*` for whole apps.
+Mounted by the Web `standard` agent preset as row `mcp-rust-anything`; the tools appear in that agent as `mcp__rust-anything__*` with no setup step. A task shaped like "rewrite this CLI in Rust", "move this hot loop to Rust", or "plan a migration of `src/parser/`" reaches the matching [`dsh-rust-anything`](../../skill/skill-rust-anything/assets/dsh-rust-anything/SKILL.md) skill, which drives the loop: `profile` (or `go`, which runs the first steps for one hot function), `analyze`, `bridge`, `record`, write `port.rs`, `build`, `diff`, `bench`, `gate`, `report`, and `app_*` for whole apps.
 
 | Field | Default | Meaning |
 |---|---|---|
 | `command` | staged vendored build | Executable to run instead of `native/rust-anything/bin/rust-anything`, the path `pnpm run build` stages from the vendored crate; `RUST_ANYTHING_BIN` is the environment fallback. |
-| `toolLoading` | `eager` | `on-demand` lists the 16 tools in the system prompt and loads the ones an agent asks for. |
+| `toolLoading` | `eager` | `on-demand` lists the 22 tools in the system prompt and loads the ones an agent asks for. |
 | `toolCallTimeoutMs` | 15 minutes | `gate`, `build`, `bench` and `app record` compile crates and replay corpora, so the MCP default of 60 s is short. |
 | `startupTimeoutMs` | 20 s | Budget for the stdio probe, connection and initial tool sync. |
 | `env` | `{}` | Extra environment for the server process, e.g. a `RUSTUP_TOOLCHAIN` for the crates it generates. |
@@ -66,11 +66,11 @@ The CLI runs as an ordinary child process: it writes `rust/<unit>-rs` crates int
 
 #### What the model sees
 
-With `toolLoading: eager` the 16 rust-anything tools join the agent's tool list under `mcp__rust-anything__*`; their descriptions mirror the MCP server. The server's initialize result carries instructions, so the agent's system prompt gains an `### MCP server: rust-anything` section, and the shared MCP resource tools name the server in their own section.
+With `toolLoading: eager` the 22 rust-anything tools join the agent's tool list under `mcp__rust-anything__*`; their descriptions mirror the MCP server. The server's initialize result carries instructions, so the agent's system prompt gains an `### MCP server: rust-anything` section, and the shared MCP resource tools name the server in their own section.
 
 #### Token effect
 
-The 16 schemas total roughly 21 KB (about 6k tokens) of fixed request context, plus the server's instruction section (a few hundred bytes) and the three shared MCP resource tools that appear once a server registers. `on-demand` replaces the 16 schemas with a system-prompt catalog and one `mcp__rust-anything__load_tools` schema.
+The 22 schemas total roughly 29 KB (about 8k tokens) of fixed request context, plus the server's instruction section (a few hundred bytes) and the three shared MCP resource tools that appear once a server registers. `on-demand` replaces the 22 schemas with a system-prompt catalog and one `mcp__rust-anything__load_tools` schema.
 
 #### KV Cache effect
 
@@ -85,7 +85,8 @@ Mounting happens before the first turn and does not change mid-session, so it do
 - Packaged runtimes cannot ship it: the executable lives outside every package, so the Desktop app and the Python SDK executable stage the plugin without its CLI and expose no rust-anything tools. Shipping them needs per-platform staging, as `native/system` does for its launcher.
 - Building needs Rust 1.97: `native/rust-anything/rust-toolchain.toml` pins that channel and rustup installs it on demand. A missing cargo fails the build with an actionable error.
 - Generated crates declare `rust-version = "1.97"`. An older default toolchain fails at build time; `rust-anything doctor` reports it.
-- Upstream 2.1.0 fails `build`, `diff`, `gate` and `bench` on a **relative** crate path (its `run` helper re-parents the child to a temp directory while passing a relative `--manifest-path`). Pass absolute paths; the skill says so.
+- The crates a port generates compile into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so a migrated repository's worktree gains only its `rust/` crates.
+- PHP and C# units need `php` with `ext-ffi`, or `dotnet`, on `PATH`; the other languages need their own runtime. `rust-anything doctor` reports each one.
 - The tool executes the code it records and writes crates into the repository. Treat a run as code execution with the agent's full environment.
 
 ### Dev Note

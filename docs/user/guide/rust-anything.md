@@ -2,14 +2,15 @@
 
 English | [中文](rust-anything.zh.md)
 
-The Web `standard` agent preset mounts the [rust-anything](https://github.com/erkamyaman/rust-anything) MCP server, so a default Session can rewrite TypeScript/JavaScript, Python, C, Go, Ruby, Java, or Kotlin code as Rust one unit at a time. Every unit is checked against a recording of what the original code returned, and a port is not done until `gate` passes. Nothing is installed globally: the CLI is compiled from the crate vendored in this repository.
+The Web `standard` agent preset mounts the [rust-anything](https://github.com/erkamyaman/rust-anything) MCP server, so a default Session can rewrite TypeScript/JavaScript, Python, C, Go, Ruby, Java, Kotlin, PHP, or C# code as Rust one unit at a time. Every unit is checked against a recording of what the original code returned, and a port is not done until `gate` passes. Nothing is installed globally: the CLI is compiled from the crate vendored in this repository.
 
 ## What ships
 
 | Phase | Tools |
 |---|---|
-| Plan | `analyze`, `map`, `profile` |
-| Port one unit | `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `shadow`, `gate` |
+| Plan | `analyze`, `map`, `profile`, `go` |
+| Port one unit | `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `fuzz`, `shadow`, `gate`, `report` |
+| Switch a unit on | `enable`, `disable` |
 | Port a whole app | `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift` |
 
 ## Before the first Session
@@ -39,13 +40,13 @@ Each unit gets a crate under `rust/<unit>-rs/` with its `src/port.rs`, the recor
 ./native/rust-anything/bin/rust-anything doctor
 ```
 
-Pass absolute crate paths to `build`, `diff`, `gate`, and `bench`: version 2.1.0 re-parents its child process and fails on a relative `--manifest-path`.
+A port's crate compiles into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so the migrated repository gains only its own `rust/` crates.
 
 ## Tune it
 
 | Field | Default | Effect |
 |---|---|---|
-| `toolLoading` | `eager` | `on-demand` replaces the 16 schemas with a system-prompt catalog and one `mcp__rust-anything__load_tools` tool |
+| `toolLoading` | `eager` | `on-demand` replaces the 22 schemas with a system-prompt catalog and one `mcp__rust-anything__load_tools` tool |
 | `command` | staged build | executable to spawn instead; `RUST_ANYTHING_BIN` is the environment fallback |
 | `toolCallTimeoutMs` | 15 minutes | per-call budget; `gate`, `bench`, and `app record` compile crates and replay corpora |
 | `env` | `{}` | extra environment for the server, such as `RUSTUP_TOOLCHAIN` |
@@ -54,12 +55,12 @@ Edit the `mcp-rust-anything` row in `packages/bundle/web-app/presets/standard.pa
 
 ## Costs and limits
 
-- The 16 tool schemas plus the three shared MCP resource tools cost about 7k request tokens per agent.
+- The 22 tool schemas plus the three shared MCP resource tools cost about 8k request tokens per agent.
 - Each Session that mounts the row starts its own server process.
 - Only the Web and Desktop `standard` preset mounts it, together with the bundled `dsh-rust-anything` skill; `minimal`, `ptc`, and the headless, ACP, and SDK profiles mount neither.
 - The packaged Desktop app and the Python SDK executable stage the plugin without the CLI, so they expose no tools; the skill is still listed and tells the agent to stop rather than install one.
 - Generated crates declare `rust-version = "1.97"`; build them with that toolchain or newer.
-- The tool executes the code it records and writes crates into the workspace: treat a run as running that code with the agent's environment.
+- The tool executes the code it records, writes crates into the workspace, and `enable` rewrites the ported functions' call sites in your source files; treat a run as running that code with the agent's environment, and review `enable`'s diff.
 
 ## When something is missing
 

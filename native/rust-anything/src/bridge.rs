@@ -127,6 +127,41 @@ fn has_functions(name: &str, local_types: &[LocalType], seen: &mut Vec<String>) 
         .any(|w| has_functions(w, local_types, seen))
 }
 
+/// The exported functions of a TS/JS `file` with the types `bridge` judges them by: a sibling
+/// `.d.ts` applied, aliases resolved and generic constraints substituted. `analyze` counts
+/// bridgeable exports from the same list.
+pub fn ts_functions(root: &Path, file: &str, text: &str, types: &[LocalType]) -> Vec<ExportedFn> {
+    let mut functions = exported_functions(file, text);
+    crate::ts::jsdoc::apply_declarations(root, file, &mut functions);
+    for f in &mut functions {
+        for p in &mut f.params {
+            p.ts_type = resolve_aliases(&p.ts_type, types);
+        }
+        f.returns = resolve_aliases(&f.returns, types);
+        substitute_constraints(f, types);
+    }
+    functions
+}
+
+/// Why a class has to stay in the source language: its blocker, else the first method (and, for
+/// TS/JS, the constructor) that cannot cross. `None` when it can be bridged.
+pub fn class_reason(class: &ExportedClass, types: &[LocalType], ts: bool) -> Option<String> {
+    let constructor = ts.then(|| ExportedFn {
+        name: format!("{} constructor", class.name),
+        file: class.file.clone(),
+        line: class.line,
+        params: class.constructor.clone(),
+        returns: "void".into(),
+        ..Default::default()
+    });
+    class.blocker.clone().or_else(|| {
+        constructor
+            .iter()
+            .chain(&class.methods)
+            .find_map(|m| js_only_reason(m, types).map(|r| format!("`{}`: {r}", m.name)))
+    })
+}
+
 /// Why an export cannot cross a JS/Rust bridge unchanged, if it cannot.
 ///
 /// Functions, iterators, RegExp objects and objects with function members are JS values a
@@ -899,7 +934,9 @@ pub struct Refreshed {
 pub fn refresh(crate_dir: &Path) -> Result<Refreshed> {
     let manifest = Manifest::load(crate_dir)?;
     if manifest.kind == Kind::CAbi {
-        let mut files = c_bindings(&manifest);
+        let port = std::fs::read_to_string(crate_dir.join("src/port.rs"))
+            .context("reading src/port.rs")?;
+        let mut files = c_bindings(&manifest, &port);
         let cargo =
             std::fs::read_to_string(crate_dir.join("Cargo.toml")).context("reading Cargo.toml")?;
         files.push((
@@ -1041,31 +1078,31 @@ pub fn bridge(opts: &Options) -> Result<Outcome> {
             unit.notes.first().map_or("", String::as_str)
         );
     }
-    if unit.bridge == Bridge::PhpFfi {
-        bail!(
-            "bridging PHP units into Rust comes next (PHP FFI over a C ABI); for now a PHP app can \
-             be analyzed, recorded and replayed (`app record`, `app replay`) and get a Rust front \
-             door (`app front-door`) that hands everything to the original"
-        );
+    if unit.bridge == Bridge::PhpFfi && !opts.batch.is_empty() {
+        bail!("`--batch` is not available for PHP units yet");
     }
-    if unit.bridge == Bridge::DotnetFfi {
-        bail!(
-            "bridging C# units into Rust comes next (P/Invoke over a C ABI); for now a C# app can \
-             be analyzed, recorded and replayed (`app record`, `app replay`) and get a Rust front \
-             door (`app front-door`) that hands everything to the original"
-        );
+    if unit.bridge == Bridge::DotnetFfi && !opts.batch.is_empty() {
+        bail!("`--batch` is not available for C# units yet");
     }
     let kind = opts.kind.unwrap_or(match unit.bridge {
         Bridge::WasmBindgen => Kind::Wasm,
         Bridge::Pyo3 => Kind::Pyo3,
         Bridge::CAbi => Kind::CAbi,
-        Bridge::Cgo | Bridge::Fiddle | Bridge::Jni => Kind::Ffi,
+        Bridge::Cgo | Bridge::Fiddle | Bridge::Jni | Bridge::PhpFfi | Bridge::DotnetFfi => {
+            Kind::Ffi
+        }
         _ => Kind::Napi,
     });
 
     let mut exports = Vec::new();
     let mut classes = Vec::new();
     let mut js_only = Vec::new();
+    if lang == crate::lang::Lang::C {
+        crate::lang::c::use_typedefs(&root);
+    }
+    if lang == crate::lang::Lang::Csharp {
+        crate::lang::csharp::use_shapes(&root);
+    }
     for file in &unit.files {
         if file.ends_with(".vue") || file.ends_with(".svelte") || file.ends_with(".astro") {
             continue;
@@ -1086,13 +1123,8 @@ pub fn bridge(opts: &Options) -> Result<Outcome> {
                 }
             }
             for class in foreign_classes {
-                let method_reason = class
-                    .methods
-                    .iter()
-                    .find_map(|m| js_only_reason(m, &[]).map(|r| format!("`{}`: {r}", m.name)));
                 match keep_reason(&opts.keep, &class.name)
-                    .or_else(|| class.blocker.clone())
-                    .or(method_reason)
+                    .or_else(|| class_reason(&class, &[], false))
                 {
                     Some(reason) => js_only.push(JsOnly {
                         name: class.name,
@@ -1108,22 +1140,7 @@ pub fn bridge(opts: &Options) -> Result<Outcome> {
         let types = types_in_scope(&root, file, &text);
         for mut class in exported_classes(file, &text) {
             let kept = keep_reason(&opts.keep, &class.name);
-            let constructor = ExportedFn {
-                name: format!("{} constructor", class.name),
-                file: class.file.clone(),
-                line: class.line,
-                params: class.constructor.clone(),
-                returns: "void".into(),
-                is_async: false,
-                is_generator: false,
-                type_params: Vec::new(),
-                uses_instanceof: false,
-                ..Default::default()
-            };
-            let method_reason = std::iter::once(&constructor)
-                .chain(&class.methods)
-                .find_map(|m| js_only_reason(m, &types).map(|r| format!("`{}`: {r}", m.name)));
-            match kept.or_else(|| class.blocker.clone()).or(method_reason) {
+            match kept.or_else(|| class_reason(&class, &types, true)) {
                 Some(reason) => js_only.push(JsOnly {
                     name: class.name,
                     file: class.file,
@@ -1144,14 +1161,7 @@ pub fn bridge(opts: &Options) -> Result<Outcome> {
                 }
             }
         }
-        let mut functions = exported_functions(file, &text);
-        crate::ts::jsdoc::apply_declarations(&root, file, &mut functions);
-        for mut f in functions {
-            for p in &mut f.params {
-                p.ts_type = resolve_aliases(&p.ts_type, &types);
-            }
-            f.returns = resolve_aliases(&f.returns, &types);
-            substitute_constraints(&mut f, &types);
+        for mut f in ts_functions(&root, file, &text, &types) {
             substitute_json(&mut f, &opts.as_json);
             let kept = keep_reason(&opts.keep, &f.name);
             match kept.or_else(|| js_only_reason(&f, &types)) {
@@ -1367,9 +1377,9 @@ fn write_files(crate_dir: &Path, files: &[(String, String)]) -> Result<()> {
 
 /// The generated C-side files: the `extern "C"` layer and its header. C signatures are fixed
 /// by the original, so they come from the manifest, not from `port.rs`.
-fn c_bindings(m: &Manifest) -> Vec<(String, String)> {
+fn c_bindings(m: &Manifest, port: &str) -> Vec<(String, String)> {
     vec![
-        ("src/lib.rs".into(), crate::codegen_c::lib_rs(m)),
+        ("src/lib.rs".into(), crate::codegen_c::lib_rs(m, port)),
         (
             format!("include/{}.h", m.lib_name()),
             crate::codegen_c::header(m),
@@ -1454,6 +1464,18 @@ fn ffi_bindings(m: &Manifest, api: &codegen::PortApi) -> Result<Vec<(String, Str
                 crate::codegen_ruby::wrapper(m, api).map_err(anyhow::Error::msg)?,
             ));
         }
+        crate::lang::Lang::Php => {
+            files.push((
+                crate::codegen_php::wrapper_path(m),
+                crate::codegen_php::wrapper(m),
+            ));
+        }
+        crate::lang::Lang::Csharp => {
+            files.push((
+                crate::codegen_csharp::wrapper_path(m),
+                crate::codegen_csharp::wrapper(m),
+            ));
+        }
         crate::lang::Lang::Java | crate::lang::Lang::Kotlin => {
             files.extend(crate::codegen_java::wrappers(m, api));
             files.extend(
@@ -1502,7 +1524,7 @@ fn bridge_ffi(manifest: &Manifest, crate_dir: &Path, kept: &[JsOnly]) -> Result<
         ("src/port.rs".into(), port),
         (
             ".gitignore".into(),
-            "target/\n.rust-anything/\nruby/*.so\nruby/*.bundle\n".into(),
+            "target/\n.rust-anything/\nruby/*.so\nruby/*.bundle\nphp/*.so\nphp/*.dylib\nphp/*.dll\ncs/*.so\ncs/*.dylib\ncs/*.dll\n".into(),
         ),
         ("README.md".into(), readme(manifest)),
         (
@@ -1544,7 +1566,7 @@ fn bridge_c(manifest: &Manifest, crate_dir: &Path, kept: &[JsOnly]) -> Result<Ou
         ("src/port.rs".into(), crate::codegen_c::port_rs(manifest)),
         (
             ".gitignore".into(),
-            "target/\n.rust-anything/\nruby/*.so\nruby/*.bundle\n".into(),
+            "target/\n.rust-anything/\nruby/*.so\nruby/*.bundle\nphp/*.so\nphp/*.dylib\nphp/*.dll\n".into(),
         ),
         ("README.md".into(), readme(manifest)),
         (
@@ -1552,7 +1574,8 @@ fn bridge_c(manifest: &Manifest, crate_dir: &Path, kept: &[JsOnly]) -> Result<Ou
             serde_json::to_string_pretty(manifest)? + "\n",
         ),
     ];
-    files.extend(c_bindings(manifest));
+    let port = crate::codegen_c::port_rs(manifest);
+    files.extend(c_bindings(manifest, &port));
     write_files(crate_dir, &files)?;
     format_rust(crate_dir);
     let mut notes = vec![

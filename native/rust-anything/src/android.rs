@@ -160,7 +160,7 @@ pub fn build(crate_dir: &Path, manifest: &Manifest, opts: &Options) -> Result<Re
         .clone()
         .unwrap_or_else(|| crate_dir.join("jniLibs"));
     let lib = manifest.lib_name();
-    let target_dir = crate_dir.join("target");
+    let target_dir = crate::cache::target_for(crate_dir)?.dir;
     let mut libraries = Vec::new();
     for abi in abis {
         let linker = bin.join(format!("{}{}-clang", abi.clang_prefix(), opts.api));
@@ -583,16 +583,29 @@ mod tests {
              pub extern \"system\" fn Java_pkg_Fake_call() {}\n",
         )
         .unwrap();
-        let nm = dir.join("nm");
-        std::fs::write(&nm, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&nm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let script = |name: &str, body: &str| {
+            let text = dir.join(format!("{name}.txt"));
+            std::fs::write(&text, body).unwrap();
+            let path = dir.join(name);
+            assert!(
+                Command::new("cp")
+                    .arg(&text)
+                    .arg(&path)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        let nm = script("nm", "#!/bin/sh\nexit 0\n");
         let err = check_symbols(&dir, Abi::Arm64, &nm, Path::new("libfake.so"))
             .unwrap_err()
             .to_string();
         assert!(err.contains("Java_pkg_Fake_call"), "{err}");
         assert!(!err.contains("not_real"), "{err}");
         assert!(err.contains("arm64-v8a"), "{err}");
-        std::fs::write(&nm, "#!/bin/sh\necho '0000 T Java_pkg_Fake_call'\n").unwrap();
+        let nm = script("nm-found", "#!/bin/sh\necho '0000 T Java_pkg_Fake_call'\n");
         assert_eq!(
             check_symbols(&dir, Abi::Arm64, &nm, Path::new("libfake.so")).unwrap(),
             1

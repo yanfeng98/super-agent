@@ -49,8 +49,9 @@ is what moves well.
 it is. Moving the UI to Tauri (the same web UI on a Rust backend) is a separate step once the logic
 is Rust.
 
-**What about C#, Kotlin or Swift?** C# is supported for whole apps (see [Languages](../README.md#languages)); Kotlin and
-Swift are not supported yet. Each language needs a parser, a recorder, a bridge and a replay
+**What about C#, Kotlin or Swift?** C# is supported for whole apps, and Kotlin for Gradle modules of
+top-level functions and `@JvmStatic` methods (see [Languages](../README.md#languages)); Swift is not
+supported yet. Each language needs a parser, a recorder, a bridge and a replay
 driver, all tested end to end. Open an issue (or upvote one) for the language you need.
 
 **Won't the Rust be much bigger than the original?** It shouldn't be. `gate` compares the port's
@@ -69,7 +70,20 @@ by the original and never the other way round, and callbacks stay in the source 
 anywhere. Cargo downloads crates as usual, and your agent's model provider sees what your agent
 sends it, under its own policy.
 
-**What does it need installed?** Rust, plus the runtime of the language you port (see
-[Install](install.md#install)).
+**What does it need installed?** Rust, plus the runtime of the language you port, and a few extras
+that only matter for some languages, which `rust-anything doctor` lists with the command that
+installs each one:
+
+| Piece | Needed for |
+| --- | --- |
+| Ruby 3.0+ (not macOS's 2.6), Java 17+ | the Ruby and Java bridges; magnus and JNI do not build on older ones |
+| `kotlinc` | Kotlin units, and `record`/`diff` on a host JVM |
+| Android NDK, `adb`, `d8`, `kotlinc` and the three Rust Android targets | `build`/`record`/`diff --profile android` |
+| `wasm32-unknown-unknown` and the matching `wasm-bindgen` CLI | `bridge --kind wasm`, and the wasm demo |
+| Node 24 | `profile` (22.6+ runs everything else on the JS side) |
+| PHP, the .NET SDK | the PHP and C# whole-app paths |
+
+A missing optional runtime skips its tests instead of failing them; `RUST_ANYTHING_REQUIRE` makes
+them fail. See [Install](install.md#install).
 
 **Something broke.** Open an issue with the command, its output and your platform.

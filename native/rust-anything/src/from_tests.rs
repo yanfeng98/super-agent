@@ -26,7 +26,8 @@ const BACKUP: &str = ".rust-anything-backup";
 
 #[derive(Debug)]
 pub struct Capture {
-    /// The captured inputs, one `{"fn", "args"}` per line, in the `--inputs` format.
+    /// The captured inputs, one `{"fn", "args"}` per line (with `"kwargs"` for Python arguments
+    /// passed by keyword), in the `--inputs` format.
     pub inputs: PathBuf,
     pub per_function: BTreeMap<String, usize>,
     /// Exports the capture cannot see (not a function declaration), with why.
@@ -166,6 +167,7 @@ fn instrument_js(m: &Manifest, skipped: &mut Vec<String>) -> Result<Restore> {
         by_file.entry(&f.file).or_default().push(&f.name);
     }
     let mut guard = Restore(Vec::new());
+    let capture = JS_CAPTURE.replace("__CODEC__", &js_codec());
     for (file, names) in by_file {
         let path = m.root.join(file);
         restore(&path);
@@ -201,7 +203,7 @@ fn instrument_js(m: &Manifest, skipped: &mut Vec<String>) -> Result<Restore> {
         let instrumented = format!(
             "{}{text}\n{}",
             if ts { "// @ts-nocheck\n" } else { "" },
-            JS_CAPTURE.replace("__WRAPS__", &wraps)
+            capture.replace("__WRAPS__", &wraps)
         );
         std::fs::write(&path, instrumented)
             .with_context(|| format!("instrumenting {}", path.display()))?;
@@ -215,29 +217,19 @@ const JS_CAPTURE: &str = r#"// rust-anything record --from-tests: removed when t
 {
   const __raFs = globalThis.process?.getBuiltinModule?.('node:fs')
   const __raOut = globalThis.process?.env?.RUST_ANYTHING_CAPTURE
-  const __raCount = new Map()
-  const __raReplacer = function (k, v) {
-    const raw = this[k]
-    if (typeof raw === 'function' || typeof raw === 'symbol') throw new Error('not data')
-    if (raw instanceof Date) return { $date: Number.isNaN(raw.getTime()) ? 'Invalid' : raw.toISOString() }
-    if (raw instanceof Uint8Array) return { $bytes: Array.from(raw) }
-    if (raw instanceof Map) return { $map: [...raw] }
-    if (raw instanceof Set) return { $set: [...raw] }
-    return v === undefined ? { $undefined: true }
-      : typeof v === 'bigint' ? { $bigint: String(v) }
-      : typeof v === 'number' ? (Number.isFinite(v) && !Object.is(v, -0) ? v : { $num: Object.is(v, -0) ? '-0' : String(v) })
-      : typeof v === 'string' && !v.isWellFormed() ? { $utf16: Array.from({ length: v.length }, (_, i) => v.charCodeAt(i)) }
-      : v
-  }
+  const __raCount = new globalThis.Map()
+  // The built-in name of a typed array, which a subclass cannot change.
+  const __raTypedName = globalThis.Object.getOwnPropertyDescriptor(globalThis.Object.getPrototypeOf(globalThis.Uint8Array.prototype), globalThis.Symbol.toStringTag).get
+__CODEC__
   const __raWrap = (name, orig) => {
     if (!__raFs || !__raOut || typeof orig !== 'function') return orig
     const wrapped = function (...args) {
       const n = __raCount.get(name) ?? 0
       if (n < 5000) {
         __raCount.set(name, n + 1)
-        try { __raFs.appendFileSync(__raOut, JSON.stringify({ fn: name, args }, __raReplacer) + '\n') } catch {}
+        try { __raFs.appendFileSync(__raOut, globalThis.JSON.stringify({ fn: name, args: globalThis.Array.from(args, a => __raEnc(a)) }) + '\n') } catch {}
       }
-      return new.target ? Reflect.construct(orig, args, new.target) : orig.apply(this, args)
+      return new.target ? globalThis.Reflect.construct(orig, args, new.target) : orig.apply(this, args)
     }
     if (typeof exports === 'object' && exports !== null) {
       for (const key of [name, 'default']) if (exports[key] === orig) exports[key] = wrapped
@@ -247,6 +239,71 @@ const JS_CAPTURE: &str = r#"// rust-anything record --from-tests: removed when t
 __WRAPS__}
 /* c8 ignore stop */
 "#;
+
+/// What the capture hook changes in the `enc` of `CODEC_JS`: a value `dec` cannot give back
+/// throws, so the call is left out. That is a function, symbol, cycle, RegExp or Error, an
+/// object `dec` would rebuild as a plain one although it is not (a `URL`, an `ArrayBuffer`, a
+/// boxed string, anything with `toJSON`, or a RegExp, Error, Map, Set or Date from another
+/// realm), and a typed array keeps its built-in kind (a subclass is not a global `dec` can find).
+/// Array holes stay `undefined`, as `JSON.stringify` saw them before. A class instance is still
+/// captured as its own fields, as before.
+const JS_CAPTURE_ENC: &[(&str, &str)] = &[
+    ("return { $function: v.name }", NOT_DATA),
+    ("return { $symbol: String(v.description) }", NOT_DATA),
+    ("return { $cycle: true }", NOT_DATA),
+    ("return { $regexp: String(v) }", NOT_DATA),
+    ("return { $error: v.message }", NOT_DATA),
+    (
+        "if (Array.isArray(v)) return v.map(x => enc(x, next))",
+        "if (Array.isArray(v)) return Array.from(v, x => enc(x, next))",
+    ),
+    ("kind: v.constructor.name,", "kind: __raTypedName.call(v),"),
+    (
+        "const plain = Object.fromEntries(",
+        "if (Object.prototype.toString.call(v) !== '[object Object]' || typeof v.toJSON === 'function') throw new Error('not data')\n  const plain = Object.fromEntries(",
+    ),
+];
+
+const NOT_DATA: &str = "throw new Error('not data')";
+
+/// The `enc` of `CODEC_JS`, which `record` uses, for the capture hook, changed as
+/// `JS_CAPTURE_ENC` says. It runs inside the user's module: its names take a `__ra` prefix so
+/// they cannot shadow a wrapped function of the same name, and the built-ins it uses are read
+/// from `globalThis` so the module's own names cannot shadow them. Strings and comments are left
+/// as they are.
+fn js_codec() -> String {
+    let codec = crate::harness::CODEC_JS;
+    let end = codec.find("\nconst dec = ").unwrap_or(codec.len());
+    let enc = JS_CAPTURE_ENC
+        .iter()
+        .fold(codec[..end].to_string(), |enc, (from, to)| {
+            enc.replace(from, to)
+        });
+    js_names()
+        .replace_all(&enc, |c: &regex::Captures| {
+            match c.get(1).map(|m| m.as_str()) {
+                None => c[0].to_string(),
+                Some("enc") => "__raEnc".to_string(),
+                Some("MARKERS") => "__raMarkers".to_string(),
+                Some("looksLikeMarker") => "__raLooksLikeMarker".to_string(),
+                Some(global) => format!("globalThis.{global}"),
+            }
+        })
+        .into_owned()
+}
+
+/// The built-ins the codec uses.
+const JS_GLOBALS: &str =
+    "Array|ArrayBuffer|Buffer|DataView|Date|Error|Map|Number|Object|RegExp|Set|String|Uint8Array";
+
+/// The codec's own names and the built-ins it uses, outside strings and `//` comments (those
+/// match whole, without a group).
+fn js_names() -> regex::Regex {
+    regex::Regex::new(&format!(
+        r"'[^']*'|//[^\n]*|\b(enc|MARKERS|looksLikeMarker|{JS_GLOBALS})\b"
+    ))
+    .expect("valid regex")
+}
 
 fn python_hook() -> String {
     let driver = crate::harness_py::DRIVER_PY;
@@ -292,11 +349,14 @@ def _wrap(name, orig):
         if n < 5000 and sig is not None:
             try:
                 bound = sig.bind(*args, **kwargs)
-                if not bound.kwargs:
-                    line = json.dumps({"fn": name, "args": enc(list(bound.args))}, ensure_ascii=False, allow_nan=False)
-                    with open(_OUT, "a", encoding="utf-8") as f:
-                        f.write(line + "\n")
-                    _COUNT[name] = n + 1
+                case = {"fn": name, "args": enc(list(bound.args))}
+                # Keyword-only arguments, and those named after a skipped default.
+                if bound.kwargs:
+                    case["kwargs"] = {k: enc(v) for k, v in bound.kwargs.items()}
+                line = json.dumps(case, ensure_ascii=False, allow_nan=False)
+                with open(_OUT, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                _COUNT[name] = n + 1
             except Exception:
                 pass
         return orig(*args, **kwargs)
@@ -335,3 +395,41 @@ class _Finder(importlib.abc.MetaPathFinder):
 if _OUT and _WANT:
     sys.meta_path.insert(0, _Finder())
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `CODEC_JS` and the capture hook's copy of its `enc` must not drift apart in silence.
+    #[test]
+    fn the_capture_codec_is_the_record_codec_with_its_changes() {
+        let codec = crate::harness::CODEC_JS;
+        let end = codec.find("\nconst dec = ").expect("CODEC_JS defines dec");
+        for (from, _) in JS_CAPTURE_ENC {
+            let found = codec[..end].matches(from).count();
+            assert_eq!(found, 1, "enc no longer has {from:?}");
+        }
+        let capture = js_codec();
+        for marker in ["$function", "$symbol", "$cycle", "$regexp", "$error"] {
+            assert!(!capture.contains(marker), "{marker} is written:\n{capture}");
+        }
+        // Every top-level name is prefixed, and nothing after `enc` came along.
+        let declared: Vec<&str> = capture
+            .lines()
+            .filter_map(|l| l.strip_prefix("const "))
+            .filter_map(|l| l.split([' ', '=']).next())
+            .collect();
+        let prefixed = ["__raEnc", "__raMarkers", "__raLooksLikeMarker"];
+        assert_eq!(declared, prefixed, "{capture}");
+        // Built-ins outside strings and comments are read from `globalThis`; strings stay.
+        let globals = regex::Regex::new(&format!(
+            r"'[^']*'|//[^\n]*|(globalThis\.)?\b(enc|{JS_GLOBALS})\b"
+        ))
+        .unwrap();
+        for c in globals.captures_iter(&capture) {
+            let bare = c.get(2).is_some() && c.get(1).is_none();
+            assert!(!bare, "bare {}:\n{capture}", &c[0]);
+        }
+        assert!(capture.contains("'[object Object]'"), "{capture}");
+    }
+}

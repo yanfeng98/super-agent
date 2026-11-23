@@ -23,14 +23,34 @@ take PHP units yet, so tell the user before planning a PHP port past the front d
 the same way: record a built app (`dotnet out/app.dll`, servers with
 `--urls http://127.0.0.1:{port}`); `bridge` does not take C# units yet.
 
-Tools: the `rust-anything` CLI, or the same steps as MCP tools (`rust-anything mcp`): `profile`,
-`analyze`, `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `shadow`, `gate`, and for a
-whole app `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift`.
+Tools: the `rust-anything` CLI, or the same steps as MCP tools (`rust-anything mcp`): `go`,
+`profile`, `analyze`, `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `shadow`, `gate`,
+`enable`, `disable`, `report`, and for a whole app `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift`.
 If the MCP tools are not available, use the CLI; if `rust-anything` is not installed, ask the user
 to install it (`cargo install rust-anything`) and run
 `rust-anything setup`, then restart the agent. When a step fails because a runtime, the agent
 setup or the MCP server is missing or out of date, run `rust-anything doctor`: it checks each one
 and prints the command that fixes it.
+
+## Only the slow part: `go`
+
+When the user wants one slow command faster rather than a migration, `go` runs steps 0 to 5 for
+the top hot function in one call:
+
+```sh
+rust-anything go -- python3 app.py          # profile, bridge, record, write rust/<fn>-rs/TASK.md
+# port src/port.rs as TASK.md says (build, diff, gate), then the same command again:
+rust-anything go -- python3 app.py          # build, diff, gate, and enable when all pass
+```
+
+It picks the outermost exported function of a portable unit that takes arguments, batched where
+`profile` advises it (`--function` picks another), and records generated cases plus the calls the
+workload makes. You are the agent: port only that function, and do not pass `--agent` (that hands
+the port to another agent process). `go` switches the unit on only when every case matches, gate
+passes and `bench` shows it is not slower as its callers call it; a `slower` stage names the
+batch class to call from the loop or the caller to port with it. Report its stage and next step
+to the user. `rust-anything report <crate>` then writes
+`report/REPORT.md` and `report/card.svg` with measured numbers for the pull request.
 
 ## 0. Profile: find what is worth moving
 
@@ -96,6 +116,21 @@ a signature in `port.rs`, run `rust-anything refresh <crate>`.
 - Numbers in Python and Ruby: ints that the original passes through must come back as ints;
   in Python ports use `crate::pynum::Num` for int-or-float, not `serde_json::Value`.
 - C: inputs recorded as `crash:` are undefined behavior; any result passes.
+- C pointers: a byte pointer with a length parameter is `&[u8]` (or `&mut [u8]` when the
+  function writes it), a pointer to one scalar is `Option<&mut T>`, and a returned pointer into
+  a parameter is its offset (`Option<usize>`). In `--inputs`, give buffers as hex text (a number
+  means that many zero bytes, `null` is `NULL`) and leave length parameters out; recorded
+  results then hold the return value and what the function wrote. A struct of scalar fields
+  passed or returned by value is a `#[repr(C)]` struct at the crate root (`crate::AVRational`),
+  and an object of its fields in cases. A `char **` / `const char **` the function points into
+  the first `char` string argument is `Option<&mut Option<usize>>` (the offset into it); in
+  cases give the starting offset, `true` for a `NULL` start, or `null` for a `NULL` `**`.
+  Contexts, other structs and other `**` stay blocked: bridge a small wrapper with plain
+  arguments, and say so. Pass the
+  project's build flags in `CFLAGS` (`-DHAVE_CONFIG_H`, `-I<root>`) when its sources need them.
+- C strings: `const char *` is `Option<&[u8]>`, which costs a `strlen` per argument. Where that
+  dominates (short-string helpers), type the parameter `Option<crate::CChars<'_>>` in `port.rs`
+  and run `refresh`: the port reads the bytes as it goes (`next`, `peek`, `to_bytes`).
 - Ordered maps and object keys: `indexmap` where order reaches output.
 - Regex lookaround or backreferences: `fancy-regex`, not `regex`. Either way, `\w`, `\b`, `\d`
   and case-insensitive matching treat non-ASCII text differently from the source language's
@@ -181,6 +216,11 @@ rust-anything shadow <crate>                   # drop-in with the original's API
 Load the shadow where the app loaded the original. `RUST_ANYTHING_MODE=shadow` (default) returns the
 original's results and reports Rust mismatches; `new` switches to Rust; `old` turns Rust off.
 The public API does not change.
+
+For TS/JS and Python, `rust-anything enable <crate>` switches a gated unit on in place instead: one
+marked block in the original files rebinds its functions to Rust for every caller.
+`rust-anything disable <crate>` removes it byte for byte; `RUST_ANYTHING_UNIT_<NAME>=original`
+runs the original for one run. Ask the user before enabling: it edits their source files.
 
 ## 5. Done means gate passes
 

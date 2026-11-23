@@ -225,6 +225,14 @@ pub fn rust_write(t: &Ty, rust: &str, expr: &str, schema: &str, depth: usize) ->
         ));
     }
     if *t == Ty::Dyn {
+        // `serde_json::to_value` turns NaN and the infinities into `Value::Null`, so a scalar
+        // float whose declaration is only `unknown` goes over the wire as a number: JS then sees
+        // NaN and ±Infinity, instead of `null` that `diff` blames on the port.
+        let spelled = rust.trim();
+        let scalar = spelled.rsplit("::").next().unwrap_or(spelled);
+        if matches!(scalar, "f64" | "f32") {
+            return Some(format!("w.tag(4); w.f64(f64::from(*{expr}));"));
+        }
         return Some(format!(
             "wire::write_dyn(w, &serde_json::to_value({expr}).map_err(|e| e.to_string())?);"
         ));
@@ -971,6 +979,23 @@ mod tests {
         );
         // A port type that does not fit the wire type keeps the JSON bridge.
         assert!(rust_read(&strings, "Vec<i64>", "S").is_none());
+    }
+
+    #[test]
+    fn a_scalar_float_under_an_untyped_declaration_keeps_nan_and_infinities() {
+        // `serde_json::to_value(NaN)` is `Value::Null`, so a port typed `f64` whose declaration
+        // says only `unknown` reached JS as `null`: `diff` then blamed the port for a binding bug.
+        let code = rust_write(&Ty::Dyn, "f64", "out", "S", 0).unwrap();
+        assert!(code.contains("w.f64("), "{code}");
+        assert!(!code.contains("to_value"), "{code}");
+        let single = rust_write(&Ty::Dyn, "f32", "out", "S", 0).unwrap();
+        assert!(single.contains("w.f64("), "{single}");
+        // A qualified spelling is the same type.
+        for spelled in ["std::primitive::f64", "core::primitive::f32"] {
+            let qualified = rust_write(&Ty::Dyn, spelled, "out", "S", 0).unwrap();
+            assert!(qualified.contains("w.f64("), "{spelled}: {qualified}");
+            assert!(!qualified.contains("to_value"), "{spelled}: {qualified}");
+        }
     }
 
     #[test]

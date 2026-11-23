@@ -1,10 +1,14 @@
-# Real code in six languages
+# Real code in eight languages
 
 rust-anything was run end to end (analyze, bridge, record, port, diff, gate, bench) on real code in
 each language it supports. The code had to be already on this machine: code downloaded from the
 internet was not executed. So the targets are standard-library modules shipped with the
 installed toolchains, and for Java and C, where no suitable library source was on disk, the JDK
-and glibc themselves serve as the oracle behind a thin facade.
+and glibc themselves serve as the oracle behind a thin facade. For PHP the code is PEAR's
+`XML_Util`, which Homebrew's PHP installs, behind a facade of top-level functions (the PHP bridge
+takes top-level functions only). For C# the code is Google.Protobuf's C# runtime (protobuf
+v29.0), whose sources a Bazel build had already fetched into this machine's Bazel cache; no
+facade, the library's own public static methods.
 
 The ports, recorded cases and extra inputs are in [`demo/real-world`](../demo/real-world/README.md).
 
@@ -16,6 +20,8 @@ The ports, recorded cases and extra inputs are in [`demo/real-world`](../demo/re
 | Java | JDK 21 behind a facade (`Integer`, `Long`, `Math`, `Double.toString`, `URLEncoder`, `Base64`, `toUpperCase`) | 11 | 4,492 (226 throw) | 4,492/4,492, gate passes |
 | C | glibc behind a facade (`strtol`, `atoi`, `strtod`, `strspn`, `strcmp`, ctype) | 9 | 1,860 (6 crash) | 1,859/1,859 after dropping one undefined-behavior case, gate passes |
 | C | aklomp/base64 (vendored in mypyc's runtime) | 0 of 7 | - | plan only: every function takes output buffers or a state struct |
+| PHP | PEAR `XML_Util` 1.4.5 (New BSD, Stephan Schmidt) behind a facade, PHP 8.5.12 | 7 | 1,838 (41 throw `TypeError`; 286 from written inputs) | 1,838/1,838, gate passes |
+| C# | Google.Protobuf 3.29.0 `CodedOutputStream.ComputeSize.cs` (BSD-3-Clause, Google), .NET SDK 11.0.100 | 16 (+6 kept) | 2,941 (1 throws; 2,528 from written inputs) | 2,941/2,941 with 2 listed in `known-diffs.jsonl` (lone surrogates), gate passes |
 
 ## Speed
 
@@ -31,6 +37,8 @@ whether to ship.
 | C | - | no crossing: linked directly | 0.87x: ctype 1.1-1.4x faster, glibc's tuned `strtod`, `strspn`, `strcmp` 0.5-0.7x | optimize or keep the slower ones |
 | Java | about 1.7 µs (JNI + JSON) | 30-800 ns (typed JNI and binary wire) | 0.18x | port bigger units |
 | Go | 2.6 µs (cgo + JSON) | 0.11-0.42 µs (typed cgo and binary wire) | 0.04x | port bigger units |
+| PHP | - | 1.1-2.6 µs (`ext-ffi` + JSON, the first PHP bridge) | 0.09x (0.05-0.42x per function) | port bigger units |
+| C# | - | 0.56-3.3 µs (P/Invoke + JSON, the first C# bridge) | 0.03x (0.01-0.06x per function) | port bigger units |
 
 Lists, maps, structs and several results in Go and Java cross as a binary wire generated per
 type: Go's `WordFreq` (a map) went from 5.1 to 1.0 µs, `Midpoint` (a struct) from 7.2 to 1.0 µs;
@@ -50,8 +58,18 @@ What decides it:
   cgo call alone costs about 80 ns, a JNI call with strings more. No bridge can make a 5 ns
   function faster. These languages gain only when one call does a lot of work: port a function
   together with its callers. `bench` says so.
+- **PHP**: the first bridge sends every argument and result through JSON over `ext-ffi`, about
+  1.1 µs per call before any work. `XML_Util`'s functions take 78-102 ns in PHP 8.5
+  (`attributes_to_string` about 1.1 µs), so every one is slower through Rust. Measured with
+  `bench` on an Apple M4 (10 cores) while other builds ran (load average 10-16): a second run
+  gave 0.04-0.29x. The verdict does not depend on the noise, but the exact ratios do.
 - **C**: there is no crossing; the Rust code is compared with the C code directly, and the result
   is a property of the port.
+- **C#**: the first bridge sends every argument and result through JSON over P/Invoke.
+  Google.Protobuf's size functions take 29-87 ns in .NET 11, and both sides are called through
+  reflection (`MethodInfo.Invoke`), which is part of those 29-87 ns. Measured with `bench` on an
+  Apple M4 (10 cores) while other builds ran (load average 11-20), so the exact ratios are noisy;
+  the verdict is not.
 
 ### Batches: x18n's search
 
@@ -147,6 +165,10 @@ Per call, the Go port went from 0.73x to 0.93x, the Java one from 0.46x to 0.68x
 - **Messages from the TypeScript days**: "must stay in JS", "kept in TS", "characterization tests
   against the TS code" now name the source language.
 - **Reopened core classes** (`class String` in `shellwords.rb`) are now a monkeypatching risk.
+- **A test that could not fail** (PHP run). A port that decoded `&#39;` passed, because the only
+  input with `&#39;` also held `&nbsp;`, whose ISO-8859-1 result is not UTF-8, so PHP's answer was
+  never recorded. Inputs that keep the result ASCII made the broken port fail 2 cases. Recording
+  skips results JSON cannot hold; check that the cases you rely on are in `cases.jsonl`.
 
 ### Behavior a port has to match, found by `diff`
 
@@ -169,6 +191,14 @@ the real-world runs above.
 - Python's int-or-float results: `colorsys` keeps ints through `+`, `-` and `*`, so the faithful port
   computes with a small int-or-float type instead of `f64` (134 cases once ints were recorded).
 - glibc `strtod("-")` converts nothing and returns `+0.0`, not `-0.0`.
+- PHP `html_entity_decode($s, ENT_COMPAT, 'ISO-8859-1')` leaves `&#0;`-`&#8;`, `&#11;`, `&#12;`,
+  `&#14;`-`&#31;`, `&#39;` and `&#127;`-`&#159;` as they are.
+- PHP prints floats with 14 significant digits, in exponent form below 1e-4 and from 1e14 after
+  rounding: `0.00001` is `1.0E-5`, `99999999999999.9` is `1.0E+14`, `-0.0` is `-0`.
+- *fixture* PHP's own parameter types run in the generated wrapper too: `top(0, 1)` throws the same
+  `TypeError` before Rust is called, so those cases pass for an unported function.
+- *fixture* C# `null` reaches a record or POCO parameter as `null`, and the original throws
+  `NullReferenceException`; the port has to return that error, not compute with missing fields.
 
 Handled in the first port, and confirmed by the recorded cases:
 
@@ -179,6 +209,9 @@ Handled in the first port, and confirmed by the recorded cases:
   `-0.0 % 1.0` is `0.0`.
 - glibc `toupper(-128)` is `128` (its tables accept signed `char` values); `strtol` with base 0
   reads `077` as octal and `0x` without a hex digit as `0`.
+- .NET `Encoding.UTF8.GetByteCount(null)` throws `ArgumentNullException`, so
+  `ComputeStringSize(null)` throws; the port takes `Option<String>` to keep that. A
+  port that counted characters instead of UTF-8 bytes failed 123 cases.
 
 ### Limits these runs showed
 
@@ -195,8 +228,27 @@ Handled in the first port, and confirmed by the recorded cases:
   for numbers, nil, arrays and hashes, because `shellescape` accepts anything. The `colorsys`
   port needs Python's numeric tower. A typed port is shorter, but changes behavior for some
   callers; `diff` shows exactly which.
-- **The facades.** The Java and C runs test real JDK and glibc behavior, but through facades
-  written for the run, not through a library's own API.
+- **The facades.** The Java and C runs test real JDK and glibc behavior, and the PHP run real
+  `XML_Util` code, but through facades written for the run, not through a library's own API. The
+  PHP facade gives its parameters the native types `XML_Util`'s phpdoc names and literal defaults
+  for `XML_Util`'s constants (`XML_UTIL_ENTITIES_XML` is `1`), and leaves out the `$encoding`
+  parameters and the options-array form of `attributesToString`.
+- **Size of a PHP port.** `gate`'s size check counts every PHP file under the unit, here the facade
+  and all of `XML/Util.php` (440 lines): 381 lines of Rust, 0.9x. Against the seven methods the
+  port replaces and the facade (185 lines) it is 2.1x, because the port reimplements PHP built-ins
+  (`htmlentities` and `html_entity_decode` for ISO-8859-1, `ksort`'s key comparison, float to
+  string).
+- **PHP values JSON cannot carry.** NaN, infinities and `-0.0` inside an `array` or untyped
+  argument reach the port as the codec's `{"$num": "NaN"}` marker, not as a number; the port has to
+  read the marker (the `XML_Util` port does for attribute values).
+- **No PHP shadow.** PHP cannot redefine a function once the original file is loaded, so `shadow`
+  refuses PHP units; the generated `php/<crate>.php` is required in place of the original files.
+- **Lone surrogates in C#.** A .NET string can hold a lone UTF-16 surrogate
+  (`ComputeStringSize("\ud800")` is 4: the encoder writes U+FFFD); a Rust `String` cannot. The
+  C# bridge sends such a string as `{"$utf16": [...]}`, and a `String` parameter refuses it, so
+  the two written cases with lone surrogates fail and are listed in `known-diffs.jsonl` with that
+  reason. Changing them to U+FFFD on the way would make these two pass and hide the difference
+  everywhere else.
 
 ## How each language runs
 
@@ -206,4 +258,6 @@ Handled in the first port, and confirmed by the recorded cases:
 | Ruby | generated driver loads the original files | the same driver loads the magnus extension | magnus extension defining the same modules | file to require after the original: `prepend`s both |
 | Java | reflection driver compiled with the original sources | the same driver compiled with the JNI wrapper classes | typed JNI with a binary wire + wrapper classes with the original static methods | `<Class>Shadow` classes |
 | Python | in-process driver imports the original | the same driver imports the PyO3 package | PyO3 | module with the original API |
+| PHP | generated `driver.php` requires the original files (after `vendor/autoload.php` when present) | the same driver requires the generated wrapper | JSON dispatcher over `ext-ffi` + a file redeclaring the functions in their namespaces with the original parameters | none: `shadow` refuses PHP |
 | C | `cc -shared` of the original, called through ctypes, one fork per case | ctypes over the Rust `cdylib` | `extern "C"` functions with the original names and a header | shadow `.c` with `-D` renames; the crate's `shadow` feature exports only `rust_anything_` names |
+| C# | reflection driver compiled with the project's sources (`dotnet build`) | the same driver compiled with the P/Invoke wrapper | JSON dispatcher over the C ABI + `<namespace>.Rust` classes with the original static methods | none yet: C# binds calls at compile time; call the `.Rust` classes or alias them with `using` |

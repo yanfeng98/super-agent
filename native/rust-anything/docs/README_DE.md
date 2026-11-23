@@ -4,34 +4,42 @@
 
 <h1 align="center">rust-anything</h1>
 
-<p align="center"><b>Schreibe deine App in Rust neu und beweise, dass sie sich weiterhin genauso verhält.</b></p>
-
-<p align="center">Neu in 2.0: <a href="real-world.md#prettier">Prettier, nach Rust portiert</a>. 19x schneller · 15,837 von 17,224 aufgezeichneten Läufen komplett in Rust · alle Byte für Byte gleich</p>
-
-<p align="center">
-  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io-Version"></a>
-  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm-Version"></a>
-  <a href="https://github.com/erkamyaman/rust-anything/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/erkamyaman/rust-anything/ci.yml?branch=main&label=tests" alt="Tests"></a>
-  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub-Sterne"></a>
-  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
-</p>
-
-<p align="center">
-  <a href="#schnellstart">Schnellstart</a> ·
-  <a href="#sprachen">Sprachen</a> ·
-  <a href="real-world.md">Echte Portierungen</a> ·
-  <a href="how-it-works.md#how-it-works">So funktioniert es</a> ·
-  <a href="whole-apps.md#port-a-whole-app">Ganze Apps</a> ·
-  <a href="faq.md#faq">FAQ</a>
-</p>
-
-<p align="center">Gemacht in der Türkei 🇹🇷 von <a href="https://github.com/erkamyaman">erKam Yaman</a> · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ Sponsere mich</a></p>
-
-<p align="center">Gesponsert von <a href="https://coderabbit.ai"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
-
-<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · Deutsch · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a></sub></p>
-
+<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · Deutsch · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a> · <a href="README_ES.md">Español</a> · <a href="README_IT.md">Italiano</a></sub></p>
 <p align="center"><sub>Diese Übersetzung wird von der Community gepflegt und kann hinter dem <a href="../README.md">englischen README</a> zurückliegen.</sub></p>
+
+<p align="center"><b>Schreibe deine App in Rust neu und beweise, dass sie sich weiterhin genauso verhält.</b><br>
+Es übersetzt keinen Code: Ihr Coding-Agent (oder Sie) schreibt das Rust, und rust-anything prüft es gegen das Original.</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/languages/top/erkamyaman/rust-anything?logo=rust&label=Rust&color=CE422B" alt="Rust share of the code">
+  <img src="https://img.shields.io/badge/macOS%20·%20Linux%20·%20Windows-native-2563EB" alt="Native binaries for macOS, Linux and Windows">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT license"></a>
+  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io version"></a>
+  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm version"></a>
+  <br>
+  <a href="https://coderabbit.link/erkamyaman"><img src="https://img.shields.io/coderabbit/prs/github/erkamyaman/rust-anything?labelColor=171717&color=FF570A&label=Reviewed+by+CodeRabbit" alt="Pull requests reviewed by CodeRabbit"></a>
+  <a href="https://github.com/rust-unofficial/awesome-rust#development-tools"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Rust"></a>
+  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
+  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center"><a href="https://github.com/erkamyaman/rust-anything/discussions/127"><img src="https://img.shields.io/badge/Join%20the%20discussion-6E40C9?style=for-the-badge&logo=github&logoColor=white" alt="Join the discussion"></a></p>
+
+<p align="center"><a href="https://trendshift.io/repositories/363468" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/363468/daily?language=Rust" alt="erkamyaman/rust-anything: #1 Rust repository of the day on Trendshift" width="250" height="55"/></a></p>
+
+<p align="center"><b><a href="#schnellstart">Schnellstart</a></b> · <a href="https://github.com/erkamyaman/rust-anything/releases">Releases</a> · <a href="#schnellstart">Claude Code plugin</a> · <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=rust-anything">MCP Registry</a> · <a href="real-world.md">Echte Portierungen</a> · <a href="faq.md#faq">FAQ</a><br>
+<sub><a href="#sprachen">Sprachen</a> · <a href="how-it-works.md#how-it-works">So funktioniert es</a> · <a href="whole-apps.md#port-a-whole-app">Ganze Apps</a> · <a href="../LICENSE">MIT</a></sub><br>
+Gemacht in der Türkei 🇹🇷 von <a href="https://github.com/erkamyaman">erKam Yaman</a> · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ Sponsere mich</a> · Gesponsert von <a href="https://coderabbit.link/erkamyaman"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
+
+<p align="center">Neu in 2.0: <a href="real-world.md#prettier">Prettier, nach Rust portiert</a>. 19x schneller · 15,861 von 17,224 aufgezeichneten Läufen komplett in Rust · alle Byte für Byte gleich</p>
+
+<p align="center">
+  <img src="assets/prettier.gif" alt="Prettier und seine Rust-Portierung formatieren dieselben 59 echten Dateien, ein Prozess pro Datei: Prettier braucht 3.63 s, die Rust-Portierung 0.20 s, mit Byte für Byte derselben Ausgabe." width="820">
+  <br>
+  <sub>Prettier gegen seine Rust-Portierung an 59 echten Dateien aus ms, Fuse.js und json-server (Apple M4). Dieselbe Ausgabe, Byte für Byte. <a href="real-world.md#prettier">So wurde gemessen</a>.</sub>
+</p>
+
+<p align="center"><sub>PHP und C#: heute Aufzeichnen, Abspielen und die Front Door; Unit-Ports folgen.</sub></p>
 
 <table>
   <tr>
@@ -70,7 +78,7 @@ der langsame Teil, ein Hot Path nach dem anderen:
 | json-server, vom Start bis zur ersten Antwort | 79 bis 85 ms | **8 bis 10 ms** |
 | [Fuse.js](real-world.md#fusejs)-Suche über 50,000 Strings, pro Anfrage | 91.2 ms | **2.8 ms: 32x schneller** |
 
-Prettier: 15,837 von 17,224 aufgezeichneten Läufen formatieren vollständig in Rust, über 10 Sprachen
+Prettier: 15,861 von 17,224 aufgezeichneten Läufen formatieren vollständig in Rust, über 10 Sprachen
 hinweg (JavaScript, TypeScript, JSX, JSON, GraphQL, YAML, Markdown, CSS, SCSS, Less), und alle 17,224
 stimmen Byte für Byte mit Prettier überein, da alles noch nicht Portierte auf Prettier zurückfällt.
 json-server: 514/514 aufgezeichnete HTTP-Fälle stimmen auf einer reinen Rust-Binärdatei überein.
@@ -78,11 +86,32 @@ Gemessen auf einem Apple M4, jeweils zwei Läufe, jede Ausgabe vor der Zeitmessu
 ([Details](real-world.md)). Rust für jede kleine Funktion einzeln aufzurufen ist meist *langsamer*
 als ein JIT; rust-anything findet die Schleife, deren Auslagerung sich lohnt, und verschiebt sie.
 
-<p align="center">
-  <img src="assets/prettier.gif" alt="Prettier und seine Rust-Portierung formatieren dieselben 59 echten Dateien, ein Prozess pro Datei: Prettier braucht 3.63 s, die Rust-Portierung 0.20 s, mit Byte für Byte derselben Ausgabe." width="820">
-  <br>
-  <sub>Prettier gegen seine Rust-Portierung an 59 echten Dateien aus ms, Fuse.js und json-server (Apple M4). Dieselbe Ausgabe, Byte für Byte. <a href="real-world.md#prettier">So wurde gemessen</a>.</sub>
-</p>
+## Nur der langsame Teil
+
+Du musst nicht die ganze App portieren. Richte `go` auf einen Befehl, der zu langsam ist, und es
+portiert die eine Funktion, die die Zeit kostet:
+
+```sh
+rust-anything go --agent claude -- python3 app.py
+```
+
+Es profiliert den Lauf, wählt die äußerste Funktion, deren Auslagerung sich lohnt (die Schleife, nicht
+den kleinen Aufruf darin, als Batch, wo das Profil es nahelegt), zeichnet sie mit generierten Eingaben
+und den Aufrufen deines Laufs auf und übergibt `src/port.rs` an deinen Agenten (`claude`, `codex` oder
+einen beliebigen Befehl, der einen Prompt von stdin liest; ohne `--agent` schreibt es `TASK.md` für
+dich und hält an). Es schaltet die Funktion erst ein, wenn jeder aufgezeichnete Fall übereinstimmt und
+`gate` besteht. Danach:
+
+```sh
+rust-anything report rust/dedupe-rs     # REPORT.md und card.svg für den Pull Request
+rust-anything disable rust/dedupe-rs    # zurück zum Original, Byte für Byte
+```
+
+Die [Fuse.js](real-world.md#fusejs)-Zeile oben hat genau diese Form: Fuses Score für einen String, als
+Batch über die Liste, wurde nach Rust verschoben, während Objektschlüssel, erweiterte Suche und der Rest
+in JavaScript bleiben, von 91.2 ms auf 2.8 ms pro Anfrage über 50,000 Strings. Probiere `go` an
+[`tests/fixtures/go-fuzzy`](../tests/fixtures/go-fuzzy) aus, einem 20-zeiligen Python-Dedupe. Alle Wege,
+eine Portierung ein- und auszuschalten: [Switch a port on and off](how-it-works.md#switch-a-port-on-and-off).
 
 <p align="center">
   <img src="assets/json-server.gif" alt="json-server als Node-Server und als eine einzige Rust-Binärdatei: Speicher im Leerlauf 74 MB und 3.5 MB, vom Start bis zur ersten Antwort 79 bis 85 ms und 8 bis 10 ms, und 514 von 514 aufgezeichneten HTTP-Fällen stimmen überein." width="820">
@@ -241,7 +270,7 @@ Portieren einzelner Einheiten über P/Invoke folgt als Nächstes.
 </p>
 
 <p align="center">
-  <a href="https://coderabbit.ai">
+  <a href="https://coderabbit.link/erkamyaman">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/sponsors/company-dark.svg">
       <img src="assets/sponsors/company-light.svg" width="800" alt="Unternehmenssponsor: CodeRabbit">
@@ -260,6 +289,7 @@ Portieren einzelner Einheiten über P/Invoke folgt als Nächstes.
 
 <p align="center">
   <a href="https://github.com/sponsors/erkamyaman"><img src="https://img.shields.io/badge/Sponsor_werden-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor werden"></a>
+  <a href="https://buymeacoffee.com/erkamyaman"><img src="https://img.shields.io/badge/Buy_me_a_coffee-%E2%98%95-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 ## Mitwirken

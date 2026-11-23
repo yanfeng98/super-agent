@@ -117,6 +117,8 @@ pub struct Options<'a> {
     pub command: PathBuf,
     pub remove: bool,
     pub dry_run: bool,
+    /// Save `<file>.rust-anything.bak` before changing an existing file.
+    pub backup: bool,
 }
 
 /// One change: which agent, which file, and what happened.
@@ -287,7 +289,9 @@ fn json_server(
     };
     let mut saved = None;
     if !opts.dry_run && matches!(action, "added" | "updated" | "removed") {
-        saved = backup(path)?;
+        if opts.backup {
+            saved = backup(path)?;
+        }
         write(path, &(serde_json::to_string_pretty(&doc)? + "\n"))?;
     }
     Ok(Change {
@@ -382,7 +386,9 @@ fn opencode_server(agent: Agent, path: &Path, command: &str, opts: &Options) -> 
     };
     let mut saved = None;
     if !opts.dry_run && matches!(action, "added" | "updated" | "removed") {
-        saved = backup(path)?;
+        if opts.backup {
+            saved = backup(path)?;
+        }
         write(path, &(serde_json::to_string_pretty(&doc)? + "\n"))?;
     }
     Ok(Change {
@@ -453,7 +459,9 @@ fn codex_server(agent: Agent, path: &Path, command: &str, opts: &Options) -> Res
     };
     let mut saved = None;
     if !opts.dry_run && matches!(action, "added" | "updated" | "removed") {
-        saved = backup(path)?;
+        if opts.backup {
+            saved = backup(path)?;
+        }
         write(path, &doc.to_string())?;
     }
     Ok(Change {
@@ -562,7 +570,36 @@ mod tests {
             command: PathBuf::from("/opt/bin/rust-anything"),
             remove: false,
             dry_run: false,
+            backup: true,
         }
+    }
+
+    #[test]
+    fn no_backup_changes_the_file_without_a_copy() {
+        let home = temp_home("no-backup");
+        let cursor = home.join(".cursor/mcp.json");
+        std::fs::create_dir_all(cursor.parent().unwrap()).unwrap();
+        std::fs::write(&cursor, r#"{"mcpServers":{"other":{"command":"x"}}}"#).unwrap();
+        let copy = home.join(".cursor/mcp.json.rust-anything.bak");
+
+        let mut options = opts(&home, vec![Agent::Cursor]);
+        options.backup = false;
+        let r = setup(&options).unwrap();
+        assert_eq!(r.changes[0].action, "added");
+        assert!(r.changes[0].backup.is_none());
+        assert!(!copy.exists());
+        assert!(
+            std::fs::read_to_string(&cursor)
+                .unwrap()
+                .contains("rust-anything")
+        );
+
+        options.remove = true;
+        options.backup = true;
+        let r = setup(&options).unwrap();
+        assert_eq!(r.changes[0].backup.as_deref(), Some(copy.as_path()));
+        assert!(copy.exists());
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

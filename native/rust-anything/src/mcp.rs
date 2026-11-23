@@ -343,7 +343,20 @@ const TOOL_META: &[ToolMeta] = &[
         [false, false, true, true],
     ),
     meta("profile", "Profile workload", [false, false, true, true]),
+    meta(
+        "go",
+        "Port the hot path end to end",
+        [false, false, false, true],
+    ),
+    meta("enable", "Switch a unit on", [false, false, true, false]),
+    meta("disable", "Switch a unit off", [false, false, true, false]),
+    meta("report", "Write a report card", [false, false, true, true]),
     meta("bench", "Benchmark port", [false, false, true, true]),
+    meta(
+        "fuzz",
+        "Fuzz port against original",
+        [false, false, false, true],
+    ),
     meta(
         "shadow",
         "Generate shadow module",
@@ -355,6 +368,7 @@ const TOOL_META: &[ToolMeta] = &[
         [false, false, true, true],
     ),
     meta("map", "Map the port", [true, false, true, false]),
+    meta("package", "Lay out packages", [false, false, true, false]),
     meta(
         "app_record",
         "Record whole app",
@@ -442,6 +456,7 @@ fn tool_schemas() -> Value {
                 "test_command": { "type": "array", "items": { "type": "string" }, "description": "TS/JS or Python: also record every call the original's own test suite makes to the unit's functions, e.g. [\"npx\", \"jest\"] or [\"pytest\"]. Runs in the original's folder." },
                 "profile": { "type": "string", "enum": ["host", "android"], "description": "Record on this machine (default) or on a connected Android device (JVM crates)." },
                 "device": { "type": "string", "description": "Android device serial; picked automatically when only one is connected." },
+                "pin_clock": { "type": "boolean", "description": "TS/JS (napi) and Python: true pins the clock and random numbers while recording and diffing (`Date.now()`, `new Date()`, `Math.random`; `time.time`, `datetime.now`, `random`) to the values in pinned.json, and writes src/port/pinned.rs for the port to read them (`mod pinned;` in port.rs). Kept for later runs; false stops pinning." },
             }, "required": ["crate"] },
         },
         {
@@ -480,12 +495,58 @@ fn tool_schemas() -> Value {
             }, "required": ["root", "command"] },
         },
         {
+            "name": "go",
+            "description": "The hot-path loop in one call: profile the workload, pick the top portable function (the outermost loop; batched where profile says so), bridge it into rust/<function>-rs, record generated cases plus the calls the workload makes, write TASK.md, hand the port to `agent` (claude, codex, or a command reading the prompt on stdin), then build, diff and gate, and switch the unit on with `enable` only when every case matches, gate passes and `bench` shows it is not slower as its callers call it. Without `agent` it stops at `waiting_for_port`: port src/port.rs as TASK.md says and call go again; finished steps are kept. Returns the stage (waiting_for_port, mismatch, gate_failed, slower, on, passed), the speedup, the pick, the steps and what to do next.",
+            "inputSchema": { "type": "object", "properties": {
+                "root": { "type": "string", "description": "Repository root." },
+                "command": { "type": "array", "items": { "type": "string" }, "description": "The workload, run in root: [\"python3\", \"app.py\"]." },
+                "agent": { "type": "string", "description": "claude, codex, or a command that reads a prompt on stdin. Omit to port it yourself." },
+                "function": { "type": "string", "description": "Port this hot function instead of the profile's pick." },
+                "lang": { "type": "string", "enum": ["ts", "python", "go", "java", "ruby"], "description": "Detected from the repository when omitted." },
+                "count": { "type": "integer", "description": "Generated cases per function (default 200)." },
+                "rounds": { "type": "integer", "description": "Agent turns: the port, then one per failing diff or gate (default 3)." },
+            }, "required": ["root", "command"] },
+        },
+        {
+            "name": "enable",
+            "description": "Switch a ported TS/JS or Python unit on: one marked block in each original source file rebinds the unit's functions to the built Rust module, for every caller, with no import changed. RUST_ANYTHING_MODE=old or RUST_ANYTHING_UNIT_<NAME>=original runs the original for one run. Refuses while recorded cases differ unless `force`.",
+            "inputSchema": { "type": "object", "properties": { "crate": crate_dir, "force": { "type": "boolean" } }, "required": ["crate"] },
+        },
+        {
+            "name": "disable",
+            "description": "Switch a unit off: removes exactly the lines enable added, leaving the source files byte for byte as they were.",
+            "inputSchema": { "type": "object", "properties": { "crate": crate_dir }, "required": ["crate"] },
+        },
+        {
+            "name": "report",
+            "description": "Write <crate>/report/REPORT.md and card.svg for a pull request or README: the unit, recorded cases matched (diff), speedup call included (bench), fallback rate, on or off, and the machine with its core count. Builds first; every number comes from this run.",
+            "inputSchema": { "type": "object", "properties": {
+                "crate": crate_dir,
+                "out": { "type": "string", "description": "Output folder; defaults to <crate>/report." },
+                "min_ms": { "type": "integer", "description": "Minimum measured time per function and side, in milliseconds (default 200)." },
+                "node_args": { "type": "array", "items": { "type": "string" }, "description": "Extra arguments for node, e.g. [\"--import=tsx\"]." },
+            }, "required": ["crate"] },
+        },
+        {
             "name": "bench",
             "description": "Time the recorded cases on the original and on the built Rust module, bridge included; speedup below 1 means the port is slower as its callers call it. Returns the rows and a verdict with advice: ship, keep the slower functions, or port a bigger unit.",
             "inputSchema": { "type": "object", "properties": {
                 "crate": crate_dir,
                 "resolve_from": { "type": "string" },
                 "min_ms": { "type": "integer", "description": "Minimum measured time per function and side, in milliseconds (default 200)." },
+                "node_args": { "type": "array", "items": { "type": "string" }, "description": "Extra arguments for node, e.g. [\"--import=tsx\"]." },
+            }, "required": ["crate"] },
+        },
+        {
+            "name": "fuzz",
+            "description": "Live differential test: generate fresh inputs from a new seed (the record generator, without the cases already recorded), run them through the original and the built port, and report mismatches the recording missed. Returns the seed to replay, counts and the first mismatches; `keep` appends mismatching (or all) fresh cases to cases.jsonl so the next diff and gate check them. Works wherever record and diff do on this machine (TS/JS, Python, C, Go, Ruby, Java, Kotlin).",
+            "inputSchema": { "type": "object", "properties": {
+                "crate": crate_dir,
+                "cases": { "type": "integer", "description": "Fresh cases per function (and scenarios per class) in each round (default 200)." },
+                "seed": { "type": "integer", "description": "Seed of the first round; random when omitted (returned as `seed`). Later rounds count up from it." },
+                "time": { "type": "number", "description": "Keep running new rounds until this many seconds have passed; one round when omitted." },
+                "keep": { "type": "string", "enum": ["mismatches", "all"], "description": "Append the mismatching fresh cases, or all of them, to cases.jsonl." },
+                "resolve_from": { "type": "string", "description": "Resolve npm packages the original imports from this folder's node_modules." },
                 "node_args": { "type": "array", "items": { "type": "string" }, "description": "Extra arguments for node, e.g. [\"--import=tsx\"]." },
             }, "required": ["crate"] },
         },
@@ -501,6 +562,20 @@ fn tool_schemas() -> Value {
                 "repo": { "type": "string", "description": "Repository root." },
                 "crates": { "type": "array", "items": { "type": "string" }, "description": "Folders with crates kept outside the repository." }
             }, "required": ["repo"] },
+        },
+        {
+            "name": "package",
+            "description": "Lay out installable packages for a gated port; writes files only, never builds other platforms or publishes. PyO3: a maturin project (abi3 wheel importable under the original module's name). CLI front door (`rust/app` of a Node CLI): a main npm package whose command runs `<name>-<platform>`'s front door binary, with the original pinned to its exact version as a dependency for every case the port hands back. napi: a main npm package whose loader picks `<name>-<platform>` from optionalDependencies and falls back to the original JS, one package per platform (this machine's binary copied in when built). wasm: one npm package with the built pkg/. PyO3 and napi also get a GitHub Actions workflow building macOS (arm64, x86_64), Linux (x86_64, aarch64) and Windows.",
+            "inputSchema": { "type": "object", "properties": {
+                "crate": crate_dir,
+                "name": { "type": "string", "description": "Package name on npm or PyPI; defaults to the crate name." },
+                "version": { "type": "string", "description": "Package version; defaults to the original package's." },
+                "out": { "type": "string", "description": "Output folder; defaults to <crate>/package." },
+                "fallback": { "type": "string", "description": "napi: module to load where no binary fits; defaults to the original file when it is plain JS that imports nothing." },
+                "bin": { "type": "array", "items": { "type": "string" }, "description": "CLI front door: the commands the package installs; defaults to the package name without its scope." },
+                "original": { "type": "string", "description": "CLI front door: the original npm package it falls back to, as <name>@<version>; defaults to the one in the repository's node_modules." },
+                "dry_run": { "type": "boolean", "description": "List the files, write nothing." },
+            }, "required": ["crate"] },
         },
         {
             "name": "gate",
@@ -525,7 +600,7 @@ fn tool_schemas() -> Value {
                 "db_reset": { "type": "string", "description": "Shell command that resets the database before each case (each start for servers); cases then run one at a time." },
                 "db_dump": { "type": "string", "description": "Shell command that prints the database's state (e.g. `sqlite3 app.db .dump`), run after each case or request and recorded with the effects." },
                 "args": { "type": "array", "items": { "type": "string" }, "description": "Servers: arguments every start gets after its command, the original's and every build's ([\"db.json\"]). Implies http; saved." },
-                "fresh": { "type": "array", "items": { "type": "string" }, "description": "Servers: repository files or folders the server reads or writes, snapshotted and copied into a fresh working directory before every start. Implies http; saved." },
+                "fresh": { "type": "array", "items": { "type": "string" }, "description": "Repository files or folders the app reads or writes (a project tree, a database file), snapshotted and copied into a fresh working directory before every case (CLIs) or start (servers); a CLI's removed files are compared too. Saved." },
                 "pace": { "type": "integer", "description": "Servers: milliseconds to wait after each response, for work the server does after answering (a file watcher). Implies http; saved and used by replay; 0 removes it." },
                 "float_tolerance": { "type": "number", "description": "Numeric output: numbers match when they differ by at most this times the larger magnitude (absolute below 1), e.g. 1e-9. Saved with the cases; 0 removes it." },
                 "float_file": { "type": "array", "items": { "type": "string" }, "description": "Written files of raw floats, compared value by value within float_tolerance: `PATH=f32le` or `PATH=f64le`. Saved with the cases." },
@@ -670,6 +745,10 @@ fn call(name: &str, args: &Value) -> Result<Value> {
                 manifest.float_tolerance = (crate::tolerance::check(t)? > 0.0).then_some(t);
                 manifest.save(&crate_dir)?;
             }
+            let helper = match args["pin_clock"].as_bool() {
+                Some(on) => crate::pin::set(&crate_dir, on)?,
+                None => None,
+            };
             let opts = harness::RecordOptions {
                 crate_dir: &crate_dir,
                 count: args["count"]
@@ -688,6 +767,9 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             })?;
             if let Some(c) = captured {
                 out["from_tests"] = c;
+            }
+            if let Some(helper) = helper {
+                out["pinned_helper"] = json!(helper);
             }
             out
         }
@@ -789,6 +871,32 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             let verdict = harness::verdict(&rows, lang);
             serde_json::json!({ "rows": rows, "verdict": verdict })
         }
+        "fuzz" => {
+            let crate_dir = path("crate")?;
+            let resolve_from = opt_path("resolve_from");
+            let keep = match args["keep"].as_str() {
+                None => None,
+                Some("mismatches") => Some(crate::fuzz::Keep::Mismatches),
+                Some("all") => Some(crate::fuzz::Keep::All),
+                Some(other) => anyhow::bail!("unknown `keep` `{other}`: use mismatches or all"),
+            };
+            let time = match args["time"].as_f64() {
+                Some(t) if t.is_finite() && t >= 0.0 => Some(std::time::Duration::from_secs_f64(t)),
+                Some(_) => anyhow::bail!("`time` takes seconds"),
+                None => None,
+            };
+            serde_json::to_value(crate::fuzz::fuzz(&crate::fuzz::FuzzOptions {
+                crate_dir: &crate_dir,
+                cases: args["cases"]
+                    .as_u64()
+                    .map_or(200, |n| usize::try_from(n).unwrap_or(200)),
+                seed: args["seed"].as_u64(),
+                time,
+                keep,
+                resolve_from: resolve_from.as_deref(),
+                node_args: &strings("node_args"),
+            })?)?
+        }
         "shadow" => {
             let out = opt_path("out");
             serde_json::to_value(shadow::shadow(&path("crate")?, out.as_deref())?)?
@@ -797,6 +905,76 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             let crates: Vec<std::path::PathBuf> =
                 strings("crates").into_iter().map(Into::into).collect();
             serde_json::to_value(crate::port_map::map(&path("repo")?, &crates)?)?
+        }
+        "package" => {
+            let crate_dir = path("crate")?;
+            serde_json::to_value(crate::package::package(&crate::package::Options {
+                crate_dir: &crate_dir,
+                name: args["name"].as_str().map(str::to_string),
+                version: args["version"].as_str().map(str::to_string),
+                out: opt_path("out"),
+                dry_run: args["dry_run"].as_bool().unwrap_or(false),
+                fallback: args["fallback"].as_str().map(str::to_string),
+                bin: strings("bin"),
+                original: args["original"].as_str().map(str::to_string),
+            })?)?
+        }
+        "go" => {
+            let command = strings("command");
+            anyhow::ensure!(!command.is_empty(), "missing `command`");
+            let lang = match args.get("lang") {
+                Some(v) if !v.is_null() => {
+                    Some(serde_json::from_value(v.clone()).context("`lang`")?)
+                }
+                _ => None,
+            };
+            let root = path("root")?;
+            serde_json::to_value(crate::go::go(&crate::go::Options {
+                root: &root,
+                command: &command,
+                lang,
+                agent: args["agent"].as_str(),
+                function: args["function"].as_str(),
+                count: args["count"]
+                    .as_u64()
+                    .map_or(200, |n| usize::try_from(n).unwrap_or(200)),
+                rounds: args["rounds"]
+                    .as_u64()
+                    .map_or(3, |n| usize::try_from(n).unwrap_or(3)),
+            })?)?
+        }
+        "enable" => {
+            let crate_dir = std::path::absolute(path("crate")?)?;
+            if !args["force"].as_bool().unwrap_or(false) {
+                harness::build(&crate_dir)?;
+                let d = harness::diff(&harness::DiffOptions {
+                    crate_dir: &crate_dir,
+                    module: None,
+                    ignore_key_order: false,
+                    node_args: &[],
+                    float_tolerance: None,
+                })?;
+                anyhow::ensure!(
+                    d.failed == 0 && d.missing.is_empty(),
+                    "{}/{} recorded cases match; switch it on once they all do, or pass force",
+                    d.passed,
+                    d.total
+                );
+            }
+            serde_json::to_value(crate::enable::enable(&crate_dir)?)?
+        }
+        "disable" => serde_json::to_value(crate::enable::disable(&std::path::absolute(path(
+            "crate",
+        )?)?)?)?,
+        "report" => {
+            let crate_dir = std::path::absolute(path("crate")?)?;
+            let out = opt_path("out").map(std::path::absolute).transpose()?;
+            serde_json::to_value(crate::card::report(&crate::card::Options {
+                crate_dir: &crate_dir,
+                out: out.as_deref(),
+                min_ms: args["min_ms"].as_u64().unwrap_or(200),
+                node_args: &strings("node_args"),
+            })?)?
         }
         "gate" => serde_json::to_value(gate::gate(
             Path::new(&path("crate")?),
@@ -945,9 +1123,15 @@ mod tests {
                 "build",
                 "diff",
                 "profile",
+                "go",
+                "enable",
+                "disable",
+                "report",
                 "bench",
+                "fuzz",
                 "shadow",
                 "map",
+                "package",
                 "gate",
                 "app_record",
                 "app_replay",
@@ -996,6 +1180,7 @@ mod tests {
             "gate",
             "shadow",
             "bench",
+            "fuzz",
             "profile",
             "app_record",
             "app_replay",

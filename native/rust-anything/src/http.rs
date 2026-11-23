@@ -57,11 +57,8 @@ pub struct HttpConfig {
 
 /// The `http` config of a recording: the saved one, changed by what this record was given.
 pub(crate) fn merge_config(saved: Option<HttpConfig>, opts: &RecordOptions) -> Option<HttpConfig> {
-    let asked = opts.http
-        || opts.port.is_some()
-        || !opts.server_args.is_empty()
-        || !opts.fresh.is_empty()
-        || opts.pace_ms.is_some();
+    let asked =
+        opts.http || opts.port.is_some() || !opts.server_args.is_empty() || opts.pace_ms.is_some();
     let mut config = match (saved, asked) {
         (Some(c), _) => c,
         (None, true) => HttpConfig::default(),
@@ -84,7 +81,7 @@ pub(crate) fn merge_config(saved: Option<HttpConfig>, opts: &RecordOptions) -> O
 
 pub(crate) const FILES_DIR: &str = "files";
 
-fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     if from.is_dir() {
         std::fs::create_dir_all(to)?;
         for entry in std::fs::read_dir(from)?.flatten() {
@@ -102,10 +99,16 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 
 /// Copies the `fresh` paths from the repository into `http/files/`, replacing the last snapshot.
 fn snapshot(repo: &Path, fresh: &[String]) -> Result<Option<PathBuf>> {
+    let dir = app::cases_dir(repo).join(HTTP_DIR).join(FILES_DIR);
+    snapshot_to(repo, fresh, &dir)
+}
+
+/// Copies the `fresh` paths from the repository into `dir`, replacing the last snapshot.
+pub(crate) fn snapshot_to(repo: &Path, fresh: &[String], dir: &Path) -> Result<Option<PathBuf>> {
     if fresh.is_empty() {
         return Ok(None);
     }
-    let dir = app::cases_dir(repo).join(HTTP_DIR).join(FILES_DIR);
+    let dir = dir.to_path_buf();
     let _ = std::fs::remove_dir_all(&dir);
     for path in fresh {
         let rel = Path::new(path);
@@ -118,7 +121,12 @@ fn snapshot(repo: &Path, fresh: &[String]) -> Result<Option<PathBuf>> {
         );
         let from = repo.join(rel);
         ensure!(from.exists(), "--fresh `{path}`: no such file or folder");
-        copy_tree(&from, &dir.join(rel))?;
+        let to = if path.ends_with('/') && from.is_dir() {
+            dir.clone()
+        } else {
+            dir.join(rel)
+        };
+        copy_tree(&from, &to)?;
     }
     Ok(Some(dir))
 }

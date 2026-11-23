@@ -4,11 +4,7 @@ use rust_anything::{bridge, harness};
 
 #[test]
 fn ruby_recording_fails_on_unencodable_results_and_preserves_cases() {
-    if !common::have_with(
-        "ruby",
-        &["-e", "exit(RUBY_VERSION.to_i >= 3 ? 0 : 1)"],
-        "3 or newer was not found",
-    ) {
+    if !common::have_ruby_3() {
         return;
     }
 

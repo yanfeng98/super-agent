@@ -249,6 +249,7 @@ pub fn lib_rs(m: &Manifest, api: &PortApi, modules: &Modules) -> String {
     let mut out = format!(
         "//! Python bindings for `{}`: generated from the signatures in `port.rs` by rust-anything.\n\
          //! Regenerate with `rust-anything refresh` after changing them.\n\n\
+         #![allow(clippy::too_many_arguments)]\n\n\
          use pyo3::prelude::*;\n\n",
         m.unit
     );
@@ -1167,6 +1168,10 @@ mod tests {
             js: false,
         };
         let lib = lib_rs(&verdict_manifest(), &api, &modules);
+        assert!(
+            lib.contains("#![allow(clippy::too_many_arguments)]"),
+            "{lib}"
+        );
         // The signature still defaults to `None`, and the Rust parameter takes `Option`.
         assert!(
             lib.contains("#[pyo3(name = \"verdict\", signature = (readings, thresholds=None))]"),

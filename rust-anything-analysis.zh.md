@@ -1,6 +1,7 @@
 # rust-anything 项目分析
 
 > 分析对象：<https://github.com/erkamyaman/rust-anything>（v2.1.0，commit `e795d53`，2026-11-20）
+> 基线更新：仓库内置的 vendored 副本已同步到 `v3.3.0`（见 [日志 00119](logs/00119-rust-anything升级到3.3.0.md)），工具面从 16 个增至 22 个，PHP 与 C# 单元可 bridge；本文关于 v2.1.0 的判断保持当时结论。
 > 方法：浅克隆源码通读 + 3 个并行子 agent 分区审阅 + 下载官方 release 二进制实测（本机 Linux x86_64）。
 > 结论性判断均标注证据；未能复现的只当作待验证声明。
 

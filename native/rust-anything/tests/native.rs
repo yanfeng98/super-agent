@@ -229,6 +229,9 @@ fn unported_stubs_never_match_a_ruby_runtime_error() {
         );
         return;
     }
+    if !common::have_ruby_3() {
+        return;
+    }
     let root = project(
         "stubs-ruby",
         &[

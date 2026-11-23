@@ -42,6 +42,9 @@ Choices made so far, with reasons. Each one can be revisited.
 | L8 | wasm builds use `cargo` + `wasm-bindgen-cli` (version-checked), not wasm-pack. | wasm-pack downloads tools at run time, which fails offline and in locked-down CI. |
 | L9 | Shadow mode returns the original's result, runs Rust second, and never lets Rust errors reach callers. | Shipping shadow code must not change behavior; only the report sees Rust. |
 | L10 | The MCP server is a small hand-written JSON-RPC loop on serde_json. | The stdio transport needs four methods; an SDK would add churn for no gain. |
+| L11 | `go` composes `profile`, `bridge`, `record`, `diff`, `gate` and `enable`; it picks the outermost portable exported function that takes arguments, and bridges that one function alone. | One crossing per run instead of one per item, and a crate small enough to compile in seconds. A function without arguments (`main`) has nothing to record. |
+| L12 | `enable` rebinds functions with a marked block in the original file, not by editing imports. | Every caller switches at once, in any number of files, and removing the block restores the file byte for byte. Plain function declarations only: a `const` arrow cannot be rebound. |
+| L13 | One shared cargo target folder, with each package name owned by one crate folder. | Dependencies compile once; ownership keeps two same-named crates from replacing each other's library (pitfalls). Front doors stay apart: every app binary has the same name. |
 
 ## Learned from porting x18n's core
 

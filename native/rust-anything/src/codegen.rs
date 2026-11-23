@@ -200,7 +200,10 @@ pub fn port_rs(m: &Manifest) -> String {
 fn port_param_type(m: &Manifest, p: &crate::ts::exports::Param) -> RType {
     if matches!(
         m.language,
-        crate::lang::Lang::Python | crate::lang::Lang::Ruby
+        crate::lang::Lang::Python
+            | crate::lang::Lang::Ruby
+            | crate::lang::Lang::Php
+            | crate::lang::Lang::Csharp
     ) && crate::codegen_py::has_literal_default(p)
     {
         RType::from_ts(&p.ts_type)

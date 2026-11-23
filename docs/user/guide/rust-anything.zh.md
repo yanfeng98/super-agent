@@ -2,14 +2,15 @@
 
 [English](rust-anything.md) | 中文
 
-Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erkamyaman/rust-anything) MCP server，默认会话因此可以按单元把 TypeScript/JavaScript、Python、C、Go、Ruby、Java、Kotlin 代码改写成 Rust。每个单元都会对照"原代码返回什么"的录制做校验，`gate` 不通过就不算完成。它不需要全局安装：CLI 由仓库里 vendored 的源码现场编译。
+Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erkamyaman/rust-anything) MCP server，默认会话因此可以按单元把 TypeScript/JavaScript、Python、C、Go、Ruby、Java、Kotlin、PHP、C# 代码改写成 Rust。每个单元都会对照"原代码返回什么"的录制做校验，`gate` 不通过就不算完成。它不需要全局安装：CLI 由仓库里 vendored 的源码现场编译。
 
 ## 内置能力
 
 | 阶段 | 工具 |
 |---|---|
-| 规划 | `analyze`、`map`、`profile` |
-| 迁移单个单元 | `bridge`、`refresh`、`record`、`build`、`diff`、`bench`、`shadow`、`gate` |
+| 规划 | `analyze`、`map`、`profile`、`go` |
+| 迁移单个单元 | `bridge`、`refresh`、`record`、`build`、`diff`、`bench`、`fuzz`、`shadow`、`gate`、`report` |
+| 就地启用单元 | `enable`、`disable` |
 | 迁移整个应用 | `app_record`、`app_replay`、`app_front_door`、`app_wire`、`app_lift` |
 
 ## 首次使用前
@@ -39,13 +40,13 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 ./native/rust-anything/bin/rust-anything doctor
 ```
 
-`build`、`diff`、`gate`、`bench` 请传绝对 crate 路径：2.1.0 会把子进程切到临时目录，相对 `--manifest-path` 会失败。
+迁移生成的 crate 统一编译到一个共享 cargo target 目录（设置了 `CARGO_TARGET_DIR` 用它，否则用平台缓存目录下的 `rust-anything/target`），被迁移的仓库工作树里只多出它自己的 `rust/` crate。
 
 ## 调整行为
 
 | 字段 | 默认值 | 作用 |
 |---|---|---|
-| `toolLoading` | `eager` | 设为 `on-demand` 时用一段系统提示目录加一个 `mcp__rust-anything__load_tools` 工具替代 16 个 schema |
+| `toolLoading` | `eager` | 设为 `on-demand` 时用一段系统提示目录加一个 `mcp__rust-anything__load_tools` 工具替代 22 个 schema |
 | `command` | 仓库内构建产物 | 覆盖要启动的可执行文件；环境变量 `RUST_ANYTHING_BIN` 是次级回退 |
 | `toolCallTimeoutMs` | 15 分钟 | 单次调用预算；`gate`、`bench`、`app record` 会编译 crate 并回放语料 |
 | `env` | `{}` | 提供给 server 的额外环境变量，例如 `RUSTUP_TOOLCHAIN` |
@@ -54,12 +55,12 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 
 ## 成本与限制
 
-- 16 个工具 schema 加 3 个共享 MCP 资源工具，每个 agent 约 7k 请求 token。
+- 22 个工具 schema 加 3 个共享 MCP 资源工具，每个 agent 约 8k 请求 token。
 - 每个挂载该行的会话会各自启动一个 server 进程。
 - 只有 Web 与 Desktop 的 `standard` preset 挂载它，随包的 `dsh-rust-anything` 技能也由同一个 preset 提供；`minimal`、`ptc` 以及 headless、ACP、SDK profile 两者都没有。
 - 打包的 Desktop 应用与 Python SDK 可执行文件只装了插件、没带 CLI，因此那里不会出现这些工具；技能仍会列出，并要求 Agent 停下来说明，而不是自行安装。
 - 生成的 crate 声明 `rust-version = "1.97"`，请用该版本或更新的工具链构建。
-- 工具会执行被录制的代码并往工作区写 crate：把一次运行当作以 agent 的环境执行那段代码。
+- 工具会执行被录制的代码、往工作区写 crate，`enable` 还会改写你源码里被迁移函数的调用点：把一次运行当作以 agent 的环境执行那段代码，并检查 `enable` 的 diff。
 
 ## 出问题怎么办
 

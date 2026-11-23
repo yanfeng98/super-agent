@@ -1,6 +1,6 @@
 {
   "name": "rust-anything",
-  "version": "2.1.0",
+  "version": "3.3.0",
   "description": "Rewrite your app in Rust, one piece at a time, checked against the original's recorded behavior at every step: profile, bridge, record, diff, bench, shadow and gate, for TypeScript/JavaScript, Python, C, Go, Ruby and Java, with whole-app record and replay for PHP and C#. Uses the rust-anything CLI (cargo install rust-anything or npm install -g rust-anything).",
   "author": {
     "name": "Erkam Yaman",

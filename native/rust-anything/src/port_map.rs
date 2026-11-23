@@ -1,10 +1,10 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::bridge::{MANIFEST, Manifest};
+use crate::bridge::{MANIFEST, Manifest, SCHEMA};
 use crate::front_door::APP_DIR;
 use crate::harness::CASES;
 use crate::recording;
@@ -17,8 +17,20 @@ pub struct PortMap {
     pub ports: Vec<Port>,
     pub not_ported: Vec<Unported>,
     pub glue: Vec<Glue>,
+    /// Crate folders under `rust/` whose manifest could not be read. `map` has to skip them, and a
+    /// skipped port is not a missing port: the file says so instead of listing the unit as unported.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub crate_errors: Vec<String>,
+    /// Units a broken manifest still names: they are covered, so they belong in the total even
+    /// though no `Port` could be built for them.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub covered_by_broken: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub analyze_error: Option<String>,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Serialize)]
@@ -61,18 +73,55 @@ impl PortMap {
 }
 
 pub fn map(root: &Path, extra: &[PathBuf]) -> Result<PortMap> {
-    let root = std::fs::canonicalize(root)?;
+    let root =
+        std::fs::canonicalize(root).with_context(|| format!("mapping {}", root.display()))?;
     let mut crate_dirs = manifests(&root);
     for dir in extra {
-        crate_dirs.extend(manifests(&std::fs::canonicalize(dir)?));
+        let dir =
+            std::fs::canonicalize(dir).with_context(|| format!("mapping {}", dir.display()))?;
+        crate_dirs.extend(manifests(&dir));
     }
     crate_dirs.sort();
     crate_dirs.dedup();
 
     let mut ports = Vec::new();
+    let mut crate_errors = Vec::new();
+    let mut covered_by_broken: Vec<String> = Vec::new();
     for dir in crate_dirs {
-        let Ok(m) = Manifest::load(&dir) else {
-            continue;
+        let m = match Manifest::load(&dir) {
+            Ok(m) => m,
+            Err(e) => {
+                // The manifest did not load, but its JSON can still say what it covers and where:
+                // a folder that belongs to another repository stays skipped without a word, and a
+                // local one still covers its unit, so the unit is not reported as unported.
+                let raw: Option<serde_json::Value> = std::fs::read_to_string(dir.join(MANIFEST))
+                    .ok()
+                    .and_then(|t| serde_json::from_str(&t).ok());
+                // Foreign only when the root actually resolves somewhere else: a `root` that does
+                // not exist says nothing about ownership, and its unit still belongs here.
+                let foreign = raw
+                    .as_ref()
+                    .and_then(|v| v["root"].as_str())
+                    .and_then(|r| std::fs::canonicalize(dir.join(r)).ok())
+                    .is_some_and(|resolved| resolved != root);
+                let other_schema = raw
+                    .as_ref()
+                    .and_then(|v| v["schema"].as_str())
+                    .is_some_and(|s| s != SCHEMA);
+                if foreign || other_schema {
+                    continue;
+                }
+                if let Some(unit) = raw.as_ref().and_then(|v| v["unit"].as_str()) {
+                    covered_by_broken.push(unit.to_string());
+                }
+                let shown = dir
+                    .strip_prefix(&root)
+                    .unwrap_or(&dir)
+                    .display()
+                    .to_string();
+                crate_errors.push(format!("`{shown}`: {e:#}"));
+                continue;
+            }
         };
         if std::fs::canonicalize(&m.root).ok().as_deref() != Some(root.as_path()) {
             continue;
@@ -81,7 +130,7 @@ pub fn map(root: &Path, extra: &[PathBuf]) -> Result<PortMap> {
     }
     ports.sort_by(|a, b| a.unit.cmp(&b.unit).then(a.crate_dir.cmp(&b.crate_dir)));
 
-    let (not_ported, analyze_error) = match crate::analyze::analyze(&root) {
+    let (not_ported, broken_units, analyze_error) = match crate::analyze::analyze(&root) {
         Ok(report) => {
             let order = |id: &str| {
                 report
@@ -90,11 +139,18 @@ pub fn map(root: &Path, extra: &[PathBuf]) -> Result<PortMap> {
                     .position(|s| s == id)
                     .unwrap_or(usize::MAX)
             };
-            let mut units: Vec<_> = report
+            let unported: Vec<_> = report
                 .units
                 .iter()
                 .filter(|u| !ports.iter().any(|p| covers(&p.unit, &u.id, &u.files)))
                 .collect();
+            // A unit a broken manifest still names is covered, but it is still a unit of this
+            // repository: the report counts it, or the summary reads as if it did not exist.
+            let (covered, mut units): (Vec<_>, Vec<_>) = unported.into_iter().partition(|u| {
+                covered_by_broken
+                    .iter()
+                    .any(|unit| covers(unit, &u.id, &u.files))
+            });
             units.sort_by(|a, b| {
                 order(&a.id)
                     .cmp(&order(&b.id))
@@ -110,9 +166,9 @@ pub fn map(root: &Path, extra: &[PathBuf]) -> Result<PortMap> {
                     exports: u.exports,
                 })
                 .collect();
-            (units, None)
+            (units, covered.len(), None)
         }
-        Err(e) => (Vec::new(), Some(format!("{e:#}"))),
+        Err(e) => (Vec::new(), 0, Some(format!("{e:#}"))),
     };
 
     Ok(PortMap {
@@ -120,6 +176,8 @@ pub fn map(root: &Path, extra: &[PathBuf]) -> Result<PortMap> {
         root,
         ports,
         not_ported,
+        crate_errors,
+        covered_by_broken: broken_units,
         analyze_error,
     })
 }
@@ -200,7 +258,7 @@ fn render(out: &mut String, map: &PortMap) -> std::fmt::Result {
         |n| n.to_string_lossy().into(),
     );
     writeln!(out, "# Port map: {name}\n")?;
-    let total = map.ports.len() + map.not_ported.len();
+    let total = map.ports.len() + map.not_ported.len() + map.covered_by_broken;
     write!(
         out,
         "{} of {} units have a Rust port",
@@ -218,6 +276,18 @@ fn render(out: &mut String, map: &PortMap) -> std::fmt::Result {
             out,
             "; **{n} changed upstream** since they were recorded: re-record them and run `diff`.\n"
         )?,
+    }
+
+    if !map.crate_errors.is_empty() {
+        writeln!(out, "## Crate folders that could not be read\n")?;
+        writeln!(
+            out,
+            "A folder under `rust/` whose manifest does not parse: fix its `rust-anything.json` and run `map` again. A unit the file still names is not listed as unported, so it does not read as work to do:\n"
+        )?;
+        for e in &map.crate_errors {
+            writeln!(out, "- {e}")?;
+        }
+        writeln!(out)?;
     }
 
     writeln!(out, "## Ports\n")?;

@@ -1,0 +1,4 @@
+# Upstream fixtures live under directories the checkout root ignores by name
+# (`lib/`). They are part of the vendored crate, and `analyze` walks them with
+# gitignore semantics, so they must stay visible here.
+!tests/fixtures/**

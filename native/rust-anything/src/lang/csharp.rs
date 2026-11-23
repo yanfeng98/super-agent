@@ -45,8 +45,9 @@ fn attribute(tag: &str, name: &str) -> Option<String> {
     Some(tag[start..start + end].to_string())
 }
 
-/// `Include` of each `<PackageReference>` in a project file.
+/// `Include` of each `<PackageReference>` in a project file, outside `<!-- -->` comments.
 pub fn package_references(text: &str) -> Vec<String> {
+    let text = super::syntax::without_xml_comments(text);
     text.split("<PackageReference")
         .skip(1)
         .filter_map(|tag| attribute(tag.split('>').next().unwrap_or(""), "Include"))
@@ -65,10 +66,11 @@ fn element(text: &str, tag: &str) -> Option<String> {
 
 /// A project of tests: it references a test framework or says `IsTestProject`.
 pub fn is_test_project(text: &str) -> bool {
-    package_references(text)
+    let text = super::syntax::without_xml_comments(text);
+    package_references(&text)
         .iter()
         .any(|d| TEST_PACKAGES.iter().any(|t| d.starts_with(t)))
-        || element(text, "IsTestProject").as_deref() == Some("true")
+        || element(&text, "IsTestProject").as_deref() == Some("true")
 }
 
 pub fn discover(root: &Path) -> Result<Workspace> {
@@ -112,6 +114,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
                 dir,
                 deps,
                 dev_deps,
+                namespaces: Vec::new(),
             });
         } else if name.ends_with(".cs") {
             files.push(rel);
@@ -126,6 +129,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             src_root: String::new(),
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     packages.sort_by(|a, b| a.dir.cmp(&b.dir));
@@ -314,6 +318,20 @@ pub fn scan(source: &str) -> FileFacts {
     facts
 }
 
+/// The file's `using` directives as written (`using static`, aliases and `global using` too).
+pub fn using_directives(source: &str) -> Vec<String> {
+    let Some(tree) = syntax::parse(&language(), source) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    syntax::walk(tree.root_node(), |node| {
+        if node.kind() == "using_directive" {
+            out.push(text(node, source).trim().to_string());
+        }
+    });
+    out
+}
+
 /// The folder a namespace names, relative to a project: `Acme.Textkit.Text` in the project
 /// `Acme.Textkit` is its `Text/` folder.
 fn namespace_dir(namespace: &str, project: &str) -> String {
@@ -387,8 +405,155 @@ fn split_top(text: &str) -> Vec<String> {
     out
 }
 
+/// A record's or plain class's `(property, C# type)` pairs; `None` when it cannot cross.
+type Members = Option<Vec<(String, String)>>;
+
+thread_local! {
+    static SHAPES: std::cell::RefCell<HashMap<String, Members>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+fn shape_members(node: Node, source: &str) -> Members {
+    let mods = modifiers(node, source);
+    if !mods.iter().any(|m| m == "public")
+        || mods
+            .iter()
+            .any(|m| matches!(m.as_str(), "static" | "abstract"))
+    {
+        return None;
+    }
+    let children = named_children(node);
+    if children
+        .iter()
+        .any(|c| matches!(c.kind(), "type_parameter_list" | "base_list"))
+    {
+        return None;
+    }
+    let mut members = Vec::new();
+    let positional = children.iter().find(|c| c.kind() == "parameter_list");
+    if let Some(list) = positional {
+        if node.kind() != "record_declaration" {
+            return None;
+        }
+        for p in named_children(*list) {
+            let ty = p.child_by_field_name("type")?;
+            let name = p.child_by_field_name("name")?;
+            members.push((text(name, source).to_string(), text(ty, source).to_string()));
+        }
+    }
+    if let Some(body) = node.child_by_field_name("body") {
+        for m in named_children(body) {
+            let mods = modifiers(m, source);
+            let public = mods.iter().any(|m| m == "public") && !mods.iter().any(|m| m == "static");
+            match m.kind() {
+                "constructor_declaration" => {
+                    let takes = m
+                        .child_by_field_name("parameters")
+                        .is_some_and(|l| !named_children(l).is_empty());
+                    if takes {
+                        return None;
+                    }
+                }
+                "property_declaration" if public => {
+                    let Some(accessors) = m.child_by_field_name("accessors") else {
+                        continue;
+                    };
+                    let names: Vec<&str> = named_children(accessors)
+                        .into_iter()
+                        .filter_map(|a| a.child_by_field_name("name").map(|n| text(n, source)))
+                        .collect();
+                    let auto = named_children(accessors)
+                        .into_iter()
+                        .all(|a| a.child_by_field_name("body").is_none());
+                    if !(auto
+                        && names.contains(&"get")
+                        && names.iter().any(|n| matches!(*n, "set" | "init")))
+                    {
+                        continue;
+                    }
+                    let ty = m.child_by_field_name("type")?;
+                    let name = m.child_by_field_name("name")?;
+                    members.push((text(name, source).to_string(), text(ty, source).to_string()));
+                }
+                "field_declaration" if public => return None,
+                _ => {}
+            }
+        }
+    }
+    (!members.is_empty()).then_some(members)
+}
+
+fn collect_shapes(
+    node: Node,
+    source: &str,
+    out: &mut HashMap<String, Option<Vec<(String, String)>>>,
+) {
+    for child in named_children(node) {
+        match child.kind() {
+            "record_declaration" | "class_declaration" | "struct_declaration" => {
+                if let Some(name) = child.child_by_field_name("name") {
+                    let name = text(name, source).to_string();
+                    let members = shape_members(child, source);
+                    out.entry(name).and_modify(|e| *e = None).or_insert(members);
+                }
+                if let Some(body) = child.child_by_field_name("body") {
+                    collect_shapes(body, source, out);
+                }
+            }
+            "namespace_declaration" | "file_scoped_namespace_declaration" | "declaration_list" => {
+                collect_shapes(child, source, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Makes `exports` read the project's records and plain classes (public auto-properties, no
+/// constructor arguments) on this thread, so methods taking or returning them can cross as JSON
+/// objects.
+pub fn use_shapes(root: &Path) {
+    let mut shapes = HashMap::new();
+    if let Ok(ws) = discover(root) {
+        for file in ws.files.iter().filter(|f| f.kind == FileKind::Source) {
+            let Ok(source) = std::fs::read_to_string(root.join(&file.path)) else {
+                continue;
+            };
+            if let Some(tree) = syntax::parse(&language(), &source) {
+                collect_shapes(tree.root_node(), &source, &mut shapes);
+            }
+        }
+    }
+    SHAPES.with(|s| *s.borrow_mut() = shapes);
+}
+
+fn shape_ts(name: &str, depth: usize) -> Option<Result<String, String>> {
+    let members = SHAPES.with(|s| s.borrow().get(name).cloned())?;
+    let Some(members) = members else {
+        return Some(Err(format!(
+            "uses the type `{name}`, which is not a plain record or class (generic, inherited, \
+             with constructor arguments, public fields, or declared twice)"
+        )));
+    };
+    if depth > 8 {
+        return Some(Err(format!("uses the recursive type `{name}`")));
+    }
+    let mut fields = Vec::new();
+    for (field, ty) in members {
+        match to_ts(&ty, depth + 1) {
+            Ok(t) => fields.push(format!("{field}: {t}")),
+            Err(reason) => return Some(Err(format!("`{name}.{field}` {reason}"))),
+        }
+    }
+    Some(Ok(format!("{{ {} }}", fields.join("; "))))
+}
+
 /// A C# type in the TS-like dialect, or why the bridge cannot carry it.
 pub fn csharp_to_ts(t: &str) -> Result<String, String> {
+    to_ts(t, 0)
+}
+
+fn to_ts(t: &str, depth: usize) -> Result<String, String> {
+    let csharp_to_ts = |t: &str| to_ts(t, depth);
     let t = t.trim();
     if let Some(inner) = t.strip_suffix('?') {
         return csharp_to_ts(inner).map(|i| format!("{i} | undefined"));
@@ -460,7 +625,14 @@ pub fn csharp_to_ts(t: &str) -> Result<String, String> {
         "IAsyncEnumerable" | "IEnumerator" | "Span" | "ReadOnlySpan" | "Memory" => {
             return Err(format!("uses `{head}`"));
         }
-        other => return Err(format!("uses the type `{other}`")),
+        other => {
+            if args.is_empty()
+                && let Some(shape) = shape_ts(other, depth)
+            {
+                return shape;
+            }
+            return Err(format!("uses the type `{other}`"));
+        }
     })
 }
 
@@ -524,10 +696,19 @@ fn method_export(
                 blocker.get_or_insert(reason);
                 "unknown".into()
             });
+            let after = p
+                .child_by_field_name("name")
+                .map_or(usize::MAX, |n| n.end_byte());
+            let default = named_children(p)
+                .into_iter()
+                .find(|c| c.start_byte() >= after)
+                .map(|d| text(d, source).to_string());
             signature.push(format!("{ty} {pname}"));
             params.push(Param {
                 name: pname,
                 ts_type,
+                optional: default.is_some(),
+                default,
                 native_type: Some(ty),
                 ..Default::default()
             });
@@ -716,6 +897,41 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
         assert_eq!(ws.files[0].kind, FileKind::Test);
         assert_eq!(ws.files[1].kind, FileKind::Source);
+    }
+
+    #[test]
+    fn resolves_records_and_plain_classes() {
+        let src = "namespace A;\n\
+                   public record Point(double X, double Y);\n\
+                   public class Box { public string Label { get; set; } = \"\"; public int[] Sizes { get; init; } }\n\
+                   public class Made { public Made(int n) {} public int N { get; set; } }\n\
+                   public class Kid : Box { public int Age { get; set; } }\n\
+                   public class Holder { public decimal Amount { get; set; } }\n";
+        let tree = syntax::parse(&language(), src).unwrap();
+        let mut shapes = HashMap::new();
+        collect_shapes(tree.root_node(), src, &mut shapes);
+        SHAPES.with(|s| *s.borrow_mut() = shapes);
+        assert_eq!(csharp_to_ts("Point").unwrap(), "{ X: number; Y: number }");
+        assert_eq!(
+            csharp_to_ts("List<Box>").unwrap(),
+            "({ Label: string; Sizes: int[] })[]"
+        );
+        assert!(
+            csharp_to_ts("Made")
+                .unwrap_err()
+                .contains("not a plain record")
+        );
+        assert!(
+            csharp_to_ts("Kid")
+                .unwrap_err()
+                .contains("not a plain record")
+        );
+        assert!(
+            csharp_to_ts("Holder")
+                .unwrap_err()
+                .contains("`Holder.Amount` uses `decimal`")
+        );
+        SHAPES.with(|s| s.borrow_mut().clear());
     }
 
     #[test]

@@ -264,6 +264,15 @@ pub fn analyze_lang(root: &Path, lang: Lang) -> Result<Report> {
         .iter()
         .map(|file| {
             let text = std::fs::read_to_string(root.join(&file.path)).ok()?;
+            if lang == Lang::C {
+                let mut facts = crate::lang::scan(lang, &file.path, &text);
+                if let Some(header) = own_header(root, &file.path) {
+                    facts
+                        .imports
+                        .extend(crate::lang::scan(lang, &header.0, &header.1).imports);
+                }
+                return Some(facts);
+            }
             if lang != Lang::Ts {
                 return Some(crate::lang::scan(lang, &file.path, &text));
             }
@@ -280,11 +289,22 @@ pub fn analyze_lang(root: &Path, lang: Lang) -> Result<Report> {
     Ok(report)
 }
 
+fn own_header(root: &Path, unit: &str) -> Option<(String, String)> {
+    let stem = unit.strip_suffix(".c")?;
+    let name = stem.rsplit('/').next().unwrap_or(stem);
+    [format!("{stem}.h"), format!("include/{name}.h")]
+        .into_iter()
+        .find_map(|h| Some((h.clone(), std::fs::read_to_string(root.join(&h)).ok()?)))
+}
+
 /// Counts each unit's exports that can cross a bridge, with the rules `bridge` applies. A unit
 /// whose exports are all JS-shaped (plugin objects, callbacks) cannot be ported without an API
 /// change: it is marked `caution` and left out of `start_here`.
 fn check_bridgeable(root: &Path, report: &mut Report, lang: Lang) {
-    use crate::ts::exports::{exported_classes, exported_functions};
+    use crate::ts::exports::exported_classes;
+    if lang == Lang::C {
+        crate::lang::c::use_typedefs(root);
+    }
     for unit in &mut report.units {
         if matches!(unit.status, Status::Keep | Status::Blocked) {
             continue;
@@ -302,17 +322,20 @@ fn check_bridgeable(root: &Path, report: &mut Report, lang: Lang) {
                     .iter()
                     .filter(|f| crate::bridge::js_only_reason(f, &[]).is_none())
                     .count();
-                bridgeable += classes.iter().filter(|c| c.blocker.is_none()).count();
+                bridgeable += classes
+                    .iter()
+                    .filter(|c| crate::bridge::class_reason(c, &[], false).is_none())
+                    .count();
                 continue;
             }
-            for mut f in exported_functions(file, &text) {
+            for f in crate::bridge::ts_functions(root, file, &text, &types) {
                 exports += 1;
-                crate::bridge::substitute_constraints(&mut f, &types);
                 bridgeable += usize::from(crate::bridge::js_only_reason(&f, &types).is_none());
             }
             for class in exported_classes(file, &text) {
                 exports += 1;
-                bridgeable += usize::from(class.blocker.is_none());
+                bridgeable +=
+                    usize::from(crate::bridge::class_reason(&class, &types, true).is_none());
             }
         }
         unit.exports = exports;
@@ -321,9 +344,15 @@ fn check_bridgeable(root: &Path, report: &mut Report, lang: Lang) {
             unit.status = Status::Caution;
             unit.notes.insert(
                 0,
-                "Every export is JS-shaped (functions, plugin objects, iterators): porting the logic \
-                 means adding a data-only function, an API change."
-                    .into(),
+                if lang == Lang::C {
+                    "No export can cross the C ABI bridge (contexts, function pointers, structs by \
+                     value, pointers it cannot pair with a length): bridge a wrapper with plain \
+                     arguments, an API change."
+                } else {
+                    "Every export is JS-shaped (functions, plugin objects, iterators): porting the \
+                     logic means adding a data-only function, an API change."
+                }
+                .into(),
             );
         }
     }
@@ -464,6 +493,13 @@ fn build(root: &Path, ws: &Workspace, facts: &[Option<FileFacts>], lang: Lang) -
         unit.loops += f.loops;
         unit.parse_errors += f.parse_errors;
         unit.platforms.extend(f.platforms.iter().copied());
+        if lang == Lang::C && crate::lang::c::in_arch_dir(&file.path) {
+            let entry = unit.risks.entry(Risk::PlatformSpecific).or_default();
+            entry.0 += 1;
+            if entry.1.len() < SAMPLES_PER_RISK {
+                entry.1.push(format!("{}:1", file.path));
+            }
+        }
         for (risk, lines) in &f.risks {
             let entry = unit.risks.entry(*risk).or_default();
             entry.0 += lines.len();
@@ -702,13 +738,31 @@ fn score(u: usize, ctx: &Ctx) -> UnitReport {
         ));
     }
     if unit.deps.is_empty() && !keep {
-        notes.push("Leaf: imports no other unit.".into());
+        if unit.workspace_deps.is_empty() {
+            notes.push("Leaf: imports no other unit.".into());
+        } else {
+            let names: Vec<String> = unit
+                .workspace_deps
+                .iter()
+                .map(|d| format!("`{d}`"))
+                .collect();
+            notes.push(format!(
+                "Imports {} from another workspace package: port {} first.",
+                names.join(", "),
+                if names.len() == 1 {
+                    "that package"
+                } else {
+                    "those packages"
+                }
+            ));
+        }
     }
     if unit.direct_tests > 0 {
-        notes.push(format!(
-            "{} test files import it directly.",
-            unit.direct_tests
-        ));
+        notes.push(if unit.direct_tests == 1 {
+            "1 test file imports it directly.".to_string()
+        } else {
+            format!("{} test files import it directly.", unit.direct_tests)
+        });
     } else if package_tests == 0 && !keep {
         notes.push(
             "No tests found: write characterization tests against the original code first.".into(),

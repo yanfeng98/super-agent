@@ -196,7 +196,9 @@ Taken while building, without a question to the user (the conventional option, w
 28. **Shape is server, else CLI, else library**: a server that also has a `main` is ported as a
     server; the library shape waits for milestone 6.
 29. **Every dependency means imported or declared**: a declared one no unit imports is listed with
-    `used_by: 0` (often an import name that differs from the package name, or a dead dependency).
+    `used_by: 0` (a dead dependency, or an import name the crate table does not tie to the
+    package name). Names the table resolves to the same row are one dependency, with every
+    spelling in `names`.
 30. **Decisions are generated only where a fact cannot decide**: the shape, each keep and blocked
     unit, each dependency with fit `none`, `unknown` or `partial`, and each tangled piece; each
     comes with the recommended answer, as the grilling round asks.

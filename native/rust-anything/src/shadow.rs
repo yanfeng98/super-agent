@@ -57,6 +57,25 @@ pub fn shadow(crate_dir: &Path, out: Option<&Path>) -> Result<ShadowOutcome> {
             exports: manifest.exports.iter().map(|f| f.name.clone()).collect(),
         });
     }
+    if manifest.language == crate::lang::Lang::Php {
+        bail!(
+            "PHP cannot redefine a function once the original is loaded, so there is no shadow \
+             module for PHP yet; once `diff` passes, require {} in place of the original files",
+            crate_dir
+                .join(crate::codegen_php::wrapper_path(&manifest))
+                .display()
+        );
+    }
+    if manifest.language == crate::lang::Lang::Csharp {
+        bail!(
+            "C# binds calls when it compiles, so there is no shadow module for C# yet; once `diff` \
+             passes, compile {} into the project and call the `<namespace>.Rust` classes (or alias \
+             them with `using`), with the built library next to the app",
+            crate_dir
+                .join(crate::codegen_csharp::wrapper_path(&manifest))
+                .display()
+        );
+    }
     if manifest.language == crate::lang::Lang::Ruby {
         let path = match out {
             Some(p) => p.to_path_buf(),
@@ -320,7 +339,7 @@ fn with_kill_switch(text: &str, crate_name: &str) -> String {
     )
 }
 
-fn relative(from: &Path, to: &Path) -> String {
+pub(crate) fn relative(from: &Path, to: &Path) -> String {
     let from: Vec<Component> = from.components().collect();
     let to_parts: Vec<Component> = to.components().collect();
     let common = from

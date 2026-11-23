@@ -35,10 +35,21 @@ fn whole_app(out: &mut String, w: &crate::whole_app::WholeApp) -> std::fmt::Resu
         )?;
         writeln!(out, "| --- | --- | --- | --- | --- | --- |")?;
         for d in &w.dependencies {
+            let others: Vec<String> = d
+                .names
+                .iter()
+                .filter(|n| **n != d.name)
+                .map(|n| format!("`{n}`"))
+                .collect();
             writeln!(
                 out,
-                "| `{}` | {} | {} | {} | {} | {} |",
+                "| `{}`{} | {} | {} | {} | {} | {} |",
                 d.name,
+                if others.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (also {})", others.join(", "))
+                },
                 if d.declared { "yes" } else { "no" },
                 d.used_by,
                 d.crates.unwrap_or("?"),
@@ -86,8 +97,13 @@ fn render(out: &mut String, r: &Report, title: &str) -> std::fmt::Result {
     )?;
     writeln!(
         out,
-        "{} packages, {} source files ({} lines), {} test files, {} UI files, grouped into {} units.\n",
-        s.packages, s.source_files, s.loc, s.test_files, s.ui_files, s.units
+        "{}, {} ({} lines), {}, {}, grouped into {}.\n",
+        count(s.packages, "package"),
+        count(s.source_files, "source file"),
+        s.loc,
+        count(s.test_files, "test file"),
+        count(s.ui_files, "UI file"),
+        count(s.units, "unit")
     )?;
     for warning in &r.warnings {
         writeln!(out, "> **Warning:** {warning}\n")?;
@@ -105,17 +121,31 @@ fn render(out: &mut String, r: &Report, title: &str) -> std::fmt::Result {
     if s.parse_errors > 0 {
         writeln!(
             out,
-            "> {} files had parse errors; their units are marked partial.\n",
-            s.parse_errors
+            "> {} had parse errors; their units are marked caution.\n",
+            count(s.parse_errors, "file")
         )?;
     }
 
     writeln!(out, "## Start here\n")?;
     if r.start_here.is_empty() {
-        writeln!(
-            out,
-            "No unit is a safe first port yet. See the blocked units and dependencies below.\n"
-        )?;
+        if s.blocked > 0 {
+            writeln!(
+                out,
+                "No unit is a safe first port yet. See the blocked units and dependencies below.\n"
+            )?;
+        } else if s.units == 0 {
+            writeln!(out, "No unit to port was found.\n")?;
+        } else if s.ready + s.caution == 0 {
+            writeln!(
+                out,
+                "No unit to port first: every unit stays in the source language.\n"
+            )?;
+        } else {
+            writeln!(
+                out,
+                "No unit exports anything a bridge can carry yet: the units below expose constants, types or nothing a port could call.\n"
+            )?;
+        }
     } else {
         writeln!(
             out,
@@ -165,12 +195,12 @@ fn render(out: &mut String, r: &Report, title: &str) -> std::fmt::Result {
         };
         writeln!(
             out,
-            "### {}. {} (`{}`, {}, {} test files{deps})\n",
+            "### {}. {} (`{}`, {}, {}{deps})\n",
             p.order,
             p.name,
             if p.dir.is_empty() { "." } else { &p.dir },
             p.runtime,
-            p.test_files
+            count(p.test_files, "test file")
         )?;
         writeln!(
             out,
@@ -248,13 +278,21 @@ fn render(out: &mut String, r: &Report, title: &str) -> std::fmt::Result {
     Ok(())
 }
 
+fn count(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
 fn unit_detail(out: &mut String, u: &UnitReport) -> std::fmt::Result {
     writeln!(out, "### `{}`\n", u.id)?;
     writeln!(
         out,
-        "{} lines in {} files, wave {}, priority {}, readiness {}, bridge **{}**.\n",
+        "{} lines in {}, wave {}, priority {}, readiness {}, bridge **{}**.\n",
         u.loc,
-        u.files.len(),
+        count(u.files.len(), "file"),
         u.wave,
         u.priority,
         u.readiness,

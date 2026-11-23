@@ -4,34 +4,42 @@
 
 <h1 align="center">rust-anything</h1>
 
-<p align="center"><b>用 Rust 重寫你的應用程式，並證明它的行為依然完全相同。</b></p>
-
-<p align="center">2.0 新功能：<a href="real-world.md#prettier">Prettier 已移植到 Rust</a>。提速 19 倍 · 17,224 次錄製執行中 15,837 次完全由 Rust 執行 · 全部逐位元組一致</p>
-
-<p align="center">
-  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io 版本"></a>
-  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm 版本"></a>
-  <a href="https://github.com/erkamyaman/rust-anything/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/erkamyaman/rust-anything/ci.yml?branch=main&label=tests" alt="測試狀態"></a>
-  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub Stars"></a>
-  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
-</p>
-
-<p align="center">
-  <a href="#快速開始">快速開始</a> ·
-  <a href="#支援語言">支援語言</a> ·
-  <a href="real-world.md">真實移植案例</a> ·
-  <a href="how-it-works.md#how-it-works">運作原理</a> ·
-  <a href="whole-apps.md#port-a-whole-app">整個應用程式</a> ·
-  <a href="faq.md#faq">常見問題</a>
-</p>
-
-<p align="center">由 <a href="https://github.com/erkamyaman">erKam Yaman</a> 在土耳其 🇹🇷 打造 · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ 贊助我</a></p>
-
-<p align="center">贊助商：<a href="https://coderabbit.ai"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
-
-<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · 繁體中文 · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a></sub></p>
-
+<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · 繁體中文 · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a> · <a href="README_ES.md">Español</a> · <a href="README_IT.md">Italiano</a></sub></p>
 <p align="center"><sub>本譯文由社群維護，可能落後於<a href="../README.md">英文 README</a>。</sub></p>
+
+<p align="center"><b>用 Rust 重寫你的應用程式，並證明它的行為依然完全相同。</b><br>
+它不會自動翻譯程式碼：Rust 由你的程式設計代理（或你自己）撰寫，rust-anything 負責對照原程式進行驗證。</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/languages/top/erkamyaman/rust-anything?logo=rust&label=Rust&color=CE422B" alt="Rust share of the code">
+  <img src="https://img.shields.io/badge/macOS%20·%20Linux%20·%20Windows-native-2563EB" alt="Native binaries for macOS, Linux and Windows">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT license"></a>
+  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io version"></a>
+  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm version"></a>
+  <br>
+  <a href="https://coderabbit.link/erkamyaman"><img src="https://img.shields.io/coderabbit/prs/github/erkamyaman/rust-anything?labelColor=171717&color=FF570A&label=Reviewed+by+CodeRabbit" alt="Pull requests reviewed by CodeRabbit"></a>
+  <a href="https://github.com/rust-unofficial/awesome-rust#development-tools"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Rust"></a>
+  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
+  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center"><a href="https://github.com/erkamyaman/rust-anything/discussions/127"><img src="https://img.shields.io/badge/Join%20the%20discussion-6E40C9?style=for-the-badge&logo=github&logoColor=white" alt="Join the discussion"></a></p>
+
+<p align="center"><a href="https://trendshift.io/repositories/363468" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/363468/daily?language=Rust" alt="erkamyaman/rust-anything: #1 Rust repository of the day on Trendshift" width="250" height="55"/></a></p>
+
+<p align="center"><b><a href="#快速開始">快速開始</a></b> · <a href="https://github.com/erkamyaman/rust-anything/releases">Releases</a> · <a href="#快速開始">Claude Code plugin</a> · <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=rust-anything">MCP Registry</a> · <a href="real-world.md">真實移植案例</a> · <a href="faq.md#faq">常見問題</a><br>
+<sub><a href="#支援語言">支援語言</a> · <a href="how-it-works.md#how-it-works">運作原理</a> · <a href="whole-apps.md#port-a-whole-app">整個應用程式</a> · <a href="../LICENSE">MIT</a></sub><br>
+由 <a href="https://github.com/erkamyaman">erKam Yaman</a> 在土耳其 🇹🇷 打造 · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ 贊助我</a> · 贊助商：<a href="https://coderabbit.link/erkamyaman"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
+
+<p align="center">2.0 新功能：<a href="real-world.md#prettier">Prettier 已移植到 Rust</a>。提速 19 倍 · 17,224 次錄製執行中 15,861 次完全由 Rust 執行 · 全部逐位元組一致</p>
+
+<p align="center">
+  <img src="assets/prettier.gif" alt="Prettier 與它的 Rust 移植版格式化同樣的 59 個真實檔案，每個檔案一個行程：Prettier 耗時 3.63 s，Rust 移植版 0.20 s，輸出逐位元組相同。" width="820">
+  <br>
+  <sub>在取自 ms、Fuse.js 與 json-server 的 59 個真實檔案上，Prettier 對上它的 Rust 移植版（Apple M4）。輸出逐位元組相同。<a href="real-world.md#prettier">測量方式</a>。</sub>
+</p>
+
+<p align="center"><sub>PHP 與 C#：目前支援錄製、重播和 front door；單元移植即將推出。</sub></p>
 
 <table>
   <tr>
@@ -68,18 +76,36 @@ Rust 重寫程式碼對照該錄製紀錄進行驗證，確認無誤後再繼續
 | json-server，從啟動到第一個回應 | 79 至 85 ms | **8 至 10 ms** |
 | [Fuse.js](real-world.md#fusejs) 在 50,000 個字串中搜尋，每次查詢 | 91.2 ms | **2.8 ms：提速 32 倍** |
 
-Prettier：在 17,224 次錄製執行中，有 15,837 次完全由 Rust 完成格式化，涵蓋 10 種語言（JavaScript、
+Prettier：在 17,224 次錄製執行中，有 15,861 次完全由 Rust 完成格式化，涵蓋 10 種語言（JavaScript、
 TypeScript、JSX、JSON、GraphQL、YAML、Markdown、CSS、SCSS、Less），且全部 17,224 次都與 Prettier
 逐位元組相同，因為尚未移植的部分會回退給 Prettier 處理。json-server：514/514 筆錄製的 HTTP 案例
 在純 Rust 執行檔上全部吻合。以上數據在 Apple M4 上測得，每項執行兩次，計時前先比對每一份輸出
 （[詳細資訊](real-world.md)）。每個小函式呼叫一次 Rust 通常比 JIT 更*慢*；rust-anything 會找出
 真正值得搬移的迴圈，並將整個迴圈移過去。
 
-<p align="center">
-  <img src="assets/prettier.gif" alt="Prettier 與它的 Rust 移植版格式化同樣的 59 個真實檔案，每個檔案一個行程：Prettier 耗時 3.63 s，Rust 移植版 0.20 s，輸出逐位元組相同。" width="820">
-  <br>
-  <sub>在取自 ms、Fuse.js 與 json-server 的 59 個真實檔案上，Prettier 對上它的 Rust 移植版（Apple M4）。輸出逐位元組相同。<a href="real-world.md#prettier">測量方式</a>。</sub>
-</p>
+## 只移植慢的部分
+
+你不必移植整個應用程式。把 `go` 指向一個太慢的指令，它會移植真正耗時的那一個函式：
+
+```sh
+rust-anything go --agent claude -- python3 app.py
+```
+
+它會對這次執行進行效能剖析，挑出值得搬移的最外層函式（是迴圈，而不是迴圈裡的小呼叫；剖析結果
+顯示需要時還會批次處理），以自動產生的輸入以及你這次執行實際發出的呼叫來錄製它，然後把
+`src/port.rs` 交給你的代理程式（`claude`、`codex`，或任何從 stdin 讀取提示詞的指令；不加
+`--agent` 時，它會替你寫好 `TASK.md` 後停止）。只有每一筆錄製案例都吻合且 `gate` 通過，它才會
+啟用這個函式。接著：
+
+```sh
+rust-anything report rust/dedupe-rs     # 供 pull request 使用的 REPORT.md 與 card.svg
+rust-anything disable rust/dedupe-rs    # 回到原版程式，逐位元組相同
+```
+
+上表中的 [Fuse.js](real-world.md#fusejs) 那一列就是這種形式：Fuse 對單一字串的評分以批次方式套用到
+整個清單並搬到 Rust，而物件鍵、延伸搜尋與其餘部分仍留在 JavaScript，在 50,000 個字串上每次查詢
+從 91.2 ms 降到 2.8 ms。可以在 [`tests/fixtures/go-fuzzy`](../tests/fixtures/go-fuzzy)（一個 20 行
+的 Python 去重程式）上試試 `go`。開啟與關閉移植的所有方式：[Switch a port on and off](how-it-works.md#switch-a-port-on-and-off)。
 
 <p align="center">
   <img src="assets/json-server.gif" alt="json-server 作為 Node 伺服器與作為單一 Rust 執行檔的對比：閒置記憶體 74 MB 與 3.5 MB，從啟動到第一個回應 79 至 85 ms 與 8 至 10 ms，514 筆錄製的 HTTP 案例全部吻合。" width="820">
@@ -230,7 +256,7 @@ C# 的運作方式相同：`analyze` 會讀取 `.csproj` 專案與其 NuGet 套�
 </p>
 
 <p align="center">
-  <a href="https://coderabbit.ai">
+  <a href="https://coderabbit.link/erkamyaman">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/sponsors/company-dark.svg">
       <img src="assets/sponsors/company-light.svg" width="800" alt="企業贊助商：CodeRabbit">
@@ -249,6 +275,7 @@ C# 的運作方式相同：`analyze` 會讀取 `.csproj` 專案與其 NuGet 套�
 
 <p align="center">
   <a href="https://github.com/sponsors/erkamyaman"><img src="https://img.shields.io/badge/%E6%88%90%E7%82%BA%E8%B4%8A%E5%8A%A9%E5%95%86-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="成為贊助商"></a>
+  <a href="https://buymeacoffee.com/erkamyaman"><img src="https://img.shields.io/badge/Buy_me_a_coffee-%E2%98%95-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 ## 參與貢獻

@@ -99,6 +99,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
                 dir,
                 deps: requirements(&text),
                 dev_deps: Vec::new(),
+                namespaces: Vec::new(),
             });
         } else if name.ends_with(".go") {
             let kind = if name.ends_with("_test.go") {
@@ -118,6 +119,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             src_root: String::new(),
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     modules.sort_by(|a, b| a.dir.cmp(&b.dir));

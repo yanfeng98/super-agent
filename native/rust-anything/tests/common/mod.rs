@@ -50,6 +50,16 @@ pub fn have_with(program: &str, args: &[&str], need: &str) -> bool {
     runs(program, args) || missing(program, need)
 }
 
+/// Ruby 3 or newer, which a test that builds a magnus/rb-sys extension needs: macOS's system
+/// Ruby is 2.6, and rb-sys does not build on it.
+pub fn have_ruby_3() -> bool {
+    have_with(
+        "ruby",
+        &["-e", "exit(RUBY_VERSION.to_i >= 3 ? 0 : 1)"],
+        "3 or newer was not found",
+    )
+}
+
 /// `python3`, else `python` (Windows installs only the latter); required as `python3` or `python`.
 pub fn python() -> Option<&'static str> {
     if let Some(found) = ["python3", "python"]

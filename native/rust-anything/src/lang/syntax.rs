@@ -38,3 +38,64 @@ pub fn named_children<'t>(node: Node<'t>) -> Vec<Node<'t>> {
 pub fn loc(text: &str) -> usize {
     text.lines().filter(|l| !l.trim().is_empty()).count()
 }
+
+/// `text` with its `<!-- -->` comments removed (a `pom.xml`, a project file).
+pub fn without_xml_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("<!--") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("-->") {
+            Some(end) => rest = &rest[start + end + 3..],
+            None => {
+                rest = "";
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A build file with its comments removed, so a commented-out `implementation("a:b:1")` is not
+/// read as a dependency the project declares. `//` counts only at the start of a line: a trailing
+/// one follows code the project does declare.
+pub fn without_slash_comments(text: &str) -> String {
+    let mut unblocked = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut quote = None;
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(q) => {
+                unblocked.push(c);
+                if c == '\\' {
+                    if let Some(escaped) = chars.next() {
+                        unblocked.push(escaped);
+                    }
+                } else if c == q || c == '\n' {
+                    quote = None;
+                }
+            }
+            None if c == '"' || c == '\'' => {
+                quote = Some(c);
+                unblocked.push(c);
+            }
+            None if c == '/' && chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut last = ' ';
+                for c in chars.by_ref() {
+                    if last == '*' && c == '/' {
+                        break;
+                    }
+                    last = c;
+                }
+            }
+            None => unblocked.push(c),
+        }
+    }
+    unblocked
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}

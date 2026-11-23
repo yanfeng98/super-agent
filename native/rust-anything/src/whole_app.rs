@@ -41,8 +41,13 @@ pub struct EntryPoint {
 
 #[derive(Debug, Serialize)]
 pub struct Dependency {
+    /// The manifest's spelling when the library is declared, else the one the code imports.
     pub name: String,
-    /// Listed in a manifest (package.json, pyproject, go.mod, Gemfile, pom.xml, ...).
+    /// Every spelling of the library, sorted: the names the code imports and the manifest
+    /// declares that the crate table resolves to the same row (`yaml`, `pyyaml`).
+    pub names: Vec<String>,
+    /// Listed in a manifest (package.json, pyproject, go.mod, Gemfile, pom.xml, ...), under any
+    /// of `names`.
     pub declared: bool,
     /// Units that import it.
     pub used_by: usize,
@@ -309,158 +314,26 @@ fn csproj_files(root: &Path) -> Vec<String> {
     .collect()
 }
 
-fn normalize(lang: Lang, name: &str) -> String {
-    match lang {
-        Lang::Python => name.to_lowercase().replace('_', "-"),
-        _ => name.to_string(),
-    }
-}
-
-/// Dependencies the manifests declare (runtime ones, not dev or test).
+/// Dependencies the manifests declare (runtime ones, not dev or test), as each language's
+/// `discover` reads them. A package's dependency on another package of the same workspace is
+/// not an external one.
 pub fn declared(root: &Path, lang: Lang) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    let name_of = |spec: &str| -> String {
-        spec.trim()
-            .chars()
-            .take_while(|c| c.is_alphanumeric() || "-_.".contains(*c))
-            .collect()
+    let ws = match lang {
+        Lang::Ts => crate::ts::discover::discover(root),
+        _ => crate::lang::discover(lang, root),
     };
-    match lang {
-        Lang::Ts => {
-            if let Ok(pkg) = serde_json::from_str::<Value>(&read(root, "package.json"))
-                && let Some(deps) = pkg["dependencies"].as_object()
-            {
-                out.extend(deps.keys().cloned());
-            }
-        }
-        Lang::Python => {
-            if let Ok(doc) = read(root, "pyproject.toml").parse::<DocumentMut>() {
-                if let Some(list) = doc
-                    .get("project")
-                    .and_then(|p| p.get("dependencies"))
-                    .and_then(|d| d.as_array())
-                {
-                    out.extend(list.iter().filter_map(|v| v.as_str()).map(name_of));
-                }
-                if let Some(t) = doc
-                    .get("tool")
-                    .and_then(|t| t.get("poetry"))
-                    .and_then(|p| p.get("dependencies"))
-                    .and_then(|d| d.as_table_like())
-                {
-                    out.extend(
-                        t.iter()
-                            .map(|(k, _)| k.to_string())
-                            .filter(|k| k != "python"),
-                    );
-                }
-            }
-            for line in read(root, "requirements.txt").lines() {
-                let line = line.trim();
-                if !line.is_empty() && !line.starts_with(['#', '-']) {
-                    out.insert(name_of(line));
-                }
-            }
-        }
-        Lang::Go => {
-            let gomod = read(root, "go.mod");
-            let mut in_block = false;
-            for line in gomod.lines() {
-                let line = line.trim();
-                if line.starts_with("require (") {
-                    in_block = true;
-                    continue;
-                }
-                if in_block && line == ")" {
-                    in_block = false;
-                    continue;
-                }
-                let spec = if in_block {
-                    Some(line)
-                } else {
-                    line.strip_prefix("require ")
-                };
-                if let Some(spec) = spec
-                    && !spec.contains("// indirect")
-                    && let Some(module) = spec.split_whitespace().next()
-                {
-                    out.insert(module.to_string());
-                }
-            }
-        }
-        Lang::Ruby => {
-            let gem = Regex::new(r#"^\s*gem\s+['"]([^'"]+)['"]"#).expect("valid regex");
-            let spec = Regex::new(r#"add_(?:runtime_)?dependency\s*\(?\s*['"]([^'"]+)['"]"#)
-                .expect("valid regex");
-            let mut text = read(root, "Gemfile");
-            for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
-                if entry.path().extension().is_some_and(|x| x == "gemspec") {
-                    text += "\n";
-                    text += &std::fs::read_to_string(entry.path()).unwrap_or_default();
-                }
-            }
-            let mut group = false;
-            for line in text.lines() {
-                let t = line.trim();
-                if t.starts_with("group ") {
-                    group = true;
-                } else if t == "end" {
-                    group = false;
-                }
-                if let Some(c) = gem.captures(line).filter(|_| !group) {
-                    out.insert(c[1].to_string());
-                }
-                if let Some(c) = spec.captures(line) {
-                    out.insert(c[1].to_string());
-                }
-            }
-        }
-        Lang::Java | Lang::Kotlin => {
-            let pom = read(root, "pom.xml");
-            let dep = Regex::new(r"(?s)<dependency>(.*?)</dependency>").expect("valid regex");
-            let tag = |block: &str, name: &str| -> Option<String> {
-                let re = Regex::new(&format!(r"<{name}>\s*([^<]+?)\s*</{name}>")).ok()?;
-                re.captures(block).map(|c| c[1].to_string())
-            };
-            for c in dep.captures_iter(&pom) {
-                let block = &c[1];
-                if tag(block, "scope").is_some_and(|s| s == "test") {
-                    continue;
-                }
-                if let (Some(g), Some(a)) = (tag(block, "groupId"), tag(block, "artifactId")) {
-                    out.insert(format!("{g}:{a}"));
-                }
-            }
-            let gradle = read(root, "build.gradle") + &read(root, "build.gradle.kts");
-            let line =
-                Regex::new(r#"\b(?:implementation|api|compile)\s*\(?\s*['"]([^:'"]+:[^:'"]+)"#)
-                    .expect("valid regex");
-            out.extend(line.captures_iter(&gradle).map(|c| c[1].to_string()));
-        }
-        Lang::Php => {
-            if let Ok(doc) = serde_json::from_str::<Value>(&read(root, "composer.json"))
-                && let Some(deps) = doc["require"].as_object()
-            {
-                out.extend(
-                    deps.keys()
-                        .filter(|k| k.contains('/') && !k.starts_with("ext-"))
-                        .cloned(),
-                );
-            }
-        }
-        Lang::Csharp => {
-            for project in csproj_files(root) {
-                let text = read(root, &project);
-                if !crate::lang::csharp::is_test_project(&text) {
-                    out.extend(crate::lang::csharp::package_references(&text));
-                }
-            }
-        }
-        Lang::C => {}
-    }
-    out.into_iter()
-        .filter(|n| !n.is_empty())
-        .map(|n| normalize(lang, &n))
+    let Ok(ws) = ws else {
+        return BTreeSet::new();
+    };
+    let packages = &ws.packages;
+    packages
+        .iter()
+        .flat_map(|p| {
+            p.deps.iter().filter(move |d| {
+                !d.is_empty() && !packages.iter().any(|q| q.dir != p.dir && &q.name == *d)
+            })
+        })
+        .cloned()
         .collect()
 }
 
@@ -498,30 +371,48 @@ pub fn whole_app(root: &Path, report: &Report) -> WholeApp {
         }
     }
 
-    let mut used: BTreeMap<String, usize> = BTreeMap::new();
+    let declared = declared(root, lang);
+    let imported: BTreeSet<&String> = report.units.iter().flat_map(|u| &u.external_deps).collect();
+    let key = |name: &str| match crate_for(lang, name) {
+        Some(m) => (Some(m.row), String::new()),
+        None => (None, name.to_string()),
+    };
+    let mut joined: BTreeMap<(Option<usize>, String), Dependency> = BTreeMap::new();
+    for name in imported.into_iter().chain(&declared) {
+        let found = crate_for(lang, name);
+        let dep = joined.entry(key(name)).or_insert_with(|| Dependency {
+            name: String::new(),
+            names: Vec::new(),
+            declared: false,
+            used_by: 0,
+            crates: found.map(|m| m.crates),
+            fit: fit_label(found.map(|m| m.fit)),
+            note: found.map_or("", |m| m.note),
+        });
+        if !dep.names.contains(name) {
+            dep.names.push(name.clone());
+        }
+        dep.declared |= declared.contains(name);
+    }
     for unit in &report.units {
-        for dep in &unit.external_deps {
-            *used.entry(dep.clone()).or_default() += 1;
+        let keys: BTreeSet<_> = unit.external_deps.iter().map(|n| key(n)).collect();
+        for k in keys {
+            if let Some(dep) = joined.get_mut(&k) {
+                dep.used_by += 1;
+            }
         }
     }
-    let declared = declared(root, lang);
-    let names: BTreeSet<String> = used
-        .keys()
-        .cloned()
-        .chain(declared.iter().cloned())
-        .collect();
-    let mut dependencies: Vec<Dependency> = names
-        .into_iter()
-        .map(|name| {
-            let found = crate_for(lang, &name);
-            Dependency {
-                declared: declared.contains(&name),
-                used_by: used.get(&name).copied().unwrap_or(0),
-                crates: found.map(|m| m.crates),
-                fit: fit_label(found.map(|m| m.fit)),
-                note: found.map_or("", |m| m.note),
-                name,
-            }
+    let mut dependencies: Vec<Dependency> = joined
+        .into_values()
+        .map(|mut dep| {
+            dep.names.sort();
+            dep.name = dep
+                .names
+                .iter()
+                .find(|n| declared.contains(*n))
+                .unwrap_or(&dep.names[0])
+                .clone();
+            dep
         })
         .collect();
     let rank = |fit: &str| match fit {
@@ -836,6 +727,19 @@ mod tests {
                 ("mytool".to_string(), "mytool.cli:main".to_string())
             ]
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_glob_in_a_gradle_string_does_not_open_a_comment() {
+        let dir = repo(&[(
+            "build.gradle.kts",
+            "android {\n    packaging { resources { excludes += \"META-INF/*\" } }\n}\n\
+             dependencies {\n    implementation(\"com.google.code.gson:gson:2.11.0\")\n}\n\
+             /* implementation(\"com.example:legacy:1.0\") */\n",
+        )]);
+        let found: Vec<String> = declared(&dir, Lang::Kotlin).into_iter().collect();
+        assert_eq!(found, ["com.google.code.gson:gson"]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

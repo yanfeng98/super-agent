@@ -5,7 +5,7 @@
 //! in `rust/app-cases/`. `replay` runs any build against those files and reports what differs.
 
 use crate::walk::Canonical;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -26,8 +26,10 @@ pub const FALLBACK_ENV: &str = "RUST_ANYTHING_FALLBACK_LOG";
 pub const BUILTIN_NORMALIZERS: [&str; 3] = ["timestamps", "uuids", "key-order"];
 pub(crate) const SCHEMA: &str = "rust-anything/app-cases@1";
 pub(crate) const MAX_TRAPS: usize = 300;
+pub(crate) const FRESH_DIR: &str = "files";
+const REMOVED_EXT: &str = "removed";
 const MAX_INPUT_FILE: u64 = 1 << 20;
-const TIMESTAMP: &str = r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?|\b\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\b";
+const TIMESTAMP: &str = r"\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{2} \d{4} \d{2}:\d{2}:\d{2} GMT[+-]\d{4}(?: \([^)\n]*\))?|\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?|\b\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\b";
 const UUID: &str =
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b";
 
@@ -105,6 +107,10 @@ pub struct Config {
     pub unordered: BTreeMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effects: Option<crate::effects::EffectsConfig>,
+    /// CLIs: repository paths copied (from the snapshot in `files/`) into the working directory
+    /// before every case; a path ending in `/` gives its contents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fresh: Vec<String>,
 }
 
 pub(crate) fn default_timeout() -> u64 {
@@ -143,6 +149,8 @@ pub struct Input {
     pub env: BTreeMap<String, String>,
     #[serde(default)]
     pub files: BTreeMap<String, String>,
+    #[serde(default)]
+    pub remove: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -153,6 +161,7 @@ struct Case {
     env_remove: Vec<String>,
     inherit_env: bool,
     files: BTreeMap<PathBuf, Vec<u8>>,
+    remove: Vec<PathBuf>,
 }
 
 impl Case {
@@ -164,11 +173,12 @@ impl Case {
             env_remove: Vec::new(),
             inherit_env: true,
             files: BTreeMap::new(),
+            remove: Vec::new(),
         }
     }
 
     fn key(&self) -> String {
-        serde_json::json!([self.args, self.stdin, self.env, self.files]).to_string()
+        serde_json::json!([self.args, self.stdin, self.env, self.files, self.remove]).to_string()
     }
 }
 
@@ -194,6 +204,7 @@ struct Run {
     stderr: Vec<u8>,
     status: Status,
     files: BTreeMap<PathBuf, Vec<u8>>,
+    removed: Vec<PathBuf>,
     fallback: Option<bool>,
     effects: Option<Vec<u8>>,
 }
@@ -364,9 +375,10 @@ fn run_case(
     case: &Case,
     timeout: Duration,
     effects: Option<&crate::effects::EffectsConfig>,
+    base: Option<&Path>,
 ) -> Result<Run> {
     let sandbox = temp_dir("run")?;
-    let result = run_in(command, repo, case, timeout, &sandbox, effects);
+    let result = run_in(command, repo, case, timeout, &sandbox, effects, base);
     let _ = std::fs::remove_dir_all(&sandbox);
     result
 }
@@ -378,9 +390,21 @@ fn run_in(
     timeout: Duration,
     sandbox: &Path,
     effects: Option<&crate::effects::EffectsConfig>,
+    base: Option<&Path>,
 ) -> Result<Run> {
     let work = sandbox.join("cwd");
     std::fs::create_dir_all(&work)?;
+    if let Some(base) = base {
+        crate::http::copy_tree(base, &work)?;
+    }
+    for path in &case.remove {
+        let target = work.join(path);
+        if target.is_dir() {
+            std::fs::remove_dir_all(&target)?;
+        } else if target.exists() {
+            std::fs::remove_file(&target)?;
+        }
+    }
     for (path, bytes) in &case.files {
         let target = work.join(path);
         if let Some(parent) = target.parent() {
@@ -388,6 +412,13 @@ fn run_in(
         }
         std::fs::write(&target, bytes)?;
     }
+    let before: BTreeMap<PathBuf, FileStamp> = walk_files(&work)
+        .into_iter()
+        .filter_map(|path| {
+            let stamp = FileStamp::of(&path)?;
+            Some((path.strip_prefix(&work).ok()?.to_path_buf(), stamp))
+        })
+        .collect();
     let log = sandbox.join("fallback.log");
     let (program, rest) = command.split_first().context("empty command")?;
     let mut cmd = Command::new(resolve_word(repo, program));
@@ -495,10 +526,29 @@ fn run_in(
         }
     };
     let mut files = BTreeMap::new();
+    let mut present = BTreeSet::new();
     for path in walk_files(&work) {
         let rel = path.strip_prefix(&work).unwrap_or(&path).to_path_buf();
-        files.insert(rel, redact(std::fs::read(&path).unwrap_or_default()));
+        present.insert(rel.clone());
+        let stamp = before.get(&rel);
+        if stamp.is_some() && stamp == FileStamp::of(&path).as_ref() {
+            continue;
+        }
+        let bytes = std::fs::read(&path).unwrap_or_default();
+        if stamp.is_some()
+            && !case.files.contains_key(&rel)
+            && let Some(base) = base
+            && std::fs::read(base.join(&rel)).is_ok_and(|b| b == bytes)
+        {
+            continue;
+        }
+        files.insert(rel, redact(bytes));
     }
+    let removed = before
+        .keys()
+        .filter(|rel| !present.contains(*rel))
+        .cloned()
+        .collect();
     let fallback = std::fs::metadata(&log).ok().map(|m| m.len() > 0);
     let effects = sinks.map(|s| redact(s.take(repo)));
     Ok(Run {
@@ -506,9 +556,26 @@ fn run_in(
         stderr: redact(stderr),
         status,
         files,
+        removed,
         fallback,
         effects,
     })
+}
+
+#[derive(PartialEq, Eq)]
+struct FileStamp {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+}
+
+impl FileStamp {
+    fn of(path: &Path) -> Option<Self> {
+        let meta = std::fs::metadata(path).ok()?;
+        Some(FileStamp {
+            len: meta.len(),
+            modified: meta.modified().ok(),
+        })
+    }
 }
 
 fn walk_files(root: &Path) -> Vec<PathBuf> {
@@ -764,6 +831,87 @@ pub(crate) fn line_matches(expected: &str, actual: &str) -> bool {
         }
     }
     true
+}
+
+/// Whether a line can match a line it is not equal to: `[..]` stands for any text, and with a
+/// tolerance a number can meet a nearby number. Any other line matches its own text and nothing
+/// else, so comparing the sorted sides already settles those.
+fn can_match_beyond_its_text(line: &str, tol: Option<f64>) -> bool {
+    line.contains("[..]") || (tol.is_some() && line.bytes().any(|b| b.is_ascii_digit()))
+}
+
+/// Expected lines against actual lines in any order: every expected line paired with a distinct
+/// actual line. Sorting both sides and pairing by position cannot do this once a line matches
+/// more than its own text, because no order agrees with a match that is not transitive -- `10.0`
+/// has to meet `9.999999999999999` while sorting before `2.0`. So identical lines are paired off
+/// first, and the lines that are left get a search that gives a line up when another line needs
+/// it.
+fn lines_match_in_any_order(expected: &[&str], actual: &[&str], tol: Option<f64>) -> bool {
+    if expected.len() != actual.len() {
+        return false;
+    }
+    let (mut sorted_e, mut sorted_a) = (expected.to_vec(), actual.to_vec());
+    sorted_e.sort_unstable();
+    sorted_a.sort_unstable();
+    if sorted_e == sorted_a {
+        return true;
+    }
+    if !expected.iter().any(|l| can_match_beyond_its_text(l, tol)) {
+        return false;
+    }
+    let mut spare: HashMap<&str, usize> = HashMap::new();
+    for line in actual {
+        *spare.entry(*line).or_default() += 1;
+    }
+    let mut rest_expected = Vec::new();
+    for line in expected {
+        match spare.get_mut(line) {
+            Some(count) if *count > 0 => *count -= 1,
+            _ => rest_expected.push(*line),
+        }
+    }
+    let rest_actual: Vec<&str> = spare
+        .into_iter()
+        .flat_map(|(line, count)| std::iter::repeat_n(line, count))
+        .collect();
+    let mut holder: Vec<Option<usize>> = vec![None; rest_actual.len()];
+    for want in 0..rest_expected.len() {
+        let mut tried = vec![false; rest_actual.len()];
+        if !take_a_line(
+            want,
+            &rest_expected,
+            &rest_actual,
+            tol,
+            &mut tried,
+            &mut holder,
+        ) {
+            return false;
+        }
+    }
+    true
+}
+
+/// One augmenting step: find a line for `want`, moving the expected lines that already hold one
+/// along to another line they also match.
+fn take_a_line(
+    want: usize,
+    expected: &[&str],
+    actual: &[&str],
+    tol: Option<f64>,
+    tried: &mut [bool],
+    holder: &mut [Option<usize>],
+) -> bool {
+    for i in 0..actual.len() {
+        if tried[i] || !line_matches_within(expected[want], actual[i], tol) {
+            continue;
+        }
+        tried[i] = true;
+        if holder[i].is_none_or(|held| take_a_line(held, expected, actual, tol, tried, holder)) {
+            holder[i] = Some(want);
+            return true;
+        }
+    }
+    false
 }
 
 /// A line within the float tolerance, for lines without wildcards.
@@ -1158,6 +1306,15 @@ fn read_inputs(path: &Path) -> Result<Vec<(Option<String>, Case)>> {
             );
             case.files.insert(PathBuf::from(file), content.into_bytes());
         }
+        for file in input.remove {
+            ensure!(
+                safe_relative(&file),
+                "{}:{}: removed `{file}` must be a relative path inside the sandbox",
+                path.display(),
+                n + 1
+            );
+            case.remove.push(PathBuf::from(file));
+        }
         out.push((input.name, case));
     }
     Ok(out)
@@ -1293,6 +1450,7 @@ struct Recorded {
     effects: Option<Vec<u8>>,
     status: Status,
     written: BTreeMap<PathBuf, Vec<u8>>,
+    removed: Vec<PathBuf>,
     binary: bool,
     noise: Vec<(String, NoiseKind)>,
     unstable: bool,
@@ -1375,6 +1533,7 @@ fn settle(norm: &Normalizers, case: &Case, one: &Run, two: &Run) -> Recorded {
     };
     let (w1, w2) = (one.written(case), two.written(case));
     let mut unstable = one.status != two.status
+        || one.removed != two.removed
         || !w1.keys().eq(w2.keys())
         || (binary && (out_noise.is_some() || err_noise.is_some()));
     let mut noise: Vec<(String, NoiseKind)> = [
@@ -1401,6 +1560,7 @@ fn settle(norm: &Normalizers, case: &Case, one: &Run, two: &Run) -> Recorded {
         effects,
         status: one.status.clone(),
         written,
+        removed: one.removed.clone(),
         binary,
         noise,
         unstable,
@@ -1414,7 +1574,13 @@ fn dotted() -> Table {
 }
 
 fn write_case(dir: &Path, bin: &str, name: &str, case: &Case, rec: &Recorded) -> Result<()> {
-    for ext in ["stdin", "stdout", "stderr", crate::effects::EXT] {
+    for ext in [
+        "stdin",
+        "stdout",
+        "stderr",
+        REMOVED_EXT,
+        crate::effects::EXT,
+    ] {
         let _ = std::fs::remove_file(dir.join(format!("{name}.{ext}")));
     }
     for ext in ["in", "out"] {
@@ -1451,6 +1617,13 @@ fn write_case(dir: &Path, bin: &str, name: &str, case: &Case, rec: &Recorded) ->
     if !case.files.is_empty() {
         fs["base"] = value(format!("{name}.in"));
     }
+    if !case.remove.is_empty() {
+        let mut remove = toml_edit::Array::new();
+        for path in &case.remove {
+            remove.push(path.to_string_lossy().as_ref());
+        }
+        fs["remove"] = value(remove);
+    }
     doc["fs"] = Item::Table(fs);
     if rec.binary {
         doc["binary"] = value(true);
@@ -1461,6 +1634,14 @@ fn write_case(dir: &Path, bin: &str, name: &str, case: &Case, rec: &Recorded) ->
     }
     std::fs::write(dir.join(format!("{name}.stdout")), &rec.stdout)?;
     std::fs::write(dir.join(format!("{name}.stderr")), &rec.stderr)?;
+    if !rec.removed.is_empty() {
+        let list: String = rec
+            .removed
+            .iter()
+            .map(|p| format!("{}\n", p.display()))
+            .collect();
+        std::fs::write(dir.join(format!("{name}.{REMOVED_EXT}")), list)?;
+    }
     if let Some(effects) = &rec.effects {
         std::fs::write(dir.join(format!("{name}.{}", crate::effects::EXT)), effects)?;
     }
@@ -1563,7 +1744,17 @@ pub fn record(opts: &RecordOptions) -> Result<RecordOutcome> {
             existing.as_ref().and_then(|c| c.effects.clone()),
             opts.effects.clone(),
         ),
+        fresh: Vec::new(),
     };
+    if let Some(http) = config.http.as_mut() {
+        if !opts.fresh.is_empty() {
+            http.fresh = opts.fresh.to_vec();
+        }
+    } else if !opts.fresh.is_empty() {
+        config.fresh = opts.fresh.to_vec();
+    } else if let Some(c) = &existing {
+        config.fresh = c.fresh.clone();
+    }
     let norm = Normalizers::new(&config)?;
     if config.http.is_some() {
         let outcome = crate::http::record(&repo, &config, &norm, opts)?;
@@ -1627,9 +1818,11 @@ pub fn record(opts: &RecordOptions) -> Result<RecordOutcome> {
 
     let timeout = Duration::from_secs(config.timeout_secs);
     let effects = config.effects.as_ref();
+    let base = crate::http::snapshot_to(&repo, &config.fresh, &cases_dir(&repo).join(FRESH_DIR))?;
+    let base = base.as_deref();
     let run_twice = |(_, case): &(String, Case)| -> Result<(Run, Run)> {
-        let one = run_case(&config.run, &repo, case, timeout, effects)?;
-        let two = run_case(&config.run, &repo, case, timeout, effects)?;
+        let one = run_case(&config.run, &repo, case, timeout, effects, base)?;
+        let two = run_case(&config.run, &repo, case, timeout, effects, base)?;
         Ok((one, two))
     };
     let runs = if effects.is_some_and(crate::effects::EffectsConfig::serial) {
@@ -1705,6 +1898,7 @@ struct Spec {
     effects: Option<Vec<u8>>,
     status: Expect,
     out_dir: Option<PathBuf>,
+    removed: Option<Vec<PathBuf>>,
     binary: bool,
 }
 
@@ -1780,6 +1974,16 @@ fn load_spec(dir: &Path, path: &Path) -> Result<Spec> {
     if base.is_dir() {
         case.files = read_files(&base);
     }
+    if let Some(remove) = doc
+        .get("fs")
+        .and_then(|f| f.get("remove"))
+        .and_then(Item::as_array)
+    {
+        case.remove = remove
+            .iter()
+            .filter_map(|v| v.as_str().map(PathBuf::from))
+            .collect();
+    }
     let status = match doc.get("status") {
         None => Expect::Code(0),
         Some(item) => match (item.as_str(), item.get("code").and_then(Item::as_integer)) {
@@ -1798,6 +2002,13 @@ fn load_spec(dir: &Path, path: &Path) -> Result<Spec> {
         effects: side(crate::effects::EXT)?,
         status,
         out_dir: out_dir.is_dir().then_some(out_dir),
+        removed: side(REMOVED_EXT)?.map(|bytes| {
+            String::from_utf8_lossy(&bytes)
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(PathBuf::from)
+                .collect()
+        }),
         binary: doc.get("binary").and_then(Item::as_bool).unwrap_or(false),
         name,
         case,
@@ -1871,13 +2082,9 @@ pub(crate) fn compare(
         let tol = norm.float_tolerance;
         if unordered {
             let (mut el, mut al) = (lines(&e), lines(&a));
+            let same = lines_match_in_any_order(&el, &al, tol);
             el.sort_unstable();
             al.sort_unstable();
-            let same = el.len() == al.len()
-                && el
-                    .iter()
-                    .zip(&al)
-                    .all(|(x, y)| line_matches_within(x, y, tol));
             return (!same).then(|| {
                 format!(
                     "(lines compared in any order: the original's own runs disagreed on it)\n{}",
@@ -1967,8 +2174,9 @@ fn check(
     spec: &Spec,
     timeout: Duration,
     effects: Option<&crate::effects::EffectsConfig>,
+    base: Option<&Path>,
 ) -> Result<(Vec<Problem>, Option<bool>)> {
-    let run = run_case(command, repo, &spec.case, timeout, effects)?;
+    let run = run_case(command, repo, &spec.case, timeout, effects, base)?;
     let mut problems = Vec::new();
     let status_ok = match (&spec.status, &run.status) {
         (Expect::Code(e), Status::Code(a)) => e == a,
@@ -2012,6 +2220,24 @@ fn check(
                 detail,
             });
         }
+    }
+    if let Some(expected) = &spec.removed
+        && *expected != run.removed
+    {
+        let list = |paths: &[PathBuf]| -> String {
+            paths
+                .iter()
+                .map(|p| format!("  {}\n", p.display()))
+                .collect()
+        };
+        problems.push(Problem {
+            field: "removed files".to_string(),
+            detail: format!(
+                "expected removed:\n{}got removed:\n{}",
+                list(expected),
+                list(&run.removed)
+            ),
+        });
     }
     if let Some(out_dir) = &spec.out_dir {
         for (path, expected) in read_files(out_dir) {
@@ -2184,6 +2410,7 @@ pub fn replay(opts: &ReplayOptions) -> Result<ReplayOutcome> {
         float_files: BTreeMap::new(),
         unordered: BTreeMap::new(),
         effects: None,
+        fresh: Vec::new(),
     });
     let norm = Normalizers::new(&config)?;
     let timeout = Duration::from_secs(opts.timeout_secs.unwrap_or(config.timeout_secs));
@@ -2194,11 +2421,30 @@ pub fn replay(opts: &ReplayOptions) -> Result<ReplayOutcome> {
     }
     let specs = only_case(load_specs(&dir)?, opts.case, |s| &s.name)?;
     let effects = config.effects.as_ref();
+    let base = if config.fresh.is_empty() {
+        None
+    } else {
+        let base = dir.join(FRESH_DIR);
+        ensure!(
+            base.is_dir(),
+            "no {}: record again to snapshot the fresh files",
+            base.display()
+        );
+        Some(base)
+    };
     let check_one = |spec: &Spec| {
         if matches!(spec.status, Expect::Skip) {
             return Ok((Vec::new(), None));
         }
-        check(&norm, &command, &repo, spec, timeout, effects)
+        check(
+            &norm,
+            &command,
+            &repo,
+            spec,
+            timeout,
+            effects,
+            base.as_deref(),
+        )
     };
     let results: Vec<Result<_>> = if effects.is_some_and(crate::effects::EffectsConfig::serial) {
         specs.iter().map(check_one).collect()
@@ -2288,6 +2534,84 @@ mod tests {
         text_matches(e, a, None)
     }
 
+    fn norm_with_tolerance(tol: Option<f64>) -> Normalizers {
+        Normalizers::new(&Config {
+            schema: SCHEMA.to_string(),
+            name: "app".to_string(),
+            run: Vec::new(),
+            normalize: Vec::new(),
+            normalizers: BTreeMap::new(),
+            timeout_secs: default_timeout(),
+            http: None,
+            float_tolerance: tol,
+            float_files: BTreeMap::new(),
+            unordered: BTreeMap::new(),
+            effects: None,
+            fresh: Vec::new(),
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn unordered_lines_pair_up_by_value_within_the_tolerance() {
+        let norm = norm_with_tolerance(Some(1e-9));
+        // `2.0` meets `2.0` and `10.0` meets `9.999999999999999`, but `10.0` sorts before `2.0`
+        // as text, so pairing the sorted lines by position compared `10.0` against `2.0`.
+        let expected = b"n 2.0\nn 10.0\n";
+        let actual = b"n 2.0\nn 9.999999999999999\n";
+        assert!(compare(&norm, expected, actual, false, false).is_none());
+        assert!(compare(&norm, expected, actual, false, true).is_none());
+        // A line that is genuinely different is still reported.
+        let changed = b"n 2.0\nn 11.0\n";
+        assert!(compare(&norm, expected, changed, false, true).is_some());
+        // The order the lines arrive in does not matter.
+        let swapped = b"n 9.999999999999999\nn 2.0\n";
+        assert!(compare(&norm, expected, swapped, false, true).is_none());
+    }
+
+    #[test]
+    fn unordered_lines_pair_up_around_a_wildcard() {
+        let norm = norm_with_tolerance(Some(1e-9));
+        // `[..]` takes the line the numeric pairing does not want, so a tolerance and a wildcard
+        // in the same output do not fight over the ordering.
+        let expected = b"n 10.0\nn [..]\n";
+        assert!(compare(&norm, expected, b"n 10.0\nn 2.0\n", false, true).is_none());
+        assert!(compare(&norm, expected, b"n 2.0\nn 10.0\n", false, true).is_none());
+        assert!(
+            compare(
+                &norm,
+                expected,
+                b"n 2.0\nn 9.999999999999999\n",
+                false,
+                true
+            )
+            .is_none()
+        );
+        // Nothing to take the 10.0: both actual lines are far from it.
+        assert!(compare(&norm, expected, b"n 2.0\nn 3.0\n", false, true).is_some());
+    }
+
+    #[test]
+    fn unordered_lines_keep_a_plain_permutation_matching() {
+        let norm = norm_with_tolerance(Some(1e-9));
+        // The same lines in another order match whatever the numbers look like, and a value
+        // written two ways stays a difference rather than becoming one by being re-sorted.
+        assert!(compare(&norm, b"n 2\nn 2.0\n", b"n 2.0\nn 2\n", false, true).is_none());
+        assert!(compare(&norm, b"n 2\nn 2\n", b"n 2.0\nn 2.0\n", false, true).is_some());
+    }
+
+    #[test]
+    fn unordered_lines_without_a_tolerance_still_compare_as_text() {
+        let norm = norm_with_tolerance(None);
+        let expected = b"b\na\n";
+        assert!(compare(&norm, expected, b"a\nb\n", false, true).is_none());
+        assert!(compare(&norm, expected, b"a\nc\n", false, true).is_some());
+        assert!(compare(&norm, expected, b"a\n", false, true).is_some());
+        // Without a tolerance a number is text like any other, so this stays a mismatch.
+        let numeric = b"n 10.0\nn 2.0\n";
+        assert!(compare(&norm, numeric, b"n 2.0\nn 9.999999999999999\n", false, true).is_some());
+    }
+
     #[cfg(unix)]
     #[test]
     fn replay_deadline_covers_descendants_that_keep_pipes_open() {
@@ -2299,6 +2623,7 @@ mod tests {
                 Path::new("."),
                 &Case::new(Vec::new()),
                 Duration::from_millis(200),
+                None,
                 None,
             )
             .unwrap();
@@ -2395,6 +2720,7 @@ mod tests {
             float_files: BTreeMap::new(),
             unordered: BTreeMap::new(),
             effects: None,
+            fresh: Vec::new(),
         })
         .unwrap();
         let kind = |a: &str, b: &str| settle_text(&norm, a.as_bytes(), b.as_bytes()).1;
@@ -2420,6 +2746,7 @@ mod tests {
             float_files: BTreeMap::new(),
             unordered: BTreeMap::from([("c".to_string(), vec!["stdout".to_string()])]),
             effects: None,
+            fresh: Vec::new(),
         })
         .unwrap();
         assert!(norm.unordered("c", "stdout"));
@@ -2429,6 +2756,19 @@ mod tests {
         assert!(compare(&norm, e, b"y=2\nx=2\n", false, true).is_some());
         assert!(compare(&norm, e, b"x=1\n", false, true).is_some());
         assert!(compare(&norm, e, b"y=2\nx=1\n", false, false).is_some());
+    }
+
+    #[test]
+    fn timestamps_cover_javascript_date_strings() {
+        let re = Regex::new(TIMESTAMP).unwrap();
+        let line = "Generated on Sat Nov 21 2026 01:30:12 GMT+0300 (Türkiye Standard Time) - ok";
+        assert_eq!(re.replace_all(line, "[..]"), "Generated on [..] - ok");
+        assert_eq!(
+            re.replace_all("Mon Jan 05 2026 09:00:00 GMT-0800", "[..]"),
+            "[..]"
+        );
+        assert_eq!(re.replace_all("at 2026-11-16T10:00:00Z", "[..]"), "at [..]");
+        assert_eq!(re.replace_all("Saturday 12", "[..]"), "Saturday 12");
     }
 
     #[test]
@@ -2460,6 +2800,7 @@ mod tests {
             float_files: BTreeMap::new(),
             unordered: BTreeMap::new(),
             effects: None,
+            fresh: Vec::new(),
         };
         let norm = Normalizers::new(&config).unwrap();
         assert_eq!(

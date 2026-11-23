@@ -369,6 +369,9 @@ fn functions(path: &str, source: &str, declarations: bool) -> Vec<ExportedFn> {
                     }
                 }
             }
+            Statement::ExpressionStatement(e) if !declarations => {
+                listed.extend(commonjs_exports(&e.expression));
+            }
             Statement::FunctionDeclaration(f) if f.body.is_some() => {
                 if let Some(id) = &f.id {
                     local.insert(id.name.as_str().to_string(), (Local::Function(f), doc));
@@ -394,6 +397,59 @@ fn functions(path: &str, source: &str, declarations: bool) -> Vec<ExportedFn> {
         }
     }
     out
+}
+
+fn commonjs_exports(expression: &Expression) -> Vec<(String, String)> {
+    let Expression::AssignmentExpression(assign) = expression else {
+        return Vec::new();
+    };
+    let is_module_exports = |e: &Expression| {
+        matches!(e, Expression::StaticMemberExpression(m)
+            if m.property.name == "exports"
+                && matches!(&m.object, Expression::Identifier(o) if o.name == "module"))
+    };
+    let target = match &assign.left {
+        oxc_ast::ast::AssignmentTarget::StaticMemberExpression(m) => {
+            if m.property.name == "exports"
+                && matches!(&m.object, Expression::Identifier(o) if o.name == "module")
+            {
+                None
+            } else if is_module_exports(&m.object)
+                || matches!(&m.object, Expression::Identifier(o) if o.name == "exports")
+            {
+                Some(m.property.name.to_string())
+            } else {
+                return Vec::new();
+            }
+        }
+        _ => return Vec::new(),
+    };
+    match (target, &assign.right) {
+        (Some(exported), Expression::Identifier(local)) => {
+            vec![(local.name.to_string(), exported)]
+        }
+        (None, Expression::ObjectExpression(object)) => object
+            .properties
+            .iter()
+            .filter_map(|p| match p {
+                oxc_ast::ast::ObjectPropertyKind::ObjectProperty(prop) if !prop.computed => {
+                    let exported = match &prop.key {
+                        oxc_ast::ast::PropertyKey::StaticIdentifier(id) => id.name.to_string(),
+                        oxc_ast::ast::PropertyKey::StringLiteral(s) => {
+                            s.value.as_str()?.to_string()
+                        }
+                        _ => return None,
+                    };
+                    match &prop.value {
+                        Expression::Identifier(local) => Some((local.name.to_string(), exported)),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 enum Local<'b, 'a> {
@@ -603,5 +659,26 @@ mod tests {
         assert_eq!(names, ["printDoc", "getWidth"]);
         assert_eq!(found[0].params.len(), 2);
         assert_eq!(found[1].line, 2);
+    }
+
+    #[test]
+    fn reads_commonjs_exports() {
+        let found = exported_functions(
+            "a.js",
+            "\"use strict\";\n\
+             async function lintText(args, text) { return text }\n\
+             const width = (text) => text.length\n\
+             function helper() {}\n\
+             const value = 1\n\
+             module.exports = { lintText, getWidth: width, value, other: () => 1 };\n\
+             module.exports.helper = helper;\n",
+        );
+        let names: Vec<&str> = found.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["lintText", "getWidth", "helper"]);
+        assert!(found[0].is_async);
+        assert_eq!(found[0].params.len(), 2);
+        let exported = exported_functions("b.js", "function f(a) {}\nexports.f = f;\n");
+        assert_eq!(exported.len(), 1);
+        assert!(exported_functions("c.js", "function f() {}\nfoo.exports = { f };\n").is_empty());
     }
 }

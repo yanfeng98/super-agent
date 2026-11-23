@@ -43,7 +43,7 @@ semantic probes in section 4 were run locally (rustc 1.99.0, Node, CPython 3, Go
    JSON, moved to protobuf, then Cap'n Proto so hashes were identical across languages, and lists "a
    single serialization format from the start" among its lessons
    ([Vercel](https://vercel.com/blog/finishing-turborepos-migration-from-go-to-rust)). Prisma found
-   that serializing data JS to Rust and back added overhead that negated the benefit
+   that serializing data from JS to Rust and back added overhead that negated the benefit
    ([Prisma](https://www.prisma.io/blog/from-rust-to-typescript-a-new-chapter-for-prisma-orm)). Chatty
    fine-grained boundaries are a cost during a whole-app port, so cut at subsystem seams.
 6. **Port first, idiomatize second.** fish kept the C++ structure to make comparison easy

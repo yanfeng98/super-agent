@@ -264,13 +264,14 @@ existing Rust formatter, byte-identical output as the bar).
 | `doc-printer-rs` | `printDocToString` and `getStringWidth` (`src/document/`), recorded on 2,848 docs (2,570 harvested from the fixtures, 180 written to reach the rest); `gate` passes, 608 of the printer's 613 lines reached |
 | `prettier-js-rs` | the JavaScript and TypeScript printer, 12,000 lines of Rust: statements, expressions, member chains, call arguments, assignments, binary operators, arrays, objects, functions and arrows, modules, template literals, ternaries (both styles), classes and decorators, JSX, every TypeScript node, `needs-parens`, comments (attachment with the JavaScript and TypeScript handlers, printing, every comment branch in those printers) and `prettier-ignore` |
 | `js-format-rs` | Prettier's `format()` bridged and backed by `prettier-js-rs`; recorded on the 15,753 `format()` calls the CLI cases make for files the port covers; `gate` passes 15,753/15,753 |
-| `wire` | milestone 1: 3,143/3,143 at 51.9% fallback (1,513 in Rust); milestone 2, TypeScript: 3,143/3,143 at 22.5% (2,436 in Rust); with JSON: 4,621/4,621 at 25.8% (3,431 in Rust); with GraphQL: 5,468/5,468 at 22.9% (4,218 in Rust); with YAML: 8,812/8,812 at 14.6% (7,527 in Rust); with Markdown: 15,162/15,162 at 9.8% (13,676 in Rust); with CSS, SCSS and Less: **17,224/17,224 at 8.1% fallback, 15,837 cases formatted fully in Rust**, byte-identical |
+| `wire` | milestone 1: 3,143/3,143 at 51.9% fallback (1,513 in Rust); milestone 2, TypeScript: 3,143/3,143 at 22.5% (2,436 in Rust); with JSON: 4,621/4,621 at 25.8% (3,431 in Rust); with GraphQL: 5,468/5,468 at 22.9% (4,218 in Rust); with YAML: 8,812/8,812 at 14.6% (7,527 in Rust); with Markdown: 15,162/15,162 at 9.8% (13,676 in Rust); with CSS, SCSS and Less: 17,224/17,224 at 8.1% (15,837 in Rust); after the equivalence checks' fixes: **17,224/17,224 at 7.9% fallback, 15,861 cases formatted fully in Rust**, byte-identical |
 | config | the glue resolves Prettier's config as its CLI does (closest `.prettierrc`/`.prettierrc.json`/`package.json` `"prettier"` key with `overrides`, `.editorconfig` up to the project root, `.gitignore`/`.prettierignore` and `node_modules`), and hands YAML, TOML, JSON5 and JavaScript configs, unknown options and ignored files to Prettier; 44 of the 63 config cases run in Rust |
 | JSON | 1,478 more cases (`gen-json-inputs.mjs`): Prettier's 55 JSON fixtures as `.json`, `.jsonc`, `.json5` and `package.json`, ten option variants, 26 real JSON files (`package.json`, `tsconfig.json`, lock files...) and edge snippets; the port picks `json`, `jsonc`, `json5` or `json-stringify` from the file name as Prettier's language list does, parses the value with oxc, checks it with Prettier's `assertJsonNode`, and prints it with the same printer (keys quoted, double quotes, no trailing commas for `json`) or, for `json-stringify`, with a port of `printer-estree-json.js`; 995 of the 1,019 JSON cases Prettier formats run in Rust |
 | GraphQL | 847 more cases (`gen-graphql-inputs.mjs`): Prettier's 58 GraphQL fixtures (49 in `tests/format/graphql`, 9 pragma and error fixtures) as `.graphql`, `.gql` and `.graphqls`, eight option variants, `--parser graphql` on a `.txt` path, and edge snippets (block strings, escapes, legacy fragment variables, comments in every position, `prettier-ignore`, CRLF, BOM, 13 invalid inputs); the port is `graphql.rs`: graphql-js 16.11's lexer and parser (with `allowLegacyFragmentVariables`, block string dedent, every syntax error kept as an error), Prettier's generic comment attachment and printing (GraphQL has no comment handlers), and `printer-graphql.js`; **all 787 GraphQL cases Prettier formats run in Rust**, the other 60 are Prettier's own syntax errors and stay on Prettier |
 | YAML | 3,344 more cases (`gen-yaml-inputs.mjs`): Prettier's 355 YAML fixtures (348 in `tests/format/yaml`, the rest pragma, parser-inference and error fixtures) as `.yml` and `.yaml`, six option variants (`--prose-wrap always` and `never`, `--tab-width 4`, `--no-bracket-spacing`, `--single-quote`, `--print-width 40`), every fixture with CRLF line ends, 35 real files (Prettier's and the three repositories' GitHub workflows, issue templates, `.codecov.yml`...), YAML file names (`CITATION.cff`, `.clang-format`, `.prettierrc`, `yarn.lock`) and edge snippets (anchors, tags, `%TAG` directives, documents, block scalars, duplicate keys, bad indentation); the port is `src/yaml/`: yaml 1.10.2's CST parser and the checks its `Document#parse` makes (anchors, tags, pairs, duplicate keys, every error it reports), yaml-unist-parser 2.0.5's transform, comment attachment and position updates, and `printer-yaml.js`; **3,309 of the 3,310 YAML cases Prettier formats run in Rust** (the one left is `.prettierrc`, which Prettier prints as JSON), the other 34 are Prettier's own errors |
 | Markdown | 6,350 more cases (`gen-markdown-inputs.mjs`): Prettier's 852 Markdown fixtures (821 in `tests/format/markdown`, the rest pragma and front matter fixtures), five option variants (`--prose-wrap always` and `never`, `--tab-width 4`, `--print-width 40`, `--single-quote`), every fixture with CRLF, a quarter of them as `.markdown`, 54 real files (Prettier's docs and READMEs, the three repositories' Markdown) twice, and edge snippets (lists, tasks, tables, links, footnotes, math, liquid, wiki links, entities, `prettier-ignore` ranges, CJK text); the port is `src/markdown/`: remark-parse 8.0.3 with remark-footnotes, remark-math and Prettier's front matter, liquid and wiki link tokenizers, parse-entities, Prettier's preprocess and `printer-markdown.js`; code blocks in JavaScript, TypeScript, JSON, GraphQL, YAML, Markdown, CSS, SCSS and Less, and YAML front matter, are formatted by the other ports as Prettier does; **6,305 of the 6,350 Markdown cases run in Rust**, the rest hold HTML code blocks (not ported) or code oxc does not parse |
 | CSS, SCSS, Less | 2,062 more cases (`gen-css-inputs.mjs`): Prettier's 248 style fixtures (109 CSS, 80 SCSS, 36 Less, 23 in `tests/format/misc`), the CSS fixtures again as `.scss` and `.less`, five option variants (`--single-quote`, `--tab-width 4`, `--print-width 40`, `--trailing-comma none`, `--use-tabs`), every fixture with CRLF, 6 real files (Prettier's website styles, Fuse.js's docs styles) and 22 edge snippets in all three languages; the port is `src/css/`: postcss 8.5.6's tokenizer and parser with postcss-scss 4.0.9's changes (`//` comments, `#{}` interpolation, nested properties) and postcss-less 6.0.0's (inline comments, mixin calls, `each`, variables, `@{}` interpolation, `extend`), Prettier's `parseNestedCSS` and its quote masking for Less comments, postcss-values-parser 2.0.1 in loose mode, postcss-selector-parser 2.2.3, postcss-media-query-parser 0.2.3, and `printer-postcss.js` with its value group printers; **all 2,004 CSS, SCSS and Less cases Prettier formats run in Rust** (890 CSS, 711 SCSS, 403 Less), the other 58 are Prettier's own errors |
+| equivalence checks | differential fuzzing against Prettier in process (about 6M runs, random options, Prettier's output fed back, libFuzzer), mutation testing with the replay as the test, a comparison of the Rust `Doc` with Prettier's doc, and every doc up to size 5 through both doc printers; they found about 75 differences outside the corpus, now fixed or handed to Prettier, and 355 new cases (`equiv/cases.jsonl`). After the fixes: 17,224/17,224 at 7.9% fallback (15,861 in Rust), 355/355 new cases, and no difference in the last fuzzing runs. Details and bounds in [`equiv/README.md`](../demo/real-world/prettier-rs/equiv/README.md) |
 
 Formatted fully in Rust, by group: 1,295 of the 1,525 fixtures, 1,016 of the 1,196 option
 variants, all 59 real files, 20 of the 300 traps, and 46 of the 63 config cases. Of the 929
@@ -455,13 +456,267 @@ those printers (embedded GraphQL needs only the template glue now).
 Beyond the recorded cases, the new parsers were fuzzed against Prettier: 13,991 YAML
 files, 6,000 GraphQL files, 20,000 Markdown files and 11,997 CSS, SCSS and Less files made by deleting, inserting and re-indenting
 pieces of the fixtures. Rust formatted 9,973 of the YAML files, 2,131 of the GraphQL files (every
-GraphQL file Prettier accepted) 19,150 of the Markdown files and 8,153 of the 8,223 style files Prettier accepted, each
+GraphQL file Prettier accepted), 19,150 of the Markdown files and 8,153 of the 8,223 style files Prettier accepted, each
 byte-identical to Prettier, and accepted no file that Prettier rejects. The first Markdown run
 found one: `![][x` with no closing bracket, where Prettier puts `null` in its doc and throws; the
 port now refuses it too. The style runs found two: `@function f($a, $args\n...)`, where Prettier's
 `$x ...` regex matches the first `$` that has `...` after it, not the first `$`; and `pow(, 2)`,
 an empty comma group on which Prettier's printer throws (the port now refuses it). One CSS mutant
 made Prettier loop forever, so each fuzz file now runs in a child process with a 10 s limit.
+
+## ffmpeg
+
+A Reddit comment on the 2.0 launch asked for something critical, ffmpeg or OpenSSL, instead of a
+JavaScript library. ffmpeg is C plus hand-written assembly, and Rust does not beat the
+assembly; what a Rust port can honestly match is ffmpeg's portable C. So this run took
+[FFmpeg](https://ffmpeg.org)'s `libavutil` (tag `n7.1`, commit `b08d796`, LGPL-2.1-or-later),
+the utility library under every codec, and ported its pure C units one at a time, each proven
+against recordings of the real ffmpeg functions. Everything is in
+[`demo/real-world/ffmpeg-rs`](../demo/real-world/ffmpeg-rs): the crates (LGPL, like the code
+they port; `adler32-rs` keeps zlib's license), and the scripts that clone ffmpeg, assemble the
+tree, record, verify and bench. No ffmpeg source or recorded case is copied. The port is also
+published on its own as [erkamyaman/ffmpeg-rs-anything](https://github.com/erkamyaman/ffmpeg-rs-anything).
+
+| Step | Result |
+| --- | --- |
+| `analyze --lang c libavutil` | 197 files, 59,586 lines, 53 test files. Before the fixes below: 27 units blocked (each by a `goto`), CPU code (`x86/cpu.c`, `arm/cpu.c`, `aarch64/cpu.c`) in "start here", no unit credited with a test, and 35 bridgeable functions, none of them in base64, CRC, the hashes, avstring or rational (they all take pointers). After: 0 blocked, 53 kept in C (CPU folders, inline assembly, hardware contexts), 62 units credited with tests, 95 bridgeable functions; "start here" opens with `intmath.c`, `base64.c`, `rational.c` |
+| units ported | `adler32.c`, `base64.c`, `mathematics.c` (integer and rescaling functions, `av_rescale_q`, `av_bessel_i0`), `avstring.c` (10 functions, `av_strstart` and `av_stristart` among them), `rational.c` (`av_reduce` and the `AVRational` arithmetic: `av_mul_q`, `av_div_q`, `av_add_q`, `av_sub_q`, `av_d2q`, `av_nearer_q`, `av_q2intfloat`), `parseutils.c` (`av_parse_video_size`, `av_find_info_tag`), and through one-shot wrappers `crc.c`, `md5.c`, `sha.c` (SHA-1, SHA-224, SHA-256) and `murmur3.c` |
+| inputs | the vectors of ffmpeg's own `libavutil/tests/*.c` and FATE references, regenerated by `scripts/inputs.py`, plus integer limits, invalid rounding modes, buffers one byte too small or prefilled with `0xff`, non-ASCII strings, every hash input fed at ten chunk sizes, and `AVRational` terms at `INT_MIN`/`INT_MAX`, zero and negative denominators, NaN, infinities and subnormals for `av_d2q` |
+| `diff` | **226,447/226,447 recorded calls match**, over 10 crates: 702, 8,662, 88,541, 68,152, 46,764, 5,931, 2,608, 748, 1,797 and 2,542. 467 of them are inputs where ffmpeg's behavior is undefined (a `NULL` it dereferences, an `av_strnstr` length past the string, a CRC id it asserts on), recorded as the crash or out-of-bounds pointer and passed by any answer |
+| `gate` | passes on all 10 (fmt, clippy `-D warnings`, tests, no `unsafe` outside the generated `lib.rs`, size, every export, every case) |
+
+Six crates export libavutil's own functions with their C signatures (`av_adler32_update`,
+`av_base64_decode`, `av_rescale_rnd`, `av_strlcpy`, `av_reduce`, `av_parse_video_size`, ...),
+so a C caller links the Rust instead of the object file and changes nothing. The hash and CRC
+APIs keep state in a context across calls or hand out a table pointer, which a per-call
+recording cannot capture; for those, a small C wrapper (`wrappers/oneshot_md5.c`: init, update
+in `chunk`-byte pieces, final) was bridged, and the Rust ports the whole algorithm behind it.
+The proof covers ffmpeg's hashing and streaming, but the Rust does not yet export `av_md5_*`.
+
+**What stays in C, and why.** Every CPU-architecture folder (`x86/`, `aarch64/`, `arm/`, `ppc/`,
+`mips/`, `loongarch/`, `riscv/`): assembly, intrinsics and feature detection, which `analyze`
+now keeps, since a recording on one machine cannot vouch for another target and Rust would not
+beat the assembly anyway. `hwcontext_*` (hardware APIs). `av_parse_time` (reads the clock and the
+local time zone). Functions returning memory they allocate (`av_strireplace`, `av_escape`), a
+static string (`av_basename` on an empty path), advancing their own string (`av_get_token`) or
+reading a list through a pointer (`av_find_nearest_q_idx`). The `AVRational` and `const char **`
+functions stayed in C at first because the bridge did not carry them; once it did (structs of
+scalars by value, a `char **` pointing into a string argument), `av_mul_q` and friends,
+`av_rescale_q` and `av_strstart` were ported in a second round. `av_gcd_q`, `av_compare_ts`,
+`av_rescale_delta` and `av_add_stable` are bridgeable now too but not ported yet. None of the
+ported units has assembly in n7.1, so the bench is C compiled by ffmpeg's own build against Rust.
+
+**Found in ffmpeg.** `av_murmur3_update` returns early when a call exactly completes a 16-byte
+block an earlier call started. If no update follows, `av_murmur3_final` hashes that block as the
+tail instead of mixing it, so the digest depends on how the input was split: the bytes 0 to 15
+with the default seed give `0be5b973...` in one call and `502abaf4...` as 15 + 1
+(`scripts/murmur3-split.c`, against `libavutil.a`; still in master on 2026-11-20). The port
+keeps it, since the bar is identical output. The recordings caught it because every hash input
+is fed at several chunk sizes. `av_q2intfloat` negates its terms with `*= -1`, which overflows
+for `INT_MIN`; the recordings show what clang `-O3` made of that (the sign test sees the wrapped
+`num`, the division uses 2^31, and a negative `x/0` comes out `+inf`), and the port reproduces it.
+Another compiler may differ on those inputs.
+
+**Speed.** `scripts/bench.sh` links ffmpeg's own `libavutil.a` (built by its configure and make: Apple
+clang 21, `-O3`) and one LTO staticlib of all the ports (rustc 1.100, built with the `shadow`
+feature so it exports only `rust_anything_*` names) into one C program, and runs the same calls
+on both until 200 ms pass, five times, printing the median. Apple M4 (10 cores), macOS, two
+runs, load average 9 to 13 at the start (other builds were running), so read differences under
+5% as noise. Hashes call ffmpeg's context API directly on a
+preallocated context, the Rust one-shot function; above 1x the Rust is faster.
+
+| Function | Input | C (ffmpeg) | Rust | C time / Rust time (run 1, run 2) |
+| --- | --- | ---: | ---: | ---: |
+| `av_adler32_update` | 64 B | 2,221 MB/s | 2,307 MB/s | 1.04x, 1.02x |
+| `av_crc` (CRC-32 LE) | 64 B | 2,319 MB/s | 2,288 MB/s | 0.99x, 0.99x |
+| MD5 | 64 B | 379 MB/s | 360 MB/s | 0.95x, 1.01x |
+| SHA-1 | 64 B | 350 MB/s | 336 MB/s | 0.96x, 0.97x |
+| SHA-256 | 64 B | 222 MB/s | 200 MB/s | 0.90x, 0.91x |
+| murmur3 | 64 B | 2,766 MB/s | 2,688 MB/s | 0.97x, 0.99x |
+| `av_base64_encode` | 64 B | 1,985 MB/s | 2,407 MB/s | 1.21x, 1.28x |
+| `av_base64_decode` | 64 B | 2,359 MB/s | 2,157 MB/s | 0.91x, 0.97x |
+| `av_adler32_update` | 4 KiB | 15,616 MB/s | 15,948 MB/s | 1.02x, 1.03x |
+| `av_crc` (CRC-32 LE) | 4 KiB | 1,600 MB/s | 1,609 MB/s | 1.01x, 1.00x |
+| MD5 | 4 KiB | 822 MB/s | 810 MB/s | 0.99x, 0.99x |
+| SHA-1 | 4 KiB | 1,104 MB/s | 1,025 MB/s | 0.93x, 0.94x |
+| SHA-256 | 4 KiB | 579 MB/s | 518 MB/s | 0.89x, 0.88x |
+| murmur3 | 4 KiB | 7,771 MB/s | 7,772 MB/s | 1.00x, 1.04x |
+| `av_base64_encode` | 4 KiB | 4,790 MB/s | 5,314 MB/s | 1.11x, 1.09x |
+| `av_base64_decode` | 4 KiB | 3,740 MB/s | 3,269 MB/s | 0.87x, 0.86x |
+| `av_adler32_update` | 1 MiB | 17,092 MB/s | 17,446 MB/s | 1.02x, 1.07x |
+| `av_crc` (CRC-32 LE) | 1 MiB | 1,596 MB/s | 1,580 MB/s | 0.99x, 1.01x |
+| MD5 | 1 MiB | 837 MB/s | 824 MB/s | 0.98x, 0.99x |
+| SHA-1 | 1 MiB | 1,146 MB/s | 1,063 MB/s | 0.93x, 0.94x |
+| SHA-256 | 1 MiB | 596 MB/s | 532 MB/s | 0.89x, 0.92x |
+| murmur3 | 1 MiB | 7,678 MB/s | 7,797 MB/s | 1.02x, 0.99x |
+| `av_base64_encode` | 1 MiB | 4,666 MB/s | 5,262 MB/s | 1.13x, 1.10x |
+| `av_base64_decode` | 1 MiB | 3,585 MB/s | 3,187 MB/s | 0.89x, 0.85x |
+| `av_rescale_rnd` | per call | 54.6 ns | 53.4 ns | 1.02x, 0.98x |
+| `av_gcd` | per call | 40.2 ns | 38.7 ns | 1.04x, 1.01x |
+| `av_reduce` | per call | 54.4 ns | 57.3 ns | 0.95x, 0.94x |
+| `av_rescale_q` | per call | 45.1 ns | 45.0 ns | 1.00x, 1.00x |
+| `av_bessel_i0` | per call | 4.3 ns | 5.2 ns | 0.82x, 0.80x |
+| `av_mul_q` | per call | 45.5 ns | 47.1 ns | 0.97x, 0.98x |
+| `av_add_q` | per call | 58.9 ns | 63.7 ns | 0.92x, 0.95x |
+| `av_d2q` | per call | 95.6 ns | 95.8 ns | 1.00x, 0.97x |
+| `av_nearer_q` | per call | 12.4 ns | 11.7 ns | 1.06x, 1.03x |
+| `av_q2intfloat` | per call | 15.4 ns | 14.7 ns | 1.04x, 0.98x |
+| `av_strcasecmp` | per call | 1.4 ns | 1.9 ns | 0.73x, 0.68x |
+| `av_stristr` | per call | 6.2 ns | 4.4 ns | 1.42x, 1.39x |
+| `av_match_name` | per call | 77.2 ns | 35.7 ns | 2.16x, 2.26x |
+| `av_strstart` | per call | 1.1 ns | 1.4 ns | 0.76x, 0.79x |
+| `av_stristart` | per call | 1.2 ns | 1.9 ns | 0.63x, 0.60x |
+| `av_strlcpy` | per call | 4.5 ns | 5.1 ns | 0.88x, 0.96x |
+| `av_parse_video_size` | per call | 78.8 ns | 28.0 ns | 2.82x, 2.86x |
+| `av_find_info_tag` | per call | 27.0 ns | 32.0 ns | 0.84x, 0.85x |
+
+- **Even** (within 5% in both runs, or on different sides in the two): `av_adler32_update` to
+  4 KiB, CRC-32, MD5, SHA-1 at 64 B, murmur3, `av_rescale_rnd`, `av_gcd`, `av_rescale_q`,
+  `av_mul_q`, `av_d2q`, `av_q2intfloat`.
+- **Rust faster**: `av_parse_video_size` (2.8x), `av_match_name` (2.2x), `av_stristr` (1.4x),
+  `av_base64_encode` (1.1 to 1.3x), `av_adler32_update` at 1 MiB (1.02 to 1.07x) and
+  `av_nearer_q` (1.03 to 1.06x).
+- **C faster**: SHA-1 from 4 KiB (0.93x), SHA-256 (0.9x), `av_base64_decode` (0.86 to 0.97x),
+  `av_reduce` (0.95x), `av_add_q` (0.92 to 0.95x), `av_strlcpy` (0.88 to 0.96x),
+  `av_find_info_tag` (0.85x), `av_bessel_i0` (0.8x), `av_strstart` (0.78x), `av_strcasecmp`
+  (0.7x) and `av_stristart` (0.6x).
+- The string rows paid for the generated bridge: it turned each `const char *` into a slice,
+  which runs `strlen` before the port starts, and `av_strcasecmp` on short words takes 1.2 ns in
+  C, less than those `strlen` calls (the port ran at 0.23x). The bridge now lets a port take
+  the string as `CChars`, read as it goes; `av_strcasecmp`, `av_strncasecmp` and `av_stristr`
+  do, which took them to 0.68x and 1.4x. `av_strlcpy` and `av_find_info_tag` still take slices.
+  `av_strstart` and `av_stristart` take `CChars` too, but a call costs ffmpeg about 1 ns, and
+  turning the `const char **` into an offset and back on each call is a large share of that.
+- A first port is not a fast one. MD5 first came out at 0.43x (it picked the round function with
+  a `match` on every step); unrolled the way `md5.c` unrolls it, it matches C. A second pass did
+  the same for the rest, each change replayed against the recordings again: SHA-1 and SHA-256
+  unrolled with ffmpeg's rotating variable names instead of moving every variable each round
+  (0.62x to 0.93x, 0.82x to 0.89x); CRC-32 reads its table as four `[u32; 256]`, so each lookup
+  is one load as in C (0.84x to 1.0x); base64 decodes four characters at a time while none ends
+  the input and encodes into 4-byte chunks (decode 0.6x to 0.9x, encode 0.85x to 1.1x);
+  `av_stristr` checks the first character before comparing the rest.
+  `av_bessel_i0` evaluated the same way as C's did not get faster.
+
+So on this machine the ports are a correct drop-in at about C's speed: 18 of the 42 rows are even,
+eight are faster, and the other 16 are slower by 3 to 40%, the slowest the 1 ns string calls.
+
+**Found in the tool, and fixed** (all in the [changelog](../CHANGELOG.md)):
+
+- The C bridge took only scalars and `const char *`, so no libavutil function could cross it.
+  It now pairs a byte pointer with its length (`&[u8]`, or `&mut [u8]` with the written bytes
+  recorded), takes out-pointers to scalars (`Option<&mut T>`, values after the call recorded)
+  and returned pointers into an argument (an offset), and resolves typedefs (`AVAdler`) and
+  enums (`enum AVRounding`) through the project's headers. `tests/c_pointers.rs` covers it end
+  to end.
+- Every `const char *` reached the port as a slice, so the bridge ran `strlen` on each before the
+  port started, which cost more than `av_strcasecmp` itself on short words. A port can now type
+  the parameter `Option<crate::CChars<'_>>` and `refresh` passes it unmeasured;
+  `tests/c_pointers.rs` covers it.
+- `record` put every header folder on `-I`, so `libavutil/time.h` shadowed `<time.h>` and the
+  originals did not compile; such folders now go on `-iquote`, and `CFLAGS` is honored
+  (`-DHAVE_AV_CONFIG_H`).
+- `rust-anything build .` failed for C crates (the relative path was read from a scratch folder).
+- `analyze` blocked every C unit with a `goto` as "dynamic code", ranked CPU-specific code first,
+  did not resolve `#include "libavutil/x.h"` from inside `libavutil` (so no test counted), and
+  told C units their exports were "JS-shaped".
+- `gate`'s size check measured a wrapper's port against the wrapper's 19 lines; for C it now
+  counts the project functions the ported functions call.
+- C `char` crossed as `c_schar`; it is `c_char` now, signed or unsigned as the platform's C.
+- Second round (the `AVRational` and `av_strstart` ports): `record --count` gave struct
+  parameters values that were not objects of their fields, so every generated `av_mul_q` case was
+  a `TypeError`, and `char **` parameters got plain integers. Structs now get field objects
+  (zeros, ones, minus ones, each field's minimum and maximum, each field zero with the others one,
+  and small random values) and `char **` gets `true`, `null` or offset 0; `tests/c_structs.rs`
+  checks a count-only recording.
+- `diff` compared a recorded "returns a pointer outside its arguments" against the port, but
+  that answer is where ffmpeg's `av_strnstr` read past the string and found the needle in
+  whatever memory came next. Like a crash, it is undefined behavior, and any answer of the port
+  now passes it.
+- The bridge reads `av_escape`'s `char **dst` (memory it allocates) as a position in `src`; it
+  was kept in C by hand (`--keep`).
+
+## ESLint
+
+A Reddit comment asked for ESLint next: Oxlint is fast but differs from ESLint, so an
+exact-behavior Rust ESLint would be something else. This run took
+[ESLint](https://github.com/eslint/eslint) (MIT, tag `v10.15.0`, commit `a2101d9`) and put a Rust
+front door in front of its CLI: the front door lints a run in Rust when its
+whole config comes from flags (`--no-config-lookup --rule ... --stdin`) and every rule it enables
+is one of the 90 ported (`eslint:recommended` and 26 widely used rules), and hands every other run
+to ESLint. Everything is in [`demo/real-world/eslint-rs`](../demo/real-world/eslint-rs); its
+`DECISIONS.md` records the choices. No ESLint source, test or recorded case is copied there.
+
+| Step | Result |
+| --- | --- |
+| inputs | ESLint's own RuleTester cases for the 90 rules, turned into CLI runs by `scripts/harvest-rule-tests.cjs` (options as `--rule`, globals as `--global`, `commonjs`/`script` as `.cjs`, every fifth through `stylish`, invalid cases with an `output` through `--fix-dry-run`); 902 real-file runs (ESLint's own `lib/` and `bin/`, ms, Fuse.js, json-server, all 90 rules on, `json --fix-dry-run` and `stylish`); 555 linter-core runs (directives, inline config, unused directives, fixes, severities, CLI flags, parse errors) |
+| `app record` | 10,585 cases (8,856 rule, 902 real, 555 core, 272 traps), two runs each; the only noise was the HTML formatter's time stamp |
+| parser | oxc 0.158, with its token list mapped to espree's token types and its ranges to UTF-16: tree, tokens and comments equal espree's on 30,082 of 30,099 inputs taken from all of ESLint's rule tests (not only the 90); the other 17 are refused and go to ESLint, none differ |
+| port | about 33,700 lines of Rust: the linter core (`SourceCode`, the token store, selector ordering, directives, inline config, the report translator, the fix loop, the `json` and `stylish` formatters), eslint-scope 9.1.2, ESLint's code path analysis, eslint-utils' `getStaticValue` and `ReferenceTracker`, regexpp's parser and validator, and the 90 rules |
+| code paths | the enter, leave and code path event sequence and every segment graph, compared with ESLint's own `CodePathAnalyzer` on 9,706 inputs: all identical |
+| regexpp | `validatePattern` (message for message) and the parse tree, compared on 31,232 pattern and flag-mode pairs: all identical |
+| `gate eslint-stdin-rs` | passes: `lintStdin(args, text)`, a wrapper that runs ESLint's own `cli.execute` in process, bridged and backed by the port; 10,192/10,192 recorded calls |
+| `app replay --build` | **10,585/10,585 at 3.6% fallback; 10,204 runs answered fully in Rust**, byte-identical stdout, stderr and exit code |
+
+In Rust, by group: 8,848 of the 8,856 rule cases, 886 of the 902 real-file runs, 458 of the 555
+core cases, 12 of the 272 traps. What goes to ESLint, by the first thing the port does not take:
+file names other than `.js`, `.mjs` and `.cjs` 91, `--rule` values ESLint itself rejects (the
+tool's traps) 84, formats other than `json` and `stylish` 82, parse errors 65 (they keep espree's
+messages), `impliedStrict` and other parser options 15, inline config enabling a rule not ported
+13, import assertions (oxc accepts them, acorn does not) 6, and 25 others: inline configs whose
+options the port does not read or whose error message comes from ajv 12, invalid `--rule` options,
+severities and rule names 6, JSX text with HTML entities 2, two literals beyond `1e308` that
+no-loss-of-precision declines, `--help`, `--version`, and one run with config lookup on.
+
+How the port was checked as it grew: `linter-rs/examples/check.rs` runs every recorded case in
+process in about 3 seconds and counts cases claimed and identical, mismatches (always 0) and
+declines with their reasons. A rule that meets something it does not port (a regex option outside
+a small matcher, a value `getStaticValue` cannot reproduce exactly) declines the whole run rather
+than guess.
+
+What the port had to get right, all caught by recorded cases:
+
+- espree types a keyword used as a property name (`a.if`, `{ debugger: 1 }`) as `Identifier`
+  (acorn re-reads it as a name), except `let`, `static` and `yield`, which stay `Keyword`;
+  `new.target`'s `new` stays `Keyword`; template element ranges include the backtick and `${`.
+- oxc's parser leaves early errors to semantic analysis that acorn reports while parsing (`"use
+  strict"` in a function with default parameters); running oxc's syntax checks sends those
+  files to ESLint instead of linting them.
+- Listeners run in esquery's order: by attribute count, identifier count, then the selector
+  text, across rules; selectors with the same text in rule order. Messages at the same line and
+  column keep that order.
+- A suggestion's keys keep the order the rule wrote them, with `desc` appended; a problem from
+  `context.report` and one from the linter (`Definition for rule ... was not found`) put
+  `severity` in different places.
+- `eslint-disable-next-line` takes the comment's end line, unused directives are reported at the
+  comment's start, and removing one rule from a list keeps the commas right.
+- `String(number)`, `toPrecision` and radix conversion as V8 writes them (no-loss-of-precision),
+  UTF-16 lengths in the `stylish` table, JavaScript's `\s` set (which has U+FEFF and not U+0085).
+- `1e400` comes out of oxc's ESTree JSON as `1e+400`, which serde_json refuses; it is read as
+  infinity.
+
+Found in rust-anything, and fixed (all in the [changelog](../CHANGELOG.md)):
+
+- `bridge` and `analyze` found no functions in a CommonJS module (`module.exports = { a, b }`),
+  so no ESLint unit could be bridged; they now read `module.exports = { ... }`,
+  `module.exports.a = a` and `exports.a = a`.
+- The `timestamps` normalizer missed JavaScript's `Date#toString()`, so ESLint's HTML report
+  kept the minutes of its recording run and failed a replay ten minutes later.
+
+Benchmark: Apple M4 (10 cores), Node 24.15.0, two runs at load
+average 3.0 to 3.9, on the 443 real files the port answers with all 90 rules on
+([`bench/`](../demo/real-world/eslint-rs/bench)): one process per file, ESLint's CLI took
+53.5 s and 56.4 s and the front door 2.07 s and 2.15 s (25.9x, 26.3x; per file median 34.5x, the
+slowest file 6.3x, none slower, the same bytes from both). In process, ESLint's `Linter` warm in
+V8 took 2,368 ms and 2,553 ms and the port 754 ms and 759 ms (3.1x, 3.4x; per file median 2.9x
+and 3.0x, lowest 1.2x, none slower). A run that falls back costs about 2.5 ms more than ESLint
+alone. The CLI gap is mostly Node starting and loading ESLint; in process a first build measured
+2.1x to 2.3x (at load 19 to 22) and reached 3x after reading oxc's ESTree JSON straight into the arena instead of through
+`serde_json::Value`, and computing the listener order once per node type.
+
+What it does not cover: config files, plugins and custom parsers (TypeScript, Babel), the other
+202 core rules, formatters other than `json` and `stylish`, linting files named on the command
+line (ignore files, caching, suppressions, `--fix` writing files), and parse error messages. The
+front door is not lifted: ESLint stays installed and answers those runs.
 
 ## Fixtures written to stress the tool
 

@@ -3483,7 +3483,7 @@ export interface Config {
   /** Executable to run instead of the staged vendored build. */
   command?: string
   /**
-   * `eager` puts all 16 tool schemas in every request; `on-demand` lists them
+   * `eager` puts all 22 tool schemas in every request; `on-demand` lists them
    * in the system prompt and loads the ones an agent asks for.
    */
   toolLoading: 'eager' | 'on-demand'

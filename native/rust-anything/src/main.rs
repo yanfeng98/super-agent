@@ -25,7 +25,7 @@ use rust_anything::{analyze, app, bridge, front_door, gate, harness, lift, mcp, 
     name = "rust-anything",
     version,
     about = "Rewrite TypeScript/JavaScript, Python, C, Go, Ruby, Java or Kotlin apps in Rust, one verified piece at a time",
-    after_help = "Loop per unit: analyze -> bridge -> record -> port src/port.rs -> build -> diff -> shadow -> gate"
+    after_help = "Loop per unit: analyze -> bridge -> record -> port src/port.rs -> build -> diff -> shadow -> gate\nOnly the slow part: go --agent claude -- <workload>, then enable/disable and report"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -103,7 +103,7 @@ enum Cmd {
     },
     /// 2b. Regenerate the bindings (`lib.rs`, `index.cjs`, `js.rs`) from the signatures in `port.rs`.
     Refresh {
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         /// Add a batch class: `function:param` runs `function` over many `param` values kept in
         /// Rust, on all cores. Repeat for more.
@@ -113,12 +113,13 @@ enum Cmd {
     /// 3a. Record what the TS functions return on generated and given inputs.
     Record {
         /// Crate folder made by `bridge`.
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         /// Generated cases per function.
         #[arg(long, default_value_t = 200)]
         count: usize,
-        /// Extra cases: JSONL of `{"fn": name, "args": [...]}`.
+        /// Extra cases: JSONL of `{"fn": name, "args": [...]}`, plus `"kwargs": {...}` for Python
+        /// and Ruby arguments passed by keyword.
         #[arg(long)]
         inputs: Option<PathBuf>,
         /// Import the original from this JS module (e.g. built output) instead of the TS source.
@@ -147,11 +148,20 @@ enum Cmd {
         /// Android device serial; picked automatically when only one is connected.
         #[arg(long)]
         device: Option<String>,
+        /// Pin the clock and random numbers while recording and diffing (TS/JS with napi,
+        /// Python): `Date.now()`, `new Date()` and `Math.random` (`time.time`, `datetime.now`
+        /// and `random`) get fixed values, saved in `pinned.json`, and the port reads them from
+        /// `src/port/pinned.rs`. Kept for later runs until `--no-pin-clock`.
+        #[arg(long, conflicts_with = "no_pin_clock")]
+        pin_clock: bool,
+        /// Stop pinning the clock and random numbers.
+        #[arg(long)]
+        no_pin_clock: bool,
     },
     /// 3b. Build the crate's JS module (napi-rs `.node`, wasm-bindgen output) or, with
     /// `--profile android`, the JNI library for Android ABIs into `jniLibs/`.
     Build {
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         /// Target: this machine, or Android (needs the NDK and the Rust Android targets).
         #[arg(long, value_enum, default_value_t = Profile::Host)]
@@ -171,7 +181,7 @@ enum Cmd {
     },
     /// 3c. Replay recorded cases against the Rust module.
     Diff {
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         /// Target: this machine, or a connected Android device (for JVM crates).
         #[arg(long, value_enum, default_value_t = Profile::Host)]
@@ -198,11 +208,37 @@ enum Cmd {
     },
     /// 3d. Time the recorded cases on the TS original and on Rust, bridge included.
     Bench {
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         /// Minimum measured time per function and side, in milliseconds.
         #[arg(long, default_value_t = 200)]
         min_ms: u64,
+        /// Resolve npm packages the original imports from this folder's `node_modules`.
+        #[arg(long)]
+        resolve_from: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long = "node-arg", allow_hyphen_values = true)]
+        node_args: Vec<String>,
+    },
+    /// 3e. Run fresh inputs from a new seed through the original and the port and report where
+    /// they differ: what the recorded cases did not cover.
+    Fuzz {
+        #[arg(default_value = ".", value_parser = absolute)]
+        crate_dir: PathBuf,
+        /// Fresh cases per function (and scenarios per class) in each round.
+        #[arg(long, default_value_t = 200)]
+        cases: usize,
+        /// Seed of the first round; random (and printed) when omitted. Later rounds count up.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Keep running new rounds until this many seconds have passed (one round otherwise).
+        #[arg(long, value_name = "SECS")]
+        time: Option<f64>,
+        /// Append the mismatching cases (`--keep`) or every fresh case (`--keep=all`) to
+        /// `cases.jsonl`, so the next diff and gate check them.
+        #[arg(long, value_enum, num_args = 0..=1, require_equals = true, default_missing_value = "mismatches")]
+        keep: Option<rust_anything::fuzz::Keep>,
         /// Resolve npm packages the original imports from this folder's `node_modules`.
         #[arg(long)]
         resolve_from: Option<PathBuf>,
@@ -226,9 +262,87 @@ enum Cmd {
         #[arg(last = true, required = true)]
         command: Vec<String>,
     },
+    /// The hot-path loop in one command: profile the workload, bridge the top portable function,
+    /// record it, hand the port to an agent, then build, diff and gate it, and switch it on only
+    /// when everything matches. `rust-anything go --agent claude -- python3 app.py`
+    Go {
+        /// Repository root, as `profile` takes it.
+        #[arg(value_name = "ROOT", conflicts_with = "root")]
+        path: Option<PathBuf>,
+        /// Repository root.
+        #[arg(long)]
+        root: Option<PathBuf>,
+        /// `claude`, `codex`, or any command that reads a prompt on stdin. Without it, `go` writes
+        /// the crate's TASK.md and stops; run it again once `src/port.rs` is ported.
+        #[arg(long)]
+        agent: Option<String>,
+        /// Port this function instead of the profile's pick.
+        #[arg(long)]
+        function: Option<String>,
+        /// Source language; detected from the repository when omitted.
+        #[arg(long, value_enum)]
+        lang: Option<rust_anything::lang::Lang>,
+        /// Generated cases per function, on top of the calls the workload makes.
+        #[arg(long, default_value_t = 200)]
+        count: usize,
+        /// Agent turns: the port, then one more per failing diff or gate.
+        #[arg(long, default_value_t = 3)]
+        rounds: usize,
+        #[arg(long)]
+        json: bool,
+        /// The workload, after `--`.
+        #[arg(last = true, required = true)]
+        command: Vec<String>,
+    },
+    /// Switch a ported unit on: one marked block in the original source files rebinds its
+    /// functions to the Rust module, for every caller (TS/JS and Python). `disable` removes it.
+    Enable {
+        #[arg(default_value = ".", value_parser = absolute)]
+        crate_dir: PathBuf,
+        /// Switch it on even when recorded cases differ.
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Switch a unit off: removes exactly the lines `enable` added.
+    Disable {
+        #[arg(default_value = ".", value_parser = absolute)]
+        crate_dir: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Write a unit's result for a pull request or README: REPORT.md and card.svg with the
+    /// recorded cases matched, the speedup from bench, the fallback rate and the machine.
+    Report {
+        #[arg(default_value = ".", value_parser = absolute)]
+        crate_dir: PathBuf,
+        /// Output folder; defaults to `<crate>/report`.
+        #[arg(long, short, value_parser = absolute)]
+        out: Option<PathBuf>,
+        /// Minimum measured time per function and side, in milliseconds.
+        #[arg(long, default_value_t = 200)]
+        min_ms: u64,
+        #[arg(long)]
+        json: bool,
+        #[arg(long = "node-arg", allow_hyphen_values = true)]
+        node_args: Vec<String>,
+    },
+    /// Remove the build cache every port and bridge shares (CARGO_TARGET_DIR when set, else
+    /// rust-anything/target in your cache folder). Ports rebuild on their next build.
+    Clean {
+        /// Only print the folder and its size.
+        #[arg(long)]
+        dry_run: bool,
+        /// Remove it even when CARGO_TARGET_DIR names it (other cargo projects may build there).
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+    },
     /// 4. Generate a drop-in module that runs TS and Rust side by side.
     Shadow {
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         /// Where to write the module; defaults to `<crate>/shadow/<name>.shadow.ts`.
         #[arg(long, short)]
@@ -236,12 +350,43 @@ enum Cmd {
     },
     /// 5. Check the definition of done for a port.
     Gate {
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", value_parser = absolute)]
         crate_dir: PathBuf,
         #[arg(long)]
         json: bool,
         #[arg(long = "node-arg", allow_hyphen_values = true)]
         node_args: Vec<String>,
+    },
+    /// 6. Lay out installable packages and a CI workflow for every platform; never publishes.
+    Package {
+        #[arg(default_value = ".", value_parser = absolute)]
+        crate_dir: PathBuf,
+        /// Package name on npm or PyPI; defaults to the crate name.
+        #[arg(long)]
+        name: Option<String>,
+        /// Package version; defaults to the original package's.
+        #[arg(long)]
+        version: Option<String>,
+        /// Output folder; defaults to `<crate>/package`.
+        #[arg(long, value_parser = absolute)]
+        out: Option<PathBuf>,
+        /// napi: the module to load where no binary fits (defaults to the original file when it
+        /// imports nothing).
+        #[arg(long)]
+        fallback: Option<String>,
+        /// CLI front door: a command the package installs (repeat for more); defaults to the
+        /// package name without its scope.
+        #[arg(long = "bin")]
+        bin: Vec<String>,
+        /// CLI front door: the original npm package it falls back to, as <name>@<version>;
+        /// defaults to the one in the repository's node_modules.
+        #[arg(long)]
+        original: Option<String>,
+        /// List the files, write nothing.
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// Record the whole app's behavior and replay any build against it (CLIs).
     App {
@@ -263,6 +408,9 @@ enum Cmd {
         /// Show what would change, write nothing.
         #[arg(long)]
         dry_run: bool,
+        /// Change settings files in place without saving a `.rust-anything.bak` copy first.
+        #[arg(long)]
+        no_backup: bool,
         #[arg(long)]
         json: bool,
     },
@@ -331,9 +479,11 @@ enum AppCmd {
         /// Repeatable; implies --http; saved with the cases.
         #[arg(long = "arg", value_name = "ARG", allow_hyphen_values = true)]
         server_args: Vec<String>,
-        /// A file or folder of the repository the server reads or writes (a database file, a
-        /// public folder): snapshotted into `http/files/` and copied into a fresh working
-        /// directory before every start. Repeatable; implies --http; saved with the cases.
+        /// A file or folder of the repository the app reads or writes (a project tree, a
+        /// database file, a public folder): snapshotted into `files/` (`http/files/` for a
+        /// server) and copied into a fresh working directory before every case (CLIs) or start
+        /// (servers). A CLI's written files are what differs from it afterwards, and the files
+        /// it removed are compared too. Repeatable; saved with the cases.
         #[arg(long)]
         fresh: Vec<String>,
         /// Milliseconds to wait after each response before the next request, for work a server
@@ -568,6 +718,8 @@ fn run() -> Result<ExitCode> {
             test_command,
             profile,
             device,
+            pin_clock,
+            no_pin_clock,
         } => {
             anyhow::ensure!(
                 from_tests || test_command.is_empty(),
@@ -603,6 +755,15 @@ fn run() -> Result<ExitCode> {
                 manifest.float_tolerance = (rust_anything::tolerance::check(t)? > 0.0).then_some(t);
                 manifest.save(&crate_dir)?;
             }
+            if (pin_clock || no_pin_clock)
+                && let Some(helper) = rust_anything::pin::set(&crate_dir, pin_clock)?
+            {
+                say!(
+                    "Wrote {}: add `mod pinned;` to port.rs and call `pinned::now_ms()` and \
+                     `pinned::random()` where the original reads the clock or draws a number",
+                    helper.display()
+                );
+            }
             let opts = harness::RecordOptions {
                 crate_dir: &crate_dir,
                 count,
@@ -628,6 +789,14 @@ fn run() -> Result<ExitCode> {
             );
             for (name, n) in &outcome.per_function {
                 say!("  {name}: {n}");
+            }
+            if let Some(pin) = &outcome.pinned {
+                say!(
+                    "Clock pinned at {} ms (UTC), random numbers from seed {} ({})",
+                    pin.now_ms,
+                    pin.seed,
+                    rust_anything::pin::FILE
+                );
             }
             if !outcome.regex_functions.is_empty() {
                 say!(
@@ -794,6 +963,73 @@ fn run() -> Result<ExitCode> {
                 return Ok(ExitCode::FAILURE);
             }
         }
+        Cmd::Fuzz {
+            crate_dir,
+            cases,
+            seed,
+            time,
+            keep,
+            resolve_from,
+            json,
+            node_args,
+        } => {
+            let time = time
+                .map(|t| {
+                    anyhow::ensure!(t.is_finite() && t >= 0.0, "`--time` takes seconds");
+                    Ok(std::time::Duration::from_secs_f64(t))
+                })
+                .transpose()?;
+            let f = rust_anything::fuzz::fuzz(&rust_anything::fuzz::FuzzOptions {
+                crate_dir: &crate_dir,
+                cases,
+                seed,
+                time,
+                keep,
+                resolve_from: resolve_from.as_deref(),
+                node_args: &node_args,
+            })?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&f)?);
+            } else {
+                say!("Seed {} (replay with --seed {})", f.seed, f.seed);
+                say!(
+                    "{}/{} fresh cases match ({} round{})",
+                    f.passed,
+                    f.cases,
+                    f.rounds,
+                    if f.rounds == 1 { "" } else { "s" }
+                );
+                if !f.missing.is_empty() {
+                    say!("Missing exports: {}", f.missing.join(", "));
+                }
+                for m in &f.mismatches {
+                    say!(
+                        "- {}({}): expected {}, got {}",
+                        m["fn"].as_str().unwrap_or_default(),
+                        m["args"]
+                            .as_array()
+                            .map(|a| a
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", "))
+                            .unwrap_or_default(),
+                        m["expected"],
+                        m["actual"]
+                    );
+                }
+                if f.kept > 0 {
+                    say!(
+                        "Kept {} case(s) in {}: the next diff and gate check them",
+                        f.kept,
+                        f.recording.display()
+                    );
+                }
+            }
+            if f.failed > 0 {
+                return Ok(ExitCode::FAILURE);
+            }
+        }
         Cmd::Bench {
             crate_dir,
             min_ms,
@@ -854,6 +1090,162 @@ fn run() -> Result<ExitCode> {
                 say!("{}", rust_anything::profile::markdown(&report));
             }
         }
+        Cmd::Go {
+            path,
+            root,
+            agent,
+            function,
+            lang,
+            count,
+            rounds,
+            json,
+            command,
+        } => {
+            let root = path.or(root).unwrap_or_else(|| PathBuf::from("."));
+            let outcome = rust_anything::go::go(&rust_anything::go::Options {
+                root: &root,
+                command: &command,
+                lang,
+                agent: agent.as_deref(),
+                function: function.as_deref(),
+                count,
+                rounds,
+            })?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&outcome)?);
+            } else {
+                for problem in &outcome.failed_checks {
+                    say!("{problem}\n");
+                }
+                say!("{}", outcome.next);
+            }
+            use rust_anything::go::Stage;
+            return Ok(match outcome.stage {
+                Stage::On | Stage::Passed | Stage::WaitingForPort => ExitCode::SUCCESS,
+                Stage::Mismatch | Stage::GateFailed | Stage::Slower => ExitCode::FAILURE,
+            });
+        }
+        Cmd::Enable {
+            crate_dir,
+            force,
+            json,
+        } => {
+            if !force {
+                harness::build(&crate_dir)?;
+                let d = harness::diff(&harness::DiffOptions {
+                    crate_dir: &crate_dir,
+                    module: None,
+                    ignore_key_order: false,
+                    node_args: &[],
+                    float_tolerance: None,
+                })?;
+                if d.failed > 0 || !d.missing.is_empty() {
+                    anyhow::bail!(
+                        "{}/{} recorded cases match; switch it on once they all do (`rust-anything diff` shows them), or pass --force",
+                        d.passed,
+                        d.total
+                    );
+                }
+            }
+            let on = rust_anything::enable::enable(&crate_dir)?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&on)?);
+            } else {
+                say!(
+                    "On: {} {} in Rust",
+                    on.functions.join(", "),
+                    if on.functions.len() == 1 {
+                        "runs"
+                    } else {
+                        "run"
+                    }
+                );
+                for f in &on.files {
+                    say!("  {}", f.display());
+                }
+                for s in &on.skipped {
+                    say!("- {s}");
+                }
+                say!(
+                    "{}=original (or RUST_ANYTHING_MODE=old) runs the original for one run; `rust-anything disable {}` removes the block.",
+                    on.switch,
+                    crate_dir.display()
+                );
+            }
+        }
+        Cmd::Disable { crate_dir, json } => {
+            let off = rust_anything::enable::disable(&crate_dir)?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&off)?);
+            } else if off.files.is_empty() {
+                say!("{} was not on; nothing changed", off.crate_name);
+            } else {
+                say!(
+                    "Off: {} {} in the original again",
+                    off.functions.join(", "),
+                    if off.functions.len() == 1 {
+                        "runs"
+                    } else {
+                        "run"
+                    }
+                );
+                for f in &off.files {
+                    say!("  {}", f.display());
+                }
+            }
+        }
+        Cmd::Report {
+            crate_dir,
+            out,
+            min_ms,
+            json,
+            node_args,
+        } => {
+            let card = rust_anything::card::report(&rust_anything::card::Options {
+                crate_dir: &crate_dir,
+                out: out.as_deref(),
+                min_ms,
+                node_args: &node_args,
+            })?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&card)?);
+            } else {
+                say_raw!("{}", rust_anything::card::markdown(&card));
+                say!(
+                    "\nWrote {} and {}",
+                    card.markdown.display(),
+                    card.svg.display()
+                );
+            }
+        }
+        Cmd::Clean {
+            dry_run,
+            force,
+            json,
+        } => {
+            let c = rust_anything::cache::clean(dry_run, force)?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&c)?);
+            } else if c.removed {
+                say!(
+                    "Removed {} ({})",
+                    c.dir.display(),
+                    rust_anything::cache::human(c.bytes)
+                );
+            } else if c.from_env && !dry_run {
+                say!(
+                    "{} ({}) is CARGO_TARGET_DIR, which other cargo projects may share; pass --force to remove it",
+                    c.dir.display(),
+                    rust_anything::cache::human(c.bytes)
+                );
+            } else {
+                say!(
+                    "{} ({})",
+                    c.dir.display(),
+                    rust_anything::cache::human(c.bytes)
+                );
+            }
+        }
         Cmd::Shadow { crate_dir, out } => {
             let outcome = shadow::shadow(&crate_dir, out.as_deref())?;
             say!(
@@ -881,6 +1273,50 @@ fn run() -> Result<ExitCode> {
                 say!(
                     "Import it in place of the original. RUST_ANYTHING_MODE=old|shadow|new switches at runtime."
                 );
+            }
+        }
+        Cmd::Package {
+            crate_dir,
+            name,
+            version,
+            out,
+            fallback,
+            bin,
+            original,
+            dry_run,
+            json,
+        } => {
+            let outcome = rust_anything::package::package(&rust_anything::package::Options {
+                crate_dir: &crate_dir,
+                name,
+                version,
+                out,
+                dry_run,
+                fallback,
+                bin,
+                original,
+            })?;
+            if json {
+                say!("{}", serde_json::to_string_pretty(&outcome)?);
+            } else {
+                say!(
+                    "{} {} {}@{} in {}:",
+                    if outcome.dry_run {
+                        "Would write"
+                    } else {
+                        "Wrote"
+                    },
+                    outcome.files.len(),
+                    outcome.name,
+                    outcome.version,
+                    outcome.out.display()
+                );
+                for file in &outcome.files {
+                    say!("  {file}");
+                }
+                for note in &outcome.notes {
+                    say!("{note}");
+                }
             }
         }
         Cmd::Gate {
@@ -924,6 +1360,7 @@ fn run() -> Result<ExitCode> {
             agents,
             remove,
             dry_run,
+            no_backup,
             json,
         } => {
             let home = rust_anything::setup::home()?;
@@ -936,6 +1373,7 @@ fn run() -> Result<ExitCode> {
                 command,
                 remove,
                 dry_run,
+                backup: !no_backup,
             })?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1283,4 +1721,10 @@ fn run_app(command: AppCmd) -> Result<ExitCode> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// A path argument made absolute: the tools run compilers and cargo from scratch folders, where
+/// a relative crate path points nowhere.
+fn absolute(arg: &str) -> Result<PathBuf, String> {
+    std::path::absolute(arg).map_err(|e| e.to_string())
 }

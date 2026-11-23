@@ -66,6 +66,7 @@ Runs the original's code or commands.
 | `test_command` | string[] |  | TS/JS or Python: also record every call the original's own test suite makes to the unit's functions, e.g. ["npx", "jest"] or ["pytest"]. Runs in the original's folder. |
 | `profile` | string |  | Record on this machine (default) or on a connected Android device (JVM crates). |
 | `device` | string |  | Android device serial; picked automatically when only one is connected. |
+| `pin_clock` | boolean |  | TS/JS (napi) and Python: true pins the clock and random numbers while recording and diffing (`Date.now()`, `new Date()`, `Math.random`; `time.time`, `datetime.now`, `random`) to the values in pinned.json, and writes src/port/pinned.rs for the port to read them (`mod pinned;` in port.rs). Kept for later runs; false stops pinning. |
 
 ## Build crate
 
@@ -117,6 +118,60 @@ Runs the original's code or commands.
 | `command` | string[] | yes | The workload, run in root: ["node", "bench.mjs"]. |
 | `lang` | string |  | Detected from the repository when omitted. |
 
+## Port the hot path end to end
+
+Tool `go` · CLI `rust-anything go`
+
+The hot-path loop in one call: profile the workload, pick the top portable function (the outermost loop; batched where profile says so), bridge it into rust/<function>-rs, record generated cases plus the calls the workload makes, write TASK.md, hand the port to `agent` (claude, codex, or a command reading the prompt on stdin), then build, diff and gate, and switch the unit on with `enable` only when every case matches, gate passes and `bench` shows it is not slower as its callers call it. Without `agent` it stops at `waiting_for_port`: port src/port.rs as TASK.md says and call go again; finished steps are kept. Returns the stage (waiting_for_port, mismatch, gate_failed, slower, on, passed), the speedup, the pick, the steps and what to do next.
+
+Runs the original's code or commands.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `root` | string | yes | Repository root. |
+| `command` | string[] | yes | The workload, run in root: ["python3", "app.py"]. |
+| `agent` | string |  | claude, codex, or a command that reads a prompt on stdin. Omit to port it yourself. |
+| `function` | string |  | Port this hot function instead of the profile's pick. |
+| `lang` | string |  | Detected from the repository when omitted. |
+| `count` | integer |  | Generated cases per function (default 200). |
+| `rounds` | integer |  | Agent turns: the port, then one per failing diff or gate (default 3). |
+
+## Switch a unit on
+
+Tool `enable` · CLI `rust-anything enable`
+
+Switch a ported TS/JS or Python unit on: one marked block in each original source file rebinds the unit's functions to the built Rust module, for every caller, with no import changed. RUST_ANYTHING_MODE=old or RUST_ANYTHING_UNIT_<NAME>=original runs the original for one run. Refuses while recorded cases differ unless `force`.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `crate` | string | yes | Folder of the generated crate (holds rust-anything.json). |
+| `force` | boolean |  |  |
+
+## Switch a unit off
+
+Tool `disable` · CLI `rust-anything disable`
+
+Switch a unit off: removes exactly the lines enable added, leaving the source files byte for byte as they were.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `crate` | string | yes | Folder of the generated crate (holds rust-anything.json). |
+
+## Write a report card
+
+Tool `report` · CLI `rust-anything report`
+
+Write <crate>/report/REPORT.md and card.svg for a pull request or README: the unit, recorded cases matched (diff), speedup call included (bench), fallback rate, on or off, and the machine with its core count. Builds first; every number comes from this run.
+
+Runs the original's code or commands.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `crate` | string | yes | Folder of the generated crate (holds rust-anything.json). |
+| `out` | string |  | Output folder; defaults to <crate>/report. |
+| `min_ms` | integer |  | Minimum measured time per function and side, in milliseconds (default 200). |
+| `node_args` | string[] |  | Extra arguments for node, e.g. ["--import=tsx"]. |
+
 ## Benchmark port
 
 Tool `bench` · CLI `rust-anything bench`
@@ -130,6 +185,24 @@ Runs the original's code or commands.
 | `crate` | string | yes | Folder of the generated crate (holds rust-anything.json). |
 | `resolve_from` | string |  |  |
 | `min_ms` | integer |  | Minimum measured time per function and side, in milliseconds (default 200). |
+| `node_args` | string[] |  | Extra arguments for node, e.g. ["--import=tsx"]. |
+
+## Fuzz port against original
+
+Tool `fuzz` · CLI `rust-anything fuzz`
+
+Live differential test: generate fresh inputs from a new seed (the record generator, without the cases already recorded), run them through the original and the built port, and report mismatches the recording missed. Returns the seed to replay, counts and the first mismatches; `keep` appends mismatching (or all) fresh cases to cases.jsonl so the next diff and gate check them. Works wherever record and diff do on this machine (TS/JS, Python, C, Go, Ruby, Java, Kotlin).
+
+Runs the original's code or commands.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `crate` | string | yes | Folder of the generated crate (holds rust-anything.json). |
+| `cases` | integer |  | Fresh cases per function (and scenarios per class) in each round (default 200). |
+| `seed` | integer |  | Seed of the first round; random when omitted (returned as `seed`). Later rounds count up from it. |
+| `time` | number |  | Keep running new rounds until this many seconds have passed; one round when omitted. |
+| `keep` | string |  | Append the mismatching fresh cases, or all of them, to cases.jsonl. |
+| `resolve_from` | string |  | Resolve npm packages the original imports from this folder's node_modules. |
 | `node_args` | string[] |  | Extra arguments for node, e.g. ["--import=tsx"]. |
 
 ## Generate shadow module
@@ -157,6 +230,23 @@ Read-only.
 | --- | --- | --- | --- |
 | `repo` | string | yes | Repository root. |
 | `crates` | string[] |  | Folders with crates kept outside the repository. |
+
+## Lay out packages
+
+Tool `package` · CLI `rust-anything package`
+
+Lay out installable packages for a gated port; writes files only, never builds other platforms or publishes. PyO3: a maturin project (abi3 wheel importable under the original module's name). CLI front door (`rust/app` of a Node CLI): a main npm package whose command runs `<name>-<platform>`'s front door binary, with the original pinned to its exact version as a dependency for every case the port hands back. napi: a main npm package whose loader picks `<name>-<platform>` from optionalDependencies and falls back to the original JS, one package per platform (this machine's binary copied in when built). wasm: one npm package with the built pkg/. PyO3 and napi also get a GitHub Actions workflow building macOS (arm64, x86_64), Linux (x86_64, aarch64) and Windows.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `crate` | string | yes | Folder of the generated crate (holds rust-anything.json). |
+| `name` | string |  | Package name on npm or PyPI; defaults to the crate name. |
+| `version` | string |  | Package version; defaults to the original package's. |
+| `out` | string |  | Output folder; defaults to <crate>/package. |
+| `fallback` | string |  | napi: module to load where no binary fits; defaults to the original file when it is plain JS that imports nothing. |
+| `bin` | string[] |  | CLI front door: the commands the package installs; defaults to the package name without its scope. |
+| `original` | string |  | CLI front door: the original npm package it falls back to, as <name>@<version>; defaults to the one in the repository's node_modules. |
+| `dry_run` | boolean |  | List the files, write nothing. |
 
 ## Check definition of done
 
@@ -195,7 +285,7 @@ Runs the original's code or commands.
 | `db_reset` | string |  | Shell command that resets the database before each case (each start for servers); cases then run one at a time. |
 | `db_dump` | string |  | Shell command that prints the database's state (e.g. `sqlite3 app.db .dump`), run after each case or request and recorded with the effects. |
 | `args` | string[] |  | Servers: arguments every start gets after its command, the original's and every build's (["db.json"]). Implies http; saved. |
-| `fresh` | string[] |  | Servers: repository files or folders the server reads or writes, snapshotted and copied into a fresh working directory before every start. Implies http; saved. |
+| `fresh` | string[] |  | Repository files or folders the app reads or writes (a project tree, a database file), snapshotted and copied into a fresh working directory before every case (CLIs) or start (servers); a CLI's removed files are compared too. Saved. |
 | `pace` | integer |  | Servers: milliseconds to wait after each response, for work the server does after answering (a file watcher). Implies http; saved and used by replay; 0 removes it. |
 | `float_tolerance` | number |  | Numeric output: numbers match when they differ by at most this times the larger magnitude (absolute below 1), e.g. 1e-9. Saved with the cases; 0 removes it. |
 | `float_file` | string[] |  | Written files of raw floats, compared value by value within float_tolerance: `PATH=f32le` or `PATH=f64le`. Saved with the cases. |

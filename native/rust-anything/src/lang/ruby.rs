@@ -31,30 +31,62 @@ const SKIP_DIRS: &[&str] = &[
 
 // ---- discovery -------------------------------------------------------------------------------
 
-/// `spec.add_dependency "name"` and `gem "name"` lines.
+/// Whether a Ruby line opens a block that its own `end` closes.
+fn opens_a_block(line: &str) -> bool {
+    line.ends_with(" do")
+        || line.contains(" do |")
+        || ["if ", "unless ", "while ", "until ", "case "]
+            .iter()
+            .any(|kw| line.starts_with(kw))
+}
+
+/// `spec.add_dependency "name"` and `gem "name"` lines. A gem inside a `group` block is a
+/// development one. Blocks nest (`platform :mri do ... end`), so the group ends at its own `end`,
+/// not at the first one: otherwise every gem after a nested block is read as a runtime dependency.
 fn gem_names(text: &str) -> (Vec<String>, Vec<String>) {
+    static PATTERNS: std::sync::OnceLock<(regex::Regex, regex::Regex)> = std::sync::OnceLock::new();
+    let (gem, spec) = PATTERNS.get_or_init(|| {
+        (
+            regex::Regex::new(r#"^gem\s*\(?\s*['"]([^'"]+)['"]"#).expect("valid regex"),
+            regex::Regex::new(
+                r#"\badd_(runtime_|development_)?dependency\s*\(?\s*['"]([^'"]+)['"]"#,
+            )
+            .expect("valid regex"),
+        )
+    });
     let (mut deps, mut dev) = (Vec::new(), Vec::new());
+    let mut depth = 0usize;
+    let mut group_at: Option<usize> = None;
     for line in text.lines() {
-        let line = line.trim();
-        let quoted = |rest: &str| {
-            rest.trim()
-                .trim_start_matches('(')
-                .split(['"', '\''])
-                .nth(1)
-                .map(str::to_string)
-        };
-        if let Some(rest) = line
-            .strip_prefix("spec.add_dependency")
-            .or_else(|| line.strip_prefix("spec.add_runtime_dependency"))
-            .or_else(|| line.strip_prefix("s.add_dependency"))
-            .or_else(|| line.strip_prefix("gem "))
-        {
-            deps.extend(quoted(rest));
-        } else if let Some(rest) = line
-            .strip_prefix("spec.add_development_dependency")
-            .or_else(|| line.strip_prefix("s.add_development_dependency"))
-        {
-            dev.extend(quoted(rest));
+        let t = line.trim();
+        if t.starts_with('#') {
+            continue;
+        }
+        if t.starts_with("group ") {
+            group_at = Some(depth);
+        }
+        if opens_a_block(t) {
+            depth += 1;
+        }
+        if t == "end" || t.starts_with("end ") {
+            depth = depth.saturating_sub(1);
+            if group_at.is_some_and(|at| depth <= at) {
+                group_at = None;
+            }
+        }
+        if let Some(c) = gem.captures(t) {
+            if group_at.is_some() {
+                dev.push(c[1].to_string());
+            } else {
+                deps.push(c[1].to_string());
+            }
+        }
+        if let Some(c) = spec.captures(t) {
+            if c.get(1).is_some_and(|m| m.as_str() == "development_") {
+                dev.push(c[2].to_string());
+            } else {
+                deps.push(c[2].to_string());
+            }
         }
     }
     (deps, dev)
@@ -109,6 +141,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
                     dir,
                     deps,
                     dev_deps: dev,
+                    namespaces: Vec::new(),
                 });
             }
         } else if name.ends_with(".rb") {
@@ -141,6 +174,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             },
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     packages.sort_by(|a, b| a.dir.cmp(&b.dir));

@@ -41,6 +41,8 @@ pub enum Risk {
     /// C that depends on the target: inline assembly, `volatile` hardware access, bitfields,
     /// packed layouts, compiler extensions, integers cast to addresses.
     PlatformSpecific,
+    /// Reads of the clock or random numbers, which change between runs.
+    ClockAndRandom,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -74,7 +76,9 @@ impl Risk {
             | Self::ClassInheritance
             | Self::Reflection
             | Self::Callbacks => Severity::Medium,
-            Self::Exceptions | Self::NumberSemantics | Self::Json => Severity::Low,
+            Self::Exceptions | Self::NumberSemantics | Self::Json | Self::ClockAndRandom => {
+                Severity::Low
+            }
             Self::Pointers
             | Self::Monkeypatching
             | Self::UnorderedIteration
@@ -114,6 +118,7 @@ impl Risk {
             Self::AlreadyCompiled => "Already compiled (numba, Cython, JAX)",
             Self::ArrayParameters => "numpy array parameters",
             Self::PlatformSpecific => "Platform-specific C (asm, volatile, bitfields, packing)",
+            Self::ClockAndRandom => "Clock and random numbers",
         }
     }
 
@@ -228,6 +233,15 @@ impl Risk {
                  type sizes or its assembly. A recording on this machine says nothing about the \
                  target, and battle-tested driver or firmware code gains little from a rewrite: \
                  keep it in C and port the portable logic around it."
+            }
+            Self::ClockAndRandom => {
+                "Results that depend on the time or on random numbers differ on every run, so a \
+                 plain recording cannot pin them down. Record with `record --pin-clock` (TS/JS with \
+                 the napi bridge, Python): `Date.now()`, `new Date()` and `Math.random` (`time.time`, \
+                 `datetime.now` and `random`) then return fixed values during record, diff and \
+                 gate, and the port reads the same ones from `src/port/pinned.rs` (`now_ms()`, \
+                 `random()`, a documented mulberry32). Or pass the time and the seed in as \
+                 parameters."
             }
         }
     }

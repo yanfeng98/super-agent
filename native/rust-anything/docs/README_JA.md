@@ -4,33 +4,42 @@
 
 <h1 align="center">rust-anything</h1>
 
-<p align="center"><b>アプリを Rust で書き直し、元と同じように動くことを証明する。</b></p>
-
-<p align="center">2.0 の新機能: <a href="real-world.md#prettier">Prettier を Rust に移植</a>。19x 高速 · 記録済み実行 17,224 件中 15,837 件が完全に Rust · すべてバイト単位で一致</p>
-
-<p align="center">
-  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io バージョン"></a>
-  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm バージョン"></a>
-  <a href="https://github.com/erkamyaman/rust-anything/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/erkamyaman/rust-anything/ci.yml?branch=main&label=tests" alt="テスト"></a>
-  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub スター"></a>
-  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
-</p>
-
-<p align="center">
-  <a href="#クイックスタート">クイックスタート</a> ·
-  <a href="#対応言語">対応言語</a> ·
-  <a href="real-world.md">実プロジェクトの移植</a> ·
-  <a href="how-it-works.md#how-it-works">仕組み</a> ·
-  <a href="whole-apps.md#port-a-whole-app">アプリ全体の移植</a> ·
-  <a href="faq.md#faq">よくある質問</a>
-</p>
-
-<p align="center">トルコ 🇹🇷 で <a href="https://github.com/erkamyaman">erKam Yaman</a> が開発 · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ スポンサーになる</a></p>
-
-<p align="center">スポンサー: <a href="https://coderabbit.ai"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
-
-<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · 日本語 · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a></sub></p>
+<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · 日本語 · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a> · <a href="README_ES.md">Español</a> · <a href="README_IT.md">Italiano</a></sub></p>
 <p align="center"><sub>この翻訳はコミュニティによって管理されており、<a href="../README.md">英語版 README</a> より古い場合があります。</sub></p>
+
+<p align="center"><b>アプリを Rust で書き直し、元と同じように動くことを証明する。</b><br>
+コードを自動翻訳するツールではありません。Rust はコーディングエージェント（またはあなた）が書き、rust-anything が元のプログラムと照合して検証します。</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/languages/top/erkamyaman/rust-anything?logo=rust&label=Rust&color=CE422B" alt="Rust share of the code">
+  <img src="https://img.shields.io/badge/macOS%20·%20Linux%20·%20Windows-native-2563EB" alt="Native binaries for macOS, Linux and Windows">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT license"></a>
+  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io version"></a>
+  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm version"></a>
+  <br>
+  <a href="https://coderabbit.link/erkamyaman"><img src="https://img.shields.io/coderabbit/prs/github/erkamyaman/rust-anything?labelColor=171717&color=FF570A&label=Reviewed+by+CodeRabbit" alt="Pull requests reviewed by CodeRabbit"></a>
+  <a href="https://github.com/rust-unofficial/awesome-rust#development-tools"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Rust"></a>
+  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
+  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center"><a href="https://github.com/erkamyaman/rust-anything/discussions/127"><img src="https://img.shields.io/badge/Join%20the%20discussion-6E40C9?style=for-the-badge&logo=github&logoColor=white" alt="Join the discussion"></a></p>
+
+<p align="center"><a href="https://trendshift.io/repositories/363468" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/363468/daily?language=Rust" alt="erkamyaman/rust-anything: #1 Rust repository of the day on Trendshift" width="250" height="55"/></a></p>
+
+<p align="center"><b><a href="#クイックスタート">クイックスタート</a></b> · <a href="https://github.com/erkamyaman/rust-anything/releases">Releases</a> · <a href="#クイックスタート">Claude Code plugin</a> · <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=rust-anything">MCP Registry</a> · <a href="real-world.md">実プロジェクトの移植</a> · <a href="faq.md#faq">よくある質問</a><br>
+<sub><a href="#対応言語">対応言語</a> · <a href="how-it-works.md#how-it-works">仕組み</a> · <a href="whole-apps.md#port-a-whole-app">アプリ全体の移植</a> · <a href="../LICENSE">MIT</a></sub><br>
+トルコ 🇹🇷 で <a href="https://github.com/erkamyaman">erKam Yaman</a> が開発 · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ スポンサーになる</a> · スポンサー: <a href="https://coderabbit.link/erkamyaman"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
+
+<p align="center">2.0 の新機能: <a href="real-world.md#prettier">Prettier を Rust に移植</a>。19x 高速 · 記録済み実行 17,224 件中 15,861 件が完全に Rust · すべてバイト単位で一致</p>
+
+<p align="center">
+  <img src="assets/prettier.gif" alt="Prettier とその Rust 移植版が、ファイルごとに 1 プロセスで同じ 59 個の実ファイルをフォーマット: Prettier は 3.63 s、Rust 移植版は 0.20 s で、出力はバイト単位で同一です。" width="820">
+  <br>
+  <sub>ms、Fuse.js、json-server の 59 個の実ファイルで Prettier と Rust 移植版を比較（Apple M4）。出力はバイト単位で同一です。<a href="real-world.md#prettier">計測方法</a>。</sub>
+</p>
+
+<p align="center"><sub>PHP と C#：現在は記録・再生と front door に対応、ユニット単位の移植は次の予定です。</sub></p>
 
 <table>
   <tr>
@@ -63,13 +72,24 @@
 | json-server、起動から最初のレスポンスまで | 79〜85 ms | **8〜10 ms** |
 | 50,000 文字列に対する [Fuse.js](real-world.md#fusejs) 検索、1 クエリあたり | 91.2 ms | **2.8 ms: 32x 高速** |
 
-Prettier: 17,224 件の記録済み実行のうち 15,837 件が 10 言語（JavaScript、TypeScript、JSX、JSON、GraphQL、YAML、Markdown、CSS、SCSS、Less）にわたって完全に Rust でフォーマットされ、17,224 件すべてが Prettier とバイト単位で一致します。まだ移植されていない部分は Prettier にフォールバックするためです。json-server: 記録した 514/514 件の HTTP ケースが純粋な Rust バイナリ上で一致します。Apple M4 で各 2 回実行して計測し、計測前にすべての出力を比較しています（[詳細](real-world.md)）。小さな関数ごとに毎回 Rust を呼び出すと、通常は JIT より*遅く*なります。rust-anything は移植する価値のあるループを見つけ出し、そのループごと移行します。
+Prettier: 17,224 件の記録済み実行のうち 15,861 件が 10 言語（JavaScript、TypeScript、JSX、JSON、GraphQL、YAML、Markdown、CSS、SCSS、Less）にわたって完全に Rust でフォーマットされ、17,224 件すべてが Prettier とバイト単位で一致します。まだ移植されていない部分は Prettier にフォールバックするためです。json-server: 記録した 514/514 件の HTTP ケースが純粋な Rust バイナリ上で一致します。Apple M4 で各 2 回実行して計測し、計測前にすべての出力を比較しています（[詳細](real-world.md)）。小さな関数ごとに毎回 Rust を呼び出すと、通常は JIT より*遅く*なります。rust-anything は移植する価値のあるループを見つけ出し、そのループごと移行します。
 
-<p align="center">
-  <img src="assets/prettier.gif" alt="Prettier とその Rust 移植版が、ファイルごとに 1 プロセスで同じ 59 個の実ファイルをフォーマット: Prettier は 3.63 s、Rust 移植版は 0.20 s で、出力はバイト単位で同一です。" width="820">
-  <br>
-  <sub>ms、Fuse.js、json-server の 59 個の実ファイルで Prettier と Rust 移植版を比較（Apple M4）。出力はバイト単位で同一です。<a href="real-world.md#prettier">計測方法</a>。</sub>
-</p>
+## 遅い部分だけ
+
+アプリ全体を移植する必要はありません。遅すぎるコマンドに `go` を向けると、時間を食っている関数を 1 つだけ移植します:
+
+```sh
+rust-anything go --agent claude -- python3 app.py
+```
+
+実行をプロファイリングし、移行する価値のある最も外側の関数を選びます（その中の小さな呼び出しではなくループを選び、プロファイルが示す場合はバッチ化します）。生成した入力と実行中に行われた呼び出しでその関数を記録し、`src/port.rs` をエージェントに渡します（`claude`、`codex`、または stdin からプロンプトを読む任意のコマンド。`--agent` を指定しない場合は `TASK.md` を書き出して停止します）。記録したすべてのケースが一致し、`gate` に合格した場合にのみ、その関数を有効にします。その後は次のとおりです:
+
+```sh
+rust-anything report rust/dedupe-rs     # プルリクエスト用の REPORT.md と card.svg
+rust-anything disable rust/dedupe-rs    # 元の実装にバイト単位で戻す
+```
+
+上の表の [Fuse.js](real-world.md#fusejs) の行がこの形です。1 つの文字列に対する Fuse のスコア計算をリスト全体でバッチ化して Rust に移し、オブジェクトキー、拡張検索、その他の部分は JavaScript に残したまま、50,000 文字列に対して 1 クエリあたり 91.2 ms から 2.8 ms になりました。20 行の Python 製 dedupe である [`tests/fixtures/go-fuzzy`](../tests/fixtures/go-fuzzy) で `go` を試してみてください。移植版を有効・無効にするすべての方法: [Switch a port on and off](how-it-works.md#switch-a-port-on-and-off)。
 
 <p align="center">
   <img src="assets/json-server.gif" alt="Node サーバーとしての json-server と単一の Rust バイナリとしての json-server: アイドル時のメモリは 74 MB と 3.5 MB、起動から最初のレスポンスまでは 79〜85 ms と 8〜10 ms、記録した 514 件中 514 件の HTTP ケースが一致します。" width="820">
@@ -198,7 +218,7 @@ C# も同じように動作します: `analyze` は `.csproj` プロジェクト
 </p>
 
 <p align="center">
-  <a href="https://coderabbit.ai">
+  <a href="https://coderabbit.link/erkamyaman">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/sponsors/company-dark.svg">
       <img src="assets/sponsors/company-light.svg" width="800" alt="企業スポンサー: CodeRabbit">
@@ -217,6 +237,7 @@ C# も同じように動作します: `analyze` は `.csproj` プロジェクト
 
 <p align="center">
   <a href="https://github.com/sponsors/erkamyaman"><img src="https://img.shields.io/badge/%E3%82%B9%E3%83%9D%E3%83%B3%E3%82%B5%E3%83%BC%E3%81%AB%E3%81%AA%E3%82%8B-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="スポンサーになる"></a>
+  <a href="https://buymeacoffee.com/erkamyaman"><img src="https://img.shields.io/badge/Buy_me_a_coffee-%E2%98%95-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 ## 貢献

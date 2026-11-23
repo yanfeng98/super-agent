@@ -224,7 +224,10 @@ use axum::extract::{{Request, State}};
 use axum::http::{{StatusCode, header}};
 use axum::response::{{IntoResponse, Response}};
 
-const ROOT: &str = concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../..\");
+const ROOT: &str = match option_env!(\"RUST_ANYTHING_REPO\") {{
+    Some(root) => root,
+    None => concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../..\"),
+}};
 const RUN: &[&str] = &[{words}];
 const FALLBACK_LOG: &str = \"{log}\";
 

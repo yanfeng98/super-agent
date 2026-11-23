@@ -32,9 +32,12 @@ const SKIP_DIRS: &[&str] = &[
 // ---- discovery -------------------------------------------------------------------------------
 
 /// `groupId:artifactId` of each `<dependency>` in a pom, or `group:name` of Gradle coordinates.
-fn dependencies(text: &str) -> (Vec<String>, Vec<String>) {
+/// Comments do not count: a commented-out `<dependency>` or `implementation("a:b:1")` is not one
+/// the project declares.
+pub(crate) fn dependencies(text: &str) -> (Vec<String>, Vec<String>) {
     let (mut deps, mut dev) = (Vec::new(), Vec::new());
-    for block in text.split("<dependency>").skip(1) {
+    let pom = syntax::without_xml_comments(text);
+    for block in pom.split("<dependency>").skip(1) {
         let block = block.split("</dependency>").next().unwrap_or("");
         let tag = |t: &str| {
             block
@@ -45,28 +48,30 @@ fn dependencies(text: &str) -> (Vec<String>, Vec<String>) {
                 .unwrap_or("")
                 .to_string()
         };
-        let name = format!("{}:{}", tag("groupId"), tag("artifactId"));
+        let (group, artifact) = (tag("groupId"), tag("artifactId"));
+        if group.is_empty() || artifact.is_empty() {
+            continue;
+        }
+        let name = format!("{group}:{artifact}");
         if tag("scope") == "test" {
             dev.push(name);
         } else {
             deps.push(name);
         }
     }
-    for line in text.lines() {
-        let line = line.trim();
-        let Some((config, rest)) = line.split_once(['(', ' ']) else {
-            continue;
-        };
-        let coords = rest
-            .split(['"', '\''])
-            .nth(1)
-            .filter(|c| c.matches(':').count() >= 1);
-        let Some(coords) = coords else { continue };
-        let name = coords.split(':').take(2).collect::<Vec<_>>().join(":");
-        match config {
-            "implementation" | "api" | "compile" | "compileOnly" | "runtimeOnly" => deps.push(name),
-            "testImplementation" | "testCompile" | "testRuntimeOnly" => dev.push(name),
-            _ => {}
+    static GRADLE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let gradle = GRADLE.get_or_init(|| {
+        regex::Regex::new(
+            r#"\b(implementation|api|compile|compileOnly|runtimeOnly|testImplementation|testCompile|testRuntimeOnly|androidTestImplementation)\s*\(?\s*['"]([^:'"\s]+:[^:'"\s]+)"#,
+        )
+        .expect("valid regex")
+    });
+    for c in gradle.captures_iter(&syntax::without_slash_comments(text)) {
+        let name = c[2].to_string();
+        if c[1].starts_with("test") || c[1].starts_with("androidTest") {
+            dev.push(name);
+        } else {
+            deps.push(name);
         }
     }
     (deps, dev)
@@ -119,6 +124,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
                 dir,
                 deps,
                 dev_deps: dev,
+                namespaces: Vec::new(),
             });
         } else if name.ends_with(".java") {
             let is_test = rel.contains("src/test/")
@@ -150,10 +156,18 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             },
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     packages.sort_by(|a, b| a.dir.cmp(&b.dir));
-    packages.dedup_by(|a, b| a.dir == b.dir);
+    packages.dedup_by(|a, b| {
+        let same = a.dir == b.dir;
+        if same {
+            b.deps.append(&mut a.deps);
+            b.dev_deps.append(&mut a.dev_deps);
+        }
+        same
+    });
     files.sort_by(|a, b| a.0.cmp(&b.0));
     let files = files
         .into_iter()
@@ -311,7 +325,13 @@ pub fn resolve(spec: &str, index: &HashMap<&str, usize>, ws: &Workspace) -> supe
             return super::Resolution::File(*i);
         }
     }
-    super::Resolution::External(spec.split('.').take(2).collect::<Vec<_>>().join("."))
+    // The table's Java rows are keyed by import prefix (`com.google.common` for Guava), so the
+    // longest configured prefix is the library; two bare segments (`com.google`) name nothing.
+    // `lang/kotlin.rs` already resolves this way.
+    let external = crate::crates::longest_prefix("java", spec)
+        .map(str::to_string)
+        .unwrap_or_else(|| spec.split('.').take(2).collect::<Vec<_>>().join("."));
+    super::Resolution::External(external)
 }
 
 /// Rust counterparts of common Java libraries, by import prefix or Maven coordinates.

@@ -2,8 +2,8 @@
 
 > 使用说明：[使用 rust-anything 迁移到 Rust](docs/user/guide/rust-anything.zh.md)。变更记录：[`logs/00099`](logs/00099-源码vendored集成rust-anything.md)（本轮：改为源码 vendored + 现场编译）；[`logs/00097`](logs/00097-原生集成rust-anything.md)（最初以 npm 依赖接入，已被本轮取代）。根 [README](README.md) 的「与上游的差异」与 [MCP 子系统页](docs/subsystems/mcp.zh.md) 已同步。
 
-> 目标：任何人 clone 后 `pnpm install && pnpm run build && pnpm dsh web` 就带着这个能力——上游源码在仓库里、由仓库自己编译，不依赖全局安装，也不下载预编译二进制。
-> 结论：已完成。上游 `v2.1.0` 源码落在 `native/rust-anything/`，`pnpm run build` 用 cargo 编译并暂存可执行文件，插件按固定相对路径解析后挂到 Web 的 `standard` preset。
+> 目标：任何人 clone 后 `pnpm install && pnpm run build && pnpm dsh web` 就带着这个能力——上游源码在仓库里、由仓库自己编译，不依赖全局安装，也不下载预编译二进制。当前基线为上游 `v3.3.0`（[日志 00119](logs/00119-rust-anything升级到3.3.0.md) 记录了这次升级）。
+> 结论：已完成。上游 `v3.3.0` 源码落在 `native/rust-anything/`，`pnpm run build` 用 cargo 编译并暂存可执行文件，插件按固定相对路径解析后挂到 Web 的 `standard` preset。
 
 ---
 
@@ -11,12 +11,12 @@
 
 | 组成 | 位置 | 作用 |
 | --- | --- | --- |
-| 上游源码 | `native/rust-anything/`（`v2.1.0`，基线 `71c78e1`，MIT） | 7.1 MB 源码：`src/`、`tests/`、`docs/`、`directory/`、`skills/` 原样保留；剔除只服务于外部分发的 `npm/`、`scripts/`、`demo/` 与 CI/编辑器配置。基线、改动与同步流程见 [`NATIVE.md`](native/rust-anything/NATIVE.md) |
+| 上游源码 | `native/rust-anything/`（`v3.3.0`，基线 `c0862b8`，MIT） | 8.7 MB 源码：`src/`、`tests/`、`docs/`、`directory/`、`plugin/`、`skills/` 与 `.mcp.json` 原样保留；剔除只服务于外部分发的 `npm/`、`scripts/`、`demo/`、`website/` 与 CI/编辑器配置。基线、改动与同步流程见 [`NATIVE.md`](native/rust-anything/NATIVE.md) |
 | 构建 | `scripts/build-rust-anything.ts` + 根脚本 `build:rust-anything` + `scripts/build.ts` 的 `rust-anything CLI` gate | 以 crate 目录为 cwd 跑 `cargo build --release --locked`，把 `target/release/rust-anything` 暂存到 `native/rust-anything/bin/`（约 26 MB） |
-| 工具链 | `native/rust-anything/rust-toolchain.toml` | 固定 `1.97.0`（oxc 依赖要求同一版本）；rustup 缺失时自动安装。这是与上游唯一的文件差异 |
+| 工具链 | `native/rust-anything/rust-toolchain.toml` | 固定 `1.97.0`（oxc 依赖要求同一版本）；rustup 缺失时自动安装。这是与上游唯一的**新增**文件；另有 `docs/how-it-works.md`、`tests/fixtures/python/src/textkit/stack.py` 两处行尾空行被裁掉 |
 | 插件包 | `packages/mcp/rust-anything/`（`@deepseek-ai/dsh-rust-anything`） | `src/binary.ts` 解析暂存产物（`command` → `RUST_ANYTHING_BIN` → 仓库内构建产物），`src/index.ts` 挂一个 `dsh-mcp-client` 实例 |
-| 挂载点 | `packages/bundle/web-app/presets/standard.patch.yml` | Web 默认 preset `standard` 的 Agent 得到 16 个 `mcp__rust-anything__*` 工具（eager） |
-| 技能 | `packages/skill/skill-rust-anything/assets/dsh-rust-anything/{SKILL.md,whole-app.md}` | 随包提供方 `@deepseek-ai/dsh-skill-rust-anything`，由 `standard` preset 与 MCP server 一并挂载，`/` 菜单里归入 `内置 · erkamyaman/rust-anything`；描述命中后加载完整迁移流程（已补 Kotlin 与本仓库须知）。技能自带 `dsh-` 前缀（旧名 `rust-anything`，见 [日志 00101](logs/00101-技能改名-dsh-rust-anything.md)） |
+| 挂载点 | `packages/bundle/web-app/presets/standard.patch.yml` | Web 默认 preset `standard` 的 Agent 得到 22 个 `mcp__rust-anything__*` 工具（eager） |
+| 技能 | `packages/skill/skill-rust-anything/assets/dsh-rust-anything/{SKILL.md,whole-app.md}` | 随包提供方 `@deepseek-ai/dsh-skill-rust-anything`，由 `standard` preset 与 MCP server 一并挂载，`/` 菜单里归入 `内置 · erkamyaman/rust-anything`；描述命中后加载完整迁移流程（已补 Kotlin/PHP/C# 与本仓库须知）。技能自带 `dsh-` 前缀（旧名 `rust-anything`，见 [日志 00101](logs/00101-技能改名-dsh-rust-anything.md)） |
 | 类型/清单 | `tsconfig.base.json` 路径映射、`tsconfig.host.json` 工程引用、`packages/mcp/README.md` 列表 | 让仓库的编译、产品可达性、文档门禁都认这个包 |
 | 本地化元数据 | `packages/mcp/rust-anything/locale/{en,zh,ja,es,fr,de,ru,pt}.json` + `exports`/`files` | `verify-locale-metadata` 要求全部 8 种发布语言的 `meta.title`/`meta.description` |
 | 依赖形态 | `@deepseek-ai/dsh-mcp-client` 放在 `peerDependencies`（同时 devDependency） | 插件之间按仓库共享实例约定走 peer；模块图里出现 `rust-anything → mcp-client` 边 |
@@ -29,7 +29,9 @@
 
 | 检查 | 命令 | 结果 |
 | --- | --- | --- |
-| 源码编译 | `pnpm run build:rust-anything` | 通过；冷编译 32.6 s，暂存 26068 KiB，`rust-anything --version` → `2.1.0` |
+| 源码编译 | `pnpm run build:rust-anything` | 通过；暂存 27389 KiB，`rust-anything --version` → `3.3.0` |
+| 工具面 | `rust-anything mcp` 的 `tools/list` | 22 个工具（新增 `go`、`enable`、`disable`、`report`、`fuzz`、`package`），schema 合计 29146 字节 |
+| 上游测试套件 | `cd native/rust-anything && cargo test --release` | 见日志 00119：本机缺 `php`/`dotnet`/`kotlinc`/`go`，相关用例自行跳过 |
 | 包单测（连真实可执行文件） | `pnpm vitest run packages/mcp/rust-anything` | 5/5：eager 注册出 `analyze`/`gate`/`app_lift`，on-demand 只注册 `load_tools`，三条解析分支，可执行文件缺失时 agent 照常创建 |
 | 覆盖率 | 只统计本包 `src` | lines/branches/functions/statements 均 100% |
 | 聚合检查 | `pnpm run build:check` | 2/2 通过 |
@@ -50,25 +52,25 @@
 - 已有 profile（比如 `~/.dsh/profiles/web`）：bundle 与 preset 文件按仓库实时读取，**重启 `dsh web` 后**新会话生效；会话持久化，可 resume。
 - 改了 `native/rust-anything/` 的源码：重跑 `pnpm run build:rust-anything`（或全量 `pnpm run build`），暂存文件随之更新。
 - 想用别的二进制：设 `RUST_ANYTHING_BIN`，或在 preset 行的 `config.command` 指定。
-- 验证一句话：重启后问「列出你可用工具里以 `mcp__rust-anything__` 开头的名字」，应看到 16 个；或直接说「用 rust-anything 分析这个仓库」。
+- 验证一句话：重启后问「列出你可用工具里以 `mcp__rust-anything__` 开头的名字」，应看到 22 个；或直接说「用 rust-anything 分析这个仓库」。
 
 ## 4. 使用方式（模型侧）
 
-技能会引导：`analyze` → `bridge` → `record` → 写 `port.rs` → `build` → `diff` → `bench` → `gate`，整应用走 `app_*`。技能里额外写了三条本仓库须知：
+技能会引导：`profile`（或对单个热点函数用 `go`）→ `analyze` → `bridge` → `record` → 写 `port.rs` → `build` → `diff` → `bench` → `gate`，整应用走 `app_*`，`report` 出报告。技能里额外写了三条本仓库须知：
 
-1. `build/diff/gate/bench` 用**绝对路径**（2.1.0 的相对路径 bug，见分析报告 §6.2）；
+1. 迁移生成的 crate 编译到仓库外的共享 cargo target 目录（`CARGO_TARGET_DIR`，否则平台缓存目录下的 `rust-anything/target`）；
 2. 生成 crate 需要 Rust ≥ 1.97（`rust-anything doctor` 会报）；
-3. 工具会执行被录制的代码并往仓库写 crate，只在副本上跑。
+3. 工具会执行被录制的代码并往仓库写 crate，`enable`/`disable` 还会改用户源码，只在副本上跑并先征得同意。
 
 ## 5. 已知取舍与可选下一步
 
 - **构建前置条件**：`pnpm run build` 现在需要 Rust 工具链（`rust-toolchain.toml` 固定 1.97.0，rustup 会安装）；冷编译约 30–60 s、`target/` 约 430 MB（已 gitignore），CI 用 `Swatinem/rust-cache` 缓存。
-- **每个 agent 的额外成本**：`standard` agent 多 19 个工具（16 个 server 工具 + 3 个资源工具，约 7k tokens/请求）和多一个 server 进程；`minimal`/`ptc` 不受影响。
+- **每个 agent 的额外成本**：`standard` agent 多 25 个工具（22 个 server 工具 + 3 个资源工具，约 8k tokens/请求）和多一个 server 进程；`minimal`/`ptc` 不受影响。
 - **打包运行时（Desktop、Python SDK 可执行文件）**：两者都会挂载这个 preset，但二进制在所有包目录之外，打包不会带上；那里 MCP server 找不到可执行文件时不提供工具（`fail-soft`）。上一版（npm 依赖）能带上，所以这是源码 vendored 的已知回退；后续做法是像 `native/system` 那样按平台暂存二进制。
 - **只挂 Web**（现状）：headless/acp/sdk 不挂，keyless 快照不红。若要让 headless 也默认可用，需要给 `snapshots/session` 的 198 个 `system-prompt.expected.md` 补上 MCP 段（应走带 key 的重录流程确认）。
-- **eager vs on-demand**：eager 让工具常驻、无需 load 步骤，代价是每次请求约 7k tokens；改 `toolLoading: on-demand` 会往系统提示加一段目录，同时改变 Web e2e 快照期望。
-- **上游相对路径 bug**：2.1.0 的 `run` 把子进程切到临时目录却传下相对 `--manifest-path`，`build/diff/gate/bench` 必须传绝对路径（技能已写明）。
-- **上游测试**：`native/rust-anything/tests/` 原样保留，`cd native/rust-anything && cargo test --release` 可跑，未接入 `pnpm test`。
+- **eager vs on-demand**：eager 让工具常驻、无需 load 步骤，代价是每次请求约 8k tokens；改 `toolLoading: on-demand` 会往系统提示加一段目录，同时改变 Web e2e 快照期望。
+- **共享编译缓存**：3.1.0 起端口与被桥接 crate 共用仓库外的 cargo target 目录，首次编译会写到 `~/.cache/rust-anything/target`（约数百 MB），`CARGO_TARGET_DIR` 可改位置。
+- **上游测试**：`native/rust-anything/tests/` 原样保留，`cd native/rust-anything && cargo test --release` 可跑，未接入 `pnpm test`；缺语言运行时（`php`、`dotnet`、`kotlinc`、`go`）的用例会自行跳过。
 
 ## 6. 回滚
 

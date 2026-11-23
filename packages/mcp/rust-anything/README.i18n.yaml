@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mcp/rust-anything/README.md
 /:
-  en: 9b2ff6e2d25dea40
-  zh: 0c575fdff2b5a72b
+  en: e9cc6d94b7693b76
+  zh: 8248263633f1cdc3
 /deepseek-ai-dsh-rust-anything:
   en: a401f1528d90959f
   zh: 9de0b85532b9030b
@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: af2f3a72884f5587
 /deepseek-ai-dsh-rust-anything/use-this-package:
-  en: 51615eaad45de7c9
-  zh: 1f03a7e35ff5424c
+  en: 9bc9c463c365f349
+  zh: 7332a2abe0877f15
 /deepseek-ai-dsh-rust-anything/understand-the-implementation:
   en: 2d904cee5af140e4
   zh: ada32714742feda7
@@ -30,17 +30,17 @@
   en: 3ec83f7a88d8ac6a
   zh: e0291cbc2a6a5106
 /deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server/what-the-model-sees:
-  en: 3e691939e0e6c7bb
-  zh: d6cb8b12e6c4cc1f
+  en: f92c270f717bcf6a
+  zh: 74f6a5de8364066a
 /deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server/token-effect:
-  en: 780ebd8632797288
-  zh: f3e01d6fe85e76f7
+  en: 8dbadcde16343029
+  zh: 2a4f21712d36e67a
 /deepseek-ai-dsh-rust-anything/model-experience/mcp-tools-from-the-server/kv-cache-effect:
   en: 4085ace7d94fe688
   zh: ea24e49ac90ecc64
 /deepseek-ai-dsh-rust-anything/known-limitations-and-deferred-work:
-  en: 8dcfe492b12b4b8b
-  zh: 925a4eb2e61f45a1
+  en: d9ec3b1bf6183e0d
+  zh: 90845e4910cd3cf5
 /deepseek-ai-dsh-rust-anything/known-limitations-and-deferred-work/dev-note:
   en: 56c119df3c505832
   zh: b9bfd87f88f1fa74

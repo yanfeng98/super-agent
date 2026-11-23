@@ -1,0 +1,11 @@
+source "https://rubygems.org"
+
+group :development, :test do
+  gem "rspec"
+  platforms :mri do
+    gem "byebug"
+  end
+  gem "debug"
+end
+
+gem "rack"

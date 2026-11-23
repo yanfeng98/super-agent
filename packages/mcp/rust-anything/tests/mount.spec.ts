@@ -29,9 +29,14 @@ describe('rust-anything MCP server mount', () => {
     await ctx.plugin(ToolRuntime)
     await apply(ctx, Config({ toolLoading: 'eager' }))
     const names = ctx.tools.schemas().map(schema => schema.name)
-    expect(names).toContain('mcp__rust-anything__analyze')
-    expect(names).toContain('mcp__rust-anything__gate')
-    expect(names).toContain('mcp__rust-anything__app_lift')
+    // The vendored crate's surface at `v3.3.0`; a new upstream tool fails here so
+    // the package README's schema count and token estimate move with it.
+    const tools = [
+      'analyze', 'bridge', 'refresh', 'record', 'build', 'diff', 'profile', 'go', 'enable', 'disable',
+      'report', 'bench', 'fuzz', 'shadow', 'map', 'package', 'gate',
+      'app_record', 'app_replay', 'app_front_door', 'app_wire', 'app_lift',
+    ]
+    expect(names).toEqual(tools.map(tool => `mcp__rust-anything__${tool}`))
     await ctx.fiber.dispose()
   })
 

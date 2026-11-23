@@ -37,14 +37,23 @@ fn compiler() -> &'static str {
     }
 }
 
-/// ctypes signatures: `{ name: { "args": [...], "ret": ... } }`.
+/// ctypes signatures: `{ name: { "args": [...], "ret": ... } }`. Pointer parameters are tagged:
+/// `bytes`, `buffer`, `len:<index>:<ctype>` (the length of the buffer at that index, which cases
+/// leave out), `out:<ctype>`, `outptr:<index>` (a `char **` into the parameter at that index);
+/// a returned pointer into parameter `i` is `ptr:<i>`. A struct by value, as an argument or the
+/// return, is `struct:<field>=<ctype>,...`.
 fn signatures(manifest: &Manifest) -> Value {
-    let ctypes = |c: &str, ts: &str| -> String {
-        if ts == "string" {
-            "c_char_p".into()
-        } else {
-            scalar(c).map_or("c_int", |(_, _, _, ct)| ct).to_string()
-        }
+    use crate::codegen_c::{CKind, c_struct, kind, pointee, returns_into};
+    let ctype = |c: &str| scalar(c).map_or("c_int", |(_, _, _, ct)| ct).to_string();
+    let structure = |ts: &str| {
+        c_struct(ts).map(|s| {
+            let fields: Vec<String> = s
+                .fields
+                .iter()
+                .map(|(ty, name)| format!("{name}={}", ctype(ty)))
+                .collect();
+            format!("struct:{}", fields.join(","))
+        })
     };
     let map: serde_json::Map<String, Value> = manifest
         .exports
@@ -53,10 +62,37 @@ fn signatures(manifest: &Manifest) -> Value {
             let args: Vec<String> = f
                 .params
                 .iter()
-                .map(|p| ctypes(p.native_type.as_deref().unwrap_or("int"), &p.ts_type))
+                .map(|p| {
+                    let native = p.native_type.as_deref().unwrap_or("int");
+                    match kind(p) {
+                        CKind::Str => "c_char_p".into(),
+                        CKind::Bytes => "bytes".into(),
+                        CKind::Buffer => "buffer".into(),
+                        CKind::Len(i) => format!("len:{i}:{}", ctype(native)),
+                        CKind::Out => format!("out:{}", ctype(&pointee(native))),
+                        CKind::OutPtr(i) => format!("outptr:{i}"),
+                        CKind::Struct => structure(&p.ts_type).unwrap_or_else(|| "c_int".into()),
+                        CKind::Scalar => ctype(native),
+                    }
+                })
                 .collect();
-            let ret = ctypes(f.native_return.as_deref().unwrap_or("void"), &f.returns);
-            (f.name.clone(), json!({ "args": args, "ret": ret }))
+            let ret = match returns_into(f) {
+                Some(i) => format!("ptr:{i}"),
+                None if structure(&f.returns).is_some() => {
+                    structure(&f.returns).unwrap_or_default()
+                }
+                None if f.native_return.as_deref().unwrap_or("void") == "void" => "None".into(),
+                None => ctype(f.native_return.as_deref().unwrap_or("int")),
+            };
+            (
+                f.name.clone(),
+                json!({
+                    "args": args,
+                    "ret": ret,
+                    "names": f.params.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+                    "writes": crate::codegen_c::writes(f),
+                }),
+            )
         })
         .collect();
     Value::Object(map)
@@ -64,48 +100,41 @@ fn signatures(manifest: &Manifest) -> Value {
 
 /// Compiles the project's C sources (without `main` and tests) into one shared library.
 fn build_original(crate_dir: &Path, manifest: &Manifest) -> Result<PathBuf> {
-    let ws = crate::lang::c::discover(&manifest.root)?;
-    let mut sources = Vec::new();
-    let mut include_dirs = std::collections::BTreeSet::new();
-    include_dirs.insert(manifest.root.clone());
-    for file in ws
-        .files
-        .iter()
-        .filter(|f| f.kind == crate::ts::discover::FileKind::Source)
-    {
-        let path = manifest.root.join(&file.path);
-        if let Some(dir) = path.parent() {
-            include_dirs.insert(dir.to_path_buf());
-        }
-        if file.path.ends_with(".c")
-            && !defines_main(&std::fs::read_to_string(&path).unwrap_or_default())
-        {
-            sources.push(path);
-        }
-    }
-    // Headers paired with a `.c` file are not in the workspace listing; their folders still
-    // go on the include path.
-    for entry in crate::walk::builder(&manifest.root)
-        .require_git(false)
-        .build()
-        .flatten()
-    {
-        if entry.path().extension().is_some_and(|e| e == "h")
-            && let Some(dir) = entry.path().parent()
-        {
-            include_dirs.insert(dir.to_path_buf());
-        }
-    }
+    let (sources, include_dirs) = original_sources(manifest)?;
     let out = crate_dir.join(WORK_DIR).join("original.so");
     std::fs::create_dir_all(crate_dir.join(WORK_DIR))?;
     let mut cmd = Command::new(compiler());
     cmd.args(["-shared", "-fPIC", "-O1", "-w", "-o"]).arg(&out);
-    for dir in &include_dirs {
-        cmd.arg(format!("-I{}", dir.display()));
-    }
+    cmd.args(include_args(&include_dirs));
     cmd.args(&sources).arg("-lm");
     run(&mut cmd, "cc (original sources)")?;
     Ok(out)
+}
+
+/// Include flags: each header folder with `-I`, except a folder holding a header named like a
+/// C standard one (ffmpeg's `libavutil/time.h`), which gets `-iquote` so `<time.h>` stays the
+/// system's. Then the flags in `CFLAGS` (`-DHAVE_CONFIG_H`, `-include config.h`).
+fn include_args(dirs: &std::collections::BTreeSet<PathBuf>) -> Vec<String> {
+    let mut out = Vec::new();
+    for dir in dirs {
+        let shadows = crate::lang::c::STANDARD_HEADERS.iter().any(|h| {
+            dir.join(h.trim_start_matches('<').trim_end_matches('>'))
+                .is_file()
+        });
+        if shadows {
+            out.push("-iquote".into());
+            out.push(dir.display().to_string());
+        } else {
+            out.push(format!("-I{}", dir.display()));
+        }
+    }
+    out.extend(
+        std::env::var("CFLAGS")
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(str::to_string),
+    );
+    out
 }
 
 fn driver(crate_dir: &Path, manifest: &Manifest) -> Result<(PathBuf, PathBuf)> {
@@ -149,16 +178,16 @@ pub fn record(crate_dir: &Path, manifest: &Manifest, cases: &[Value]) -> Result<
 
 /// The Rust library: `lib<name>.so`, `.dylib` or `.dll`.
 pub fn build(crate_dir: &Path, manifest: &Manifest) -> Result<PathBuf> {
-    let target = crate_dir.join("target");
+    let target = crate::cache::target_for(crate_dir)?;
     run(
         Command::new("cargo")
             .args(["build", "--release", "--manifest-path"])
             .arg(crate_dir.join("Cargo.toml"))
-            .env("CARGO_TARGET_DIR", &target),
+            .env("CARGO_TARGET_DIR", &target.dir),
         "cargo build",
     )?;
     let lib = manifest.lib_name();
-    let release = target.join("release");
+    let release = crate::cache::publish(&target, crate_dir, &lib, &target.dir.join("release"))?;
     [
         format!("lib{lib}.so"),
         format!("lib{lib}.dylib"),
@@ -241,9 +270,7 @@ pub fn bench(crate_dir: &Path, manifest: &Manifest, min_ms: u64) -> Result<Vec<B
     for f in crate::codegen_c::shadow_flags(manifest).split_whitespace() {
         cmd.arg(f);
     }
-    for dir in &include_dirs {
-        cmd.arg(format!("-I{}", dir.display()));
-    }
+    cmd.args(include_args(&include_dirs));
     cmd.args(&sources)
         .arg(&rust)
         .arg(format!(
@@ -361,6 +388,150 @@ fn c_arg(v: &Value, c_type: &str, is_string: bool) -> Option<String> {
     }
 }
 
+/// A C string literal for `bytes`.
+fn c_bytes_literal(bytes: &[u8]) -> String {
+    let mut out = String::from("\"");
+    for &b in bytes {
+        let _ = std::fmt::Write::write_fmt(&mut out, format_args!("\\{b:03o}"));
+    }
+    out.push('"');
+    out
+}
+
+/// A buffer argument as recorded: hex text, or a size for that many zero bytes.
+fn buffer_arg(v: &Value) -> Option<Option<Vec<u8>>> {
+    match v {
+        Value::Null => Some(None),
+        Value::Number(n) => Some(Some(vec![0; usize::try_from(n.as_u64()?).ok()?])),
+        Value::String(s) => {
+            if s.len() % 2 != 0 {
+                return None;
+            }
+            (0..s.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok())
+                .collect::<Option<Vec<u8>>>()
+                .map(Some)
+        }
+        _ => None,
+    }
+}
+
+/// The statements that set up one recorded call, and its argument list; `None` when an
+/// argument has no C value.
+fn c_call(
+    f: &crate::ts::exports::ExportedFn,
+    args: &[Value],
+    tag: &str,
+) -> Option<(String, String, String)> {
+    use crate::codegen_c::{CKind, kind, pointee};
+    use std::fmt::Write as _;
+    let mut given = args.iter();
+    let values: Vec<Value> = f
+        .params
+        .iter()
+        .map(|p| match kind(p) {
+            CKind::Len(_) => Value::Null,
+            _ => given.next().cloned().unwrap_or(Value::Null),
+        })
+        .collect();
+    let (mut globals, mut setup) = (String::new(), String::new());
+    let mut lens = std::collections::HashMap::new();
+    let mut exprs = Vec::new();
+    for (i, (p, v)) in f.params.iter().zip(&values).enumerate() {
+        let native = p.native_type.as_deref().unwrap_or("int");
+        let expr = match kind(p) {
+            CKind::Str => c_arg(v, native, true)?,
+            CKind::Bytes => match buffer_arg(v)? {
+                None => "NULL".into(),
+                Some(bytes) => {
+                    lens.insert(i, bytes.len());
+                    format!("({native}){}", c_bytes_literal(&bytes))
+                }
+            },
+            CKind::Buffer => match buffer_arg(v)? {
+                None => "NULL".into(),
+                Some(bytes) => {
+                    let n = bytes.len();
+                    lens.insert(i, n);
+                    let _ = writeln!(
+                        globals,
+                        "static const unsigned char init_{tag}_{i}[{}] = {};\nstatic unsigned char buf_{tag}_{i}[{}];",
+                        n.max(1),
+                        c_bytes_literal(&bytes),
+                        n.max(1)
+                    );
+                    let _ = write!(setup, "memcpy(buf_{tag}_{i}, init_{tag}_{i}, {n}); ");
+                    format!("({native})buf_{tag}_{i}")
+                }
+            },
+            CKind::Out => {
+                if v.is_null() {
+                    "NULL".into()
+                } else {
+                    let ty = pointee(native);
+                    let _ = writeln!(globals, "static {ty} out_{tag}_{i};");
+                    let _ = write!(setup, "out_{tag}_{i} = {}; ", c_arg(v, &ty, false)?);
+                    format!("&out_{tag}_{i}")
+                }
+            }
+            CKind::Struct => {
+                let s = crate::codegen_c::c_struct(&p.ts_type)?;
+                let Value::Object(o) = v else {
+                    return None;
+                };
+                let fields = s
+                    .fields
+                    .iter()
+                    .map(|(ty, name)| {
+                        let v = o.get(name).cloned().unwrap_or(Value::from(0));
+                        Some(format!(".{name} = {}", c_arg(&v, ty, false)?))
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                format!("({}){{{}}}", s.c_name, fields.join(", "))
+            }
+            CKind::OutPtr(_) => match v {
+                Value::Null => "NULL".into(),
+                _ => {
+                    let _ = writeln!(
+                        globals,
+                        "static {};",
+                        crate::codegen_c::c_decl(
+                            native.trim_end().strip_suffix('*').unwrap_or(native),
+                            &format!("slot_{tag}_{i}")
+                        )
+                    );
+                    format!("&slot_{tag}_{i}")
+                }
+            },
+            CKind::Len(_) => String::new(),
+            CKind::Scalar => c_arg(v, native, false)?,
+        };
+        exprs.push(expr);
+    }
+    for (i, (p, v)) in f.params.iter().zip(&values).enumerate() {
+        if let CKind::OutPtr(target) = kind(p)
+            && !v.is_null()
+        {
+            let at = match v.as_u64() {
+                Some(k) if !v.is_boolean() => format!("({}) + {k}", exprs[target]),
+                _ => "NULL".into(),
+            };
+            let _ = write!(setup, "slot_{tag}_{i} = {at}; ");
+        }
+    }
+    for (i, p) in f.params.iter().enumerate() {
+        if let CKind::Len(target) = kind(p) {
+            exprs[i] = format!(
+                "({}){}",
+                p.native_type.as_deref().unwrap_or("int"),
+                lens.get(&target).copied().unwrap_or(0)
+            );
+        }
+    }
+    Some((globals, setup, exprs.join(", ")))
+}
+
 /// A C program that times each function's recorded calls on the original and on the port.
 fn bench_c(m: &Manifest, cases: &[Value], min_ms: u64) -> String {
     use std::fmt::Write as _;
@@ -371,54 +542,43 @@ fn bench_c(m: &Manifest, cases: &[Value], min_ms: u64) -> String {
          static double now_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e9 + t.tv_nsec; }\n\
          static volatile uint64_t sink;\n\n",
     );
+    out.push_str(&crate::codegen_c::c_struct_defs(m));
     let mut rows = Vec::new();
     for f in &m.exports {
-        let prototype = f.prototype.as_deref().unwrap_or(&f.name);
-        let original = prototype.replacen(
-            &format!("{}(", f.name),
-            &format!("{}__original(", f.name),
-            1,
+        let _ = writeln!(
+            out,
+            "{};\n{};",
+            crate::codegen_c::c_prototype(f, &format!("{}__original", f.name)),
+            crate::codegen_c::c_prototype(f, &format!("rust_anything_{}", f.name))
         );
-        let rust = prototype.replacen(
-            &format!("{}(", f.name),
-            &format!("rust_anything_{}(", f.name),
-            1,
-        );
-        let _ = writeln!(out, "{original};\n{rust};");
         let mut calls = Vec::new();
-        for c in cases
+        for (k, c) in cases
             .iter()
             .filter(|c| c["fn"] == f.name.as_str() && c.get("error").is_none())
+            .enumerate()
         {
             let args = c["args"].as_array().cloned().unwrap_or_default();
-            let exprs: Option<Vec<String>> = f
-                .params
-                .iter()
-                .enumerate()
-                .map(|(i, p)| {
-                    c_arg(
-                        args.get(i).unwrap_or(&Value::Null),
-                        p.native_type.as_deref().unwrap_or("int"),
-                        p.ts_type == "string",
-                    )
-                })
-                .collect();
-            if let Some(exprs) = exprs {
-                calls.push(exprs.join(", "));
+            if let Some((globals, setup, exprs)) = c_call(f, &args, &format!("{}_{k}", f.name)) {
+                out.push_str(&globals);
+                calls.push((setup, exprs));
             }
         }
         if calls.is_empty() {
             continue;
         }
         let void = f.native_return.as_deref() == Some("void");
+        let first_field = crate::codegen_c::c_struct(&f.returns)
+            .and_then(|s| s.fields.first().map(|(_, n)| n.clone()));
         let body = |target: &str| -> String {
             calls
                 .iter()
-                .map(|a| {
+                .map(|(setup, a)| {
                     if void {
-                        format!("    {target}({a});\n")
+                        format!("    {setup}{target}({a});\n")
+                    } else if let Some(field) = &first_field {
+                        format!("    {setup}sink += (uint64_t){target}({a}).{field};\n")
                     } else {
-                        format!("    sink += (uint64_t){target}({a});\n")
+                        format!("    {setup}sink += (uint64_t)(uintptr_t){target}({a});\n")
                     }
                 })
                 .collect()
@@ -488,6 +648,47 @@ def dec(v):
     return v
 
 
+STRUCTS = {}
+
+
+def structure(kind):
+    """The ctypes Structure for `struct:<field>=<ctype>,...`."""
+    if kind not in STRUCTS:
+        fields = [f.split("=", 1) for f in kind[len("struct:"):].split(",")]
+        STRUCTS[kind] = type("Struct", (ctypes.Structure,), {"_fields_": [(n, getattr(ctypes, t)) for n, t in fields]})
+    return STRUCTS[kind]
+
+
+def scalar(ctype, value):
+    if ctype in (ctypes.c_float, ctypes.c_double):
+        return float(value) if isinstance(value, (int, float)) else 0.0
+    if ctype is ctypes.c_bool:
+        return bool(value)
+    return int(value) if isinstance(value, (int, float)) and math.isfinite(value) else 0
+
+
+def to_struct(kind, value):
+    """A struct argument from an object of its fields; missing fields are zero."""
+    if not isinstance(value, dict):
+        raise TypeError("expects an object with fields %s" % ", ".join(n for n, _ in structure(kind)._fields_))
+    cls = structure(kind)
+    return cls(**{n: scalar(t, dec(value.get(n, 0))) for n, t in cls._fields_})
+
+
+def from_struct(value):
+    return {n: enc(getattr(value, n)) for n, _ in type(value)._fields_}
+
+
+def argtype(kind):
+    if kind.startswith("struct:"):
+        return structure(kind)
+    if kind in ("bytes", "buffer") or kind.startswith("out:") or kind.startswith("outptr:"):
+        return ctypes.c_void_p
+    if kind.startswith("len:"):
+        return getattr(ctypes, kind.split(":")[2])
+    return getattr(ctypes, kind)
+
+
 def bind(path, signatures):
     lib = ctypes.CDLL(path)
     functions = {}
@@ -496,27 +697,118 @@ def bind(path, signatures):
             fn = getattr(lib, name)
         except AttributeError:
             continue
-        fn.argtypes = [getattr(ctypes, t) for t in sig["args"]]
-        fn.restype = None if sig["ret"] == "None" else getattr(ctypes, sig["ret"])
+        fn.argtypes = [argtype(t) for t in sig["args"]]
+        ret = sig["ret"]
+        if ret == "None":
+            fn.restype = None
+        elif ret.startswith("ptr:"):
+            fn.restype = ctypes.c_void_p
+        elif ret.startswith("struct:"):
+            fn.restype = structure(ret)
+        else:
+            fn.restype = getattr(ctypes, ret)
         functions[name] = (fn, sig)
     return functions
 
 
+def as_bytes(value):
+    """A buffer argument: hex text, or a size for that many zero bytes; None is NULL."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return bytes(int(value))
+    if isinstance(value, (int, float)):
+        return bytes(max(int(value), 0))
+    return bytes.fromhex(str(value))
+
+
 def call(functions, c):
     fn, sig = functions[c["fn"]]
-    args = []
-    for value, kind in zip([dec(a) for a in c["args"]], sig["args"]):
+    kinds = sig["args"]
+    given = iter([dec(a) for a in c["args"]])
+    values = [None if k.startswith("len:") else next(given, None) for k in kinds]
+    args = [None] * len(kinds)
+    memory = {}
+    outs = {}
+    for i, (value, kind) in enumerate(zip(values, kinds)):
         if kind == "c_char_p":
-            args.append(None if value is None else str(value).encode("utf-8"))
+            if value is not None:
+                data = str(value).encode("utf-8")
+                buf = ctypes.create_string_buffer(data)
+                memory[i] = (buf, len(data) + 1)
+                args[i] = ctypes.cast(buf, ctypes.c_char_p)
+        elif kind in ("bytes", "buffer"):
+            data = as_bytes(value)
+            if data is not None:
+                buf = ctypes.create_string_buffer(data, max(len(data), 1))
+                memory[i] = (buf, len(data))
+                args[i] = ctypes.cast(buf, ctypes.c_void_p)
+        elif kind.startswith("out:"):
+            if value is not None:
+                ctype = getattr(ctypes, kind[4:])
+                cell = ctype(value if ctype in (ctypes.c_float, ctypes.c_double) else int(value))
+                outs[i] = cell
+                args[i] = ctypes.cast(ctypes.pointer(cell), ctypes.c_void_p)
+        elif kind.startswith("struct:"):
+            args[i] = to_struct(kind, value)
+        elif kind.startswith("outptr:"):
+            pass
         elif kind in ("c_float", "c_double"):
-            args.append(float(value) if isinstance(value, (int, float)) else 0.0)
+            args[i] = float(value) if isinstance(value, (int, float)) else 0.0
         elif kind == "c_bool":
-            args.append(bool(value))
-        else:
-            args.append(int(value) if isinstance(value, (int, float)) and math.isfinite(value) else 0)
-    while len(args) < len(sig["args"]):
-        args.append(None if sig["args"][len(args)] == "c_char_p" else 0)
-    return {"ok": enc(fn(*args))}
+            args[i] = bool(value)
+        elif not kind.startswith("len:"):
+            args[i] = int(value) if isinstance(value, (int, float)) and math.isfinite(value) else 0
+    for i, kind in enumerate(kinds):
+        if kind.startswith("len:"):
+            target = int(kind.split(":")[1])
+            args[i] = memory[target][1] if target in memory else 0
+    slots = {}
+    for i, (value, kind) in enumerate(zip(values, kinds)):
+        if kind.startswith("outptr:") and value is not None:
+            # The starting pointer: an offset into its target argument, or NULL for `true`.
+            target = int(kind.split(":")[1])
+            start = None
+            if isinstance(value, int) and not isinstance(value, bool):
+                if target not in memory or not 0 <= value <= memory[target][1]:
+                    return {"error": "starts a pointer outside its arguments"}
+                start = ctypes.addressof(memory[target][0]) + value
+            slots[i] = ctypes.c_void_p(start)
+            args[i] = ctypes.addressof(slots[i])
+    result = fn(*args)
+    if sig["ret"].startswith("ptr:"):
+        target = int(sig["ret"][4:])
+        if result is not None:
+            if target not in memory:
+                return {"error": "returns a pointer outside its arguments"}
+            offset = result - ctypes.addressof(memory[target][0])
+            if not 0 <= offset <= memory[target][1]:
+                return {"error": "returns a pointer outside its arguments"}
+            result = offset
+    elif sig["ret"].startswith("struct:"):
+        result = from_struct(result)
+    else:
+        result = enc(result)
+    if not sig.get("writes"):
+        return {"ok": result}
+    ok = {} if sig["ret"] == "None" else {"return": result}
+    for i, kind in enumerate(kinds):
+        name = sig["names"][i]
+        if kind == "buffer":
+            ok[name] = memory[i][0].raw[: memory[i][1]].hex() if i in memory else None
+        elif kind.startswith("out:"):
+            ok[name] = enc(outs[i].value) if i in outs else None
+        elif kind.startswith("outptr:"):
+            target = int(kind.split(":")[1])
+            pointer = slots[i].value if i in slots else None
+            if pointer is None:
+                ok[name] = None
+            else:
+                offset = pointer - ctypes.addressof(memory[target][0]) if target in memory else -1
+                if target not in memory or not 0 <= offset <= memory[target][1]:
+                    return {"error": "writes a pointer outside its arguments"}
+                ok[name] = offset
+    return {"ok": ok}
 
 
 def isolated(functions, c):
@@ -573,12 +865,16 @@ def diff(lib, sigs, cases_path, out_path):
                 summary["missing"].append(c["fn"])
             summary["failed"] += 1
             continue
-        if str(c.get("error", "")).startswith("crash:"):
+        error = str(c.get("error", ""))
+        if error.startswith("crash:") or error in (
+            "returns a pointer outside its arguments",
+            "writes a pointer outside its arguments",
+        ):
             # The original's behavior is undefined there: any answer of the port passes.
             summary["passed"] += 1
             continue
         got = isolated(functions, c)
-        expected = {"ok": c.get("ok")}
+        expected = {"error": c["error"]} if "error" in c else {"ok": c.get("ok")}
         if json.dumps(got) == json.dumps(expected):
             summary["passed"] += 1
         else:

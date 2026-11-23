@@ -4,33 +4,42 @@
 
 <h1 align="center">rust-anything</h1>
 
-<p align="center"><b>Uygulamanızı Rust ile yeniden yazın ve hâlâ aynı davrandığını kanıtlayın.</b></p>
-
-<p align="center">2.0'da yeni: <a href="real-world.md#prettier">Prettier, Rust'a port edildi</a>. 19x daha hızlı · 17,224 kayıtlı çalıştırmanın 15,837'si tamamen Rust'ta · hepsi bayt bayt aynı</p>
-
-<p align="center">
-  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io sürümü"></a>
-  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm sürümü"></a>
-  <a href="https://github.com/erkamyaman/rust-anything/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/erkamyaman/rust-anything/ci.yml?branch=main&label=tests" alt="Testler"></a>
-  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub yıldızları"></a>
-  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
-</p>
-
-<p align="center">
-  <a href="#hızlı-başlangıç">Hızlı başlangıç</a> ·
-  <a href="#diller">Diller</a> ·
-  <a href="real-world.md">Gerçek dünya portları</a> ·
-  <a href="how-it-works.md#how-it-works">Nasıl çalışır</a> ·
-  <a href="whole-apps.md#port-a-whole-app">Tüm uygulamalar</a> ·
-  <a href="faq.md#faq">SSS</a>
-</p>
-
-<p align="center">Türkiye'de 🇹🇷 <a href="https://github.com/erkamyaman">erKam Yaman</a> tarafından yapıldı · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ Sponsor olun</a></p>
-
-<p align="center">Sponsor: <a href="https://coderabbit.ai"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
-
-<p align="center"><sub><a href="../README.md">English</a> · Türkçe · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a></sub></p>
+<p align="center"><sub><a href="../README.md">English</a> · Türkçe · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · <a href="README_TK.md">Türkmençe</a> · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a> · <a href="README_ES.md">Español</a> · <a href="README_IT.md">Italiano</a></sub></p>
 <p align="center"><sub>Bu çeviri topluluk tarafından sürdürülmektedir ve <a href="../README.md">İngilizce README</a>'nin gerisinde kalabilir.</sub></p>
+
+<p align="center"><b>Uygulamanızı Rust ile yeniden yazın ve hâlâ aynı davrandığını kanıtlayın.</b><br>
+Kodu kendisi çevirmez: Rust'ı kodlama ajanınız (ya da siz) yazar, rust-anything onu orijinaline karşı doğrular.</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/languages/top/erkamyaman/rust-anything?logo=rust&label=Rust&color=CE422B" alt="Rust share of the code">
+  <img src="https://img.shields.io/badge/macOS%20·%20Linux%20·%20Windows-native-2563EB" alt="Native binaries for macOS, Linux and Windows">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT license"></a>
+  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io version"></a>
+  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm version"></a>
+  <br>
+  <a href="https://coderabbit.link/erkamyaman"><img src="https://img.shields.io/coderabbit/prs/github/erkamyaman/rust-anything?labelColor=171717&color=FF570A&label=Reviewed+by+CodeRabbit" alt="Pull requests reviewed by CodeRabbit"></a>
+  <a href="https://github.com/rust-unofficial/awesome-rust#development-tools"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Rust"></a>
+  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
+  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center"><a href="https://github.com/erkamyaman/rust-anything/discussions/127"><img src="https://img.shields.io/badge/Join%20the%20discussion-6E40C9?style=for-the-badge&logo=github&logoColor=white" alt="Join the discussion"></a></p>
+
+<p align="center"><a href="https://trendshift.io/repositories/363468" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/363468/daily?language=Rust" alt="erkamyaman/rust-anything: #1 Rust repository of the day on Trendshift" width="250" height="55"/></a></p>
+
+<p align="center"><b><a href="#hızlı-başlangıç">Hızlı başlangıç</a></b> · <a href="https://github.com/erkamyaman/rust-anything/releases">Releases</a> · <a href="#hızlı-başlangıç">Claude Code plugin</a> · <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=rust-anything">MCP Registry</a> · <a href="real-world.md">Gerçek dünya portları</a> · <a href="faq.md#faq">SSS</a><br>
+<sub><a href="#diller">Diller</a> · <a href="how-it-works.md#how-it-works">Nasıl çalışır</a> · <a href="whole-apps.md#port-a-whole-app">Tüm uygulamalar</a> · <a href="../LICENSE">MIT</a></sub><br>
+Türkiye'de 🇹🇷 <a href="https://github.com/erkamyaman">erKam Yaman</a> tarafından yapıldı · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ Sponsor olun</a> · Sponsor: <a href="https://coderabbit.link/erkamyaman"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
+
+<p align="center">2.0'da yeni: <a href="real-world.md#prettier">Prettier, Rust'a port edildi</a>. 19x daha hızlı · 17,224 kayıtlı çalıştırmanın 15,861'si tamamen Rust'ta · hepsi bayt bayt aynı</p>
+
+<p align="center">
+  <img src="assets/prettier.gif" alt="Prettier ve Rust portu aynı 59 gerçek dosyayı, dosya başına bir süreçle biçimlendiriyor: Prettier 3.63 s, Rust portu 0.20 s sürüyor ve çıktı bayt bayt aynı." width="820">
+  <br>
+  <sub>ms, Fuse.js ve json-server'dan alınan 59 gerçek dosyada Prettier ve Rust portu (Apple M4). Bayt bayt aynı çıktı. <a href="real-world.md#prettier">Nasıl ölçüldü</a>.</sub>
+</p>
+
+<p align="center"><sub>PHP ve C#: bugün kayıt, tekrar oynatma ve ön kapı; birim portları sırada.</sub></p>
 
 <table>
   <tr>
@@ -69,7 +78,7 @@ yalnızca yavaş kısım, her seferinde bir hot path:
 | json-server, başlatmadan ilk yanıta | 79 ila 85 ms | **8 ila 10 ms** |
 | 50,000 string üzerinde [Fuse.js](real-world.md#fusejs) araması, sorgu başına | 91.2 ms | **2.8 ms: 32x daha hızlı** |
 
-Prettier: 17,224 kayıtlı çalıştırmanın 15,837'si 10 dilde (JavaScript, TypeScript, JSX, JSON,
+Prettier: 17,224 kayıtlı çalıştırmanın 15,861'si 10 dilde (JavaScript, TypeScript, JSX, JSON,
 GraphQL, YAML, Markdown, CSS, SCSS, Less) tamamen Rust'ta biçimlendirilir ve 17,224'ünün tamamı
 Prettier ile bayt bayt eşleşir; henüz port edilmemiş her şey Prettier'a geri düşer. json-server:
 kaydedilen 514/514 HTTP vakası saf bir Rust binary'si üzerinde eşleşir. Apple M4 üzerinde, her biri
@@ -77,11 +86,32 @@ iki kez çalıştırılarak ölçülmüştür; her çıktı, süre ölçülmeden
 ([ayrıntılar](real-world.md)). Her küçük fonksiyon için Rust'ı ayrı ayrı çağırmak genellikle bir
 JIT'ten *daha yavaştır*; rust-anything taşımaya değer döngüyü bulur ve onu taşır.
 
-<p align="center">
-  <img src="assets/prettier.gif" alt="Prettier ve Rust portu aynı 59 gerçek dosyayı, dosya başına bir süreçle biçimlendiriyor: Prettier 3.63 s, Rust portu 0.20 s sürüyor ve çıktı bayt bayt aynı." width="820">
-  <br>
-  <sub>ms, Fuse.js ve json-server'dan alınan 59 gerçek dosyada Prettier ve Rust portu (Apple M4). Bayt bayt aynı çıktı. <a href="real-world.md#prettier">Nasıl ölçüldü</a>.</sub>
-</p>
+## Sadece yavaş kısım
+
+Uygulamanın tamamını port etmeniz gerekmez. `go`'yu fazla yavaş çalışan bir komuta yöneltin,
+zamanı yiyen tek fonksiyonu port etsin:
+
+```sh
+rust-anything go --agent claude -- python3 app.py
+```
+
+Çalıştırmayı profiller, taşımaya değer en dıştaki fonksiyonu seçer (içindeki küçük çağrıyı değil
+döngüyü; profil öyle diyorsa batch olarak), onu üretilen girdiler ve çalıştırmanızın yaptığı
+çağrılarla kaydeder ve `src/port.rs` dosyasını ajanınıza verir (`claude`, `codex` ya da istemi
+stdin'den okuyan herhangi bir komut; `--agent` olmadan sizin için `TASK.md` yazar ve durur).
+Fonksiyonu ancak kaydedilen her vaka eşleştiğinde ve `gate` geçtiğinde devreye alır. Sonra:
+
+```sh
+rust-anything report rust/dedupe-rs     # pull request için REPORT.md ve card.svg
+rust-anything disable rust/dedupe-rs    # bayt bayt orijinale geri dönüş
+```
+
+Yukarıdaki [Fuse.js](real-world.md#fusejs) satırı da bu biçimdedir: Fuse'un tek bir string için
+skoru, listenin tamamı üzerinde batch olarak Rust'a taşındı; nesne anahtarları, genişletilmiş
+arama ve geri kalan her şey JavaScript'te kaldı. 50,000 string üzerinde sorgu başına 91.2 ms'den
+2.8 ms'ye. `go`'yu 20 satırlık bir Python dedupe olan
+[`tests/fixtures/go-fuzzy`](../tests/fixtures/go-fuzzy) üzerinde deneyin. Bir portu açıp
+kapatmanın bütün yolları: [Switch a port on and off](how-it-works.md#switch-a-port-on-and-off).
 
 <p align="center">
   <img src="assets/json-server.gif" alt="Node sunucusu olarak ve tek bir Rust binary'si olarak json-server: boştayken bellek 74 MB ve 3.5 MB, başlatmadan ilk yanıta 79 ila 85 ms ve 8 ila 10 ms, kaydedilen 514 HTTP vakasının 514'ü eşleşiyor." width="820">
@@ -240,7 +270,7 @@ arkasına konabilir; birimleri P/Invoke üzerinden port etmek sırada.
 </p>
 
 <p align="center">
-  <a href="https://coderabbit.ai">
+  <a href="https://coderabbit.link/erkamyaman">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/sponsors/company-dark.svg">
       <img src="assets/sponsors/company-light.svg" width="800" alt="Şirket sponsoru: CodeRabbit">
@@ -259,6 +289,7 @@ arkasına konabilir; birimleri P/Invoke üzerinden port etmek sırada.
 
 <p align="center">
   <a href="https://github.com/sponsors/erkamyaman"><img src="https://img.shields.io/badge/Sponsor_olun-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor olun"></a>
+  <a href="https://buymeacoffee.com/erkamyaman"><img src="https://img.shields.io/badge/Buy_me_a_coffee-%E2%98%95-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 ## Katkıda bulunma

@@ -66,6 +66,20 @@ fn composer(text: &str) -> (Option<String>, Vec<String>, Vec<String>, Option<Str
     )
 }
 
+/// The PSR-4 namespaces of `autoload` and `autoload-dev`: the project's own code.
+fn own_namespaces(text: &str) -> Vec<String> {
+    let Ok(doc) = serde_json::from_str::<Value>(text) else {
+        return Vec::new();
+    };
+    ["autoload", "autoload-dev"]
+        .iter()
+        .filter_map(|key| doc[key]["psr-4"].as_object())
+        .flat_map(|o| o.keys())
+        .map(|ns| ns.trim_matches('\\').to_string())
+        .filter(|ns| !ns.is_empty())
+        .collect()
+}
+
 pub fn discover(root: &Path) -> Result<Workspace> {
     let mut packages: Vec<Package> = Vec::new();
     let mut files = Vec::new();
@@ -89,8 +103,8 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             .rsplit_once('/')
             .map_or(String::new(), |(d, _)| d.to_string());
         if name == "composer.json" {
-            let (pkg_name, deps, dev, src) =
-                composer(&std::fs::read_to_string(entry.path()).unwrap_or_default());
+            let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
+            let (pkg_name, deps, dev, src) = composer(&text);
             packages.push(Package {
                 name: pkg_name.unwrap_or_else(|| {
                     if dir.is_empty() {
@@ -107,6 +121,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
                 dir,
                 deps,
                 dev_deps: dev,
+                namespaces: own_namespaces(&text),
             });
         } else if name.ends_with(".php") {
             let is_test = name.ends_with("Test.php")
@@ -137,6 +152,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             },
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     packages.sort_by(|a, b| a.dir.cmp(&b.dir));
@@ -475,6 +491,13 @@ pub fn resolve(
             }
         }
     }
+    let own = |ns: &String| {
+        let spec = spec.trim_start_matches('\\');
+        spec == ns || spec.starts_with(&format!("{ns}\\"))
+    };
+    if ws.packages.iter().flat_map(|p| &p.namespaces).any(own) {
+        return super::Resolution::Unresolved;
+    }
     if parts.len() <= 1 {
         return super::Resolution::Stdlib;
     }
@@ -545,9 +568,40 @@ pub fn php_to_ts(t: &str) -> String {
         "float" | "double" => "number".into(),
         "bool" | "boolean" | "true" | "false" => "boolean".into(),
         "null" | "void" => "undefined".into(),
-        "array" | "iterable" => "unknown[]".into(),
+        "array" | "iterable" => "unknown[] | Record<string, unknown>".into(),
         _ => "unknown".into(),
     }
+}
+
+fn plain_type(t: &str) -> bool {
+    t.trim()
+        .trim_start_matches('?')
+        .split(['|', '&'])
+        .map(|p| p.trim().trim_matches(['(', ')']).to_ascii_lowercase())
+        .all(|p| {
+            matches!(
+                p.as_str(),
+                "int"
+                    | "float"
+                    | "string"
+                    | "bool"
+                    | "array"
+                    | "mixed"
+                    | "null"
+                    | "true"
+                    | "false"
+                    | "void"
+                    | "never"
+            )
+        })
+}
+
+fn bare_array(t: &str) -> bool {
+    t.trim()
+        .trim_start_matches('?')
+        .split('|')
+        .map(|p| p.trim().to_ascii_lowercase())
+        .all(|p| matches!(p.as_str(), "array" | "iterable" | "null"))
 }
 
 fn split_top(text: &str, sep: char) -> Vec<String> {
@@ -634,16 +688,17 @@ fn function_fn(
             (words.next()? == format!("${p}")).then(|| php_to_ts(t))
         })
     };
+    let doc_return = doc.iter().find_map(|tag| {
+        let t = tag.strip_prefix("@return ")?.split_whitespace().next()?;
+        Some(php_to_ts(t))
+    });
     let returns = node
         .child_by_field_name("return_type")
-        .map(|t| php_to_ts(text(t, source)))
+        .map(|t| text(t, source))
+        .filter(|t| !(bare_array(t) && doc_return.is_some()))
+        .map(php_to_ts)
         .filter(|t| t != "unknown")
-        .or_else(|| {
-            doc.iter().find_map(|tag| {
-                let t = tag.strip_prefix("@return ")?.split_whitespace().next()?;
-                Some(php_to_ts(t))
-            })
-        })
+        .or(doc_return)
         .unwrap_or_else(|| "unknown".into());
     let mut blocker = None;
     if name.starts_with("__") {
@@ -683,10 +738,14 @@ fn function_fn(
             if declared.is_some_and(|t| t.contains("callable") || t.contains("Closure")) {
                 blocker.get_or_insert_with(|| format!("takes a callable `${pname}`"));
             }
+            if let Some(t) = declared.filter(|t| !plain_type(t)) {
+                blocker.get_or_insert_with(|| format!("takes an object `${pname}` (`{t}`)"));
+            }
             let value = p
                 .child_by_field_name("default_value")
                 .map(|v| text(v, source).to_string());
             let mut ts_type = declared
+                .filter(|t| !(bare_array(t) && doc_param(&pname).is_some()))
                 .map(php_to_ts)
                 .filter(|t| t != "unknown")
                 .or_else(|| doc_param(&pname))
@@ -708,12 +767,24 @@ fn function_fn(
             });
         }
     }
+    if let Some(t) = node
+        .child_by_field_name("return_type")
+        .map(|t| text(t, source))
+        .filter(|t| !plain_type(t))
+    {
+        blocker.get_or_insert_with(|| format!("returns an object (`{t}`)"));
+    }
     if let Some(body) = node.child_by_field_name("body") {
         let mut yields = false;
         syntax::walk(body, |n| yields |= n.kind() == "yield_expression");
         if yields {
             blocker.get_or_insert_with(|| "is a generator (`yield`)".into());
         }
+    }
+    if sep == "::" {
+        blocker.get_or_insert_with(|| {
+            "a static method: the PHP bridge takes top-level functions for now".into()
+        });
     }
     let prefix = if receiver.is_empty() {
         String::new()
@@ -944,13 +1015,14 @@ use Other\Three;
 
     #[test]
     fn reads_composer() {
-        let (name, deps, dev, src) = composer(
-            r#"{"name": "acme/tool", "require": {"php": ">=8.1", "ext-json": "*", "guzzlehttp/guzzle": "^7"},
-               "require-dev": {"phpunit/phpunit": "^10"}, "autoload": {"psr-4": {"Acme\\": "src/"}}}"#,
-        );
+        let text = r#"{"name": "acme/tool", "require": {"php": ">=8.1", "ext-json": "*", "guzzlehttp/guzzle": "^7"},
+               "require-dev": {"phpunit/phpunit": "^10"}, "autoload": {"psr-4": {"Acme\\": "src/"}},
+               "autoload-dev": {"psr-4": {"Acme\\Tests\\": "tests/"}}}"#;
+        let (name, deps, dev, src) = composer(text);
         assert_eq!(name.as_deref(), Some("acme/tool"));
         assert_eq!(deps, ["guzzlehttp/guzzle"]);
         assert_eq!(dev, ["phpunit/phpunit"]);
         assert_eq!(src.as_deref(), Some("src"));
+        assert_eq!(own_namespaces(text), ["Acme", "Acme\\Tests"]);
     }
 }

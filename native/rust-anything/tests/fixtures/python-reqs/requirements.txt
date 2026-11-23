@@ -1,0 +1,6 @@
+requests>=2.31
+flask[async]==3.0.0 ; python_version >= "3.9"
+myapp @ git+https://github.com/acme/myapp.git
+git+https://github.com/acme/foo.git#egg=foo
+./vendor/foo-1.0-py3-none-any.whl
+six  # pinned for py2 shims

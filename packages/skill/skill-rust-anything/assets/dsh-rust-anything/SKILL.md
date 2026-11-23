@@ -1,6 +1,6 @@
 ---
 name: dsh-rust-anything
-description: Port TypeScript/JavaScript, Python, C, Go, Ruby, Java or Kotlin to Rust with the rust-anything CLI or MCP tools, from one hot function up to a whole app rewritten as a pure Rust app - profile, plan, bridge one unit at a time, record the original's behavior, port, diff, bench, shadow and gate; batch hot loops so they run in Rust on all cores. Use when asked to rewrite, port or migrate code or an app to Rust, to plan such a migration, or to make slow code faster with Rust.
+description: Port TypeScript/JavaScript, Python, C, Go, Ruby, Java, Kotlin, PHP or C# to Rust with the rust-anything CLI or MCP tools, from one hot function up to a whole app rewritten as a pure Rust app - profile, plan, bridge one unit at a time, record the original's behavior, port, diff, bench, shadow and gate; batch hot loops so they run in Rust on all cores. Use when asked to rewrite, port or migrate code or an app to Rust, to plan such a migration, or to make slow code faster with Rust.
 ---
 
 # Migration to Rust with rust-anything
@@ -14,22 +14,46 @@ the decisions, researches the dependencies, records the whole app, puts a Rust f
 of the original, runs the steps below for every unit, then lifts the app to a standalone Rust
 binary (or, for a library, one pure Rust crate). CLIs, HTTP servers and libraries.
 
-Languages: TypeScript/JavaScript, Python, C, Go, Ruby, Java, Kotlin. The language is detected; `--lang`
-overrides it. The steps are the same everywhere; only the bridge differs (napi-rs or wasm for
-TS, PyO3, a C ABI, cgo, a magnus extension, JNI), and the original's callers keep their API.
-For PHP: `analyze`, and for a whole app `app record`, `app replay` and
-`app front-door` (CLIs, and servers run with `php -S 127.0.0.1:{port} router.php`); `bridge` does not
-take PHP units yet, so tell the user before planning a PHP port past the front door. C# works
-the same way: record a built app (`dotnet out/app.dll`, servers with
-`--urls http://127.0.0.1:{port}`); `bridge` does not take C# units yet.
+Languages: TypeScript/JavaScript, Python, C, Go, Ruby, Java, Kotlin, PHP and C#. The language is
+detected; `--lang` overrides it. The steps are the same everywhere; only the bridge differs (napi-rs
+or wasm for TS, PyO3, a C ABI, cgo, a magnus extension, JNI), and the original's callers keep their
+API.
+PHP and C# units bridge too. A PHP unit's top-level functions with scalar, string, list and
+assoc-array parameters cross through `ext-ffi` (a JSON dispatcher plus `php/<crate>.php`); static
+methods, classes, object parameters, references, variadics, callables and generators stay in PHP
+with the reason. A C# unit's public static methods cross through P/Invoke (`cs/<Lib>.cs`); generic,
+`ref`/`out`/`in`, `params`, overloaded and async methods stay in C#. Neither language has `shadow`
+or `--batch`. Whole apps use `app record`, `app replay` and `app front-door`: PHP CLIs and servers
+run with `php -S 127.0.0.1:{port} router.php`, C# with
+`dotnet out/app.dll --urls http://127.0.0.1:{port}`.
 
-Tools: the `rust-anything` CLI, or the same steps as MCP tools (`rust-anything mcp`): `profile`,
-`analyze`, `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `shadow`, `gate`, and for a
-whole app `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift`.
+Tools: the `rust-anything` CLI, or the same steps as MCP tools (`rust-anything mcp`): `go`,
+`profile`, `analyze`, `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `shadow`, `gate`,
+`enable`, `disable`, `report`, and for a whole app `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift`.
 If the MCP tools are not available, use the installation's `rust-anything` CLI; this repository
 builds it into `native/rust-anything/bin/rust-anything` (see below). Do not install a global copy.
 When a step fails because a runtime, the installation or the MCP server is missing or out of date,
 run `rust-anything doctor`: it checks each one and prints the command that fixes it.
+
+## Only the slow part: `go`
+
+When the user wants one slow command faster rather than a migration, `go` runs steps 0 to 5 for
+the top hot function in one call:
+
+```sh
+rust-anything go -- python3 app.py          # profile, bridge, record, write rust/<fn>-rs/TASK.md
+# port src/port.rs as TASK.md says (build, diff, gate), then the same command again:
+rust-anything go -- python3 app.py          # build, diff, gate, and enable when all pass
+```
+
+It picks the outermost exported function of a portable unit that takes arguments, batched where
+`profile` advises it (`--function` picks another), and records generated cases plus the calls the
+workload makes. You are the agent: port only that function, and do not pass `--agent` (that hands
+the port to another agent process). `go` switches the unit on only when every case matches, gate
+passes and `bench` shows it is not slower as its callers call it; a `slower` stage names the
+batch class to call from the loop or the caller to port with it. Report its stage and next step
+to the user. `rust-anything report <crate>` then writes
+`report/REPORT.md` and `report/card.svg` with measured numbers for the pull request.
 
 ## 0. Profile: find what is worth moving
 
@@ -95,6 +119,21 @@ a signature in `port.rs`, run `rust-anything refresh <crate>`.
 - Numbers in Python and Ruby: ints that the original passes through must come back as ints;
   in Python ports use `crate::pynum::Num` for int-or-float, not `serde_json::Value`.
 - C: inputs recorded as `crash:` are undefined behavior; any result passes.
+- C pointers: a byte pointer with a length parameter is `&[u8]` (or `&mut [u8]` when the
+  function writes it), a pointer to one scalar is `Option<&mut T>`, and a returned pointer into
+  a parameter is its offset (`Option<usize>`). In `--inputs`, give buffers as hex text (a number
+  means that many zero bytes, `null` is `NULL`) and leave length parameters out; recorded
+  results then hold the return value and what the function wrote. A struct of scalar fields
+  passed or returned by value is a `#[repr(C)]` struct at the crate root (`crate::AVRational`),
+  and an object of its fields in cases. A `char **` / `const char **` the function points into
+  the first `char` string argument is `Option<&mut Option<usize>>` (the offset into it); in
+  cases give the starting offset, `true` for a `NULL` start, or `null` for a `NULL` `**`.
+  Contexts, other structs and other `**` stay blocked: bridge a small wrapper with plain
+  arguments, and say so. Pass the
+  project's build flags in `CFLAGS` (`-DHAVE_CONFIG_H`, `-I<root>`) when its sources need them.
+- C strings: `const char *` is `Option<&[u8]>`, which costs a `strlen` per argument. Where that
+  dominates (short-string helpers), type the parameter `Option<crate::CChars<'_>>` in `port.rs`
+  and run `refresh`: the port reads the bytes as it goes (`next`, `peek`, `to_bytes`).
 - Ordered maps and object keys: `indexmap` where order reaches output.
 - Regex lookaround or backreferences: `fancy-regex`, not `regex`. Either way, `\w`, `\b`, `\d`
   and case-insensitive matching treat non-ASCII text differently from the source language's
@@ -181,6 +220,11 @@ Load the shadow where the app loaded the original. `RUST_ANYTHING_MODE=shadow` (
 original's results and reports Rust mismatches; `new` switches to Rust; `old` turns Rust off.
 The public API does not change.
 
+For TS/JS and Python, `rust-anything enable <crate>` switches a gated unit on in place instead: one
+marked block in the original files rebinds its functions to Rust for every caller.
+`rust-anything disable <crate>` removes it byte for byte; `RUST_ANYTHING_UNIT_<NAME>=original`
+runs the original for one run. Ask the user before enabling: it edits their source files.
+
 ## 5. Done means gate passes
 
 ```sh
@@ -205,17 +249,15 @@ Then report to the user, and **wait for their go-ahead before the next unit**:
 
 ## This installation
 
-- The MCP server is mounted by the Web `standard` agent preset: tools are
-  `mcp__rust-anything__*` (eager, so no `load_tools` step). In this repository
-  the CLI compiles from the crate vendored at `native/rust-anything`: `pnpm run
-  build` (or `pnpm run build:rust-anything`) stages
-  `native/rust-anything/bin/rust-anything`, which is the executable the plugin
-  spawns. When neither the tools nor that executable is present, tell the user
-  rather than installing a global copy.
-- Pass **absolute** crate paths to `build`, `diff`, `gate` and `bench`: 2.1.0
-  re-parents its child process to a temp directory while passing a relative
-  `--manifest-path`, so a relative path fails with `manifest path ... does not
-  exist` (upstream bug, reproduced in the project's own CI).
-- Generated crates declare `rust-version = "1.97"`. Check `rust-anything doctor`;
-  if the default toolchain is older, `rustup update stable` or prefix commands
-  with `RUSTUP_TOOLCHAIN=<version>`.
+- The MCP server is mounted by the Web `standard` agent preset: tools are `mcp__rust-anything__*`
+  (eager, so no `load_tools` step). In this repository the CLI compiles from the crate vendored at
+  `native/rust-anything`: `pnpm run build` (or `pnpm run build:rust-anything`) stages
+  `native/rust-anything/bin/rust-anything`, which is the executable the plugin spawns. When neither
+  the tools nor that executable is present, tell the user rather than installing a global copy.
+- The generated crates build into one shared cargo target folder: `CARGO_TARGET_DIR` when set, else
+  `rust-anything/target` under the platform cache directory. That folder is outside the migrated
+  repository, so a build writes nothing into its worktree.
+- `enable` and `disable` edit the user's source files, so use them only after the user agrees, and
+  name the files that changed.
+- Generated crates declare `rust-version = "1.97"`. Check `rust-anything doctor`; if the default
+  toolchain is older, `rustup update stable` or prefix commands with `RUSTUP_TOOLCHAIN=<version>`.

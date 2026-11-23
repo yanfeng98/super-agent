@@ -10,7 +10,7 @@ are slower than the TS as called from JS, because the bridge costs more than the
 [`demo/x18n-core`](../demo/x18n-core/README.md). The lesson is built in: measure with `bench` before
 shipping a port.
 
-## Real code in six languages
+## Real code in eight languages
 
 Go's `path`, Ruby's `shellwords`, Python's `colorsys`, JDK and glibc behavior behind small
 facades: every port passes its gate, 13,010 recorded cases in all. The runs found and fixed

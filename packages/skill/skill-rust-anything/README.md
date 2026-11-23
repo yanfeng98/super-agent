@@ -112,10 +112,10 @@ These limits define what the bundled provider does not do. They are current pack
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The packaged text is the upstream `skills/rust-anything/SKILL.md` and `whole-app.md` copied from the vendored crate, renamed to `dsh-rust-anything`, and changed in three places: language coverage (`Kotlin` is accepted, matching this build), the CLI sentence (this installation's staged executable instead of a global install), and the trailing installation section (the preset mount and the absolute-path trap). To re-sync:
+The packaged text is the upstream `skills/rust-anything/SKILL.md` and `whole-app.md` copied from the vendored crate, renamed to `dsh-rust-anything`, and changed in four places: language coverage (`Kotlin`, `PHP` and `C#` are named, matching this build's `bridge`), the PHP and C# paragraph (upstream still says those units cannot be bridged), the CLI sentence (this installation's staged executable instead of a global install), and the trailing installation section (the preset mount, the shared cargo target folder, and `enable`/`disable` editing the user's sources). To re-sync:
 
 1. Copy `native/rust-anything/skills/rust-anything/` into `assets/dsh-rust-anything/` after an upstream bump.
-2. Re-apply those three adaptations and set the frontmatter `name` to `dsh-rust-anything`.
+2. Re-apply those four adaptations and set the frontmatter `name` to `dsh-rust-anything`.
 3. Run the package tests, which compare the asset directory with the provider's skill name.
 
 `assets/LICENSE` carries the upstream MIT notice, and `locale/*.json` supplies the component title and description in each UI language for plugin inventories.

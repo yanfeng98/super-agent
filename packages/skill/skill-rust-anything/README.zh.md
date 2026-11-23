@@ -112,10 +112,10 @@ Web 的 `standard` agent preset 把这个提供方与 rust-anything MCP server �
 <details>
 <summary>维护者工作背景 —— 点击展开</summary>
 
-随包文本是 vendored crate 里的上游 `skills/rust-anything/SKILL.md` 与 `whole-app.md`，改名为 `dsh-rust-anything`，并改了三处：语言覆盖（接受 `Kotlin`，与本构建一致）、CLI 那一句（指向本安装暂存的可执行文件而不是全局安装）、以及末尾的安装小节（preset 挂载与绝对路径陷阱）。重新同步的步骤：
+随包文本是 vendored crate 里的上游 `skills/rust-anything/SKILL.md` 与 `whole-app.md`，改名为 `dsh-rust-anything`，并改了四处：语言覆盖（点名 `Kotlin`、`PHP`、`C#`，与本构建的 `bridge` 一致）、PHP 与 C# 那一段（上游仍写着这两类单元不能 bridge）、CLI 那一句（指向本安装暂存的可执行文件而不是全局安装）、以及末尾的安装小节（preset 挂载、共享 cargo target 目录，以及 `enable`/`disable` 会改用户源码）。重新同步的步骤：
 
 1. 上游升级后把 `native/rust-anything/skills/rust-anything/` 复制到 `assets/dsh-rust-anything/`。
-2. 重新套用这三处改写，并把 frontmatter 的 `name` 设为 `dsh-rust-anything`。
+2. 重新套用这四处改写，并把 frontmatter 的 `name` 设为 `dsh-rust-anything`。
 3. 跑包测试，它会把资产目录与提供方的技能名对上。
 
 `assets/LICENSE` 带上游 MIT 声明，`locale/*.json` 提供各界面语言下的组件标题与描述，供插件清单使用。

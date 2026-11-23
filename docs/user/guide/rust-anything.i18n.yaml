@@ -3,11 +3,11 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/guide/rust-anything.md
 /port-code-to-rust-with-rust-anything:
-  en: 014c3b637b5ed000
-  zh: 79dff171a38f1832
+  en: f5e60b8f0661a69b
+  zh: 46e95adff0170652
 /port-code-to-rust-with-rust-anything/what-ships:
-  en: d20f2db2f2cb6acd
-  zh: ec44fb37e64e9f1f
+  en: 2ab6c6d44f26aef1
+  zh: 96f6165428083bd6
 /port-code-to-rust-with-rust-anything/before-the-first-session:
   en: 7191a4f496b4fb13
   zh: 8c6cd54d436dbb5f
@@ -18,14 +18,14 @@
   en: d76ce620a1417af9
   zh: 993f1856c35c679f
 /port-code-to-rust-with-rust-anything/use-the-cli-directly:
-  en: f1d4dcb8af448ebf
-  zh: 19d1772ffb9efb65
+  en: 3ddc4f9c1d3c811b
+  zh: 036bb0ba05780dde
 /port-code-to-rust-with-rust-anything/tune-it:
-  en: d1f1cebec5b9e48f
-  zh: 202c564b29ff7de4
+  en: 16b4de307fd806a6
+  zh: 3db59507ef6438ed
 /port-code-to-rust-with-rust-anything/costs-and-limits:
-  en: 93814803f42b9e20
-  zh: 0e562fc1a87c9330
+  en: 55627b6eaf733414
+  zh: e0fb72f531b4ba81
 /port-code-to-rust-with-rust-anything/when-something-is-missing:
   en: 597479d52c81b7b0
   zh: 04efbc0d6dd5ac32

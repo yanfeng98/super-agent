@@ -74,7 +74,7 @@ fn cli_options(tool: &str, sub: &[String]) -> BTreeSet<String> {
     flags
         .captures_iter(&help)
         .map(|c| c[1].to_string())
-        .filter(|f| f != "help" && f != "version")
+        .filter(|f| f != "help" && (f != "version" || help.contains("--version <")))
         .chain(
             args.captures_iter(usage)
                 .map(|c| c[1].to_string())

@@ -22,6 +22,9 @@ pub struct CrateMatch {
     pub crates: &'static str,
     pub fit: Fit,
     pub note: &'static str,
+    /// The table row that matched, within its language: two names with the same row are one
+    /// library spelled two ways (`yaml` and `PyYAML`).
+    pub row: usize,
 }
 
 /// The Rust counterpart of an npm package, if the table knows it.

@@ -1113,7 +1113,7 @@ fn ruby_modules_bridge_record_and_diff() {
         wrapper.contains("def rank(per_page = 10, min: 0)"),
         "{wrapper}"
     );
-    if !common::have("ruby") {
+    if !common::have_ruby_3() {
         return;
     }
     let recorded = harness::record(&RecordOptions {
@@ -1559,4 +1559,371 @@ fn batches_use_the_chosen_allocator() {
     assert!(!read(&dir, "src/lib.rs").contains("global_allocator"));
     assert!(!read(&dir, "Cargo.toml").contains("rusty_alloc"));
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn php_functions_bridge_record_and_diff() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/php-functions");
+    let dir = std::env::temp_dir().join(format!("rust-anything-php-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let outcome = bridge::bridge(&bridge::Options {
+        root: &root,
+        unit: "src/",
+        kind: None,
+        out: Some(dir.clone()),
+        name: Some("textfns-rs".into()),
+        force: false,
+        keep: Vec::new(),
+        lang: None,
+        batch: Vec::new(),
+        as_json: Vec::new(),
+        allocator: Default::default(),
+    })
+    .unwrap();
+    assert_eq!(outcome.kind, Kind::Ffi);
+    let manifest = Manifest::load(&dir).unwrap();
+    let kept: Vec<(&str, &str)> = manifest
+        .js_only
+        .iter()
+        .map(|j| (j.name.as_str(), j.reason.as_str()))
+        .collect();
+    assert_eq!(
+        kept,
+        [
+            ("each_word", "returns an object (`\\Generator`)"),
+            ("stamp", "takes an object `$at` (`\\DateTimeInterface`)"),
+        ]
+    );
+    let port = std::fs::read_to_string(dir.join("src/port.rs")).unwrap();
+    for signature in [
+        "pub fn slugify(text: String, sep: String, max: Option<i64>) -> Result<String, String>",
+        "pub fn mean(xs: Vec<f64>) -> Result<f64, String>",
+        "pub fn words(text: String) -> Result<Vec<String>, String>",
+        "pub fn count_words(text: String) -> Result<serde_json::Value, String>",
+    ] {
+        assert!(port.contains(signature), "{signature}\n{port}");
+    }
+    let wrapper = std::fs::read_to_string(dir.join("php/textfns_rs.php")).unwrap();
+    assert!(wrapper.contains("namespace Acme\\Text {"), "{wrapper}");
+    assert!(
+        wrapper.contains(
+            "function slugify(string $text, string $sep = '-', ?int $max = null)\n    {\n        \
+             return \\RustAnything\\NativeTextfnsRs::call('slugify', [$text, $sep, $max]);"
+        ),
+        "{wrapper}"
+    );
+    let refused = shadow::shadow(&dir, None).unwrap_err().to_string();
+    assert!(refused.contains("cannot redefine a function"), "{refused}");
+    let statics = bridge::bridge(&bridge::Options {
+        root: &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/php"),
+        unit: "src/Text/Slug.php",
+        kind: None,
+        out: Some(dir.with_extension("statics")),
+        name: None,
+        force: false,
+        keep: Vec::new(),
+        lang: None,
+        batch: Vec::new(),
+        as_json: Vec::new(),
+        allocator: Default::default(),
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(statics.contains("a static method"), "{statics}");
+    if !common::have_with(
+        "php",
+        &[
+            "-d",
+            "ffi.enable=1",
+            "-r",
+            "exit(class_exists('FFI') ? 0 : 1);",
+        ],
+        "is missing or has no FFI extension",
+    ) {
+        return;
+    }
+    let inputs = dir.join("inputs.jsonl");
+    std::fs::write(
+        &inputs,
+        "{\"fn\": \"count_words\", \"args\": [\"to be or not to be\"]}\n\
+         {\"fn\": \"count_words\", \"args\": [\"10 010 10\"]}\n\
+         {\"fn\": \"clamp\", \"args\": [42, {\"$undefined\": true}, 50]}\n",
+    )
+    .unwrap();
+    let recorded = harness::record(&RecordOptions {
+        crate_dir: &dir,
+        count: 30,
+        inputs: Some(&inputs),
+        module: None,
+        resolve_from: None,
+        node_args: &[],
+    })
+    .unwrap();
+    assert!(recorded.cases > 100, "{recorded:?}");
+    assert!(recorded.errors > 0);
+    let cases = std::fs::read_to_string(dir.join("cases.jsonl")).unwrap();
+    assert!(
+        cases.contains("\"ok\":{\"to\":2,\"be\":2,\"or\":1,\"not\":1}"),
+        "{cases}"
+    );
+    assert!(
+        cases.contains("{\"fn\":\"clamp\",\"args\":[42,{\"$undefined\":true},50],\"ok\":42}"),
+        "the default applies to an omitted middle argument"
+    );
+    assert!(cases.contains("\"error_type\":\"DivisionByZeroError\""));
+    let mut port = port;
+    for (name, body) in [
+        (
+            "clamp",
+            "if lo > hi { return Err(\"InvalidArgumentException: lo is above hi\".into()); } \
+             Ok(lo.max(hi.min(value)))",
+        ),
+        (
+            "mean",
+            "if xs.is_empty() { return Err(\"DomainException: mean of nothing\".into()); } \
+             Ok(xs.iter().fold(0.0, |a, b| a + b) / xs.len() as f64)",
+        ),
+        (
+            "ratio",
+            "if b == 0.0 { return Err(\"DivisionByZeroError: Division by zero\".into()); } \
+             Ok(a / b)",
+        ),
+        (
+            "words",
+            "Ok(text.split(' ').filter(|w| !w.is_empty()).map(String::from).collect())",
+        ),
+        (
+            "count_words",
+            "let mut counts = serde_json::Map::new(); \
+             for w in text.split(' ').filter(|w| !w.is_empty()) { \
+             let n = counts.get(w).and_then(serde_json::Value::as_i64).unwrap_or(0); \
+             counts.insert(w.to_string(), (n + 1).into()); } \
+             Ok(serde_json::Value::Object(counts))",
+        ),
+    ] {
+        let file = if matches!(name, "clamp" | "mean" | "ratio") {
+            "numbers"
+        } else {
+            "text"
+        };
+        let stub = format!("unimplemented!(\"port `{name}` from src/{file}.php\")");
+        assert!(port.contains(&stub), "{stub}");
+        port = port.replace(&stub, body);
+    }
+    std::fs::write(dir.join("src/port.rs"), port).unwrap();
+    harness::build(&dir).unwrap();
+    let diff = harness::diff(&DiffOptions {
+        crate_dir: &dir,
+        module: None,
+        ignore_key_order: false,
+        float_tolerance: None,
+        node_args: &[],
+    })
+    .unwrap();
+    assert_eq!(diff.total, recorded.cases);
+    let unported = cases
+        .lines()
+        .filter(|l| l.starts_with("{\"fn\":\"slugify\"") || l.starts_with("{\"fn\":\"top\""))
+        .filter(|l| !l.contains("\"error_type\":\"TypeError\""))
+        .count();
+    assert_eq!(diff.failed, unported, "{:?}", diff.mismatches);
+    assert!(
+        diff.mismatches
+            .iter()
+            .all(|m| matches!(m["fn"].as_str(), Some("slugify" | "top"))),
+        "{:?}",
+        diff.mismatches
+    );
+    assert!(diff.passed > 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn csharp_static_methods_bridge_record_and_diff() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/csharp-units");
+    let dir = std::env::temp_dir().join(format!("rust-anything-csharp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let options = |batch: Vec<String>| bridge::Options {
+        root: &root,
+        unit: "src/",
+        kind: None,
+        out: Some(dir.clone()),
+        name: Some("geo-rs".into()),
+        force: false,
+        keep: Vec::new(),
+        lang: None,
+        batch,
+        as_json: Vec::new(),
+        allocator: Default::default(),
+    };
+    let batch = bridge::bridge(&options(vec!["Mean:xs".into()]))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        batch.contains("`--batch` is not available for C#"),
+        "{batch}"
+    );
+    let outcome = bridge::bridge(&options(Vec::new())).unwrap();
+    assert_eq!(outcome.kind, Kind::Ffi);
+    let manifest = Manifest::load(&dir).unwrap();
+    let kept: Vec<(&str, &str)> = manifest
+        .js_only
+        .iter()
+        .map(|j| (j.name.as_str(), j.reason.as_str()))
+        .collect();
+    assert_eq!(
+        kept,
+        [
+            ("Identity", "generic"),
+            (
+                "Price",
+                "uses `decimal`, a 128-bit decimal no JSON number keeps exactly"
+            ),
+            ("TryHalf", "takes a parameter by reference"),
+        ]
+    );
+    let port = std::fs::read_to_string(dir.join("src/port.rs")).unwrap();
+    for signature in [
+        "pub fn distance(a: serde_json::Value, b: serde_json::Value) -> Result<f64, String>",
+        "pub fn total(parcel: serde_json::Value) -> Result<i64, String>",
+        "pub fn clamp(value: i64, lo: i64, hi: i64) -> Result<i64, String>",
+        "pub fn words(text: String) -> Result<Vec<String>, String>",
+        "pub fn first_index(text: String, needle: String) -> Result<Option<i64>, String>",
+    ] {
+        assert!(port.contains(signature), "{signature}\n{port}");
+    }
+    let wrapper = std::fs::read_to_string(dir.join("cs/GeoRs.cs")).unwrap();
+    for expected in [
+        "namespace Acme.Geo.Rust\n{\n    public static class Geometry",
+        "public static int Clamp(int value, int lo = 0, int hi = 100) =>\n            \
+         global::RustAnything.GeoRsNative.Call<int>(\"Clamp\", new object?[] { value, lo, hi });",
+        "public static Point Midpoint(Point a, Point b) =>",
+        "using System.Collections.Generic;",
+    ] {
+        assert!(wrapper.contains(expected), "{expected}\n{wrapper}");
+    }
+    let refused = shadow::shadow(&dir, None).unwrap_err().to_string();
+    assert!(
+        refused.contains("C# binds calls when it compiles"),
+        "{refused}"
+    );
+    if !common::have("dotnet") {
+        return;
+    }
+    let recorded = harness::record(&RecordOptions {
+        crate_dir: &dir,
+        count: 30,
+        inputs: None,
+        module: None,
+        resolve_from: None,
+        node_args: &[],
+    })
+    .unwrap();
+    assert!(recorded.cases > 200, "{recorded:?}");
+    let cases = std::fs::read_to_string(dir.join("cases.jsonl")).unwrap();
+    for expected in [
+        "\"error_type\":\"System.ArgumentException\"",
+        "\"error_type\":\"System.OverflowException\"",
+        "\"error_type\":\"System.NullReferenceException\"",
+        "{\"fn\":\"Mean\",\"args\":[[]],\"error\":\"mean of nothing\",\
+         \"error_type\":\"System.InvalidOperationException\"}",
+    ] {
+        assert!(cases.contains(expected), "{expected}");
+    }
+    assert!(
+        cases
+            .lines()
+            .any(|l| l.starts_with("{\"fn\":\"Clamp\",\"args\":[") && l.contains("$undefined")),
+        "the default applies to an omitted argument"
+    );
+    assert!(
+        !cases.contains("\"args\":[9223372036854775807"),
+        "an input that does not fit `int` is not recorded"
+    );
+    let mut port = port;
+    for (name, body) in [
+        (
+            "Distance",
+            "if a.is_null() || b.is_null() { return Err(NRE.into()); } \
+             let (dx, dy) = (num(&a[\"X\"]) - num(&b[\"X\"]), num(&a[\"Y\"]) - num(&b[\"Y\"])); \
+             Ok((dx * dx + dy * dy).sqrt())",
+        ),
+        (
+            "Midpoint",
+            "if a.is_null() || b.is_null() { return Err(NRE.into()); } \
+             Ok(serde_json::json!({ \"X\": out((num(&a[\"X\"]) + num(&b[\"X\"])) / 2.0), \
+             \"Y\": out((num(&a[\"Y\"]) + num(&b[\"Y\"])) / 2.0) }))",
+        ),
+        (
+            "Total",
+            "if parcel.is_null() { return Err(NRE.into()); } \
+             let mut total: i32 = 0; \
+             for s in parcel[\"Sizes\"].as_array().into_iter().flatten() { \
+             total = total.checked_add(s.as_i64().unwrap_or(0) as i32).ok_or(\
+             \"System.OverflowException: Arithmetic operation resulted in an overflow.\")?; } \
+             Ok(i64::from(total))",
+        ),
+        (
+            "Mean",
+            "if xs.is_empty() { return Err(\"System.InvalidOperationException: mean of nothing\".into()); } \
+             Ok(xs.iter().fold(0.0, |a, b| a + b) / xs.len() as f64)",
+        ),
+        (
+            "Clamp",
+            "if lo > hi { return Err(\"System.ArgumentException: lo is above hi\".into()); } \
+             Ok(lo.max(hi.min(value)))",
+        ),
+        (
+            "Words",
+            "Ok(text.split(' ').filter(|w| !w.is_empty()).map(String::from).collect())",
+        ),
+        (
+            "CountWords",
+            "let mut counts = serde_json::Map::new(); \
+             for w in text.split(' ').filter(|w| !w.is_empty()) { \
+             let n = counts.get(w).and_then(serde_json::Value::as_i64).unwrap_or(0); \
+             counts.insert(w.to_string(), (n + 1).into()); } \
+             Ok(serde_json::Value::Object(counts))",
+        ),
+    ] {
+        let stub = format!("unimplemented!(\"port `{name}` from src/Geometry.cs\")");
+        assert!(port.contains(&stub), "{stub}");
+        port = port.replace(&stub, body);
+    }
+    port.push_str(
+        "\nconst NRE: &str = \"System.NullReferenceException: Object reference not set to an \
+         instance of an object.\";\n\
+         fn num(v: &serde_json::Value) -> f64 { match v[\"$num\"].as_str() { \
+         Some(\"NaN\") => f64::NAN, Some(\"Infinity\") => f64::INFINITY, \
+         Some(\"-Infinity\") => f64::NEG_INFINITY, Some(\"-0\") => -0.0, \
+         _ => v.as_f64().unwrap_or(0.0) } }\n\
+         fn out(x: f64) -> serde_json::Value { if x.is_nan() { serde_json::json!({\"$num\": \"NaN\"}) } \
+         else if x.is_infinite() { serde_json::json!({\"$num\": if x > 0.0 { \"Infinity\" } else { \"-Infinity\" }}) } \
+         else { serde_json::json!(x) } }\n",
+    );
+    std::fs::write(dir.join("src/port.rs"), port).unwrap();
+    harness::build(&dir).unwrap();
+    let diff = harness::diff(&DiffOptions {
+        crate_dir: &dir,
+        module: None,
+        ignore_key_order: false,
+        float_tolerance: None,
+        node_args: &[],
+    })
+    .unwrap();
+    assert_eq!(diff.total, recorded.cases);
+    let unported = cases
+        .lines()
+        .filter(|l| l.starts_with("{\"fn\":\"FirstIndex\""))
+        .count();
+    assert_eq!(diff.failed, unported, "{:?}", diff.mismatches);
+    assert!(
+        diff.mismatches.iter().all(|m| m["fn"] == "FirstIndex"
+            && m["actual"]["error_type"]
+                .as_str()
+                .is_some_and(|t| t.ends_with("RustPanicException"))),
+        "{:?}",
+        diff.mismatches
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

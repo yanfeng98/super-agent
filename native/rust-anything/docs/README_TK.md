@@ -4,33 +4,42 @@
 
 <h1 align="center">rust-anything</h1>
 
-<p align="center"><b>Programmaňyzy Rust-da täzeden ýazyň we onuň henizem öňküsi ýaly işleýändigini subut ediň.</b></p>
-
-<p align="center">2.0-da täze: <a href="real-world.md#prettier">Prettier Rust-a geçirildi</a>. 19x has çalt · ýazga alnan 17,224 işletmäniň 15,837-si doly Rust-da · hemmesi baýtma-baýt deň</p>
-
-<p align="center">
-  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io wersiýasy"></a>
-  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm wersiýasy"></a>
-  <a href="https://github.com/erkamyaman/rust-anything/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/erkamyaman/rust-anything/ci.yml?branch=main&label=tests" alt="Testler"></a>
-  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub ýyldyzlary"></a>
-  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
-</p>
-
-<p align="center">
-  <a href="#çalt-başlangyç">Çalt başlangyç</a> ·
-  <a href="#diller">Diller</a> ·
-  <a href="real-world.md">Hakyky portlar</a> ·
-  <a href="how-it-works.md#how-it-works">Nähili işleýär</a> ·
-  <a href="whole-apps.md#port-a-whole-app">Tutuş programmalar</a> ·
-  <a href="faq.md#faq">Köp soralýan soraglar</a>
-</p>
-
-<p align="center">Türkiýede 🇹🇷 <a href="https://github.com/erkamyaman">erKam Yaman</a> tarapyndan döredildi · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ Hemaýatkär boluň</a></p>
-
-<p align="center">Hemaýatkär: <a href="https://coderabbit.ai"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
-
-<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · Türkmençe · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a></sub></p>
+<p align="center"><sub><a href="../README.md">English</a> · <a href="README_TR.md">Türkçe</a> · <a href="README_UK.md">Українська</a> · <a href="README_ZH.md">简体中文</a> · <a href="README_ZH-TW.md">繁體中文</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_FR.md">Français</a> · <a href="README_RU.md">Русский</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_AZ.md">Azərbaycanca</a> · <a href="README_UZ.md">Oʻzbekcha</a> · <a href="README_KK.md">Қазақша</a> · <a href="README_KY.md">Кыргызча</a> · Türkmençe · <a href="README_TT.md">Татарча</a> · <a href="README_UG.md">ئۇيغۇرچە</a> · <a href="README_PT.md">Português</a> · <a href="README_VI.md">Tiếng Việt</a> · <a href="README_ES.md">Español</a> · <a href="README_IT.md">Italiano</a></sub></p>
 <p align="center"><sub>Bu terjimäni jemgyýetçilik goldaýar, şonuň üçin ol <a href="../README.md">iňlisçe README</a> faýlyndan yzda galyp biler.</sub></p>
+
+<p align="center"><b>Programmaňyzy Rust-da täzeden ýazyň we onuň henizem öňküsi ýaly işleýändigini subut ediň.</b><br>
+Ol kody özi terjime etmeýär: Rust-y kodlaýyş agentiňiz (ýa-da siz) ýazýar, rust-anything bolsa ony asyl nusga bilen barlaýar.</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/languages/top/erkamyaman/rust-anything?logo=rust&label=Rust&color=CE422B" alt="Rust share of the code">
+  <img src="https://img.shields.io/badge/macOS%20·%20Linux%20·%20Windows-native-2563EB" alt="Native binaries for macOS, Linux and Windows">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-555" alt="MIT license"></a>
+  <a href="https://crates.io/crates/rust-anything"><img src="https://img.shields.io/crates/v/rust-anything?color=E2862A&label=crates.io" alt="crates.io version"></a>
+  <a href="https://www.npmjs.com/package/rust-anything"><img src="https://img.shields.io/npm/v/rust-anything?color=E2862A&label=npm" alt="npm version"></a>
+  <br>
+  <a href="https://coderabbit.link/erkamyaman"><img src="https://img.shields.io/coderabbit/prs/github/erkamyaman/rust-anything?labelColor=171717&color=FF570A&label=Reviewed+by+CodeRabbit" alt="Pull requests reviewed by CodeRabbit"></a>
+  <a href="https://github.com/rust-unofficial/awesome-rust#development-tools"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Rust"></a>
+  <a href="https://github.com/AIshihzong/awesome-reverse-engineer-anything"><img src="https://img.shields.io/badge/Featured%20in-Awesome%20REA-f0b429" alt="Featured in Awesome REA"></a>
+  <a href="https://github.com/erkamyaman/rust-anything"><img src="https://img.shields.io/github/stars/erkamyaman/rust-anything?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center"><a href="https://github.com/erkamyaman/rust-anything/discussions/127"><img src="https://img.shields.io/badge/Join%20the%20discussion-6E40C9?style=for-the-badge&logo=github&logoColor=white" alt="Join the discussion"></a></p>
+
+<p align="center"><a href="https://trendshift.io/repositories/363468" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/363468/daily?language=Rust" alt="erkamyaman/rust-anything: #1 Rust repository of the day on Trendshift" width="250" height="55"/></a></p>
+
+<p align="center"><b><a href="#çalt-başlangyç">Çalt başlangyç</a></b> · <a href="https://github.com/erkamyaman/rust-anything/releases">Releases</a> · <a href="#çalt-başlangyç">Claude Code plugin</a> · <a href="https://registry.modelcontextprotocol.io/v0.1/servers?search=rust-anything">MCP Registry</a> · <a href="real-world.md">Hakyky portlar</a> · <a href="faq.md#faq">Köp soralýan soraglar</a><br>
+<sub><a href="#diller">Diller</a> · <a href="how-it-works.md#how-it-works">Nähili işleýär</a> · <a href="whole-apps.md#port-a-whole-app">Tutuş programmalar</a> · <a href="../LICENSE">MIT</a></sub><br>
+Türkiýede 🇹🇷 <a href="https://github.com/erkamyaman">erKam Yaman</a> tarapyndan döredildi · <a href="../LICENSE">MIT</a> · <a href="https://github.com/sponsors/erkamyaman">❤️ Hemaýatkär boluň</a> · Hemaýatkär: <a href="https://coderabbit.link/erkamyaman"><img src="assets/brands/coderabbit.png" width="22" height="22" align="absmiddle" alt=""> <b>CodeRabbit</b></a></p>
+
+<p align="center">2.0-da täze: <a href="real-world.md#prettier">Prettier Rust-a geçirildi</a>. 19x has çalt · ýazga alnan 17,224 işletmäniň 15,861-si doly Rust-da · hemmesi baýtma-baýt deň</p>
+
+<p align="center">
+  <img src="assets/prettier.gif" alt="Prettier we onuň Rust porty şol bir 59 hakyky faýly her faýl üçin bir proses bilen formatlaýar: Prettier 3.63 s, Rust porty 0.20 s sarp edýär, çykyş bolsa baýtma-baýt birmeňzeş." width="820">
+  <br>
+  <sub>ms, Fuse.js we json-server-den alnan 59 hakyky faýlda Prettier we onuň Rust porty (Apple M4). Baýtma-baýt birmeňzeş çykyş. <a href="real-world.md#prettier">Nähili ölçüldi</a>.</sub>
+</p>
+
+<p align="center"><sub>PHP we C#: şu gün ýazga almak, gaýtadan işletmek we front door; modul portlary indiki nobatda.</sub></p>
 
 <table>
   <tr>
@@ -69,7 +78,7 @@ we serwerler ýa-da diňe haýal bölegi, bir gezekde bir hot path:
 | json-server, başlangyçdan ilkinji jogaba çenli | 79 bilen 85 ms aralygy | **8 bilen 10 ms aralygy** |
 | 50,000 setirde [Fuse.js](real-world.md#fusejs) gözlegi, bir soraga | 91.2 ms | **2.8 ms: 32x has çalt** |
 
-Prettier: ýazga alnan 17,224 işletmäniň 15,837-si 10 dilde (JavaScript, TypeScript, JSX, JSON,
+Prettier: ýazga alnan 17,224 işletmäniň 15,861-si 10 dilde (JavaScript, TypeScript, JSX, JSON,
 GraphQL, YAML, Markdown, CSS, SCSS, Less) doly Rust-da formatlanýar we 17,224-üň hemmesi Prettier
 bilen baýtma-baýt gabat gelýär, sebäbi entek geçirilmedik islendik zat Prettier-e gaýdýar.
 json-server: ýazga alnan 514/514 HTTP ýagdaýy arassa Rust binar faýlynda gabat gelýär. Apple M4-de,
@@ -77,11 +86,33 @@ her biri iki gezek işledilip ölçüldi; wagt ölçülmezden öň her çykyş d
 ([jikme-jiklikler](real-world.md)). Her kiçijik funksiýa üçin Rust-y aýratyn çagyrmak adatça JIT-den
 *haýalrak*; rust-anything göçürmäge degýän aýlawy tapýar we şony göçürýär.
 
-<p align="center">
-  <img src="assets/prettier.gif" alt="Prettier we onuň Rust porty şol bir 59 hakyky faýly her faýl üçin bir proses bilen formatlaýar: Prettier 3.63 s, Rust porty 0.20 s sarp edýär, çykyş bolsa baýtma-baýt birmeňzeş." width="820">
-  <br>
-  <sub>ms, Fuse.js we json-server-den alnan 59 hakyky faýlda Prettier we onuň Rust porty (Apple M4). Baýtma-baýt birmeňzeş çykyş. <a href="real-world.md#prettier">Nähili ölçüldi</a>.</sub>
-</p>
+## Diňe haýal bölegi
+
+Tutuş programmany geçirmegiňiz hökman däl. `go`-ny gaty haýal işleýän buýruga gönükdiriň, ol wagty
+alýan ýeke-täk funksiýany geçirer:
+
+```sh
+rust-anything go --agent claude -- python3 app.py
+```
+
+Ol işletmäni profilleýär, göçürmäge degýän iň daşky funksiýany saýlaýar (içindäki kiçi çagyryşy
+däl-de, aýlawy; profil şeýle diýse, batch görnüşinde), ony döredilen girişlerde we siziň işletmäňiziň
+edýän çagyryşlarynda ýazga alýar we `src/port.rs` faýlyny agentiňize berýär (`claude`, `codex` ýa-da
+stdin-den prompt okaýan islendik buýruk; `--agent` bolmasa, siziň üçin `TASK.md` ýazýar we
+saklanýar). Funksiýany diňe ýazga alnan her ýagdaý gabat gelende we `gate` geçende işe goýberýär.
+Soňra:
+
+```sh
+rust-anything report rust/dedupe-rs     # pull request üçin REPORT.md we card.svg
+rust-anything disable rust/dedupe-rs    # baýtma-baýt asyl nusga gaýdyş
+```
+
+Ýokardaky [Fuse.js](real-world.md#fusejs) hatary hem şu görnüşde: Fuse-yň bir setir üçin baly tutuş
+sanaw boýunça batch görnüşinde Rust-a göçürildi, obýekt açarlary, giňeldilen gözleg we galan zatlar
+bolsa JavaScript-de galdy. Netijede 50,000 setirde bir soraga 91.2 ms-den 2.8 ms-e çenli. `go`-ny
+20 setirlik Python dedupe bolan [`tests/fixtures/go-fuzzy`](../tests/fixtures/go-fuzzy) üstünde
+synap görüň. Porty açmagyň we ýapmagyň ähli ýollary:
+[Switch a port on and off](how-it-works.md#switch-a-port-on-and-off).
 
 <p align="center">
   <img src="assets/json-server.gif" alt="Node serweri hökmünde we ýeke-täk Rust binar faýly hökmünde json-server: boş durandaky ýat 74 MB we 3.5 MB, başlangyçdan ilkinji jogaba çenli 79 bilen 85 ms aralygy we 8 bilen 10 ms aralygy, ýazga alnan 514 HTTP ýagdaýynyň 514-si gabat gelýär." width="820">
@@ -239,7 +270,7 @@ arkasyna goýup bolýar; birlikleri P/Invoke arkaly geçirmek indiki nobatda.
 </p>
 
 <p align="center">
-  <a href="https://coderabbit.ai">
+  <a href="https://coderabbit.link/erkamyaman">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/sponsors/company-dark.svg">
       <img src="assets/sponsors/company-light.svg" width="800" alt="Kompaniýa hemaýatkäri: CodeRabbit">
@@ -258,6 +289,7 @@ arkasyna goýup bolýar; birlikleri P/Invoke arkaly geçirmek indiki nobatda.
 
 <p align="center">
   <a href="https://github.com/sponsors/erkamyaman"><img src="https://img.shields.io/badge/Hema%C3%BDatk%C3%A4r_bolu%C5%88-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Hemaýatkär boluň"></a>
+  <a href="https://buymeacoffee.com/erkamyaman"><img src="https://img.shields.io/badge/Buy_me_a_coffee-%E2%98%95-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 ## Goşant goşmak

@@ -16,6 +16,9 @@ pub struct Package {
     /// Runtime dependencies (`dependencies`, `peerDependencies`, `optionalDependencies`).
     pub deps: Vec<String>,
     pub dev_deps: Vec<String>,
+    /// Namespaces the package's own code declares (PHP's PSR-4 `autoload` and `autoload-dev`
+    /// prefixes); empty for the other languages.
+    pub namespaces: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +107,7 @@ pub fn discover(root: &Path) -> Result<Workspace> {
             dir: String::new(),
             deps: Vec::new(),
             dev_deps: Vec::new(),
+            namespaces: Vec::new(),
         });
     }
     packages.sort_by(|a, b| a.dir.cmp(&b.dir));
@@ -189,6 +193,7 @@ fn read_package(root: &Path, rel: &str) -> Result<Package> {
         dir,
         deps,
         dev_deps: keys("devDependencies"),
+        namespaces: Vec::new(),
     })
 }
 

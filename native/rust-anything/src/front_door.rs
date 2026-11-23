@@ -310,16 +310,46 @@ fn original_rs(run: &[String]) -> String {
     format!(
         "use std::ffi::OsString;
 use std::io::Write;
-use std::path::Path;
+use std::path::{{Path, PathBuf}};
 use std::process::{{Command, ExitCode, ExitStatus}};
 
-const ROOT: &str = concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../..\");
+const ROOT: &str = match option_env!(\"RUST_ANYTHING_REPO\") {{
+    Some(root) => root,
+    None => concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../..\"),
+}};
 const RUN: &[&str] = &[{}];
 const FALLBACK_LOG: &str = \"{}\";
+const ORIGINAL_BASE: &str = \"RUST_ANYTHING_ORIGINAL_BASE\";
+
+/// Where an installed package finds `node_modules/...`: the folder its launcher resolved the
+/// original from, else the nearest one above this binary while it sits inside `node_modules`.
+fn installed(word: &str) -> Option<OsString> {{
+    if !word.starts_with(\"node_modules/\") {{
+        return None;
+    }}
+    if let Some(base) = std::env::var_os(ORIGINAL_BASE) {{
+        let path = Path::new(&base).join(word);
+        if path.exists() {{
+            return Some(path.into_os_string());
+        }}
+    }}
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    if !exe.components().any(|c| c.as_os_str() == \"node_modules\") {{
+        return None;
+    }}
+    exe.ancestors()
+        .skip(1)
+        .map(|dir| dir.join(word))
+        .find(|path| path.exists())
+        .map(PathBuf::into_os_string)
+}}
 
 fn resolve(word: &str) -> OsString {{
     if word.starts_with('-') {{
         return word.into();
+    }}
+    if let Some(path) = installed(word) {{
+        return path;
     }}
     let path = Path::new(ROOT).join(word);
     let looks_like_path = word.contains('/') || word.contains('\\\\') || path.is_file();
@@ -485,6 +515,10 @@ pub(crate) fn rustfmt(file: &Path) {
         .output();
 }
 
+/// Set when rust-anything builds a front door: the repository the original runs from, so a
+/// `rust/` that is a symlink to a folder elsewhere still finds it.
+pub(crate) const REPO_ENV: &str = "RUST_ANYTHING_REPO";
+
 pub(crate) fn cargo_build(app_dir: &Path, target_dir: Option<&Path>) -> Result<PathBuf> {
     let mut cmd = Command::new("cargo");
     cmd.args([
@@ -493,6 +527,11 @@ pub(crate) fn cargo_build(app_dir: &Path, target_dir: Option<&Path>) -> Result<P
         "--manifest-path",
     ])
     .arg(app_dir.join("Cargo.toml"));
+    if let Some(repo) = app_dir.parent().and_then(Path::parent)
+        && let Ok(repo) = repo.canonical()
+    {
+        cmd.env(REPO_ENV, repo);
+    }
     if let Some(dir) = target_dir {
         cmd.env("CARGO_TARGET_DIR", dir);
     }
