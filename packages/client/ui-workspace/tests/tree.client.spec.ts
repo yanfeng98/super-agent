@@ -12,6 +12,7 @@ import {
   type ArchivedFilter,
   deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningGroupKey, owningParentFolder,
   pinCurrentBlank, reconcileManualOrder, sessionMemberIds, visibleSessionIds, workspaceLabel, UNGROUPED_KEY,
+  displayGroupKey, foldedWorkspaces,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
@@ -87,6 +88,13 @@ const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView 
   workspaceId: wid(id), path: `/projects/${id}`, title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
+const worktree = (
+  id: string, sessionIds: string[], title: string, parentId: string | undefined, active: boolean, name = `${id}-checkout`,
+): WorkspaceView => ({
+  ...workspace(id, sessionIds, title),
+  ...parentId === undefined ? {} : { parentId: wid(parentId) },
+  worktree: { name, active },
+})
 const view = (expandedGroups: readonly string[] = [], ungroupedOrder?: readonly string[]) => ({
   expandedGroups,
   ...(ungroupedOrder === undefined ? {} : { ungroupedOrder }),
@@ -114,6 +122,56 @@ describe('owningGroupKey', () => {
     const workspaces = [workspace('first', ['owned'])]
     expect(owningGroupKey(workspaces, sid('owned'))).toBe('first')
     expect(owningGroupKey(workspaces, sid('loose'))).toBe(UNGROUPED_KEY)
+  })
+})
+
+describe('worktree presentation', () => {
+  it('keeps a running worktree as its own child group with the Ticket title and checkout subtitle', () => {
+    const parent = workspace('repo', ['repo-session'], 'Repository')
+    const child = worktree('ticket', ['worker'], 'Ticket title', 'repo', true, 'ticket-checkout')
+    const sessions = list(summary('repo-session', 1), summary('worker', 2))
+    const groups = deriveGroups(sessions, [parent, child], noRows, noAttention, view(['repo', 'ticket']))
+    expect(groups.map(group => group.key)).toEqual(['repo', 'ticket'])
+    const node = groups[1]!
+    expect(node.label).toBe('Ticket title')
+    expect(node.parentId).toBe('repo')
+    expect(node.worktree).toEqual({ name: 'ticket-checkout', active: true })
+    expect(node.sessions.map(row => row.id)).toEqual([sid('worker')])
+    expect(foldedWorkspaces([parent, child]).size).toBe(0)
+  })
+
+  it('folds a finished worktree session into its registered parent and drops the child entry', () => {
+    const parent = workspace('repo', ['repo-session'], 'Repository')
+    const child = worktree('ticket', ['worker'], 'Ticket title', 'repo', false)
+    const sessions = withMain(list(summary('repo-session', 1), summary('worker', 2)), sid('worker'))
+    const groups = deriveGroups(sessions, [parent, child], noRows, noAttention, view(['repo']))
+    expect(groups.map(group => group.key)).toEqual(['repo'])
+    const node = groups[0]!
+    expect(node.sessionCount).toBe(2)
+    expect(node.sessions.map(row => row.id)).toEqual([sid('repo-session'), sid('worker')])
+    expect(node.containsCurrent).toBe(true)
+    expect(displayGroupKey([parent, child], sid('worker'))).toBe('repo')
+    expect(foldedWorkspaces([parent, child]).get(wid('ticket'))).toBe('repo')
+  })
+
+  it('follows the archived filter for the Sessions it folds into the parent', () => {
+    const parent = workspace('repo', ['repo-session'], 'Repository')
+    const child = worktree('ticket', ['worker'], 'Ticket title', 'repo', false)
+    const sessions = list(summary('repo-session', 1), summary('worker', 2))
+    const hidden = deriveGroups(sessions, [parent, child], rowState({ archived: ['worker'] }), noAttention, view(['repo']))
+    expect(hidden[0]!.sessions.map(row => row.id)).toEqual([sid('repo-session')])
+    const only = deriveGroups(sessions, [parent, child],
+      rowState({ archived: ['worker'], archivedFilter: 'only' }), noAttention, view(['repo']))
+    expect(only.map(group => group.key)).toEqual(['repo'])
+    expect(only[0]!.sessions.map(row => row.id)).toEqual([sid('worker')])
+  })
+
+  it('shows a finished worktree at the top level when its parent is not registered', () => {
+    const child = worktree('ticket', ['worker'], 'Ticket title', 'gone', false)
+    const groups = deriveGroups(list(summary('worker', 1)), [child], noRows, noAttention, view([]))
+    expect(groups.map(group => group.key)).toEqual(['ticket'])
+    expect(groups[0]!.label).toBe('Ticket title')
+    expect(groups[0]!.worktree).toEqual({ name: 'ticket-checkout', active: false })
   })
 })
 

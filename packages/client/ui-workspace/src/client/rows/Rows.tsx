@@ -208,7 +208,7 @@ function ProjectRow({
     ? { workspaceId: row.workspaceId, path: row.cwd } : undefined
   const ownRow = (
     <div
-      className={clsx(css.projectRow, menuOpen && css.menuOpen)}
+      className={clsx(css.projectRow, row.worktree !== undefined && css.projectRowWorktree, menuOpen && css.menuOpen)}
       data-row-key={`workspace:${group.key}`}
       role="treeitem"
       aria-expanded={row.expanded}
@@ -233,6 +233,7 @@ function ProjectRow({
       </span>
       <span className={css.projectText}>
         <span className={css.title}>{label}</span>
+        {row.worktree !== undefined && <span className={css.meta}>{row.worktree.name}</span>}
       </span>
       <span className={css.rowActions}>
         {workspaceMenuTarget !== undefined && (

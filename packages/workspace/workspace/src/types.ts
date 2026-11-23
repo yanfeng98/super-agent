@@ -61,10 +61,32 @@ export interface SessionActivity {
 }
 
 /**
+ * The checkout one workspace presents as a transient child of another: a
+ * worktree created for a unit of work, with its display name and whether that
+ * work is still in progress. A finished worktree stops being its own child
+ * entry; its sessions display under {@link Workspace.parentId} instead.
+ */
+export interface WorkspaceWorktree {
+  /** Checkout name, displayed as the child's subtitle. */
+  readonly name: string
+  /** Whether the work is still in progress: active children are their own collapsible entry, finished ones fold into the parent. */
+  readonly active: boolean
+}
+
+/** Display relationship and worktree presentation a caller may replace in one durable write. */
+export interface WorkspacePresentation {
+  /** Workspace this one displays under while both remain registered; omit to display it at the top level. */
+  readonly parentId?: WorkspaceId
+  /** Worktree presentation; omit for an ordinary workspace rather than a transient checkout. */
+  readonly worktree?: WorkspaceWorktree
+}
+
+/**
  * One workspace: a stable id over an existing directory, a display title, and
  * an ordered candidate account of sessions. Membership validates header cwd
  * against the workspace path, but preserves an existing account when its
- * fully qualified cwd is missing. Consumers only see this interface; the
+ * fully qualified cwd is missing. A workspace may display under a parent and
+ * carry a worktree presentation. Consumers only see this interface; the
  * implementation stays private.
  */
 export interface Workspace {
@@ -80,6 +102,16 @@ export interface Workspace {
 
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string
+
+  /**
+   * Workspace this one displays under, when that registration still exists.
+   * Kept through the parent's removal: a child whose parent is gone displays
+   * at the top level with the relationship intact.
+   */
+  readonly parentId?: WorkspaceId | undefined
+
+  /** Worktree presentation, when this workspace is a transient checkout rather than an ordinary project. */
+  readonly worktree?: WorkspaceWorktree | undefined
 
   /** ISO-8601 creation instant, stamped at create and never rewritten. */
   readonly createdAt: string
@@ -112,6 +144,17 @@ export interface Workspace {
    * @returns resolution after durability.
    */
   setTitle(title: string): Promise<void>
+
+  /**
+   * Replace the display parent and worktree presentation durably in one
+   * write. Either field is omitted to clear it. A parent id equal to this
+   * workspace rejects without writing, and no parent need be registered: the
+   * relationship is kept for the parent's return while an absent parent
+   * displays the child at the top level.
+   * @param presentation - Parent and worktree presentation to record.
+   * @returns resolution after durability.
+   */
+  setPresentation(presentation: WorkspacePresentation): Promise<void>
 
   /**
    * Prepend a session to this workspace's candidate account. An already

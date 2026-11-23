@@ -23,6 +23,7 @@ import type { SessionActivity, Workspace, WorkspaceId as WorkspaceIdBrand } from
 
 export type {
   SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap, Workspace,
+  WorkspacePresentation, WorkspaceWorktree,
 } from './types.ts'
 export { workspaceDomainState, workspaceRecord, workspaceDomainSpec } from './spec.ts'
 export type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'

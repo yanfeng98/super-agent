@@ -27,7 +27,8 @@ Consumers see only the `Workspace` interface; the implementation stays package-p
  * One workspace: a stable id over an existing directory, a display title, and
  * an ordered candidate account of sessions. Membership validates header cwd
  * against the workspace path, but preserves an existing account when its
- * fully qualified cwd is missing. Consumers only see this interface; the
+ * fully qualified cwd is missing. A workspace may display under a parent and
+ * carry a worktree presentation. Consumers only see this interface; the
  * implementation stays private.
  */
 interface Workspace {
@@ -43,6 +44,16 @@ interface Workspace {
 
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string
+
+  /**
+   * Workspace this one displays under, when that registration still exists.
+   * Kept through the parent's removal: a child whose parent is gone displays
+   * at the top level with the relationship intact.
+   */
+  readonly parentId?: WorkspaceId | undefined
+
+  /** Worktree presentation, when this workspace is a transient checkout rather than an ordinary project. */
+  readonly worktree?: WorkspaceWorktree | undefined
 
   /** ISO-8601 creation instant, stamped at create and never rewritten. */
   readonly createdAt: string
@@ -75,6 +86,17 @@ interface Workspace {
    * @returns resolution after durability.
    */
   setTitle(title: string): Promise<void>
+
+  /**
+   * Replace the display parent and worktree presentation durably in one
+   * write. Either field is omitted to clear it. A parent id equal to this
+   * workspace rejects without writing, and no parent need be registered: the
+   * relationship is kept for the parent's return while an absent parent
+   * displays the child at the top level.
+   * @param presentation - Parent and worktree presentation to record.
+   * @returns resolution after durability.
+   */
+  setPresentation(presentation: WorkspacePresentation): Promise<void>
 
   /**
    * Prepend a session to this workspace's candidate account. An already
@@ -122,6 +144,8 @@ interface Workspace {
   status(): Promise<'ok' | 'missing-dir'>
 }
 ```
+
+A record may also carry a display parent and a worktree presentation, replaced together through `setPresentation`. `WorkspacePresentation` names an optional `parentId` and an optional `worktree` (`{ name, active }`); a client nests the child under a registered parent, uses `name` as its subtitle, and folds a finished (`active: false`) entry's sessions into the parent rather than listing the entry. A parent that is not registered leaves the child at the top level with the relationship intact, so removing and re-registering a project never rewrites its children. These are display facts on the same record: membership, order, and session logs are unchanged.
 
 Ownership truth is the record's ordered `sessionIds`, never derived from session cwd. Membership validates the recorded header cwd against the workspace path; an existing candidate remains owned when its fully qualified cwd fails resolution or directory stat with `ENOENT`. This preserves missing-directory and dangling-symlink accounts without admitting new sessions. Failed writes reject (`insertSessionBefore` account errors as `WorkspaceMoveInvalidError`, storage failures as plain errors); every accepted mutation stamps `updatedAt` and durably prunes candidates that no longer pass the membership check.
 

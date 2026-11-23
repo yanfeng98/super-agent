@@ -2870,3 +2870,43 @@ describe('Workspace tree grouping', () => {
     expect(b.props.insertWorkspaceBefore).toHaveBeenCalledWith(wid('alpha'), wid('gamma'))
   })
 })
+
+describe('Worktree children', () => {
+  beforeEach(() => {
+    createWorkspaceViewStore().create().actions.setGroupBy('workspace')
+  })
+  const section = (title: string) => screen.getByText(title).closest<HTMLElement>('[class*="groupSection"]')!
+  const parent = { ...workspace('repo', ['repo-session'], 'Repository'), path: '/repo' }
+  const child = (active: boolean, parentId: string | undefined = 'repo'): WorkspaceView => ({
+    ...workspace('ticket', ['worker'], 'Ticket title'),
+    path: '/tmp/worktree/ticket',
+    ...parentId === undefined ? {} : { parentId: wid(parentId) },
+    worktree: { name: 'ticket-checkout', active },
+  })
+  const sessions = () => hook(sessionState([summary('repo-session', 1), summary('worker', 2)]))
+
+  it('shows a running worktree as an expanded child with the Ticket title and checkout subtitle', () => {
+    mount({ useSessions: sessions(), useWorkspaces: hook(workspaceState([parent, child(true)])) })
+    const repo = section('Repository')
+    const ticket = within(repo).getByText('Ticket title').closest<HTMLElement>('[class*="groupSection"]')!
+    expect(within(ticket).getByText('ticket-checkout')).toBeTruthy()
+    expect(within(ticket).getByText('worker')).toBeTruthy()
+    expect(screen.getAllByText('Ticket title')).toHaveLength(1)
+  })
+
+  it('folds a finished worktree session under the parent without a worktree entry', () => {
+    mount({ useSessions: sessions(), useWorkspaces: hook(workspaceState([parent, child(false)])) })
+    expect(screen.queryByText('Ticket title')).toBeNull()
+    expect(screen.queryByText('ticket-checkout')).toBeNull()
+    expect(within(section('Repository')).getByText('worker')).toBeTruthy()
+  })
+
+  it('lifts a worktree whose parent is not registered to a top-level entry', () => {
+    mount({ useSessions: sessions(), useWorkspaces: hook(workspaceState([child(false, 'gone')])) })
+    const ticket = section('Ticket title')
+    expect(within(ticket).getByText('ticket-checkout')).toBeTruthy()
+    expect(within(ticket).queryByText('worker')).toBeNull()
+    fireEvent.click(within(ticket).getByText('Ticket title'))
+    expect(within(ticket).getByText('worker')).toBeTruthy()
+  })
+})

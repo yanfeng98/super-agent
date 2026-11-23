@@ -59,6 +59,15 @@ await project.setTitle('Renamed')
 ctx.workspaceRegistry.list() // shows the project, newest first
 ```
 
+### Presenting a worktree child
+
+A workspace may display under another, with a checked-out worktree name as its subtitle. `setPresentation({ parentId, worktree })` records both in one durable write and omits a field to clear it; the parent need not be registered, so a child whose parent was removed keeps the relationship and displays at the top level. A worktree entry marked `active` is the work of a running unit; a client folds a finished entry's sessions into its parent instead of listing the entry. These are display facts only: membership, ordering, and session logs are unchanged, and no model sees them. Records written before the fields existed parse unchanged.
+
+```text
+await workspace.setPresentation({ parentId: repository.id, worktree: { name: 'fix-1234', active: true } })
+await workspace.setPresentation({ parentId: repository.id, worktree: { name: 'fix-1234', active: false } })
+```
+
 <a id="first-use-workspace"></a>
 ### First-use Workspace
 

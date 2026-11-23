@@ -34,7 +34,8 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { ArchivedFilter, GroupNode, SessionNode, SessionOrderBy, SessionRowState } from '../tree.ts'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningGroupKey, owningParentFolder,
+  deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningParentFolder,
+  displayGroupKey, foldedWorkspaces, displayedWorkspaceId,
   pinCurrentBlank, reconcileManualOrder, sessionMemberIds, UNGROUPED_KEY,
 } from '../tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
@@ -329,7 +330,7 @@ function SessionTree({
     : Object.values(list.byId).find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
   const revealGroup = revealSessionId === undefined || !workspaceReady
     ? undefined
-    : owningGroupKey(workspaces, revealSessionId)
+    : displayGroupKey(workspaces, revealSessionId)
   // Per-group raised watermarks; an absent key means the base watermark.
   const [storedWatermarks, setStoredWatermarks] = useState<Readonly<Record<string, number>>>({})
   // Advances on user-driven watermark changes so AnimatedRows settles them; automatic raises animate.
@@ -343,19 +344,31 @@ function SessionTree({
   useNativeDragAcceptance(nativeDragActive)
   const currentGroup = current === undefined || !workspaceReady
     ? undefined
-    : owningGroupKey(workspaces, current)
+    : displayGroupKey(workspaces, current)
   useEffect(() => {
     if (current === undefined || currentGroup === undefined || Object.hasOwn(groupExpansion, currentGroup)) return
     setGroupExpanded(currentGroup, true)
   }, [current, currentGroup, setGroupExpanded, groupExpansion])
   const parents = useMemo(() => {
-    if (!nestWorkspaces) return new Map<string, WorkspaceId | undefined>()
+    const registered = new Set(workspaces.map(workspace => workspace.workspaceId))
+    const folded = foldedWorkspaces(workspaces)
+    // An explicit parent places a worktree child under a Workspace outside its own path.
+    const explicit = new Map<string, WorkspaceId | undefined>()
+    for (const workspace of workspaces) {
+      if (workspace.parentId === undefined) continue
+      if (workspace.parentId === workspace.workspaceId || !registered.has(workspace.parentId)) continue
+      const parentId = displayedWorkspaceId(folded, workspace.parentId)
+      if (parentId !== workspace.workspaceId) explicit.set(workspace.workspaceId, parentId)
+    }
+    if (!nestWorkspaces) return explicit
     const keysByPath = new Map(workspaces.map(workspace => [workspace.path, workspace.workspaceId]))
     const paths = [...keysByPath.keys()]
-    return new Map<string, WorkspaceId | undefined>(workspaces.map((workspace) => {
+    for (const workspace of workspaces) {
+      if (explicit.has(workspace.workspaceId) || folded.has(workspace.workspaceId)) continue
       const path = owningParentFolder(workspace.path, paths)
-      return [workspace.workspaceId, path === undefined ? undefined : keysByPath.get(path)]
-    }))
+      explicit.set(workspace.workspaceId, path === undefined ? undefined : keysByPath.get(path))
+    }
+    return explicit
   }, [nestWorkspaces, workspaces])
   const currentAncestors = useMemo(() => {
     const keys = new Set<string>()
@@ -366,9 +379,21 @@ function SessionTree({
   }, [currentGroup, parents])
   const expandedGroups = useMemo(() => {
     const ancestorKeys = new Set<string | undefined>(parents.values())
+    // An active worktree starts expanded so its ticket Session is visible; a saved collapse still wins.
+    const activeWorktrees = new Set<string>(
+      workspaces.filter(workspace => workspace.worktree?.active).map(workspace => workspace.workspaceId),
+    )
     return [...workspaces.map(workspace => workspace.workspaceId), UNGROUPED_KEY]
-      .filter(key => groupExpansion[key] ?? ancestorKeys.has(key))
+      .filter(key => groupExpansion[key] ?? (ancestorKeys.has(key) || activeWorktrees.has(key)))
   }, [groupExpansion, parents, workspaces])
+
+  // Sessions of a finished worktree render inside the parent group; they stay in their own account and cannot reorder there.
+  const foldedSessionIds = useMemo(() => {
+    const folded = foldedWorkspaces(workspaces)
+    return new Set<SessionId>(workspaces
+      .filter(workspace => folded.has(workspace.workspaceId))
+      .flatMap(workspace => workspace.sessionIds))
+  }, [workspaces])
   const groups = useMemo(
     () => deriveGroups(list, workspaces, rowState, statuses, {
       expandedGroups,
@@ -577,11 +602,12 @@ function SessionTree({
         {sessions.map((node) => {
         // Session drag never leaves its browser-local account, and pinned
         // rows reorder only within their leading pinned block.
-          const sameGroupDrag = drag !== null && drag.accountKey === group.key
+          const foldedSession = foldedSessionIds.has(node.id)
+          const sameGroupDrag = !foldedSession && drag !== null && drag.accountKey === group.key
           const compatibleTarget = sameGroupDrag && drag.pinned === node.pinned
           const normalizeHalf = (half: 'before' | 'after'): 'before' | 'after' =>
             node.blank ? 'after' : half
-          const dragProps = {
+          const dragProps = foldedSession ? undefined : {
             start: () => {
               sessionDropCommitted.current = false
               setDrag({ accountKey: group.key, sessionId: node.id, pinned: node.pinned, over: null })

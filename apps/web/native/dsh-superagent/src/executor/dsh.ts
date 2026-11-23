@@ -9,7 +9,8 @@ import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Execu
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
 import { runAsWorker, verifyDirectory } from '../infra/environment.ts'
-import { workspaceFacts } from '../app/review.ts'
+import { workspaceFacts, type WorkspaceFacts } from '../app/review.ts'
+import { linkWorktree } from '../app/worktrees.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
@@ -505,12 +506,13 @@ export class DshExecutor implements Executor {
    * Records the commit and the main working tree's branch the workspace started from before its first Assignment runs, so a
    * later review lists the commits the ticket added and a merge refuses a repository that moved to another branch. A
    * workspace that is not a git repository keeps neither.
+   * @returns the checkout facts, which also name the repository a worktree displays under; undefined outside a repository.
    */
-  private async captureBase(ticket: Ticket): Promise<void> {
+  private async captureBase(ticket: Ticket): Promise<WorkspaceFacts | undefined> {
     const directory = ticket.execution?.directory
-    if (!directory || ticket.execution?.base) return
+    if (!directory) return undefined
     const facts = await workspaceFacts(this.host.context.subprocess, directory, this.host.lifetime).catch(() => undefined)
-    if (!facts) return
+    if (!facts || ticket.execution?.base) return facts
     this.host.store.atomic(() => {
       const current = this.host.store.tickets.get(ticket.id)
       if (!current?.execution || current.execution.base) return
@@ -520,6 +522,7 @@ export class DshExecutor implements Executor {
       current.execution.target = facts.target
       this.host.store.tickets.save(current)
     })
+    return facts
   }
   private async launch(ticket: Ticket, assignment: Assignment): Promise<void> {
     const current = () => {
@@ -540,10 +543,14 @@ export class DshExecutor implements Executor {
       if (!current()) return
     }
     if (!current()) return
-    await this.captureBase(ticket)
+    const facts = await this.captureBase(ticket)
     if (!current()) return
     const sessionId = workerSessionId(ticket.id)
     const agent = await this.host.sessions.ensure(sessionId, workspace, ticket.title, 'worker')
+    if (!current()) return
+    // The sidebar nests the checkout under the repository's Workspace; a failure here changes no Ticket state.
+    await linkWorktree(this.host.context, ticket, facts?.root)
+      .catch((error: unknown) => { this.host.context.logger.warn('dsh-superagent: presenting ticket %s\'s worktree failed: %s', ticket.id, String(error)) })
     if (!current()) return
     // The background work of the Assignment this one replaces stops first, so its end does not clear this one's message.
     await this.stopped(ticket.id)

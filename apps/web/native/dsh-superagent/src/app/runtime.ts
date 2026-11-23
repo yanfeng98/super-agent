@@ -40,6 +40,7 @@ import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceFacts, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
+import { adoptWorktrees, presentWorktree, removeWorktree, retitleWorktree } from './worktrees.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
   recordHandback, recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordRevert, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
@@ -201,12 +202,26 @@ export class Runtime extends Service implements SourceHost {
             })
             this.finishing.set(ended.id, task)
             void task.finally(() => { if (this.finishing.get(ended.id) === task) this.finishing.delete(ended.id) })
+            void presentWorktree(ctx, ended, false).catch((error: unknown) => {
+              ctx.logger.warn('dsh-superagent: finishing ticket %s\'s worktree entry failed: %s', ended.id, String(error))
+            })
           })
           if (event.type === 'ticket.reopened') {
             const reopened = store.tickets.get(event.data.ticketId)
             if (reopened) this.store.afterCommit(() => {
               void reopenArchive(reopened, event.at).catch((error: unknown) => {
                 ctx.logger.warn('dsh-superagent: recording a reopening in the archive failed: %s', String(error))
+              })
+              void presentWorktree(ctx, reopened, true).catch((error: unknown) => {
+                ctx.logger.warn('dsh-superagent: reopening ticket %s\'s worktree entry failed: %s', reopened.id, String(error))
+              })
+            })
+          }
+          if (event.type === 'ticket.resumed') {
+            const resumed = store.tickets.get(event.data.ticketId)
+            if (resumed) this.store.afterCommit(() => {
+              void presentWorktree(ctx, resumed, true).catch((error: unknown) => {
+                ctx.logger.warn('dsh-superagent: resuming ticket %s\'s worktree entry failed: %s', resumed.id, String(error))
               })
             })
           }
@@ -369,6 +384,9 @@ export class Runtime extends Service implements SourceHost {
     void recordRename(ticket, at, ticket.title).catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: recording a rename in the archive failed: %s', String(error))
     })
+    void retitleWorktree(this.ctx, ticket).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: renaming ticket %s\'s worktree entry failed: %s', ticket.id, String(error))
+    })
     return ticket
   }
   /**
@@ -398,6 +416,15 @@ export class Runtime extends Service implements SourceHost {
       throw new Error('The local Source allows nobody; add the operator under Policy → On each Source')
     }
     return createLocalRequest(this, input)
+  }
+  /** Links the checkouts of Tickets recorded before their sidebar presentation existed. */
+  async adoptWorktrees(): Promise<number> {
+    return await adoptWorktrees(this.ctx, this.store.tickets.list(), async (ticket) => {
+      const directory = ticket.execution?.directory
+      if (directory === undefined) return undefined
+      const facts = await workspaceFacts(this.ctx.subprocess, directory, this.lifetime).catch(() => undefined)
+      return facts?.root
+    })
   }
   /**
    * Completes archive records a crash may have left half-written: the close section of ended local tickets, and the merge or
@@ -1458,6 +1485,9 @@ export class Runtime extends Service implements SourceHost {
     if (!directory) throw new Error('This ticket has no workspace')
     await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal,
       { merged: true, squash: ticket.merged.strategy === 'squash' })
+    await removeWorktree(this.ctx, ticket).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: removing ticket %s\'s worktree entry failed: %s', ticket.id, String(error))
+    })
     const at = now()
     this.store.atomic(() => {
       const current = this.store.tickets.get(id)
@@ -1549,6 +1579,9 @@ export class Runtime extends Service implements SourceHost {
     // An ending capture reads the worktree; wait for it before removing what it reads.
     await this.finishing.get(ticketId)
     await discardWorkspace(this.ctx.subprocess, directory, this.stopped.signal)
+    await removeWorktree(this.ctx, ticket).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: removing ticket %s\'s worktree entry failed: %s', ticket.id, String(error))
+    })
     const at = now()
     this.store.atomic(() => {
       const current = this.store.tickets.get(ticketId)
@@ -1667,6 +1700,10 @@ export class Runtime extends Service implements SourceHost {
     // A crash between an ending and its archive write leaves the archive behind; complete those records once at startup.
     void this.reconcileArchives().catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: completing archive records failed: %s', String(error))
+    })
+    // Checkouts recorded before the sidebar presentation existed are linked now, without waiting for another launch.
+    void this.adoptWorktrees().catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: presenting recorded ticket checkouts failed: %s', String(error))
     })
   }
   private httpHost(): HttpHost {

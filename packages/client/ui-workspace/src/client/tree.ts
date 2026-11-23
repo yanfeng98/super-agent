@@ -7,7 +7,7 @@ import {
   type SessionListState, type SessionSearchResultItem, type SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
-import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceId, WorkspaceView, WorkspaceWorktree } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionStatusSnapshot,
 } from '@deepseek-ai/dsh-client-ui-session-status/client'
@@ -80,6 +80,10 @@ export interface GroupNode {
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
   label: string
+  /** Display parent while that registration exists; absent for a top-level group or the ungrouped bucket. */
+  parentId?: WorkspaceId
+  /** Worktree presentation, whose name is the row's subtitle. */
+  worktree?: WorkspaceWorktree
   /** Total visible sessions in the group. */
   sessionCount: number
   expanded: boolean
@@ -127,6 +131,8 @@ interface Group {
   cwd: string | undefined
   createdAt: number | undefined
   label: string
+  parentId?: WorkspaceId
+  worktree?: WorkspaceWorktree
   sessions: SessionSummary[]
 }
 
@@ -301,8 +307,65 @@ function buildGroup(
   createdAt: number | undefined,
   label: string,
   members: readonly SessionSummary[],
+  presentation: Pick<WorkspaceView, 'parentId' | 'worktree'> = {},
 ): Group {
-  return { key, workspaceId, cwd, createdAt, label, sessions: [...members] }
+  return {
+    key, workspaceId, cwd, createdAt, label, sessions: [...members],
+    ...presentation.parentId === undefined ? {} : { parentId: presentation.parentId },
+    ...presentation.worktree === undefined ? {} : { worktree: presentation.worktree },
+  }
+}
+
+/**
+ * Worktree children that display their Sessions under a registered parent
+ * instead of as their own entry: a worktree whose work finished. The child's
+ * registration and sessions remain; only the entry moves into the parent.
+ * @param workspaces - Workspaces in Host order.
+ * @returns child Workspace id to its registered display parent.
+ */
+export function foldedWorkspaces(workspaces: readonly WorkspaceView[]): ReadonlyMap<WorkspaceId, WorkspaceId> {
+  const registered = new Set(workspaces.map(workspace => workspace.workspaceId))
+  const folded = new Map<WorkspaceId, WorkspaceId>()
+  for (const workspace of workspaces) {
+    if (workspace.worktree === undefined || workspace.worktree.active) continue
+    const parentId = workspace.parentId
+    if (parentId === undefined || parentId === workspace.workspaceId || !registered.has(parentId)) continue
+    folded.set(workspace.workspaceId, parentId)
+  }
+  return folded
+}
+
+/**
+ * Resolve the group that displays a Workspace's Sessions after finished-worktree folding.
+ * @param folded - child Workspace id to registered display parent.
+ * @param workspaceId - Workspace whose displayed group is required.
+ * @returns the Workspace itself, or the ancestor its worktree folding ends at.
+ */
+export function displayedWorkspaceId(
+  folded: ReadonlyMap<WorkspaceId, WorkspaceId>,
+  workspaceId: WorkspaceId,
+): WorkspaceId {
+  const seen = new Set<WorkspaceId>([workspaceId])
+  let current = workspaceId
+  for (let parent = folded.get(current); parent !== undefined; parent = folded.get(current)) {
+    if (seen.has(parent)) return current
+    seen.add(parent)
+    current = parent
+  }
+  return current
+}
+
+/**
+ * Resolve the Workspace browser group that displays one Session: its owning
+ * Workspace, or the parent group a finished worktree folds into.
+ * @param workspaces - authoritative Workspace registration and membership.
+ * @param sessionId - Session whose displayed group is required.
+ * @returns the displayed group key, or {@link UNGROUPED_KEY} when no Workspace accounts for it.
+ */
+export function displayGroupKey(workspaces: readonly WorkspaceView[], sessionId: SessionId): string {
+  const owning = owningGroupKey(workspaces, sessionId)
+  if (owning === UNGROUPED_KEY) return owning
+  return displayedWorkspaceId(foldedWorkspaces(workspaces), owning as WorkspaceId)
 }
 
 /** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
@@ -336,9 +399,28 @@ function groupByWorkspace(
   ungroupedOrder: readonly string[] | undefined,
 ): Group[] {
   const current = mainSessionId(list)
+  const folded = foldedWorkspaces(workspaces)
+  // A finished worktree keeps its Sessions accounted to itself; they render inside the parent's group.
+  const foldedMembers = new Map<WorkspaceId, SessionSummary[]>()
+  for (const workspace of workspaces) {
+    const displayedId = displayedWorkspaceId(folded, workspace.workspaceId)
+    if (displayedId === workspace.workspaceId) continue
+    const members = foldedMembers.get(displayedId) ?? []
+    for (const id of workspace.sessionIds) {
+      const summary = list.byId[id]
+      if (summary === undefined) continue // account may lead the list pull; the row appears when the summary lands
+      if (!sessionVisible(summary, current, archived, archivedFilter)) continue
+      members.push(summary)
+    }
+    foldedMembers.set(displayedId, members)
+  }
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
   for (const workspace of workspaces) {
+    if (displayedWorkspaceId(folded, workspace.workspaceId) !== workspace.workspaceId) {
+      for (const id of workspace.sessionIds) accounted.add(id)
+      continue
+    }
     const members: SessionSummary[] = []
     for (const id of workspace.sessionIds) {
       const summary = list.byId[id]
@@ -347,12 +429,13 @@ function groupByWorkspace(
       if (!sessionVisible(summary, current, archived, archivedFilter)) continue
       members.push(summary)
     }
+    members.push(...foldedMembers.get(workspace.workspaceId) ?? [])
     // The archived-only view lists archives, not the Workspace inventory, so
     // a Workspace without archived Sessions contributes no group.
     if (archivedFilter === 'only' && members.length === 0) continue
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path,
-      Date.parse(workspace.createdAt), workspace.title, members,
+      Date.parse(workspace.createdAt), workspace.title, members, workspace,
     ))
   }
   const stray = list.ids
@@ -447,7 +530,7 @@ export function deriveGroups(
   const current = mainSessionId(list)
   const currentGroup = current === undefined
     ? undefined
-    : owningGroupKey(workspaces, current)
+    : displayGroupKey(workspaces, current)
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder)) {
     const expanded = expandedGroups.has(g.key)
@@ -457,6 +540,8 @@ export function deriveGroups(
       cwd: g.cwd,
       createdAt: g.createdAt,
       label: g.label,
+      ...g.parentId === undefined ? {} : { parentId: g.parentId },
+      ...g.worktree === undefined ? {} : { worktree: g.worktree },
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,

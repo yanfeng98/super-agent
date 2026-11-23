@@ -1059,6 +1059,38 @@ describe('workspace mutation and status', () => {
     expect(workspace.title).toBe('kept')
   })
 
+  it('records a display parent and worktree presentation, and clears them on request', async () => {
+    const parentDir = await makeDir('worktree-parent')
+    const childDir = await makeDir('worktree-child')
+    const { registry, pool } = await harness()
+    const parent = await registry.create(parentDir, 'Repository')
+    const child = await registry.create(childDir, 'Ticket title')
+    await child.setPresentation({ parentId: parent.id, worktree: { name: 'ticket-checkout', active: true } })
+    expect(child.parentId).toBe(parent.id)
+    expect(child.worktree).toEqual({ name: 'ticket-checkout', active: true })
+    expect(storedRecord(pool, child.id)).toMatchObject({
+      parentId: parent.id, worktree: { name: 'ticket-checkout', active: true },
+    })
+    await child.setPresentation({ parentId: parent.id, worktree: { name: 'ticket-checkout', active: false } })
+    expect(child.worktree?.active).toBe(false)
+    await child.setPresentation({})
+    expect(child.parentId).toBeUndefined()
+    expect(child.worktree).toBeUndefined()
+    expect(storedRecord(pool, child.id).parentId).toBeUndefined()
+    expect(storedRecord(pool, child.id).worktree).toBeUndefined()
+  })
+
+  it('keeps an unregistered parent relationship and rejects self-parenting', async () => {
+    const dir = await makeDir('worktree-orphan')
+    const { registry } = await harness()
+    const child = await registry.create(dir, 'Ticket title')
+    const absent = brandString<WorkspaceId>('absent-parent')
+    await child.setPresentation({ parentId: absent, worktree: { name: 'checkout', active: true } })
+    expect(child.parentId).toBe(absent)
+    await expect(child.setPresentation({ parentId: child.id })).rejects.toThrow(/own display parent/)
+    expect(child.parentId).toBe(absent)
+  })
+
   it('reports directory disappearance without mutating the workspace', async () => {
     const dir = await makeDir('vanishing')
     const { registry } = await harness()

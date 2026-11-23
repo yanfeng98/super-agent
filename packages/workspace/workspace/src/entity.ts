@@ -12,7 +12,7 @@ import { stat } from 'node:fs/promises'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
-import type { Workspace, WorkspaceId } from './types.ts'
+import type { Workspace, WorkspaceId, WorkspacePresentation } from './types.ts'
 import { realpathNormalize } from './paths.ts'
 
 /** An insertSessionBefore request named a session or anchor not on the account (storage failures stay plain errors). */
@@ -99,6 +99,14 @@ export class WorkspaceEntity implements Workspace {
     return this.record.title
   }
 
+  get parentId(): WorkspaceId | undefined {
+    return this.record.parentId
+  }
+
+  get worktree(): Workspace['worktree'] {
+    return this.record.worktree
+  }
+
   get createdAt(): string {
     return this.record.createdAt
   }
@@ -118,6 +126,24 @@ export class WorkspaceEntity implements Workspace {
 
   async setTitle(title: string): Promise<void> {
     await this.mutate(record => ({ ...record, title }))
+  }
+
+  async setPresentation(presentation: WorkspacePresentation): Promise<void> {
+    const { parentId, worktree } = presentation
+    if (parentId === this.id) {
+      throw new Error(`cannot make workspace '${this.id}' its own display parent`)
+    }
+    await this.mutate((record) => {
+      const unchangedParent = record.parentId === parentId
+      const unchangedWorktree = record.worktree?.name === worktree?.name && record.worktree?.active === worktree?.active
+      if (unchangedParent && unchangedWorktree) return record
+      const next: WorkspaceRecord = { ...record }
+      if (parentId === undefined) delete next.parentId
+      else next.parentId = parentId
+      if (worktree === undefined) delete next.worktree
+      else next.worktree = { name: worktree.name, active: worktree.active }
+      return next
+    })
   }
 
   async attachSession(sessionId: SessionId): Promise<void> {

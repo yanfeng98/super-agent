@@ -27,7 +27,8 @@ type WorkspaceId = Branded<'WorkspaceId'>
  * One workspace: a stable id over an existing directory, a display title, and
  * an ordered candidate account of sessions. Membership validates header cwd
  * against the workspace path, but preserves an existing account when its
- * fully qualified cwd is missing. Consumers only see this interface; the
+ * fully qualified cwd is missing. A workspace may display under a parent and
+ * carry a worktree presentation. Consumers only see this interface; the
  * implementation stays private.
  */
 interface Workspace {
@@ -43,6 +44,16 @@ interface Workspace {
 
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string
+
+  /**
+   * Workspace this one displays under, when that registration still exists.
+   * Kept through the parent's removal: a child whose parent is gone displays
+   * at the top level with the relationship intact.
+   */
+  readonly parentId?: WorkspaceId | undefined
+
+  /** Worktree presentation, when this workspace is a transient checkout rather than an ordinary project. */
+  readonly worktree?: WorkspaceWorktree | undefined
 
   /** ISO-8601 creation instant, stamped at create and never rewritten. */
   readonly createdAt: string
@@ -75,6 +86,17 @@ interface Workspace {
    * @returns resolution after durability.
    */
   setTitle(title: string): Promise<void>
+
+  /**
+   * Replace the display parent and worktree presentation durably in one
+   * write. Either field is omitted to clear it. A parent id equal to this
+   * workspace rejects without writing, and no parent need be registered: the
+   * relationship is kept for the parent's return while an absent parent
+   * displays the child at the top level.
+   * @param presentation - Parent and worktree presentation to record.
+   * @returns resolution after durability.
+   */
+  setPresentation(presentation: WorkspacePresentation): Promise<void>
 
   /**
    * Prepend a session to this workspace's candidate account. An already
@@ -122,6 +144,8 @@ interface Workspace {
   status(): Promise<'ok' | 'missing-dir'>
 }
 ```
+
+记录还可以携带显示父级与 worktree 呈现，二者通过 `setPresentation` 一起替换。`WorkspacePresentation` 包含可选的 `parentId` 与可选的 `worktree`（`{ name, active }`）；客户端把子项嵌套在已登记的父级下，用 `name` 作副标题，并把已结束（`active: false`）条目的会话折叠进父级，而不再列出该条目。父级未登记时子项在顶层显示且关系保留，因此移除并重新登记项目不会改写它的子项。这些是同一记录上的显示事实：成员关系、顺序与会话日志都不变。
 
 所有权的真源是记录中有序的 `sessionIds`，绝不从会话 cwd 派生。成员资格将记录的 header cwd 与工作区路径校验；已有候选的完全限定 cwd 在路径解析或目录 stat 时返回 `ENOENT`，仍保留其归属。这会保留目录缺失或符号链接失效时的记账关系，但不会接纳新会话。失败的写入会拒绝（`insertSessionBefore` 的账本错误以 `WorkspaceMoveInvalidError` 拒绝，存储失败以普通错误拒绝）；每次被接受的变更都盖上 `updatedAt` 时间戳，并持久修剪不再通过成员资格检查的候选项。
 

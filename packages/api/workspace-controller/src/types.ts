@@ -6,9 +6,9 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionActivity, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionActivity, WorkspaceId, WorkspaceWorktree } from '@deepseek-ai/dsh-workspace/types'
 
-export type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+export type { WorkspaceId, WorkspaceWorktree } from '@deepseek-ai/dsh-workspace/types'
 export type {
   SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap,
 } from '@deepseek-ai/dsh-workspace/types'
@@ -21,6 +21,10 @@ export interface WorkspaceView {
   readonly path: string
   /** User-visible title. */
   readonly title: string
+  /** Display parent while that registration exists; absent for a top-level Workspace. */
+  readonly parentId?: WorkspaceId
+  /** Worktree presentation of a transient checkout; absent for an ordinary Workspace. */
+  readonly worktree?: WorkspaceWorktree
   /** Sessions accounted to this Workspace in manual order. */
   readonly sessionIds: readonly SessionId[]
   /** ISO-8601 creation instant. */

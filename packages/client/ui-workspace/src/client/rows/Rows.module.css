@@ -115,6 +115,11 @@
   box-sizing: border-box;
 }
 
+/* A worktree child adds the checkout name as a subtitle under its Workspace title. */
+.projectRowWorktree {
+  height: 44px;
+}
+
 .projectRow .rowActions {
   height: 20px;
 }

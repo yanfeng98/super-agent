@@ -17,14 +17,28 @@ const workspaceId = z.string().transform(value => value as WorkspaceId)
 const sessionId = z.string().transform(value => brandString<SessionId>(value))
 
 /**
+ * Durable worktree presentation of one workspace record. `name` is the
+ * checkout name shown as the child's subtitle; `active` says whether the work
+ * is still in progress, which decides whether the child is its own entry.
+ */
+export const workspaceWorktreeRecord = z.object({
+  name: z.string(),
+  active: z.boolean(),
+})
+
+/**
  * Durable shape of one workspace record. `path` is the `fs.realpath` canon
  * stamped at create; `sessionIds` is the ordered ownership account (array
- * order is display order); timestamps are ISO-8601 strings.
+ * order is display order); timestamps are ISO-8601 strings. `parentId` and
+ * `worktree` are optional display facts: records written before them parse
+ * unchanged, and a parent may name a registration that no longer exists.
  */
 export const workspaceRecord = z.object({
   path: z.string(),
   title: z.string(),
   sessionIds: z.array(sessionId),
+  parentId: workspaceId.optional(),
+  worktree: workspaceWorktreeRecord.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

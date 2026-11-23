@@ -3,7 +3,10 @@
  * allowed member Alice (`ou_alice`), listened chat `oc_team`, and `auto` eval mode. Stop it with `stop()`.
  */
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { Workspace, WorkspaceId, WorkspaceWorktree } from '@deepseek-ai/dsh-workspace'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, type Mock } from 'vitest'
@@ -20,6 +23,54 @@ import { testMachine } from './deployment.ts'
 
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
+
+/**
+ * The Workspace registry as the Executor and Runtime use it, backed by one
+ * in-memory record per path. It records titles, parents, and worktree
+ * presentation, so a test can inspect what the sidebar would receive.
+ */
+export function workspaceRegistryStub() {
+  const records = new Map<string, Workspace>()
+  const create = async (cwd: string): Promise<Workspace> => {
+    const existing = records.get(cwd)
+    if (existing !== undefined) return existing
+    let title = cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? cwd
+    let parentId: WorkspaceId | undefined
+    let worktree: WorkspaceWorktree | undefined
+    const entity: Workspace = {
+      id: brandString<WorkspaceId>(cwd),
+      path: cwd,
+      get title() { return title },
+      get parentId() { return parentId },
+      get worktree() { return worktree },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      sessionIds: [],
+      getSessionHeaders: () => [],
+      setTitle: async (next) => { title = next },
+      setPresentation: async (presentation) => { parentId = presentation.parentId; worktree = presentation.worktree },
+      attachSession: async () => {},
+      insertSessionBefore: async () => {},
+      detachSession: async () => {},
+      status: async () => await stat(cwd).then(entry => entry.isDirectory() ? 'ok' as const : 'missing-dir' as const, () => 'missing-dir' as const),
+    }
+    records.set(cwd, entity)
+    return entity
+  }
+  return {
+    create,
+    list: (): Workspace[] => [...records.values()],
+    get: (id: WorkspaceId): Workspace | undefined => [...records.values()].find(workspace => workspace.id === id),
+    delete: async (id: WorkspaceId): Promise<boolean> => {
+      for (const [path, workspace] of records) {
+        if (workspace.id !== id) continue
+        records.delete(path)
+        return true
+      }
+      return false
+    },
+  }
+}
 
 /** The dsh-im bot the fixture's Source is bound to, and the account fingerprint dsh-im would report for it. */
 export const BOT_ID = 'bot_1'
@@ -293,7 +344,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
   const jobs = jobRegistry(id => agents.get(id))
   const subagents = subagentRuntime(agents)
   const services = { agents, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
-    sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer,
+    sessionPersistence: persistence, workspaceRegistry: workspaceRegistryStub(), permissionPresets: { set: () => {} }, subprocess, webServer,
     jobs: jobs.service, subagents: subagents.service }
   const ctx = new Context()
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
@@ -349,6 +400,6 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, route, acceptedTicket, api, controller, persistence, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim, replies }
+    jobs, subagents, step, claim, replies, workspaces: ctx.get('workspaceRegistry')! }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

@@ -59,6 +59,15 @@ await project.setTitle('Renamed')
 ctx.workspaceRegistry.list() // shows the project, newest first
 ```
 
+### 展示 worktree 子项
+
+工作区可以显示在另一个工作区之下，并用检出的 worktree 名作为副标题。`setPresentation({ parentId, worktree })` 在一次持久化写入中记录二者，省略某个字段即清除它；父工作区不必仍处于登记状态，因此父级被移除后子项仍保留关系，并在顶层显示。标记为 `active` 的 worktree 条目表示仍在进行的工作；客户端会把已结束条目的会话折叠进父工作区，而不再列出该条目。这些只是显示事实：成员关系、排序与会话日志都不变，模型也看不到。字段出现之前写入的记录仍可解析。
+
+```text
+await workspace.setPresentation({ parentId: repository.id, worktree: { name: 'fix-1234', active: true } })
+await workspace.setPresentation({ parentId: repository.id, worktree: { name: 'fix-1234', active: false } })
+```
+
 <a id="first-use-workspace"></a>
 ### 首次使用工作区
 
