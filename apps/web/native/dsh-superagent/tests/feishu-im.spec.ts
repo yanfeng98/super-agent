@@ -808,8 +808,8 @@ describe('dsh-im Feishu context parts and images', () => {
     expect(feishuImKind.threadContext!.files!('[文件] notes.txt file_x [图片] img_y')).toEqual(['file_x'])
   })
 
-  it('keeps a profile saved with the lark-cli page size usable', () => {
-    expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 50 })).toMatchObject({ readPageSize: 20 })
+  it('keeps a profile saved with the lark-cli page size', () => {
+    expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 50 })).toMatchObject({ readPageSize: 50 })
     expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 7 })).toMatchObject({ readPageSize: 7 })
   })
 

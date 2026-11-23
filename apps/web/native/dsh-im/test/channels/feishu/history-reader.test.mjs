@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readExternalMessage } from '../../../src/channels/feishu/history-reader.mjs';
+import { readExternalHistory, readExternalMessage } from '../../../src/channels/feishu/history-reader.mjs';
 
 const identity = { botId: 'bot', appId: 'app', botOpenId: 'bot-open-id', fingerprint: 'a'.repeat(64) };
 const route = { messageId: 'anchor', conversationId: 'conversation', actorId: 'actor' };
@@ -57,4 +57,21 @@ test('refuses a route that no longer resolves to its own message', async () => {
   // An id the provider no longer returns is unreadable rather than deleted.
   await assert.rejects(readExternalMessage(client(record({ message_id: 'other' })), identity, route, signal),
     { code: 'message-unavailable' });
+});
+
+test('a context page is as large as a chat history page', async () => {
+  const page = Array.from({ length: 50 }, (_, index) => record({ message_id: `m${index}` }));
+  const readClient = { im: { v1: { message: {
+    get: async ({ path }) => ({ data: { items: path.message_id === 'anchor' ? [record()] : [] } }),
+    list: async () => ({ data: { items: page, has_more: false } }),
+  } } } };
+  const read = await readExternalHistory(readClient, identity, route, { scope: 'group', limit: 50 }, signal);
+  assert.equal(read.events.length, 50);
+  assert.equal(read.hasMore, false);
+  // The page cap is Feishu's 50, refused before any request for one more.
+  let listed = 0;
+  readClient.im.v1.message.list = async () => { listed++; return { data: { items: page, has_more: false } }; };
+  await assert.rejects(readExternalHistory(readClient, identity, route, { scope: 'group', limit: 51 }, signal),
+    { code: 'bad-request' });
+  assert.equal(listed, 0);
 });

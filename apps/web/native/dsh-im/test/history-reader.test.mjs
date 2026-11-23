@@ -87,7 +87,7 @@ test('pagination is bounded, forwarded unchanged, and never follows a page autom
 
 test('invalid limits, cursor and route IDs refuse before making SDK calls', async () => {
  const bot=client();bot.im.v1.message.get=async()=>{throw Error('must not read');};
- for(const query of [{scope:'search',limit:1},{scope:'group',limit:0},{scope:'group',limit:21},
+ for(const query of [{scope:'search',limit:1},{scope:'group',limit:0},{scope:'group',limit:51},
  {scope:'group',limit:1.5},{scope:'group',limit:1,cursor:''},{scope:'group',limit:1,cursor:'x'.repeat(4097)}])
   await assert.rejects(readExternalHistory(bot,identity,route,query),{code:'bad-request'});
  await assert.rejects(readExternalHistory(bot,identity,{...route,messageId:''},{scope:'group',limit:1}),{code:'bad-request'});

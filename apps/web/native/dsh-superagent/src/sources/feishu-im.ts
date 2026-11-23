@@ -27,7 +27,10 @@ interface CachedBot { botId: string; fingerprint: string; name: string; brand: '
 const cachedBots = new Map<string, CachedBot>()
 /** Sets the config the Channel uses; the watch loop keeps it current, and tests set it directly. */
 export const setFeishuConfig = (value: FeishuConfig | undefined): void => { currentConfig = value }
-const HISTORY_LIMIT = 20
+/** dsh-im's page cap for a history read; Feishu itself lists at most this many messages a page. */
+const PAGE_LIMIT = 50
+/** The page size the lark-cli Source used, kept as the default so a negotiated page does not change on its own. */
+const DEFAULT_PAGE = 20
 
 const FeishuConfigSchema = z.object({
   botId: z.string().trim().max(128).default(''),
@@ -36,9 +39,7 @@ const FeishuConfigSchema = z.object({
     .default([]),
   directMessages: z.boolean().default(true),
   otherChats: z.enum(['none', 'mentions']).default('none'),
-  readPageSize: z.number().int().min(1).max(50).default(HISTORY_LIMIT)
-    // A profile saved with the lark-cli Source may carry up to 50; dsh-im refuses more than 20 per page, so clamp it.
-    .transform(value => Math.min(value, HISTORY_LIMIT)),
+  readPageSize: z.number().int().min(1).max(PAGE_LIMIT).default(DEFAULT_PAGE),
   linkTimeoutMs: z.number().int().min(1).max(90_000).default(5_000),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
@@ -322,7 +323,7 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     { key: 'otherChats', type: 'select', label: { zh: '其他群', en: 'Other chats' }, options: [{ value: 'none', label: { zh: '不接收', en: 'Not received' } }, { value: 'mentions', label: { zh: '仅 @', en: '@ only' } }],
       hint: { zh: '机器人已加入、但没列在上面的群。“仅 @”接收那里 @ 机器人的消息；谁的消息能发起工作看策略里的准入。', en: 'Chats the bot has joined that are not listed above. "@ only" receives messages there that mention the bot; whose messages may originate work is the Policy\'s admission.' } },
     { key: 'directMessages', type: 'switch', label: { zh: '接收私聊', en: 'Direct messages' } },
-    { key: 'readPageSize', type: 'number', advanced: true, min: 1, max: HISTORY_LIMIT, label: { zh: '每页消息数', en: 'Messages per page' }, hint: { zh: '智能体读取线程和群历史时，每页的消息数，最多 20 条（dsh-im 单页上限）。', en: 'Messages per page when agents read Threads and chat history, at most 20 (the dsh-im page limit).' } },
+    { key: 'readPageSize', type: 'number', advanced: true, min: 1, max: PAGE_LIMIT, label: { zh: '每页消息数', en: 'Messages per page' }, hint: { zh: '智能体读取线程和群历史时，每页的消息数，最多 50 条（dsh-im 单页上限，也是飞书的上限）；默认 20。', en: 'Messages per page when agents read Threads and chat history, at most 50 (both the dsh-im and the Feishu page limit); the default is 20.' } },
     { key: 'linkTimeoutMs', type: 'number', advanced: true, min: 1, max: 90_000, label: { zh: '原消息链接的查询时限 / 毫秒', en: 'Original message link time limit / ms' },
       hint: { zh: '查询原消息链接最多等待的时间；超时后智能体改为直接读取原消息。', en: 'How long to wait for an original message\'s link; after that, agents read the message itself.' } },
   ],

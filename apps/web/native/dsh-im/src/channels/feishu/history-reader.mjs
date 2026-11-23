@@ -11,6 +11,9 @@ function check(response) {
   if (response?.code) refuse('history-unavailable');
 }
 
+/** Feishu's page cap for a message listing; a context read and a backfill page share it. */
+const HISTORY_LIMIT = 50;
+
 async function checkedSdkRead(operation, signal) {
   let response;
   try { response = await operation(); }
@@ -83,7 +86,7 @@ async function expandMergedForward(client, item, signal) {
 export async function readExternalHistory(client, identity, route, query, signal) {
   if (!route || !identifier(route.messageId) || !identifier(route.conversationId)
     || !identifier(route.actorId) || ['threadId', 'rootId', 'parentId'].some(key => route[key] !== undefined && !identifier(route[key])) || !['group', 'nearby', 'thread'].includes(query?.scope)
-    || !Number.isInteger(query.limit) || query.limit < 1 || query.limit > 20
+    || !Number.isInteger(query.limit) || query.limit < 1 || query.limit > HISTORY_LIMIT
     || (query.includeBots !== undefined && typeof query.includeBots !== 'boolean')
     || (query.includeDeleted !== undefined && typeof query.includeDeleted !== 'boolean')
     || (query.cursor !== undefined && (typeof query.cursor !== 'string' || !query.cursor || query.cursor.length > 4096)))
@@ -156,8 +159,6 @@ function historyEvent(item, identity, { chatId, threadId, direct = false, includ
       mentions: (item.mentions ?? []).map(mention => ({ ...mention, id: { open_id: mention?.id } })) },
   }, identity, { includeBots });
 }
-
-const HISTORY_LIMIT = 50;
 
 function historyQuery(query) {
   if (!query || typeof query !== 'object') refuse('bad-request');
