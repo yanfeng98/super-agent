@@ -8,11 +8,14 @@ This checkout mounts dsh-superagent in its Web profile: after `pnpm install && p
 
 ### Quick start
 
-1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), restarting it if it is already running, and open **Superagent** in the sidebar.
-2. In **Settings → Execution**, set the directory root and, when the work needs files, a prepare command that creates a worktree per Ticket (see the prepare-command example under Settings below). The default root is `<stateDir>/work`.
-3. Create the first ticket under **Execution → New ticket**, or ask the main Session in the DSH chat. The first request seeds the local Source's Policy part with the operator on the allowed list, so no extra configuration is needed.
+1. `pnpm install && pnpm run build`, then `pnpm dsh web` (or Desktop), restarting it if it is already running, and open **Superagent** in the sidebar. A new state directory starts empty — no Tickets, Triggers, Decisions or saved settings — and no Source has to be turned on: the local ticket Source is ready at the first request.
+2. In **Settings → Execution**, set the directory root, a prepare command when each Ticket needs its own checkout (see the prepare-command example under Settings below), and a check command when a merge should wait for tests: each line runs in the worktree when a Ticket ends, and a merge requires it to pass since the latest ending. The default root is `<stateDir>/work`.
+3. Create the first ticket under **Execution → New ticket**, with a title and request plus, when they apply, a project label, tags, up to five attachments and **hold for approval**, or ask the main Session, opened by **Open main Session** in the panel header. The first request seeds the local Source's Policy part with the operator on the allowed list, so no extra configuration is needed, and both paths write the same Thread and Markdown archive.
 4. Optionally hand a dsh-im Feishu bot to superagent (see Enabling Feishu) and mention it in a configured chat.
-5. Review the result on the ticket page and **Merge** it once the gates pass, or ask the main Session to merge it.
+5. Follow the run on the ticket page: the **Replies and results** the Ticket sent, the review with **View diff** and line-anchored notes, and **Approve changes** or **Request changes**.
+6. **Merge** the ticket once its gates pass (see the merge gates under Local tickets), or ask the main Session to merge it, push it, undo the merge or stop it.
+
+A worker runs with `danger-full-access` as the operator's OS user, and its command shims block names instead of isolating the process; see Permissions and isolation before handing it a shared machine.
 
 ### Local tickets
 

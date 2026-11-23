@@ -126,7 +126,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    `local.spec.ts` and `service-script.spec.ts` cover it.
 11. **Built-in documentation.** `docs/006-deployment.md` opens with a **Built-in copy** section (no profile, default state
    directory, API follows the bind), and `README.md` and `SETUP.md` point at the built-in path instead of the standalone
-   install. The rest of the upstream documents describe the standalone deployment and still apply.
+   install. Its **Quick start** is the order a person actually follows in this checkout: an empty state directory with the
+   local Source already on, the three Execution settings and their defaults, the panel and the main Session as the two ways
+   to open work, the review and merge steps, and the isolation the workers do not have. The rest of the upstream documents
+   describe the standalone deployment and still apply.
 
 12. **Main Session requests and answers.** The main Session can record a person's explicit request from its own
     conversation as a local ticket request (`orchestrator_request` in `src/app/tools/main.ts`) and send their answer to a
