@@ -16,7 +16,6 @@ import { health, sourceContext, type Health, type SourceContext } from './host.t
 import type { ContextMessage, ContextPart, Localized, SourceKind, ThreadContext } from './kind.ts'
 import type { SourceRegistry } from './registry.ts'
 
-export { SOURCE }
 const POLL_MS = 2_000
 /** How long a failed message stays visible in the Source's health, cleared earlier by the next message that is handled. */
 const EVENT_FAILURE_MS = 10 * 60_000
@@ -233,6 +232,8 @@ export async function readFeishuImFile(agent: Agent, trigger: Trigger, message: 
 export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
   messageId: trigger => String(trigger.meta.messageId ?? ''),
   async read(_commands, trigger, part, cursor, config) {
+    // A Trigger recorded before the handoff retained no reply route, so dsh-im cannot read any of its context.
+    if (!trigger.channel?.address.actorId) return empty('unavailable')
     const im = dshIm()
     if (!im) throw new Error('dsh-im is not mounted')
     const botId = typeof trigger.meta.botId === 'string' ? trigger.meta.botId : config.botId
@@ -289,9 +290,15 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
   file: (agent, _commands, trigger, message, key, _stateDir, signal) => readFeishuImFile(agent, trigger, message, key, signal),
 }
 
-/** Sends one queued reply through dsh-im's checked original-message route. */
+/**
+ * Sends one queued reply through dsh-im's checked original-message route.
+ *
+ * A Trigger recorded before the handoff retained no route, so its reply can never be delivered: it settles as `gone`
+ * instead of retrying against a route dsh-im cannot resolve.
+ */
 export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, message: OutboundMessage): Promise<'sent' | 'gone'> {
   const config = currentConfig
+  if (!message.channel.address.actorId) return 'gone'
   const im = dshIm()
   const botId = message.channel.address.botId || config?.botId || ''
   if (!im || !botId) throw new Error('dsh-im is not ready for Feishu replies')

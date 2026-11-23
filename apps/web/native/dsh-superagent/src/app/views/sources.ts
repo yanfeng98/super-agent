@@ -25,13 +25,12 @@ export interface SetupState {
   /** Setup failure that stops all Sources. */
   problem?: SetupProblem | undefined
 }
-export const problemOf = (id: string, setup: SetupState) => setup.problem?.place === id ? setup.problem : undefined
 /** Source lifecycle state in priority order: missing kind, disabled, setup/part error, blocked on global setup, starting, paused, or ready. */
 export type SourceState = 'missing' | 'off' | 'error' | 'setup' | 'starting' | 'paused' | 'ready'
 function sourceState(instance: SourceInstance & { installed: boolean }, parts: { state: string }[], setup: SetupState): SourceState {
   if (!instance.installed) return 'missing'
   if (!instance.enabled) return 'off'
-  if (problemOf(instance.id, setup) || parts.some(part => part.state === 'error')) return 'error'
+  if (parts.some(part => part.state === 'error')) return 'error'
   if (setup.problem) return 'setup'
   if (parts.some(part => part.state === 'starting')) return 'starting'
   return parts.some(part => part.state === 'paused') ? 'paused' : 'ready'
@@ -47,9 +46,8 @@ export function sourcesStatus(host: ViewHost, health: HealthMap, setup: SetupSta
   const dropped = droppedReplies(host)
   return sources.instances().map(instance => {
     const { health: parts, ...named } = sourceHealth(sources, instance, health)
-    const problem = problemOf(instance.id, setup)
     return { ...named, installed: instance.installed, enabled: instance.enabled, state: sourceState(instance, parts, setup), health: parts,
-      ...problem ? { problem } : {}, stats: stats[instance.id] ?? { received: 0, filtered: 0, lastAt: '' }, filtered: filtered(instance.id),
+      stats: stats[instance.id] ?? { received: 0, filtered: 0, lastAt: '' }, filtered: filtered(instance.id),
       dropped: dropped.filter(item => item.channel.source === instance.id) }
   })
 }

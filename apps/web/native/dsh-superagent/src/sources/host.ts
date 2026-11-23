@@ -15,7 +15,6 @@ export const HEALTH_TEXT = {
   imHandoffOff: 'Hand to Superagent is off for this bot',
   imConsumerTaken: 'Another consumer already owns this Feishu bot',
   imBackfillMissing: 'This dsh-im does not expose Feishu backfill',
-  pollFailures: '{count} consecutive failed polls; last: {error}',
 } as const
 export type HealthCode = keyof typeof HEALTH_TEXT
 export type Health = { state: 'starting' | 'ready' | 'paused' | 'error'; detail: string; at?: string; code?: HealthCode; values?: Record<string, string> }

@@ -146,13 +146,15 @@ it('leaves the Feishu skill out when no Feishu bot is configured', async () => {
 })
 
 it('shows a Source\'s health in the interface language, and a diagnostic as reported', async () => {
-  server.health = { feishu: { state: 'error', detail: '3 consecutive failed polls; last: EOF', code: 'pollFailures', values: { count: '3',
-    error: 'EOF' } } }
+  server.health = { feishu: { state: 'error', detail: 'Another consumer already owns this Feishu bot', code: 'imConsumerTaken' },
+    history: { state: 'error', detail: 'history read failed: EOF' } }
   await mount()
   await click(zh['tab.source'])
   const feishu = all('.dt-form > .dt-list > .dt-row').find(row => row.querySelector('.dt-row-name')?.textContent === '飞书')!
-  expect(feishu.textContent).toContain('飞书来源：连续 3 次轮询失败，最近一次：EOF')
-  expect(feishu.textContent).not.toContain('consecutive')
+  expect(feishu.textContent).toContain('飞书来源：另一个消费者已经接管了这个飞书机器人')
+  expect(feishu.textContent).not.toContain('Another consumer')
+  // A health entry the panel has no words for shows the detail the host reported.
+  expect(feishu.textContent).toContain('history read failed: EOF')
   const local = all('.dt-form > .dt-list > .dt-row').find(row => row.querySelector('.dt-row-name')?.textContent === '本地工单')!
   expect(local.querySelector('.dt-mono')).toBeNull()
 })

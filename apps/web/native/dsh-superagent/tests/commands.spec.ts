@@ -8,7 +8,7 @@ describe('account-isolated operations', () => {
   it('runs every command with its environment over the process environment, where undefined removes a variable', async () => {
     process.env.DSH_SUPERAGENT_PROBE_TOKEN = 'personal'
     try {
-      const output = await new Commands(() => deployment, { DSH_SUPERAGENT_PROBE_TOKEN: undefined, DSH_SUPERAGENT_PROBE: 'agent' },
+      const output = await new Commands({ DSH_SUPERAGENT_PROBE_TOKEN: undefined, DSH_SUPERAGENT_PROBE: 'agent' },
         new AbortController().signal).run('env', [])
       expect(output).toContain('DSH_SUPERAGENT_PROBE=agent')
       expect(output).not.toContain('DSH_SUPERAGENT_PROBE_TOKEN=')
@@ -24,12 +24,12 @@ it('reports a CLI failure with its code and without command arguments', () => {
 describe('Channels', () => {
   it('link each address to its chat page with its label', () => {
     const message = { chatId: 'oc_1', messageId: 'om_1' }
-    expect(feishuImKind.channel!.link(message, {})).toEqual({ url: 'https://applink.feishu.cn/client/chat/open?openChatId=oc_1',
+    expect(feishuImKind.channel!.link(message)).toEqual({ url: 'https://applink.feishu.cn/client/chat/open?openChatId=oc_1',
       label: { zh: '飞书消息', en: 'Feishu message' }, triggerId: key('feishu', 'om_1') })
   })
 })
 it('names only the program and how it ended when a command prints no diagnostics, never its arguments', async () => {
-  const commands = new Commands(() => deployment, {}, new AbortController().signal)
+  const commands = new Commands({}, new AbortController().signal)
   const secret = 'secret reply text'
   await expect(commands.run('sh', ['-c', 'exit 3', secret])).rejects.toMatchObject({ message: 'sh exited with code 3', exitCode: 3 })
   await expect(commands.run('sh', ['-c', 'kill -9 $$', secret])).rejects.toMatchObject({ message: 'sh was stopped by SIGKILL' })
@@ -50,14 +50,14 @@ it('reports failures as CliError with the code the CLI names and the exit status
   const aborted = Object.assign(new Error('The operation was aborted'), { name: 'AbortError', stderr: '' })
   expect(commandError(aborted)).toBe(aborted)
   const controller = new AbortController()
-  const running = new Commands(() => deployment, {}, controller.signal).run('sleep', ['5'])
+  const running = new Commands({}, controller.signal).run('sleep', ['5'])
   controller.abort()
   await expect(running).rejects.toMatchObject({ name: 'AbortError' })
 })
 
 it('stops a running command when the signal of its work aborts, or the lifetime, and leaves the other work running', async () => {
   const lifetime = new AbortController(), work = new AbortController()
-  const commands = new Commands(() => deployment, {}, lifetime.signal)
+  const commands = new Commands({}, lifetime.signal)
   const started = Date.now()
   const running = commands.withSignal(work.signal).run('sleep', ['5'])
   work.abort()

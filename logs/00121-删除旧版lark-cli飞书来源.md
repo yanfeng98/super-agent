@@ -33,11 +33,10 @@
 | 命令 | 结果 |
 |---|---|
 | `npx tsc --noEmit`（dsh-superagent，含测试） | 通过 |
-| `npx vitest run --maxWorkers=1 --no-file-parallelism`（dsh-superagent 全量） | 1,320 通过、3 失败；3 个都是 `tests/role-models.spec.ts` 的既有失败（`Cannot read properties of undefined (reading 'assemble')`），与本改动无关 |
+| `npx vitest run --maxWorkers=1 --no-file-parallelism`（dsh-superagent 全量） | 1,322 通过、3 失败；3 个都是 `tests/role-models.spec.ts` 的既有失败（`Cannot read properties of undefined (reading 'assemble')`），与本改动无关 |
 | `npm run build`（dsh-superagent） | 通过；`lib/` 重建后不再含 `event consume`、`chat-members-list`、`messages-mget` 等旧 lark-cli 字符串 |
 | `pnpm run test:docs` | 21 通过、0 失败 |
 
-另有一次全量运行多出 1 个非 `role-models` 的失败，连续两次复跑未重现（未记下具体用例名，属计时类偶发）。
 
 ## 4. 校验中发现并修掉的两处
 
@@ -45,3 +44,17 @@
 |---|---|
 | `scripts/dsh-superagent` 的 `start()` 仍读 `current['feishu']`（`status` 已不再输出该键），KeyError 让 `start` 全部退 1 | 删掉那段「runs without Feishu」提示；`tests/service-script.spec.ts` 17 通过 |
 | `tests/panel-settings.spec.tsx` 用「机器人的 lark-cli」输入框验证保存条，字段已不存在 | 改用「IM 飞书机器人」字段，并断言保存来源设置**不再**提示「进行中的派工会中断」（没有字段需要重启） |
+
+## 5. 审计：删除之后仍然存在的问题
+
+| 发现 | 处理 |
+|---|---|
+| 旧工单的上下文读取走 `routeOf`，对没有 `actorId` 的旧地址抛 `The Feishu reply route is incomplete`；回复则每轮重试同一个无法解析的路由 | `feishuImThreadContext.read` 对无 `actorId` 的 Trigger 直接返回 `unavailable`；`sendFeishuIm` 直接返回 `gone`，收据记 `channelGone` 进丢弃列表，不再无限重试。各补一条测试 |
+| `Commands.deployment` 及其构造参数、`ChannelLinks`、`SetupHost.context` 在 `lark()`/旧链接/旧探测删除后没有使用者 | 删除；`new Commands(env, signal)`、`channel.link(address)`、`new Setup({ machine, lifetime, restart })`，调用点与测试同步 |
+| `KV.feishu.seen`/`initialized`、`HEALTH_TEXT.pollFailures` 与其中文文案：旧轮询循环删除后没有任何写入者 | 删除 |
+| `KV.feishu.topics` 与 schema-11 里把旧话题数组转成映射的那一步：转换后的数据没有任何读者（新循环用 `imTopics`） | 删除该 KV 族、`feishuTopics()` 与测试里的断言；其余 10→11 迁移步骤不变 |
+| `SetupHost.lifetime`：探测删除后 `Setup` 不再持有时限 | 删除字段与构造参数 |
+| 每个来源的 setup `problem` 字段（`views/sources.ts`、`views/settings.ts`、客户端卡片、panel fixture、006 的 `GET sources`）永远不可能再有值 | 删除该字段与渲染路径，`SourceState` 只看 health |
+| 文档与示例残留：007 的 `setupChanged`、008 的 `validItems`、NATIVE 第 6 与第 28 条、`examples/profile.cordis.patch.yml` 的「set the bot's lark-cli」 | 改写为当前事实 |
+
+审计后的校验：`npx tsc --noEmit` 通过；全量 **1,322 通过 / 3 失败**（同样只有 `role-models` 的既有失败，总数 1,325）；`npm run build` 通过；`pnpm run test:docs` 21 通过。

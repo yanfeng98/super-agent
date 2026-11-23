@@ -26,8 +26,8 @@ beforeEach(() => {
 })
 afterEach(() => { store.close(); rmSync(directory, { recursive: true, force: true }) })
 const links = (channel: ChannelRef) => channel.source === 'feishu'
-  ? feishuImKind.channel!.link(channel.address, {})
-  : localKind.channel!.link(channel.address, {})
+  ? feishuImKind.channel!.link(channel.address)
+  : localKind.channel!.link(channel.address)
 /** The Channel a Feishu reply answers: the retained route names the message whose Thread receives it. */
 const feishuChannel = (chatId: string, messageId: string): ChannelRef => ({ source: 'feishu', thread: `feishu:${chatId}`,
   address: { chatId, messageId, actorId: 'ou_a' } })

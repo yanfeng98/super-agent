@@ -77,8 +77,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 6. **Local tickets.** `src/sources/local.ts` (exported as `./local`) adds a panel-driven Source: the
    management routes `POST local/requests` and `POST local/followups` write `<archive>/<request id>.md`, ingest Triggers whose
    actor is `operator`, and append every outbound message to the same file; the ticket page lists those receipts under
-   **Replies and results** and offers a reply box for the follow-ups (`src/app/views/tickets.ts`, `src/app/store.ts`). Setup no longer requires a repository and an account: `resolveFeishuBot` resolves only the optional Feishu bot and
-   `writeEnvironment` writes the command shims and the neutral author `dsh-superagent <dsh-superagent@localhost>`. Receipts record the time of their last delivery state, and the overview counts a kind's default
+   **Replies and results** and offers a reply box for the follow-ups (`src/app/views/tickets.ts`, `src/app/store.ts`). Setup requires neither a repository nor an account: `writeEnvironment` writes the command shims and the neutral author
+   `dsh-superagent <dsh-superagent@localhost>`. Receipts record the time of their last delivery state, and the overview counts a kind's default
    Policy part (`src/app/views/overview.ts`) so a fresh install is not told that nobody may ask. `local.spec.ts`,
    `deployment.spec.ts`, `environment.spec.ts`, `http.spec.ts`, `views.spec.ts` and `panel-execution.spec.tsx` cover it.
 7. **Local-only worker prompt.** `prompts/work.md`, `prompts/worker.md` and `prompts/team/delivery.md` tell a worker that there is no remote account, so it commits locally (setting `user.name` and `user.email` itself when git has none), does not push, and reports ready without waiting for a merge; `prompts/orchestrator.md` says the main Session merges or undoes a merge only on the person's explicit request.
@@ -302,10 +302,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
 
 28. **Removal of the GitHub Source and account integration.** The vendored copy no longer contains `src/sources/github*.ts`,
     the GitHub skill, the GitHub account and repository setup, the pull-request binding and its CI gate, or the GitHub
-    prompt text and UI. `Deployment` carries only `stateDir` and the optional legacy Feishu bot; `SETUP_FIELDS` probes only
-    that legacy CLI; `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
-    reads only Thread context; `orchestrator_read` exposes `feishu/` originals and no `github/` resources; and the merge
-    gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
+    prompt text and UI. `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
+    reads only Thread context; `orchestrator_read` exposes the Feishu originals item 31 describes and no `github/` resources;
+    and the merge gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
     containment, rebase, queue and the post-merge target check. No migration or startup cleanup handles GitHub records:
     a database written by a GitHub-enabled build is not cleaned, so start with a new state directory if its old records
     must not remain. The plugin locale metadata no longer names GitHub. The worker environment still keeps `gh`
@@ -401,7 +400,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     is the machine settings alone; `GET state` and `scripts/dsh-superagent status` carry `setup.problem` only;
     `accounts.feishu` names the dsh-im bot the Source is bound to; a settings save restarts dsh-superagent only while
     setup waits. A Trigger recorded before the removal keeps its text but resolves to no link, and its original message is
-    not readable, because no reply route for it was retained. The worker's `lark-cli` shim stays and fails with that
+    reads as `unavailable` and its replies settle as `channelGone`, because no reply route for it was retained. The worker's `lark-cli` shim stays and fails with that
     reason, so a worker reaches Feishu only through the orchestrator tools. `tests/feishu-read.spec.ts` is gone,
     `tests/sources.spec.ts` keeps only the Source-context coverage, and the fixtures build Triggers through `imTrigger`
     over a fake dsh-im service.
@@ -417,7 +416,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,323 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,325 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a

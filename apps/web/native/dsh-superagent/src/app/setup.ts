@@ -1,5 +1,4 @@
 /** Configures the worker execution environment and command shims, and tracks setup readiness. */
-import type { Context } from '@deepseek-ai/cordis'
 import { UserError } from '../core/index.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import { agentVariables, applyEnvironment, withoutDirectory, workerBin, writeEnvironment } from '../infra/environment.ts'
@@ -7,9 +6,7 @@ import type { Settings } from '../policy.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
 
 export interface SetupHost {
-  readonly context: Context
   readonly machine: Machine
-  readonly lifetime: AbortSignal
   restart(): void
 }
 

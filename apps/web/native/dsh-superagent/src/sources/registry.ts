@@ -3,7 +3,7 @@ import type { ChannelRef, OutboundMessage, ScopeResult, SourceScope, Trigger } f
 import type { Commands } from '../infra/commands.ts'
 import { HealthBoard, type HealthEntry } from '../infra/health.ts'
 import { AdmissionTableSchema, type Settings } from '../policy.ts'
-import type { ChannelLink, ChannelLinks, SourceInstance, SourceKind, TriggerContext, VariableSpec } from './kind.ts'
+import type { ChannelLink, SourceInstance, SourceKind, TriggerContext, VariableSpec } from './kind.ts'
 
 
 /**
@@ -97,8 +97,8 @@ export class SourceRegistry implements SourceScope {
     if (!kind) return 'waiting'
     return kind.channel ? kind.channel.send({ commands }, message) : 'gone'
   }
-  link(channel: ChannelRef, links: ChannelLinks): ChannelLink {
-    const link = this.kinds.get(channel.source)?.channel?.link(channel.address, links)
+  link(channel: ChannelRef): ChannelLink {
+    const link = this.kinds.get(channel.source)?.channel?.link(channel.address)
     return link ?? { url: '', label: { zh: channel.source, en: channel.source } }
   }
   find(query: string): { threads: string[]; terms: string[] } {

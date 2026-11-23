@@ -4,7 +4,7 @@ import { policyVersion } from '../../policy.ts'
 import type { SourceRegistry } from '../../sources/registry.ts'
 import { declaredVariables, executionRoot } from '../execution-environment.ts'
 import type { Store } from '../store.ts'
-import { problemOf, sourceHealth, type HealthMap, type SetupState } from './sources.ts'
+import { sourceHealth, type HealthMap, type SetupState } from './sources.ts'
 
 function policyOf(sources: SourceRegistry, id: string, health: HealthMap) {
   const policy = sources.kind(id)?.policy
@@ -28,14 +28,13 @@ export function settingsView(store: Store, sources: SourceRegistry, health: Heal
       settings.executor) },
     sources: sources.instances(settings).map(instance => {
       const kind = sources.kind(instance.kind)
-      const problem = problemOf(instance.id, setup)
       const { id, title } = sourceHealth(sources, instance, health)
       const labels = store.get(KV.sources.labels(instance.id)) ?? {}
       return { id, kind: instance.kind, title, description: kind?.description ?? { zh: '', en: '' }, installed: instance.installed,
         value: { enabled: instance.enabled, config: instance.config }, revision: store.blockRevision(`source:${instance.id}`),
         restarts: [], fields: kind?.fields ?? [],
         facts: kind?.facts?.({ deployment: setup.deployment, config: instance.config, labels }) ?? {},
-        labels, ...problem ? { problem } : {}, ...policyOf(sources, instance.id, health) }
+        labels, ...policyOf(sources, instance.id, health) }
     }),
     environment: { root: executionRoot(settings, stateDir), variables: declaredVariables(sources, settings) },
   }

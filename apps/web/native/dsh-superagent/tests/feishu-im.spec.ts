@@ -877,6 +877,24 @@ describe('dsh-im Feishu context parts and images', () => {
     expect(feishuImKind.threadContext!.files!('[文件] notes.txt file_x [图片] img_y')).toEqual(['file_x'])
   })
 
+  it('reports the context of a Trigger recorded before the handoff as unavailable', async () => {
+    const old = { id: key('feishu', 'om_old'), source: 'feishu', threads: [{ source: 'feishu', id: 'oc_team:om_old' }],
+      actor: { source: 'feishu', id: 'ou_alice' }, human: true, at: '2026-09-01T00:00:00.000Z', text: 'old message',
+      channel: { source: 'feishu', thread: 'feishu:oc_team', address: { chatId: 'oc_team', messageId: 'om_old' } } }
+    setDshIm(service({ historyChecked: async () => { throw new Error('should not read') } }))
+    await expect(feishuImKind.threadContext!.read({} as never, old as never, 'thread', undefined, config()))
+      .resolves.toMatchObject({ status: 'unavailable', messages: [] })
+  })
+
+  it('settles a reply to a Trigger recorded before the handoff as gone, without asking dsh-im', async () => {
+    const calls: unknown[] = []
+    setDshIm(service({ replyChecked: async (...args) => { calls.push(args); return { sent: true, messageId: 'om_reply' } } }))
+    const message = { id: 'reply_old', channel: { source: 'feishu', thread: 'feishu:oc_team',
+      address: { chatId: 'oc_team', messageId: 'om_1' } }, text: 'done', kind: 'reply' as const }
+    await expect(sendFeishuIm({ commands: {} as never }, message)).resolves.toBe('gone')
+    expect(calls).toEqual([])
+  })
+
   it('keeps a profile saved with the lark-cli page size', () => {
     expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 50 })).toMatchObject({ readPageSize: 50 })
     expect(feishuImKind.schema.parse({ botId: 'bot_1', readPageSize: 7 })).toMatchObject({ readPageSize: 7 })

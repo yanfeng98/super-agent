@@ -1,8 +1,7 @@
-/** Subprocess wrapper for running git and other local commands with the deployment's environment, timeouts, and abort signals. */
+/** Subprocess wrapper for running git and other local commands with the agent's environment, timeouts, and abort signals. */
 import { execFile } from 'node:child_process'
 import { basename } from 'node:path'
 import { promisify } from 'node:util'
-import type { Deployment } from '../deployment.ts'
 
 const exec = promisify(execFile)
 const TIMEOUT_MS = 90_000
@@ -39,17 +38,16 @@ function ended(error: unknown): string {
   return typeof code === 'string' ? `could not run: ${code}` : 'failed'
 }
 /**
- * Executes subprocesses with the deployment's environment, timeouts, and abort signals.
+ * Executes subprocesses with the agent's environment, timeouts, and abort signals.
  * Translates CLI failures into CliError instances for the Sources, the Executor and the review checks.
  */
 export class Commands {
   /**
-   * @param resolved - returns the resolved deployment setup, or throws while setup is still pending.
    * @param environment - variables overriding `process.env` for every command (such as isolated git settings).
+   * @param signal - aborts a running command when dsh-superagent stops.
    */
-  constructor(private readonly resolved: () => Deployment, private readonly environment: Record<string, string | undefined>, private readonly signal: AbortSignal) {}
-  get deployment(): Deployment { return this.resolved() }
-  withSignal(signal?: AbortSignal): Commands { return signal ? new Commands(this.resolved, this.environment, AbortSignal.any([this.signal, signal])) : this }
+  constructor(private readonly environment: Record<string, string | undefined>, private readonly signal: AbortSignal) {}
+  withSignal(signal?: AbortSignal): Commands { return signal ? new Commands(this.environment, AbortSignal.any([this.signal, signal])) : this }
   async run(program: string, args: string[], cwd?: string): Promise<string> {
     try {
       const { stdout } = await exec(program, args, { cwd, signal: this.signal, timeout: TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024,

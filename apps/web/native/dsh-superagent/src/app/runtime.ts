@@ -129,14 +129,14 @@ export class Runtime extends Service implements SourceHost {
       const rekeyed = rekeyFeishuTopicThreads(store, (error, thread) =>
         ctx.logger.warn('dsh-superagent: re-keying Feishu Topic Thread %s failed: %s', thread.key, String(error)))
       if (rekeyed) ctx.logger.info('dsh-superagent: re-keyed %d Feishu Topic Thread(s) to the messages that opened them', rekeyed)
-      const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart })
+      const setup = this.setup = new Setup({ machine, restart })
       const deployed = () => setup.configured()
         ? environmentOf({ deployment: setup.deployment, sources: this.sources, settings: store.settings() }) : undefined
       const feishu = () => setup.configured() && !!this.sources?.instance<{ botId?: string }>('feishu')?.config.botId
       const prompts = this.prompts = new Prompts(store, () => machine.promptMaxChars.get(), deployed, feishu)
       const masterId = this.masterId = store.get(KV.runtime.masterId) ?? `orchestrator-${key(machine.stateDir)}`
       store.set(KV.runtime.masterId, masterId)
-      const commands = this.commands = new Commands(() => setup.deployment, setup.commandEnvironment, this.lifetime)
+      const commands = this.commands = new Commands(setup.commandEnvironment, this.lifetime)
       const board = this.board
       const effects = this.effects = new Effects(store, board)
       const sources = this.sources = new SourceRegistry(() => store.settings(), board, kind => {
@@ -260,7 +260,7 @@ export class Runtime extends Service implements SourceHost {
   configured(): boolean { return this.setup.configured() }
   get setupProblem(): SetupProblem | undefined { return this.setup.problem }
   links(): LinkTarget {
-    return channel => this.sources.link(channel, {})
+    return channel => this.sources.link(channel)
   }
   ticketEnvironment(ticket: Ticket): Variable[] {
     const trigger = sourceTrigger(this, ticket)

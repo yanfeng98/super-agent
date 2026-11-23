@@ -39,18 +39,13 @@ export const KV = {
     prompts: record<number | null>('prompt-notification'), settings: record<number | null>('settings-notification') },
   /** Per-Source resolved display names mapping a named ID (such as a Feishu chat ID) to its display name. */
   sources: { labels: family<Record<string, string>, [source: string]>('source-labels:') },
-  /**
-   * Feishu Source: known chats (`true` for direct messages); per-chat history cursor and active topics mapped from topic ID
-   * to last-seen timestamp; and per-polled-thread seen message IDs and initialization flag.
-   */
+  /** Feishu Source: known chats (`true` for direct messages) and the per-chat history cursor. */
   feishu: { chats: record<Record<string, boolean>>('feishu-chats'), history: family<string, [chat: string]>('feishu-history:'),
-    topics: family<Record<string, string>, [chat: string]>('feishu-history-threads:'),
     /**
      * Topics the dsh-im Source recovers: a topic's last activity, the message that roots it, and the time up to which it
      * has been read.
      */
     imTopics: family<Record<string, { at: string; rootId: string; readThrough?: string }>, [chat: string]>('feishu-im-topics:'),
-    seen: family<string[], [thread: string]>('thread-seen:'), initialized: family<boolean, [thread: string]>('thread-initialized:'),
     /** Per-polled-thread topic lookup: the Thread activity it was looked up at, and the topic when Feishu reports one. */
     topic: family<{ at: string; threadId?: string }, [thread: string]>('thread-topic:') },
 }

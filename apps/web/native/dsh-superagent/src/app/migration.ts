@@ -457,21 +457,11 @@ function backfillThreadTimes(store: Store): void {
   }
 }
 
-/** Upgrade stored source state (Feishu topics, direct-chat flags, thread links, and pending assessments) to schema 11. */
+/** Upgrade stored source state (direct-chat flags, thread links, and pending assessments) to schema 11. */
 function migrateSourceRecords(store: Store): void {
-  feishuTopics(store)
   feishuDirectAddresses(store)
   feishuThreadLinks(store)
   assessmentTriggers(store)
-}
-/** Convert legacy Feishu topic ID arrays into maps keyed by topic ID with the chat's last recovery timestamp. */
-function feishuTopics(store: Store): void {
-  for (const name of store.keys(KV.feishu.topics)) {
-    const topics: unknown = store.get(name)
-    if (!Array.isArray(topics)) continue
-    const seen = store.get(KV.feishu.history(name.slice(KV.feishu.topics.prefix.length))) ?? new Date().toISOString()
-    store.set(name, Object.fromEntries(topics.map(id => [String(id), seen])))
-  }
 }
 /**
  * Backfill `direct: 'true'` onto Feishu channel addresses from `KV.feishu.chats`, because Feishu `oc_` chat IDs do not

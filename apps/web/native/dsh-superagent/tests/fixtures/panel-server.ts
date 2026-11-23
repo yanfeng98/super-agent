@@ -121,11 +121,9 @@ function healthOf(name: string): Health {
   if (name !== 'feishu') return { state: 'ready', detail: '' }
   return { state: 'error', detail: 'socket closed' }
 }
-const problemOf_ = (id: string) => server.setup.problem?.place === id ? server.setup.problem : undefined
 function sourceSettings(): SourceView[] {
   return KINDS.map(kind => {
     const config = kind.schema.parse(server.settings.sources[kind.kind]?.config ?? {})
-    const problem = problemOf_(kind.kind)
     const { admission: _admission, ...part } = server.settings.policy.sources[kind.kind] ?? { allowed: [], admission: {} }
     const sync = kind.policy?.sync && { label: kind.policy.sync.label, ready: kind.policy.sync.ready(kind.policy.schema.parse(part)),
       health: server.health[`sync:${kind.kind}`] }
@@ -137,18 +135,17 @@ function sourceSettings(): SourceView[] {
         revision: server.revisions[`source:${kind.kind}`] ?? 0,
       restarts: [], fields: kind.fields,
       facts: kind.facts?.({ deployment: resolved(), config, labels }) ?? {},
-      labels, ...problem ? { problem } : {}, ...policy ? { policy } : {} }
+      labels, ...policy ? { policy } : {} }
   })
 }
 function sourceStatuses(): SourceStatusRow[] {
   return KINDS.map(kind => {
     const enabled = server.settings.sources[kind.kind]?.enabled ?? true
     const health = kind.health.map(name => ({ name, ...healthOf(name) }))
-    const problem = problemOf_(kind.kind)
-    const state = !enabled ? 'off' : problem || health.some(item => item.state === 'error') ? 'error' : server.setup.problem ? 'setup'
+    const state = !enabled ? 'off' : health.some(item => item.state === 'error') ? 'error' : server.setup.problem ? 'setup'
       : health.some(item => item.state === 'starting') ? 'starting' : health.some(item => item.state === 'paused') ? 'paused' : 'ready'
     const feishu = kind.kind === 'feishu'
-    return { id: kind.kind, title: kind.title, installed: true, enabled, state, health, ...problem ? { problem } : {},
+    return { id: kind.kind, title: kind.title, installed: true, enabled, state, health,
       stats: { received: feishu ? 12 : 0, filtered: feishu ? 2 : 0, lastAt: '2026-09-23T00:00:00Z' },
       filtered: feishu ? [{ id: 'e9', at: '2026-09-23T00:02:00Z', actor: actor('feishu', 'someone'), preview: 'looks wrong',
         reason: { code: 'source_disabled' } }] : [],

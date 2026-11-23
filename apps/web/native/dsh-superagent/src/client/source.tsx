@@ -6,10 +6,10 @@ import { DisclosureRow, Dot, Icon, InfoTip, Switch, Tag } from './controls.tsx'
 import { SaveBar } from './draft.tsx'
 import { sourceMark } from './marks.ts'
 import { usePanel, usePanelData } from './provider.tsx'
-import { setupPage, settingsRoute, type Route } from './route.ts'
+import { setupPage, type Route } from './route.ts'
 import { ConfigHistory, Fields, SourceField, useBlockDraft, useSettings } from './settings-kit.tsx'
 import { actorName, healthText, localized, readableMarkers, reasonLabel, valueLabel, when } from './text.ts'
-import { CheckSetupButton, Hint, LabelValue, LoadState, SetupMessage, StatusHead, When } from './widgets.tsx'
+import { Hint, LabelValue, LoadState, SetupMessage, StatusHead, When } from './widgets.tsx'
 
 function SourceCard({ source }: { source: SourceView }) {
   const { t, call } = usePanel()
@@ -20,7 +20,7 @@ function SourceCard({ source }: { source: SourceView }) {
     { id: source.id }); await reload(); return added }
   const draft = useBlockDraft(`source:${source.id}`, source.value, source.revision)
   const value = draft.value
-  const { problem, value: saved } = source
+  const { value: saved } = source
   const changed = (key: string) => String(value.config[key] ?? '') !== String(saved.config[key] ?? '')
   // Saving a modified setup-sensitive field restarts dsh-superagent, interrupting running Assignments.
   const restarts = draft.dirty && source.restarts.some(changed)
@@ -43,9 +43,6 @@ function SourceCard({ source }: { source: SourceView }) {
         {source.installed && <Switch checked={value.enabled} onChange={enabled => draft.edit({ ...value, enabled })}
           label={t('sourceEnable', { name: localized(t, source.title) })} />}
       </div>
-      {problem && <div className="dt-row-buttons">
-        <p className="dt-error" role="status"><SetupMessage problem={problem} lead /></p><CheckSetupButton />
-      </div>}
       {!source.installed && <Hint>{t('sourceNotInstalledHint')}</Hint>}
       {source.installed && source.fields.filter(spec => !spec.advanced).map(field)}
       {source.installed && advanced.length > 0 && <DisclosureRow icon={<Icon name="settings" />} title={t('advanced')} open={advancedOpen}
@@ -96,11 +93,11 @@ function SourceRow({ source }: { source: SourceStatusRow }) {
   const { t, navigate } = usePanel()
   const { setup } = usePanelData()
   const [filteredOpen, setFilteredOpen] = useState(false)
-  const { problem, dropped } = source
+  const { dropped } = source
   const { dot, label: state } = sourceMark(t, source.state)
   const { received, filtered, lastAt } = source.stats
-  // Omit healthy parts and suppress per-part notes when a setup problem already explains why the Source is stopped.
-  const notes = source.enabled && !problem && !setup?.problem ? source.health.filter(item => item.state === 'error'
+  // Omit healthy parts, and suppress per-part notes when the deployment problem already explains why every Source is stopped.
+  const notes = source.enabled && !setup?.problem ? source.health.filter(item => item.state === 'error'
     || item.state === 'paused') : []
   return <li className="dt-row">
     <Dot state={dot} label={state} />
@@ -112,12 +109,6 @@ function SourceRow({ source }: { source: SourceStatusRow }) {
           value={received} />}{filtered > 0 && <LabelValue label={t('sourceFilteredLabel')} value={filtered} />}
         {lastAt && <LabelValue label={t('sourceLatestLabel')} value={when(lastAt, t('lang'))} />}
       </div>
-      {problem && <p className="dt-error">
-        <SetupMessage problem={problem} lead /> <button type="button" className="dt-textlink"
-          onClick={() => navigate(settingsRoute('source', { source: source.id }))}>
-          {t('sourceOpenSettings')}
-        </button>
-      </p>}
       {notes.map(item => <p key={item.name} className={item.state === 'error' ? 'dt-error dt-clamp' : 'dt-hint dt-clamp'}>
         {valueLabel(t, 'health', item.name)}{t('labelSeparator')}<span className={item.code ? undefined : 'dt-mono'}>{healthText(t,
           item)}</span>
@@ -142,7 +133,7 @@ export function SourceStatus() {
   const { t, call, navigate } = usePanel()
   const { setup } = usePanelData()
   const { data, error } = usePoll(() => call('GET sources'), [])
-  // Global deployment setup problems halt all Sources and show at the top; Source-specific setup problems show on that Source's row.
+  // A deployment setup problem halts every Source, so it is shown once, above the list.
   const elsewhere = setup?.problem?.place === 'deployment' ? setup.problem : undefined
   return <div className="dt-form">
     <StatusHead hint={t('sourceStatusIntro')} settings="source" />

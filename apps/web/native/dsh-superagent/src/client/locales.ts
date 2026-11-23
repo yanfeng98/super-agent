@@ -357,7 +357,6 @@ const TEXT = {
   'sourceState.ongoing': ['启动中', 'Starting'],
   'sourceState.warning': ['待处理', 'Pending'],
   'sourceState.error': ['出错', 'Failing'],
-  sourceOpenSettings: ['去设置', 'Open settings'],
   'sourceState.setup': ['等待部署检查', 'Waiting for the deployment check'],
   setupFixLink: ['去修正', 'Fix it'],
   'openSettingsOf.deployment': ['去部署页修改', 'Change it on Deployment'],
@@ -962,7 +961,6 @@ const TEXT = {
   'healthCode.imHandoffOff': ['这个机器人没有打开“交给 Superagent”', HEALTH_TEXT.imHandoffOff],
   'healthCode.imConsumerTaken': ['另一个消费者已经接管了这个飞书机器人', HEALTH_TEXT.imConsumerTaken],
   'healthCode.imBackfillMissing': ['这个 dsh-im 不提供飞书补收', HEALTH_TEXT.imBackfillMissing],
-  'healthCode.pollFailures': ['连续 {count} 次轮询失败，最近一次：{error}', HEALTH_TEXT.pollFailures],
 } as const satisfies Record<string, readonly [string, string]>
 export type DshSuperagentKey = keyof typeof TEXT
 const language = (index: 0 | 1) => Object.fromEntries(Object.entries(TEXT).map(([key, pair]) => [key, pair[index]])) as Record<DshSuperagentKey, string>

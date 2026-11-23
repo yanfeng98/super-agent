@@ -36,7 +36,7 @@ function harness({ allow = true, enabled = true } = {}) {
     withdraw: () => {} }
   const engine = new Engine({ repo: store, scope: sources, policy: () => settingsPolicy(store.settings(), sources), assessor, executor,
     outbox })
-  const commands = new Commands(() => deployment, {}, new AbortController().signal)
+  const commands = new Commands({}, new AbortController().signal)
   const receive = (trigger: Trigger) => { const result = engine.receive(trigger); engine.evaluateDue(); return result }
   const parts: SourceContextDeps = { store, engine, outbox, commands, sources, deployment, ready: Promise.resolve(), configured: () => true,
     receive, stopThreadWork: async () => undefined }
