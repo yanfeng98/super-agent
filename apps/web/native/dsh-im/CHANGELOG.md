@@ -8,8 +8,11 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ### Added / 新增
 
-- 「交给 Superagent」的上下文读法每页上限从 20 提到 50：`readExternalHistory`（即 `historyChecked` 的 group/nearby/thread 读法）与补收用的群/话题历史读法现在共用飞书的单页上限 50，不再一半 20 一半 50；`nearby` 的前后条数上限仍是 20。调用方想保持旧行为就继续传 20。
-  The context read behind the handoff now accepts up to 50 records a page: `readExternalHistory` — the `group`/`nearby`/`thread` reads behind `historyChecked` — shares Feishu's 50-record page cap with the chat and thread history reads behind the backfill, instead of stopping at 20; the `nearby` before/after minima keep their 20 cap. A caller keeps the old behaviour by still passing 20.
+- `nearby` 上下文读法的前后条数上限从 20 提到 500：`beforeCount`/`afterCount` 只表示「这一侧至少取多少条」，每次调用仍然只返回一页 provider 记录（≤ `limit`），所以提高上限只是让调用方用 cursor 继续往前翻更久的历史，单次响应不会变大；`/around` 因此能从「前 20 条」翻到「前 500 条」。旧的 20 及以下取值行为不变。
+  A `nearby` context read now accepts up to 500 records on either side: `beforeCount`/`afterCount` are minima for that side, and one call still returns a single provider page (at most `limit` records), so a larger minimum only lets the caller continue further back with the cursor and never makes one response larger; `/around` can therefore walk back 500 messages instead of 20. Existing values of 20 or less behave as before.
+
+- 「交给 Superagent」的上下文读法每页上限从 20 提到 50：`readExternalHistory`（即 `historyChecked` 的 group/nearby/thread 读法）与补收用的群/话题历史读法现在共用飞书的单页上限 50，不再一半 20 一半 50。调用方想保持旧行为就继续传 20。
+  The context read behind the handoff now accepts up to 50 records a page: `readExternalHistory` — the `group`/`nearby`/`thread` reads behind `historyChecked` — shares Feishu's 50-record page cap with the chat and thread history reads behind the backfill, instead of stopping at 20. A caller keeps the old behaviour by still passing 20.
 
 - 「交给 Superagent」时语音消息也会转写：接管路径在把手前复用机器人自己的语音能力（与独立模式同一 `transcribeIncoming`），把音频转成文字交给消费者，消费者读到的是「说了什么」，而不是 `[语音] 12s file_<key>` 占位；音频资源仍留在事件正文里可回读，转写关闭或失败时保持原来的占位，既不丢消息也不阻塞接管。
   A voice message is transcribed on the way to Superagent too: before handoff the consumer path reuses the bot's own voice capability (the same `transcribeIncoming` as standalone mode) and hands the words over, so the consumer reads what was said instead of a `[语音] 12s file_<key>` placeholder; the audio resource stays in the event body for a read-back, and a disabled or failed transcription keeps the placeholder without dropping the message or blocking the handoff.

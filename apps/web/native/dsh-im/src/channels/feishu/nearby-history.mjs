@@ -1,5 +1,11 @@
 function refuse(code) { throw Object.assign(new Error(code), { code }); }
-const count = value => Number.isInteger(value) && value >= 0 && value <= 20;
+
+/**
+ * How many records one nearby read may collect on either side of the anchor. A call still returns one provider page,
+ * so a larger count only lets the caller page further back; it never makes one response larger.
+ */
+export const NEARBY_SIDE_LIMIT = 500;
+const count = value => Number.isInteger(value) && value >= 0 && value <= NEARBY_SIDE_LIMIT;
 
 export async function readNearbyHistory(readPage, route, query, anchorTime) {
   const before = query.beforeCount ?? 10;
@@ -41,8 +47,8 @@ export async function readNearbyHistory(readPage, route, query, anchorTime) {
     if (state.phase === 'window') {
       if (at < start || at > end) continue;
       events.push(event);
-      if (event.messageId !== route.messageId && at < anchorTime) state.before = Math.min(20, state.before + 1);
-      if (event.messageId !== route.messageId && at > anchorTime) state.after = Math.min(20, state.after + 1);
+      if (event.messageId !== route.messageId && at < anchorTime) state.before = Math.min(NEARBY_SIDE_LIMIT, state.before + 1);
+      if (event.messageId !== route.messageId && at > anchorTime) state.after = Math.min(NEARBY_SIDE_LIMIT, state.after + 1);
     } else if (state.phase === 'before' && at < start && state.before < before) {
       events.push(event); state.before++;
     } else if (state.phase === 'after' && at > end && state.after < after) {

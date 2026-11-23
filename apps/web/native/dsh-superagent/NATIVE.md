@@ -348,8 +348,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     answer looks like the removed lark-cli Source's `--markdown --reply-in-thread` reply, and a bot-authored source can be
     answered because dsh-im accepts bot senders on the retained route. `root`, `parent` and `message` context reads the
     message by id through `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still
-    resolves, and `around` reads the chat around a message even when it sits in a Thread, asking for the whole preceding
-    half of dsh-im's nearby window (20 messages, its cap) and reporting that window's bounds; a `thread` read of a message
+    resolves, and `around` reads the chat around a message even when it sits in a Thread, reporting that window's bounds
+    and paging back through older messages one provider page per call until dsh-im's 500-record side limit, so a long
+    discussion before the Trigger is reachable; a `thread` read of a message
     Feishu placed in no Topic is the surrounding chat and reports `chat_neighbours`; a `/root` or `/parent` read reports
     `deleted` when that related message was recalled, and a `/message`, `/root`, `/parent` or `/around` read of a Trigger
     whose own message was recalled answers `unavailable`, because dsh-im's route check refuses a route to a recalled

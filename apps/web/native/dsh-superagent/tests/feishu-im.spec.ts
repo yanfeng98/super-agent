@@ -669,7 +669,7 @@ describe('dsh-im Feishu context parts and images', () => {
     // return before the message, since dsh-im cannot page further back than that window.
     const around = await feishuImKind.threadContext!.read({} as never, trigger, 'around', undefined, config())
     expect(around.messages.map(message => message.id)).toEqual(['om_1'])
-    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 20, afterCount: 5, includeDeleted: true })
+    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 500, afterCount: 5, includeDeleted: true })
     const own = await feishuImKind.threadContext!.read({} as never, trigger, 'message', undefined, config())
     expect(own.messages[0]).toMatchObject({ id: 'om_1', reply_to: 'om_parent' })
     expect(asked[1]?.[2]).toMatchObject({ messageId: 'om_1' })

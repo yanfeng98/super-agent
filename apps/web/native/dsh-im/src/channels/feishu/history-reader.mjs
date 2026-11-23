@@ -1,4 +1,4 @@
-import { readNearbyHistory } from './nearby-history.mjs';
+import { NEARBY_SIDE_LIMIT, readNearbyHistory } from './nearby-history.mjs';
 import { deletedHistoryEvent, MESSAGE_TYPES, mergedForwardText, normalizeExternalText, senderMatches } from './external-consumer.mjs';
 
 function refuse(code) { throw Object.assign(new Error(code), { code }); }
@@ -92,7 +92,7 @@ export async function readExternalHistory(client, identity, route, query, signal
     || (query.cursor !== undefined && (typeof query.cursor !== 'string' || !query.cursor || query.cursor.length > 4096)))
     refuse('bad-request');
   if (query.scope === 'nearby' && [query.beforeCount ?? 10, query.afterCount ?? 5]
-    .some(value => !Number.isInteger(value) || value < 0 || value > 20)) refuse('bad-request');
+    .some(value => !Number.isInteger(value) || value < 0 || value > NEARBY_SIDE_LIMIT)) refuse('bad-request');
   signal?.throwIfAborted();
   const reference = await checkedSdkRead(() => client.im.v1.message.get({ path: { message_id: route.messageId }, params: { with_sender_name: true } }, { signal }), signal);
   signal?.throwIfAborted();

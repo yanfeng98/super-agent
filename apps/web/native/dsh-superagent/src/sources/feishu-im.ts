@@ -246,8 +246,9 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
         const scope: 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread' : 'nearby'
         page = await im.historyChecked(botId, route, {
           scope, limit: config.readPageSize, includeBots: true, includeDeleted: true, ...cursor ? { cursor } : {},
-          // `around` reads back further than the window an assessment needs: dsh-im caps the preceding count at 20.
-          ...scope === 'nearby' ? { beforeCount: part === 'around' ? 20 : 5, afterCount: 5 } : {},
+          // `around` walks back through older messages, a provider page per call, until dsh-im's 500-record side limit;
+          // an assessment window asks for the nearest five so the Trigger stays at the centre of a bounded read.
+          ...scope === 'nearby' ? { beforeCount: part === 'around' ? 500 : 5, afterCount: 5 } : {},
         }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
       }
     } catch (error) {

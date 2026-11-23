@@ -57,7 +57,7 @@ test('counts are bounded, continuation cannot change anchor/count/limit, and a s
  for(const query of [{scope:'nearby',limit:1,cursor:first.nextCursor,beforeCount:1},{scope:'nearby',limit:2,cursor:first.nextCursor},
  {scope:'nearby',limit:1,cursor:'bad-json'}]) await assert.rejects(readExternalHistory(bot,identity,route,query),{code:'bad-request'});
  const prior=bot.calls.length;
- for(const value of [-1,21,1.5,'10'])await assert.rejects(readExternalHistory(bot,identity,route,{scope:'nearby',limit:1,beforeCount:value}),{code:'bad-request'});
+ for(const value of [-1,501,1.5,'10'])await assert.rejects(readExternalHistory(bot,identity,route,{scope:'nearby',limit:1,beforeCount:value}),{code:'bad-request'});
  assert.equal(bot.calls.length,prior);
 });
 test('fresh anchors exhaust without querying a future supplementary start',async(t)=>{
@@ -73,4 +73,11 @@ test('fresh anchors exhaust without querying a future supplementary start',async
  assert.deepEqual(result.events.map(e=>e.messageId),['om-anchor','older']);
  assert.equal(result.pages.at(-1).hasMore,false);
  assert.equal(bot.calls.length,2);
+});
+
+test('a wider side count pages past the old twenty-message stop',async()=>{
+ const data=[item('om-anchor',0),...Array.from({length:30},(_,i)=>item('old-'+i,-400000-i*1000))];
+ const bot=client(data);const result=await all(bot,{beforeCount:40,afterCount:0});
+ assert.equal(result.events.filter(e=>e.messageId.startsWith('old-')).length,30);
+ assert(!result.pages.at(-1).hasMore);
 });
