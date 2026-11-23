@@ -1091,14 +1091,19 @@ test('the bot access policy still gates a handed-over message, and the group arc
   assert.equal(captured.length, 1);
   assert.equal(captured[0].groupId, 'chat');
   assert.equal(captured[0].text, 'hello');
+  // A bot has no user id to match the whitelist against, so the consumer's own bot list decides its messages.
+  const botEvent = event('om_bot');
+  botEvent.sender = { sender_type: 'app', sender_id: { app_id: 'cli_ci' } };
+  await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](botEvent);
+  assert.equal(seen.length, 1);
   await denied.stop();
   // An open group policy admits the same message, so the consumer receives it.
   const open = createAccessPolicy({ group: createAccessPolicyScope({ mode: 'open',
     open: { defaultCanExecuteCommands: false, commandPermissionOverrides: [] }, allowlist: { users: [] } }) });
   const admitted = await start({ getSettings: () => open });
   await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](event('om_allowed'));
-  assert.equal(seen.length, 1);
-  assert.equal(captured.length, 2);
+  assert.equal(seen.length, 2);
+  assert.equal(captured.length, 3);
   await admitted.stop();
 });
 

@@ -834,6 +834,8 @@ export class FeishuRuntime {
    */
   #consumable(event) {
     if (!this.#accessPolicy) return true;
+    // A bot or app has no user id to match the whitelist against; the consumer's own bot list decides its messages instead.
+    if (['app', 'bot'].includes(event?.sender?.sender_type)) return true;
     const message = extractInboundMessage(event, this.#client);
     const conversationType = event?.message?.chat_type === 'p2p' ? 'direct'
       : event?.message?.chat_type === 'group' ? 'group' : null;

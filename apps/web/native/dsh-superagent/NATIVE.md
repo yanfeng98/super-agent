@@ -376,7 +376,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     one read, not one per round. The bot owner's own access policy still gates a handed-over message, and dsh-im's group
     archive keeps recording the groups it receives, so the bot's own settings are not bypassed by the handoff; a message
     that policy refuses never reaches the Source (it is logged as a warning, never answered), while the Policy still decides
-    what an admitted message may become. A bot migrated from an older version keeps an empty allowlist, which admits only
+    what an admitted message may become. A bot or app has no user id for that list, so the Policy's bot list decides its
+    messages instead. A bot migrated from an older version keeps an empty allowlist, which admits only
     its owner until its access mode is switched to all users or the team is listed. The
     backfill asks dsh-im for messages it has not handled yet (`excludeHandled`), so a
     takeover does not answer again what the bot answered while it was not handed over. dsh-im never hands the bot its own
