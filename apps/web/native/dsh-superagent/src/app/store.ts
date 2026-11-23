@@ -224,6 +224,32 @@ export class Store implements Repositories {
       if (JSON.stringify(meta) !== JSON.stringify(thread.meta)) this.threads.save({ ...thread, meta })
     }),
   }
+  /**
+   * Deletes a Thread with its Decisions and the Triggers that belong to it alone, together with their Dispositions, and drops
+   * the Thread from every other Thread's correlations. A Trigger indexed on another Thread as well stays there, losing only
+   * this Thread's index. The caller checks the Thread is idle and has no Tickets.
+   */
+  deleteThread(keyValue: string): void {
+    this.atomic(() => {
+      const rows = this.db.prepare('SELECT id, value FROM trigger WHERE id IN (SELECT id FROM trigger_thread WHERE thread=?)')
+        .all(keyValue) as { id: string; value: string }[]
+      const removeTrigger = this.db.prepare('DELETE FROM trigger WHERE id=?')
+      const removeDisposition = this.db.prepare('DELETE FROM disposition WHERE id=?')
+      for (const row of rows) {
+        const trigger = JSON.parse(row.value) as Trigger
+        if (!trigger.threads.every(ref => threadKey(ref) === keyValue)) continue
+        removeTrigger.run(row.id)
+        removeDisposition.run(row.id)
+      }
+      this.db.prepare('DELETE FROM trigger_thread WHERE thread=?').run(keyValue)
+      this.db.prepare('DELETE FROM decision WHERE thread=?').run(keyValue)
+      this.db.prepare('DELETE FROM thread WHERE key=?').run(keyValue)
+      for (const other of this.threads.list()) {
+        if (other.correlated.includes(keyValue))
+          this.threads.save({ ...other, correlated: other.correlated.filter(item => item !== keyValue) })
+      }
+    })
+  }
   readonly tickets = {
     get: (id: string): Ticket | undefined => { const row = this.db.prepare('SELECT value FROM ticket WHERE id=?').get(id); return row ? JSON.parse(String(row.value)) as Ticket : undefined },
     save: (ticket: Ticket): void => { this.db.prepare('INSERT INTO ticket VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(ticket.id, JSON.stringify(ticket)) },

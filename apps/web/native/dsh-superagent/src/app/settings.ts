@@ -217,7 +217,7 @@ export class Settings {
     return sources.instances().filter(instance => instance.installed && instance.enabled).flatMap(instance => {
       const sync = sources.kind(instance.id)?.policy?.sync
       const part = sources.policyPart(instance.id)
-      return sync && part && sync.ready(part) ? [instance.id] : []
+      return sync && part && sync.ready(part, instance.config) ? [instance.id] : []
     })
   }
   /**

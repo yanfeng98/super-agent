@@ -153,6 +153,10 @@ export interface Evaluation {
   pausedAt?: string
 }
 
+/** Whether a Thread may be deleted: it has no Tickets, no Eval in progress, and no Trigger waiting for one. */
+export const canDeleteThread = (thread: Thread): boolean =>
+  thread.subscriptions.length === 0 && !thread.evaluating && thread.pending.length === 0
+
 /** Thread aggregate: consistency boundary of eval, holder of subscriptions and decision history. */
 export interface Thread {
   key: string

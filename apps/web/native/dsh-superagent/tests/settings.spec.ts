@@ -28,6 +28,11 @@ const dshImService = (overrides: Partial<DshImService> = {}): DshImService => ({
   replyChecked: async () => ({ sent: true, messageId: 'om_reply' }),
   ...overrides,
 })
+/** The fixture bot's account read, with the fields a test changes. */
+const described = (overrides: Partial<Awaited<ReturnType<DshImService['describeBot']>>> = {}) => ({
+  version: 1 as const, botId: BOT_ID, channel: 'feishu', domain: 'feishu' as const,
+  account: { fingerprint: FINGERPRINT, name: 'Widgets Bot' }, connected: true, superagent: true, superagentActive: true,
+  capabilities: ['exclusive-text-consumer'], ...overrides })
 
 it('refuses a save of a block that another save changed during its model check, and saves nothing of it', async () => {
   h = await startRuntime()
@@ -106,4 +111,64 @@ it('records nothing for a pause that changes nothing, refuses a sync while setup
   await expect(settings.sync('feishu')).rejects.toThrow(new UserError('nothingToSync', { source: 'feishu' }))
   vi.mocked(Setup.prototype.configured).mockRestore()
   expect(() => settings.block('source:x')).toThrow(new UserError('unknownBlock', { block: 'source:x' }))
+})
+
+it('adopts the handoff bot\'s owners into the allowed list, so turning the handoff on needs no second list', async () => {
+  h = await startRuntime()
+  const { settings, store } = h.runtime
+  const policy = store.settings().policy
+  await settings.save('policy', { ...policy, sources: { ...policy.sources, feishu: { allowed: [{ id: 'ou_bob', name: 'Bob' }], syncChat: '' } } }, store.blockRevision('policy'), 'panel')
+  // The owner list is the bot's own; only open_ids can originate work, and '*' or an app id names no person.
+  setDshIm(dshImService({ describeBot: async () => described({ ownerOpenIds: [MEMBER, '*', 'cli_not_a_user'] }) }))
+  expect(await settings.sync('feishu')).toEqual({ allowed: [{ id: 'ou_bob', name: 'Bob' }, { id: MEMBER }], syncChat: '',
+    admission: {}, adoptedOwners: [MEMBER] })
+  expect(h.runtime.health['sync:feishu']).toMatchObject({ state: 'ready', detail: '2 allowed' })
+  const revision = store.get('settings-revision')
+  await settings.sync('feishu')
+  expect(store.get('settings-revision')).toBe(revision)
+})
+
+it('never re-adds an owner a person removed from the list, while an owner the bot gained later still joins', async () => {
+  h = await startRuntime()
+  const { settings, store } = h.runtime
+  const policy = store.settings().policy
+  await settings.save('policy', { ...policy, sources: { ...policy.sources, feishu: { allowed: [], syncChat: '' } } }, store.blockRevision('policy'), 'panel')
+  setDshIm(dshImService({ describeBot: async () => described({ ownerOpenIds: [MEMBER] }) }))
+  await settings.sync('feishu')
+  // The panel keeps `adoptedOwners` when a person removes the owner from the list, as its Policy save carries the whole part.
+  const adopted = store.settings().policy
+  await settings.save('policy', { ...adopted, sources: { ...adopted.sources,
+    feishu: { allowed: [], syncChat: '', adoptedOwners: [MEMBER] } } }, store.blockRevision('policy'), 'panel')
+  expect(await settings.sync('feishu')).toEqual({ allowed: [], syncChat: '', admission: {}, adoptedOwners: [MEMBER] })
+  // An owner added to the bot in dsh-im after the first adoption still joins at the next sync, once.
+  setDshIm(dshImService({ describeBot: async () => described({ ownerOpenIds: [MEMBER, 'ou_new'] }) }))
+  expect(await settings.sync('feishu')).toEqual({ allowed: [{ id: 'ou_new' }], syncChat: '', admission: {},
+    adoptedOwners: [MEMBER, 'ou_new'] })
+})
+
+it('keeps the handoff bot\'s owner beside a sync chat\'s members on every sync, so the roster governs there', async () => {
+  h = await startRuntime()
+  const { settings, store } = h.runtime
+  const policy = store.settings().policy
+  await settings.save('policy', { ...policy, sources: { ...policy.sources, feishu: { allowed: [{ id: 'ou_owner' }], syncChat: CHAT } } }, store.blockRevision('policy'), 'panel')
+  setDshIm(dshImService({
+    describeBot: async () => described({ ownerOpenIds: ['ou_owner'] }),
+    chatMembersChecked: async () => ({ version: 1, chatId: CHAT, users: [{ id: MEMBER, name: 'Alice' }] }),
+  }))
+  expect(await settings.sync('feishu')).toEqual({ allowed: [{ id: MEMBER, name: 'Alice' }, { id: 'ou_owner' }], syncChat: CHAT,
+    admission: {}, adoptedOwners: ['ou_owner'] })
+  // The roster rebuilds on every sync, and the owner stands beside its members each time.
+  expect(await settings.sync('feishu')).toEqual({ allowed: [{ id: MEMBER, name: 'Alice' }, { id: 'ou_owner' }], syncChat: CHAT,
+    admission: {}, adoptedOwners: ['ou_owner'] })
+})
+
+it('adopts the handoff bot\'s owners from the local handoff status, without verifying the account', async () => {
+  h = await startRuntime()
+  const { settings, store } = h.runtime
+  const policy = store.settings().policy
+  await settings.save('policy', { ...policy, sources: { ...policy.sources, feishu: { allowed: [], syncChat: '' } } }, store.blockRevision('policy'), 'panel')
+  const describeBot = vi.fn(async () => described())
+  setDshIm(dshImService({ describeBot, inboundStatus: async () => ({ version: 1, botId: BOT_ID, superagent: true, superagentActive: true, ownerOpenIds: [MEMBER] }) }))
+  expect(await settings.sync('feishu')).toEqual({ allowed: [{ id: MEMBER }], syncChat: '', admission: {}, adoptedOwners: [MEMBER] })
+  expect(describeBot).not.toHaveBeenCalled()
 })

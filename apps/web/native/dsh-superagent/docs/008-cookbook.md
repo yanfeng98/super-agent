@@ -231,7 +231,7 @@ If messages reply to earlier messages, add `repliesTo(trigger)`. It returns the 
 - `fields` generates the form under **Eval → On each Source**, beginning with `allowed`. `explicit` explains how to address the agent. Optional `unnamed: {person, bot}` supplies display labels for opaque ids such as Feishu's `ou_…`; this example omits it because queue ids are readable names.
 - `rows(config)` lists admission scopes and their available cells. Each row id must match the `row` returned by `scope`. Unaddressed-message cells are available only where the Source observes those messages. Kinds without `rows` use default cells.
 - Optional `bots` lists bots eligible for inferred candidacy, using the same entry shape as `allowed`. Without it, no bot is admitted.
-- Optional `sync: {label, ready(part), run(host, part, signal)}` refreshes membership at startup and on **Sync now**. Feishu uses chat membership. Failures appear under `sync:<id>` and retry after one minute, doubling to one hour until successful.
+- Optional `sync: {label, ready(part, config), run(host, part, signal)}` refreshes membership at startup and on **Sync now**; `ready` sees the Source's bound configuration as well as its Policy part. Feishu takes each bound dsh-im bot owner into the list once, read from the local handoff status — an owner removed from the list never rejoins, an owner the bot gained later joins at the next sync — and with a sync chat keeps the list that chat's members together with the owners. Failures appear under `sync:<id>` and retry after one minute, doubling to one hour until successful.
 
 ### 8. Variables for the Executor
 

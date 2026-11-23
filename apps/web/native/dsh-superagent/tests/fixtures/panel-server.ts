@@ -125,7 +125,7 @@ function sourceSettings(): SourceView[] {
   return KINDS.map(kind => {
     const config = kind.schema.parse(server.settings.sources[kind.kind]?.config ?? {})
     const { admission: _admission, ...part } = server.settings.policy.sources[kind.kind] ?? { allowed: [], admission: {} }
-    const sync = kind.policy?.sync && { label: kind.policy.sync.label, ready: kind.policy.sync.ready(kind.policy.schema.parse(part)),
+    const sync = kind.policy?.sync && { label: kind.policy.sync.label, ready: kind.policy.sync.ready(kind.policy.schema.parse(part), config),
       health: server.health[`sync:${kind.kind}`] }
     const policy = kind.policy && { fields: kind.policy.fields, explicit: kind.policy.explicit, ...kind.policy.rows
       ? { rows: kind.policy.rows(config) } : {}, ...sync ? { sync } : {} }
@@ -223,7 +223,7 @@ const ticketDetail = (): TicketPageView => ({
 function threadPage(key: string, { before, around }: { before?: string; around?: string }): ThreadPageView | undefined {
   if (key !== threadSummary().key) return undefined
   const base = { ...threadSummary(), tickets: [ticketSummary()], correlated: [], decisions: [],
-    url: 'https://example.test/thread', context: [] }
+    url: 'https://example.test/thread', context: [], deletable: false }
   const decision = { id: 'd1', outcome: 'accept' as const, reason: [{ code: 'said', values: { text: 'x' } }], ticketId: 't1' }
   if (before === 'cursor-1' || around === 'e1') return { ...base, timeline: [trigger('e1', '2026-09-20T00:00:00Z',
     { disposition: { decision } })], earlier: null }
@@ -327,6 +327,10 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     // A Trigger sent to Eval again is queued and cannot be requeued.
     const queued = (item: TriggerRow) => ({ ...item, disposition: { ...item.disposition, queued: true }, actions: { requeue: false } })
     return { ...found, timeline: found.timeline.map(item => server.queued.has(item.id) ? queued(item) : item) }
+  } },
+  'POST threads/:key/delete': { answer: ({ params }) => {
+    server.threads = server.threads.filter(thread => thread.key !== params.key)
+    return { deleted: true }
   } },
   'POST threads/:key/unsubscribe': { answer: ({ params }) => {
     const removed = server.threads.length > 0

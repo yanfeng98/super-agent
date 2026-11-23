@@ -138,17 +138,16 @@ async function start() {
     webServer: { host: '127.0.0.1', port: 3082, register: () => () => {} } }
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   const seed = new Store(join(directory, 'orchestrator.sqlite'))
-  seed.saveSettings(SettingsSchema.parse({ ...seed.settings(), sources: { feishu: { enabled: true, config: { botId: BOT_ID } } } }))
+  const seeded = seed.settings()
+  seed.saveSettings(SettingsSchema.parse({ ...seeded,
+    sources: { feishu: { enabled: true, config: { botId: BOT_ID, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } } },
+    policy: { ...seeded.policy, sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } } },
+    eval: { ...seeded.eval, mode: 'auto' } }))
   seed.close()
   const runtime = new Runtime(ctx, testMachine({ stateDir: directory }), () => {})
   // A Source plugin registers its kind before the Runtime creates its Sessions, so the Feishu skill is bound with the master Session.
   runtime.sources.register(feishuImKind)
   await runtime.ready
-  const settings = runtime.store.settings()
-  const allowed = { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } }
-  const feishuSource = { enabled: true, config: { botId: BOT_ID, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } }
-  runtime.store.saveSettings({ ...settings, policy: { ...settings.policy, sources: allowed }, eval: { ...settings.eval, mode: 'auto' },
-    sources: { ...settings.sources, feishu: feishuSource } })
   const run = async (sessionId: string, name: string, args: unknown) =>
     await tools.get(sessionId)!.get(name)!.execute(args, { signal: new AbortController().signal }) as Record<string, unknown>
   const stop = async () => { await runtime.stop(); setDshIm(undefined); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) }

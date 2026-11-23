@@ -39,6 +39,7 @@ Change records: [`logs/00027`](../../../../logs/00027-原生集成dsh-im.md) (in
 
 14. Root-level third-party disclosure: the repository's generated [`THIRD_PARTY_NOTICES.md`](../../../../THIRD_PARTY_NOTICES.md) lists this plugin's runtime dependencies, and the generator treats the QQ connector's declared `UNLICENSED` terms as an identity-scoped owner authorization that stays visibly non-permissive. The barrier this plugin introduced was `MIT-0` on `nodemailer` (now on the permissive allowlist) and that one identity; the decision and its limits are in [`logs/00120`](../../../../logs/00120-第三方依赖声明恢复与QQ渠道许可决策.md) and [the notices note](../../../../.agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md). The upstream copy's own `THIRD_PARTY_NOTICES.md` is unchanged.
 
+15. Exposed the handoff bot's owners so superagent needs no second allow list: `describeDeliveryAccount` and the local `inboundStatus` return `ownerOpenIds`, and the superagent Feishu Source takes each of them into its Policy's allowed senders once, at startup and on **Sync now** — a removed owner never rejoins automatically, an owner the bot gains later joins at the next sync — while a set sync chat keeps the list that chat's members together with the owners. `logs/00124` and `logs/00126` record the changes. The remaining test suite has 3,545 passing cases.
 
 ## Syncing upstream
 

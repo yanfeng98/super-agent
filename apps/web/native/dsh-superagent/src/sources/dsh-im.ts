@@ -40,6 +40,8 @@ export interface DshImBotDescription {
   channel: string
   domain?: 'feishu' | 'lark'
   account: { fingerprint: string; name?: string }
+  /** The open_ids configured as this bot's owners, which authorized its handoff in dsh-im. */
+  ownerOpenIds?: string[]
   connected: boolean
   superagent: boolean
   superagentActive: boolean
@@ -65,7 +67,9 @@ export interface DshImService {
   listTargets(botId: string): Promise<DshImTarget[]>
   describeBot(botId: string): Promise<DshImBotDescription>
   /** Cheap handoff state; absent on an older dsh-im, where the watcher falls back to `describeBot`. */
-  inboundStatus?(botId: string): Promise<{ version: 1; botId: string; superagent: boolean; superagentActive: boolean }>
+  inboundStatus?(botId: string): Promise<{ version: 1; botId: string; superagent: boolean; superagentActive: boolean
+    /** The bot's owners, read from dsh-im's configuration without verifying the account over the network. */
+    ownerOpenIds?: string[] }>
   consumeInbound(botId: string, options: {
     expectedFingerprint: string
     signal: AbortSignal

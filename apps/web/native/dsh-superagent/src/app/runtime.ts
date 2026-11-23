@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, latestAssignment, latestReport, liveTicket, reasonText, threadKey, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
+import { canDeleteThread, Engine, key, latestAssignment, latestReport, liveTicket, reasonText, threadKey, UserError, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
   type TicketCheck, type TicketCheckRun, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
@@ -1257,6 +1257,18 @@ export class Runtime extends Service implements SourceHost {
     }) }
   }
   /**
+   * Deletes an idle Thread with its messages and Decisions. A Thread a Ticket follows, one whose Eval runs, or one with
+   * messages still waiting for a Decision is refused, since deleting it would drop recorded work.
+   * @param key - The Thread's key as the panel and URLs show it.
+   * @throws UserError (`unknownThread`) when no Thread has that key, or (`threadBusy`) when it is not idle.
+   */
+  deleteThread(key: string): void {
+    const thread = this.store.threads.get(key)
+    if (!thread) throw new UserError('unknownThread', { thread: key })
+    if (!canDeleteThread(thread)) throw new UserError('threadBusy', { thread: key })
+    this.store.deleteThread(key)
+  }
+  /**
    * Records or clears that a ticket waits for another ticket's branch to merge first. Both may be named by id or by the
    * display number `T-0001`, as a person and the main Session quote them.
    * @returns The blocked ticket's blockers, with their titles and display numbers.
@@ -1639,6 +1651,7 @@ export class Runtime extends Service implements SourceHost {
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog(),
       localRequest: input => createLocalRequest(runtime, input), localFollowup: input => createLocalFollowup(runtime, input),
       ticketDiff: id => runtime.ticketDiff(id), mergeTicket: (id, strategy) => runtime.mergeTicket(id, strategy),
+      deleteThread: key => runtime.deleteThread(key),
       discardTicket: id => runtime.discardTicket(id), rebaseTicket: id => runtime.rebaseTicket(id), checkTicket: id => runtime.checkTicket(id),
       cancelAutoMerge: id => runtime.cancelAutoMerge(id),
       linkTicket: (id, reference, linked) => runtime.linkTicket(id, reference, linked),

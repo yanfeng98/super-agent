@@ -1488,6 +1488,7 @@ test('delivery account fingerprint is authenticated and checked inside the sendi
   await fx.controller.initialize();
   const info = await fx.controller.describeDeliveryAccount(existing.id);
   assert.equal(info.version, 1); assert.equal(info.connected, true);
+  assert.deepEqual(info.ownerOpenIds, existing.ownerOpenIds);
   assert.match(info.account.fingerprint, /^[a-f0-9]{64}$/);
   assert.equal(JSON.stringify(info).includes('local-secret'), false);
   const target = {targetId: 'self', kind: 'user', route: {openId: 'ou_self'}};
@@ -1511,7 +1512,8 @@ test('inboundStatus reads the handoff state without verifying the account', asyn
   await fx.controller.initialize();
   const before = verified;
   const off = await fx.controller.inboundStatus(existing.id);
-  assert.deepEqual(off, { version: 1, botId: existing.id, superagent: false, superagentActive: false });
+  assert.deepEqual(off, { version: 1, botId: existing.id, superagent: false, superagentActive: false,
+    ownerOpenIds: existing.ownerOpenIds });
   assert.equal(verified, before);
   await fx.controller.updateSuperagent(existing.id, true);
   const on = await fx.controller.inboundStatus(existing.id);

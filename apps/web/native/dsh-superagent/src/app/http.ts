@@ -64,6 +64,8 @@ export interface HttpHost {
     Promise<{ branch: string; target: string; pushed?: true; pushError?: string }>
   /** Removes an ended ticket's linked worktree and branch. */
   discardTicket(id: string): Promise<void>
+  /** Deletes an idle Thread with its messages and Decisions, refusing one that has Tickets or work waiting. */
+  deleteThread(key: string): void
   /** Rebases an ended ticket's branch onto the repository's checked-out branch. */
   rebaseTicket(id: string): Promise<{ branch: string; target: string }>
   /** Runs the executor's check command in an ended ticket's worktree. */
@@ -298,6 +300,7 @@ function routes(runtime: HttpHost): Routes {
       const removed = runtime.engine.unsubscribe(params.key)
       return { removed, thread: params.key, context_delivery: await runtime.sessions.delivery(`subscription:${params.key}`) }
     },
+    'POST threads/:key/delete': ({ params }) => { runtime.deleteThread(params.key); return { deleted: true } },
     'POST triggers/:id/requeue': ({ params }) => {
       const queued = runtime.engine.reevaluate(params.id)
       runtime.requestPass()

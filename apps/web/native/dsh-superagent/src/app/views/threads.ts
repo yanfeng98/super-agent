@@ -1,5 +1,5 @@
 /** Thread list, timeline detail, cross-entity search, and decision list views. */
-import { latestReport, threadKey, type Thread, type Ticket, type Trigger } from '../../core/index.ts'
+import { canDeleteThread, latestReport, threadKey, type Thread, type Ticket, type Trigger } from '../../core/index.ts'
 import type { ThreadFilter } from '../api.ts'
 import type { TextCache } from '../cache.ts'
 import { awaitingEval, channelLink, dayAgo, decisionView, newestFirst, page, snapshot, threadSummary, threadTitle, ticketLine,
@@ -42,7 +42,7 @@ export function threadDetail(host: ViewHost, key: string, before: string | undef
   const first = store.read.firstTrigger(key)
   const url = attribute(thread.meta.url) ?? first?.url ?? (first?.channel ? channelLink(view, first.channel).url : undefined)
   // `context` lists tickets whose Executor follows this thread for context only (messages reach them without granting authority).
-  return { ...threadSummary(view, thread), url, context: thread.context ?? [],
+  return { ...threadSummary(view, thread), url, context: thread.context ?? [], deletable: canDeleteThread(thread),
     correlated: thread.correlated.map(other => {
       const value = store.threads.get(other)
       return { key: other, title: value ? threadTitle(store, value) : other }

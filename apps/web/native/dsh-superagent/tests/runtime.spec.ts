@@ -588,6 +588,18 @@ it('syncs a Source\'s list once its plugin loads after dsh-superagent started', 
   await vi.waitFor(() => expect(next.health['sync:feishu']).toMatchObject({ state: 'ready' }))
 })
 
+it('adopts the handoff bot\'s owners when the Feishu Source loads after startup, and keeps the senders already listed', async () => {
+  const next = await restart()
+  await next.ready
+  const policy = next.store.settings().policy
+  await next.settings.save('policy', { ...policy, sources: { ...policy.sources,
+    feishu: { allowed: [{ id: 'ou_bob', name: 'Bob' }], syncChat: '' } } }, next.store.blockRevision('policy'), 'panel')
+  // The plugin row that registers the Feishu Source loads after dsh-superagent is ready, as the bundle mounts it.
+  im.inboundStatus = async () => ({ version: 1, botId: BOT_ID, superagent: true, superagentActive: true, ownerOpenIds: ['ou_owner'] })
+  next.sources.register(feishuImKind)
+  await vi.waitFor(() => expect(next.store.settings().policy.sources.feishu!.allowed.map(entry => entry.id))
+    .toEqual(['ou_bob', 'ou_owner']))
+})
 it('syncs the Feishu part of the Policy from its sync chat in place, and keeps the Policy version when only the order the chat lists changes', async () => {
   const policy = runtime.store.settings().policy
   await runtime.settings.save('policy', { ...policy, sources: { ...policy.sources, feishu: { allowed: [{ id: 'ou_bob', name: 'Bob' }, { id: MEMBER, name: 'Alice' }], syncChat: CHAT } } }, runtime.store.blockRevision('policy'), 'panel')
@@ -1865,4 +1877,29 @@ it('keeps a standing merge request across a restart', async () => {
   const next = await restart()
   await next.ready
   expect(next.store.tickets.get(ticket.id)?.autoMerge).toBeDefined()
+})
+
+it('deletes an idle Thread with its messages and Decisions, and refuses one a Ticket follows', async () => {
+  // A guest's direct message: recorded, decided as ignored, and followed by no Ticket.
+  const ignored = feishu('71', '在吗', { sender_id: 'ou_guest', chat_type: 'p2p' })
+  await receive(ignored)
+  const key = threadKey(ignored.threads[0]!)
+  expect(runtime.store.decisions.byThread(key).map(decision => decision.kind)).toEqual(['ignore'])
+  runtime.deleteThread(key)
+  expect(runtime.store.threads.get(key)).toBeUndefined()
+  expect(runtime.store.triggers.get(ignored.id)).toBeUndefined()
+  expect(runtime.store.decisions.byThread(key)).toEqual([])
+  expect(() => runtime.deleteThread(key)).toThrow(new UserError('unknownThread', { thread: key }))
+
+  // Messages waiting for a Decision keep the Thread too.
+  const waiting = feishu('73', '@bot 修一下回归')
+  runtime.receive(waiting)
+  const waitingKey = threadKey(waiting.threads[0]!)
+  expect(() => runtime.deleteThread(waitingKey)).toThrow(new UserError('threadBusy', { thread: waitingKey }))
+  await runtime.idle()
+
+  const { trigger } = await acceptedTicket(feishu('72', '@bot 修一下回归'))
+  const busy = threadKey(trigger.threads[0]!)
+  expect(() => runtime.deleteThread(busy)).toThrow(new UserError('threadBusy', { thread: busy }))
+  expect(runtime.store.threads.get(busy)).toBeDefined()
 })

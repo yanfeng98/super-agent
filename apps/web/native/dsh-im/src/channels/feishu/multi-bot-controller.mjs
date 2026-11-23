@@ -609,6 +609,7 @@ export class MultiBotDshFeishuController {
       const account = await this.#deliveryAccount(config);
       this.#assertOpen('capability-unavailable');
       return { version: 1, botId, channel: 'feishu', domain: config.domain, account,
+        ownerOpenIds: [...config.ownerOpenIds],
         connected: isConnected(connectionStatus(this.#runtimes.get(botId))),
         superagent: config.superagent === true,
         superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(botId),
@@ -622,7 +623,8 @@ export class MultiBotDshFeishuController {
     return this.#withBotTransition(botId, async () => {
       const config = this.#requireBot(botId);
       return { version: 1, botId, superagent: config.superagent === true,
-        superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(botId) };
+        superagentActive: config.consumerMode === 'external-consumer' && this.#inboundConsumers.has(botId),
+        ownerOpenIds: [...config.ownerOpenIds] };
     });
   }
 

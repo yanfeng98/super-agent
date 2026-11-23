@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { key, threadKey, type OutboundMessage, type Trigger } from '../core/index.ts'
 import { checkedImText } from '../infra/text.ts'
 import { admissionFileKeys, admissionImageKeys, feishuChatLink, SOURCE, withMentionNames } from './feishu-shared.ts'
-import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImHistory, type DshImMessage, type DshImService } from './dsh-im.ts'
+import { dshIm, dshImOf, setDshIm, type DshImBotDescription, type DshImEvent, type DshImHistory, type DshImMessage, type DshImService } from './dsh-im.ts'
 import { runFeishuImBackfill } from './feishu-im-loops.ts'
 import { consumerRetry } from './poll.ts'
 import { KV } from '../kv.ts'
@@ -379,12 +379,16 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
       syncChat: z.string().regex(/^(oc_[a-zA-Z0-9]+)?$/).default(''),
       bots: z.array(z.object({ id: z.string().regex(/^(cli|ou)_[a-zA-Z0-9]+$/), name: z.string().trim().max(100).optional() }).strict())
         .refine(bots => new Set(bots.map(bot => bot.id)).size === bots.length, 'Duplicate bot ids').optional(),
+      /** Owner open_ids already taken into the list once; an id stays here after a person removes it, so it never rejoins. */
+      adoptedOwners: z.array(z.string().regex(/^ou_[a-zA-Z0-9]+$/))
+        .refine(ids => new Set(ids).size === ids.length, 'Duplicate owner ids').optional(),
     }).strict(),
     fields: [
       { key: 'allowed', type: 'rows', label: { zh: '能发起工作的飞书用户', en: 'Feishu users who may originate work' },
+        hint: { zh: '所选机器人的主人在首次同步时加入；从名单里删掉的主人不会再自动加回，之后机器人新增的主人仍会在同步时加入。', en: 'The chosen bot\'s owners join at their first sync; an owner removed from this list never rejoins automatically, while owners added to the bot later still join.' },
         columns: [{ key: 'id', type: 'text', label: { zh: 'open_id', en: 'open_id' }, pattern: 'ou_[a-zA-Z0-9]+' }, { key: 'name', type: 'text', label: { zh: '名字', en: 'Name' }, optional: true }] },
       { key: 'syncChat', type: 'text', pattern: '(oc_[a-zA-Z0-9]+)?', label: { zh: '同步来源群', en: 'Sync chat' }, choose: { zh: '不同步', en: 'Do not sync' },
-        hint: { zh: '同步时，名单变成这个群里的人：新成员加入，离开的人移除，名字取群里的名字。启动时和点同步时进行。', en: 'Syncing makes the list the people in this chat: new members join, people who left are removed, and names follow the chat. It runs at startup and on Sync.' } },
+        hint: { zh: '设置后，名单由这个群的成员加上机器人的主人共同决定：新成员加入，离开的人移除，名字取群里的名字；启动时和点同步时进行。', en: 'When set, the list is this chat\'s members together with the bot\'s owners: new members join, people who left are removed, and names follow the chat. It runs at startup and on Sync.' } },
       { key: 'bots', type: 'rows', label: { zh: '消息可以成为候选的机器人', en: 'Bots whose messages may become candidates' },
         hint: { zh: '名单里的机器人在接收的群里发的消息成为推断的候选，交给评估；它们不能发起明确的请求，也不能停止工单。', en: 'Messages of a bot on this list, in chats the Source receives, become inferred candidates for an assessment; they never make an explicit request or stop a ticket.' },
         columns: [{ key: 'id', type: 'text', label: { zh: 'App ID 或 open_id', en: 'App ID or open_id' }, pattern: '(cli|ou)_[a-zA-Z0-9]+' },
@@ -405,20 +409,43 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     },
     sync: {
       label: { zh: '立即同步', en: 'Sync now' },
-      ready: part => !!part.syncChat,
+      // A bound bot always has owners to adopt; a sync chat also refreshes the people in that chat.
+      ready: (part, config) => !!part.syncChat || !!config.botId,
       async run(host, part, signal) {
         const im = dshIm()
         const botId = host.sources.instance<FeishuConfig>(SOURCE)?.config.botId
-        if (!im?.chatMembersChecked || !botId) throw new Error('Choose an IM Feishu bot first')
-        const described = await im.describeBot(botId)
-        const members = await im.chatMembersChecked(botId, { chatId: String(part.syncChat) },
-          { expectedFingerprint: described.account.fingerprint, signal: signal ?? AbortSignal.timeout(30_000) })
-        const users = new Map(members.users.map(user => [user.id, user.name ?? '']))
-        const known = new Set(part.allowed.map(entry => entry.id))
-        return { ...part, allowed: [
-          ...part.allowed.filter(entry => users.has(entry.id)).map(entry => ({ ...entry, name: users.get(entry.id) || entry.name })),
-          ...members.users.filter(user => !known.has(user.id)).map(user => ({ id: user.id, name: user.name ?? '' })),
-        ] }
+        if (!im) throw new Error('dsh-im is not mounted, so the handoff bot\'s owners cannot be read')
+        if (!botId) throw new Error('Choose an IM Feishu bot first')
+        // The handoff status is a local read; the account is verified only when a chat's members must be read.
+        const status = im.inboundStatus ? await im.inboundStatus(botId) : undefined
+        let described: DshImBotDescription | undefined
+        let allowed = part.allowed
+        if (part.syncChat) {
+          if (!im.chatMembersChecked) throw new Error('This dsh-im does not expose Feishu chat members')
+          described = await im.describeBot(botId)
+          const members = await im.chatMembersChecked(botId, { chatId: String(part.syncChat) },
+            { expectedFingerprint: described.account.fingerprint, signal: signal ?? AbortSignal.timeout(30_000) })
+          const users = new Map(members.users.map(user => [user.id, user.name ?? '']))
+          const known = new Set(allowed.map(entry => entry.id))
+          allowed = [
+            ...allowed.filter(entry => users.has(entry.id)).map(entry => ({ ...entry, name: users.get(entry.id) || entry.name })),
+            ...members.users.filter(user => !known.has(user.id)).map(user => ({ id: user.id, name: user.name ?? '' })),
+          ]
+        }
+        // The people who turned the handoff on in dsh-im already authorized this bot's messages, so the Source takes each
+        // into its allowed senders once instead of asking for the same identities again: without a sync chat the list is a
+        // person's to edit, so an owner removed from it never rejoins, while an owner added to the bot later still joins at
+        // the next sync. With a sync chat the roster governs, and the owners always stand beside its members.
+        const owners = (status?.ownerOpenIds ?? (described ??= await im.describeBot(botId)).ownerOpenIds ?? [])
+          .filter(id => /^ou_[a-zA-Z0-9]+$/.test(id))
+        // The kind interface types a Policy part generically; `policyPart` parses `adoptedOwners` through the schema above.
+        const seen: readonly string[] = Array.isArray(part.adoptedOwners) ? part.adoptedOwners : []
+        const adoptedOwners = [...new Set([...seen, ...owners])]
+        const present = new Set(allowed.map(entry => entry.id))
+        const joining = (part.syncChat ? owners : owners.filter(id => !seen.includes(id)))
+          .filter(id => !present.has(id))
+        return { ...part, allowed: [...allowed, ...joining.map(id => ({ id }))],
+          ...adoptedOwners.length ? { adoptedOwners } : {} }
       },
     },
   },

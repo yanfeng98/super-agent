@@ -166,6 +166,16 @@ export function ThreadPage({ id, target }: { id: string; target?: string }) {
         </Button>
       </div>}
     </Section>
+    {data.deletable && <div className="dt-danger-zone">
+      <span className="dt-hint">{t('deleteThreadHint')}</span>
+      <ConfirmButton variant="outline" icon="trash" label={t('deleteThread')} title={t('deleteThreadTitle')}
+        message={t('deleteThreadConfirm', { title: data.title })}
+        onConfirm={async () => {
+          await call('POST threads/:key/delete', { key: data.key })
+          notify(t('threadDeleted'))
+          navigate({ page: 'trigger' })
+        }} />
+    </div>}
     {data.tickets.length > 0 && <div className="dt-danger-zone">
       <span className="dt-hint">{t('unsubscribeHint')}</span>
       <ConfirmButton variant="outline" icon="unsubscribe" label={t('unsubscribe')} title={t('unsubscribeTitle')}

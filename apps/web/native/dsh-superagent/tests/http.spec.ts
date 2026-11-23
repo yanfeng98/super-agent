@@ -266,3 +266,15 @@ it('keeps a refused note range a structured error the panel can localize', async
   expect(await call('POST', 'tickets/t1/notes', { file: 'src/a.ts', endLine: 9, text: '缺起点' })).toMatchObject({ status: 400,
     body: { code: 'invalidNoteRange' } })
 })
+
+it('deletes a Thread through its panel route and reports a refusal with its code', async () => {
+  const deleted: string[] = []
+  const call = serve({ deleteThread: (key: string) => {
+    if (key === 'feishu:busy') throw new UserError('threadBusy', { thread: key })
+    deleted.push(key)
+  } })
+  expect(await call('POST', 'threads/feishu%3A1/delete')).toEqual({ status: 200, body: { deleted: true } })
+  expect(deleted).toEqual(['feishu:1'])
+  expect(await call('POST', 'threads/feishu%3Abusy/delete')).toMatchObject({ status: 400,
+    body: { code: 'threadBusy', values: { thread: 'feishu:busy' } } })
+})
