@@ -127,7 +127,8 @@ export class Runtime extends Service implements SourceHost {
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
       const store = opened = this.store = new Store(join(machine.stateDir, 'orchestrator.sqlite'), report)
       // A Feishu Topic Thread an earlier build keyed by its Topic id is re-keyed to the message that opened the Topic.
-      const rekeyed = rekeyFeishuTopicThreads(store)
+      const rekeyed = rekeyFeishuTopicThreads(store, (error, thread) =>
+        ctx.logger.warn('dsh-superagent: re-keying Feishu Topic Thread %s failed: %s', thread.key, String(error)))
       if (rekeyed) ctx.logger.info('dsh-superagent: re-keyed %d Feishu Topic Thread(s) to the messages that opened them', rekeyed)
       const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart })
       const deployed = () => setup.configured()
@@ -293,10 +294,6 @@ export class Runtime extends Service implements SourceHost {
     catch (error) { return { diff: '', truncated: false, files: [], base, error: String(error) } }
   }
   /**
-   * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
-   * failure is logged and the ticket is unaffected.
-   */
-  /**
    * Posts a ticket's open question in the conversation that raised it, so the person is asked without waiting for the main
    * Session. The message ID is the one an attention reply uses, so that reply reuses this message instead of queueing the
    * question twice.
@@ -314,7 +311,10 @@ export class Runtime extends Service implements SourceHost {
       this.ctx.logger.warn('dsh-superagent: asking ticket %s\'s question in its conversation failed: %s', ticket.id, String(error))
     }
   }
-
+  /**
+   * POSTs a local ticket's question or ending to the local Source's webhook, when one is configured. Best effort: a
+   * failure is logged and the ticket is unaffected.
+   */
   private notifyWebhook(event: Extract<DomainEvent, { type: 'ticket.attention' } | { type: 'ticket.ended' }>): void {
     const ticket = this.store.tickets.get(event.data.ticketId)
     if (!ticket) return
@@ -1463,13 +1463,20 @@ export class Runtime extends Service implements SourceHost {
     if (!ref) return undefined
     const key = threadKey(ref)
     const thread = this.store.threads.get(key)
+    // A direct chat gives each message a Thread of its own, so its running Ticket is found by the conversation instead.
+    const conversation = trigger.addressed === 'direct' ? trigger.channel?.thread : undefined
     // A Thread the store never saw holds no ticket, so a stop there has nothing to end and needs no admission decision.
-    if (!thread) return []
-    const tickets = thread.subscriptions.flatMap(id => {
-      const ticket = this.store.tickets.get(id)
-      return ticket && !thread.context?.includes(id) ? [ticket] : []
-    })
-    if (!settingsPolicy(this.store.settings(), this.sources).gate(trigger, thread, tickets).admissible) return undefined
+    if (!thread && !conversation) return []
+    const tickets = conversation
+      ? this.store.tickets.open().filter(ticket => ticket.channels.some(channel =>
+          channel.thread === conversation && channel.source === trigger.source))
+      : thread!.subscriptions.flatMap(id => {
+          const ticket = this.store.tickets.get(id)
+          return ticket && !thread!.context?.includes(id) ? [ticket] : []
+        })
+    const gateThread = thread ?? { key, ref, createdAt: new Date().toISOString(), subscriptions: [], correlated: [],
+      pending: [], meta: {} }
+    if (!settingsPolicy(this.store.settings(), this.sources).gate(trigger, gateThread, tickets).admissible) return undefined
     const stopped: Ticket[] = []
     for (const ticket of tickets) {
       if (ticket.ended || ticket.merged || ticket.cleaned || ticket.discarded) continue

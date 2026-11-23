@@ -842,7 +842,8 @@ export class FeishuRuntime {
       hasImages: hasInboundImages(message), hasFiles: hasInboundFiles(message), isCommand: false,
     });
     if (access.allowed) return true;
-    this.#logger.info?.('[dsh-feishu] a handed-over message was refused by the bot access policy:', access.reason ?? 'denied');
+    // Warn rather than debug: a refusal is silent to the sender, so the log is where an admin sees why nothing answers.
+    this.#logger.warn?.('[dsh-feishu] a handed-over message was refused by the bot access policy:', access.reason ?? 'denied');
     return false;
   }
 

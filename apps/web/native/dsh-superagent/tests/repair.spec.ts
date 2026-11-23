@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
 import { rekeyFeishuTopicThreads } from '../src/app/repair.ts'
 import { KV } from '../src/kv.ts'
@@ -85,5 +85,21 @@ it('leaves a Topic Thread alone when no opening message is known', () => {
   store.threads.save(thread('oc_team:omt_9', { subscriptions: ['ticket_1'], meta: { threadId: 'omt_9' } }))
   expect(rekeyFeishuTopicThreads(store)).toBe(0)
   expect(store.threads.get('feishu:oc_team:omt_9')).toBeDefined()
+  store.close()
+})
+
+it('leaves a Thread it cannot re-key for the next start instead of failing the start', () => {
+  const store = new Store(join(directory, 'orchestrator.sqlite'))
+  const oldKey = 'feishu:oc_team:omt_7'
+  store.threads.save(thread('oc_team:omt_7', { subscriptions: ['ticket_1'], meta: { threadId: 'omt_7' } }))
+  store.triggers.save(trigger('om_seven', 'oc_team:omt_7', '2026-01-01T00:00:00.000Z'))
+  const failure = vi.spyOn(store.tickets, 'list').mockImplementation(() => { throw new Error('disk busy') })
+  const reported: string[] = []
+  expect(rekeyFeishuTopicThreads(store, (error, failed) => reported.push(`${failed.key}: ${String(error)}`))).toBe(0)
+  expect(reported).toEqual([`${oldKey}: Error: disk busy`])
+  // Nothing was rewritten, so the next start tries again.
+  expect(store.threads.get(oldKey)).toBeDefined()
+  expect(store.threads.get('feishu:oc_team:om_seven')).toBeUndefined()
+  failure.mockRestore()
   store.close()
 })

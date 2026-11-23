@@ -1806,6 +1806,19 @@ it('records a panel notification when a worker asks a person and when the ticket
   expect(runtime.notifications().unread).toBe(2)
 })
 
+it('finds the running Ticket of a direct chat, whose messages each open their own Thread', async () => {
+  const settings = runtime.store.settings()
+  // A direct chat needs an admitted sender before its Ticket can exist.
+  await runtime.settings.save('policy', { ...settings.policy, sources: { ...settings.policy.sources,
+    feishu: { allowed: [{ id: MEMBER }] } } }, runtime.store.blockRevision('policy'), 'panel')
+  const { ticket } = await acceptedTicket(feishu('1', '修一下回归', { chat_type: 'p2p' }))
+  const context = runtime.context(feishuKind)
+  // The /stop message is its own Thread in a direct chat, so the conversation is what names the Ticket.
+  const stopped = await context.tickets.stopOnThread(feishu('9', '/stop', { chat_type: 'p2p' }))
+  expect((stopped ?? []).map(item => item.id)).toEqual([ticket.id])
+  expect(runtime.store.tickets.get(ticket.id)!.ended).toMatchObject({ reason: 'a person asked in the conversation' })
+})
+
 it('posts a worker\'s question where the person wrote, and an attention reply reuses that message', async () => {
   const { ticket, sessionId } = await acceptedTicket()
   await runTool(sessionId, 'orchestrator_report', { state: 'progress', summary: 'need a decision', human_action: 'Which color?' })

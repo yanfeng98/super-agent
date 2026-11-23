@@ -113,9 +113,10 @@ function rekey(store: Store, old: Thread, target: ThreadRef): void {
  * The repair is idempotent: a re-keyed Thread no longer has a Topic id, and a Thread whose opening message is unknown is
  * left alone.
  * @param store - The opened store, after schema migrations.
+ * @param report - Receives a Thread the repair could not re-key, which it leaves for the next start.
  * @returns How many Threads it re-keyed.
  */
-export function rekeyFeishuTopicThreads(store: Store): number {
+export function rekeyFeishuTopicThreads(store: Store, report?: (error: unknown, thread: Thread) => void): number {
   let rekeyed = 0
   for (const thread of store.threads.list()) {
     const topic = topicOf(thread)
@@ -124,7 +125,9 @@ export function rekeyFeishuTopicThreads(store: Store): number {
     if (!rootId) continue
     const target = { source: 'feishu', id: `${topic.chatId}:${rootId}` }
     if (threadKey(target) === thread.key) continue
-    store.atomic(() => rekey(store, thread, target))
+    // One unreadable Thread must not keep the Host from starting; its own transaction rolls back and the next start retries it.
+    try { store.atomic(() => rekey(store, thread, target)) }
+    catch (error) { report?.(error, thread); continue }
     rekeyed += 1
   }
   return rekeyed
