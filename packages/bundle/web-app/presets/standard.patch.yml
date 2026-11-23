@@ -150,3 +150,16 @@
               # schemas (plus the 3 shared resource tools) cost about 8k request
               # tokens per agent that mounts it.
               toolLoading: eager
+          # rea: evidence-based reverse engineering of shipped binaries,
+          # applications and runtime behavior. `pnpm run build` installs and
+          # builds the source vendored at native/rea. Its hot-cold catalog
+          # advertises five tools and loads the rest through discover_tools, so
+          # on-demand keeps the 263-tool surface out of the context until an
+          # agent needs it; the bundled skill explains the extra load_tools step.
+          - id: skill-rea
+            name: '@deepseek-ai/dsh-skill-rea'
+          - id: mcp-rea
+            name: '@deepseek-ai/dsh-rea'
+            config:
+              toolLoading: on-demand
+              catalogProfile: hot-cold

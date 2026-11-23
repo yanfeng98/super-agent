@@ -25,3 +25,7 @@ locales.ts dsh-review-layer=test
 snapshots/** dsh-review-layer=test
 *.i18n.yaml dsh-review-layer=test
 packages/*/*/src/types.ts dsh-review-layer=interface
+
+# Vendored rea keeps upstream bytes for source syncs: its license texts and a
+# few bridge sources carry trailing spaces or a final blank line.
+native/rea/** whitespace=-trailing-space,-space-before-tab

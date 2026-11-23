@@ -610,7 +610,7 @@ describe('gate graph validation', () => {
 
     expect(scripts['check:ci:windows-observational-ready']).toBe('tsx scripts/run-gates.ts ci-windows-observational-ready')
     expect(scripts).not.toHaveProperty('check:ci:windows-observational')
-    const completeOnly = new Set(['build', 'windows-site', 'native-system', 'rust-anything', 'coverage', 'coverage-exempt-heavy'])
+    const completeOnly = new Set(['build', 'windows-site', 'native-system', 'rust-anything', 'rea', 'coverage', 'coverage-exempt-heavy'])
     const shared = complete.filter(gate => !completeOnly.has(gate.id))
     expect(ready.map(gate => gate.id).sort()).toEqual([...shared.map(gate => gate.id), 'docs-site-build'].sort())
     expect(ready.some(gate => gate.id === 'build')).toBe(false)
@@ -749,18 +749,19 @@ describe('gate graph validation', () => {
     // so a step added to one cannot silently leave the others. The lane sets
     // DSH_COVERAGE_TEST_TIMEOUT_MS; vitest.config.ts reads it per inline
     // project (coverageTestTimeoutOptions), so the gate passes no budget flag.
-    const [nativeBuild, rustBuild, unitRun, ...rest] = (scripts.test ?? '').split(' && ')
+    const [nativeBuild, rustBuild, reaBuild, unitRun, ...rest] = (scripts.test ?? '').split(' && ')
     expect(rest).toEqual([])
     for (const budget of ['15000', undefined]) {
       const gates = withEnv('DSH_COVERAGE_TEST_TIMEOUT_MS', budget, () =>
         withPnpmEntrypoint(() => gatesForMode('ci-unit')))
-      expect(gates.map(gate => gate.id)).toEqual(['native-system', 'rust-anything', 'unit'])
+      expect(gates.map(gate => gate.id)).toEqual(['native-system', 'rust-anything', 'rea', 'unit'])
       expect(gates[0]).toMatchObject({ displayCommand: nativeBuild })
       expect(gates[1]).toMatchObject({ displayCommand: rustBuild })
-      expect(gates[2]?.displayCommand).toBe(`pnpm exec ${unitRun}`)
-      expect(gates[2]).toMatchObject({
+      expect(gates[2]).toMatchObject({ displayCommand: reaBuild })
+      expect(gates[3]?.displayCommand).toBe(`pnpm exec ${unitRun}`)
+      expect(gates[3]).toMatchObject({
         label: 'test',
-        needs: ['native-system', 'rust-anything'],
+        needs: ['native-system', 'rust-anything', 'rea'],
         streamOutput: true,
         args: ['/private/pnpm.cjs', 'exec', 'vitest', 'run'],
       })
@@ -789,10 +790,11 @@ describe('gate graph validation', () => {
 
     expect(subject.map(item => [item.id, item.needs ?? []])).toEqual([
       ['native-system', []],
-      ['coverage', ['native-system']],
+      ['rea', []],
+      ['coverage', ['native-system', 'rea']],
       ...ownsExempt ? [['coverage-exempt-heavy', ['native-system']]] : [],
     ])
-    expect(subject[1]).toMatchObject({
+    expect(subject[2]).toMatchObject({
       args: ['/private/pnpm.cjs', 'run', 'test:coverage:partitioned'],
       env: { DSH_COVERAGE_EXEMPT_HEAVY: '1' },
     })

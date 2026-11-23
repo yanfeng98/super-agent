@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "rea",
+    "description": "Mount the rea MCP server so an agent can reverse engineer binaries, applications and runtime behavior with evidence."
+  }
+}

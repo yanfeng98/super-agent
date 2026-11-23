@@ -31,6 +31,7 @@ The client owns each configured connection, the manager runs a settings-driven f
 | [`mcp-manager/`](mcp-manager/README.md) | Manage a settings-driven fleet of mcp-client instances: live add/edit/enable/disable/delete, status, restart, probe |
 | [`mcp-resources/`](mcp-resources/README.md) | Discover and read resources through shared tools with explicit server selection |
 | [`rust-anything/`](rust-anything/README.md) | Mount the rust-anything MCP server, with its CLI compiled from the crate vendored at `native/rust-anything` |
+| [`rea/`](rea/README.md) | Mount the rea MCP server, with its server built from the source vendored at `native/rea` |
 
 -----
 

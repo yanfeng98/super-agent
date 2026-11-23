@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "rea",
+    "description": "挂载 rea MCP server，让 Agent 基于证据逆向分析二进制、应用与运行时行为。"
+  }
+}

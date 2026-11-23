@@ -3431,6 +3431,41 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-pwsh-sandbox -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-rea -->
+<a id="deepseek-aidsh-rea"></a>
+
+## `@deepseek-ai/dsh-rea`
+
+- `inject`: `tools`
+- `source`: [`packages/mcp/rea/src/index.ts:42`](../packages/mcp/rea/src/index.ts)
+
+```ts config-catalog
+/** Plugin config: the runtime, the advertised catalog, and the transport budgets. */
+export interface Config {
+  /** Node.js executable to run the launcher; defaults to the Host's own runtime. */
+  command?: string
+  /** Entry script to run instead of the vendored `native/rea/scripts/rea.mjs`. */
+  launcher?: string
+  /**
+   * `full` advertises all 263 tools on connect (about 353 KB of schemas);
+   * `hot-cold` advertises five and loads the rest through `discover_tools`.
+   */
+  catalogProfile: 'full' | 'hot-cold'
+  /**
+   * `on-demand` lists the advertised tools in the system prompt and loads the
+   * ones an agent asks for; `eager` puts every schema in every request.
+   */
+  toolLoading: 'eager' | 'on-demand'
+  /** Per-`tools/call` budget in milliseconds. */
+  toolCallTimeoutMs: number
+  /** Budget for the stdio probe, connection and initial tool sync. */
+  startupTimeoutMs: number
+  /** Extra environment for the server process. */
+  env: Record<string, string>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-rea -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -4067,6 +4102,22 @@ export interface Config {
 export type PythonEnvironment = 'workspace-dependencies' | 'user'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-rea -->
+<a id="deepseek-aidsh-skill-rea"></a>
+
+## `@deepseek-ai/dsh-skill-rea`
+
+- `source`: [`packages/skill/skill-rea/src/index.ts:26`](../packages/skill/skill-rea/src/index.ts)
+
+```ts config-catalog
+/** Bundled skill asset location. */
+export interface Config {
+  /** Absolute assets directory containing the skill directory; defaults to the packaged assets. */
+  assetRoot?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-rea -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-rust-anything -->
 <a id="deepseek-aidsh-skill-rust-anything"></a>

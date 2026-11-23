@@ -31,6 +31,7 @@ kind: "package-group"
 | [`mcp-manager/`](mcp-manager/README.zh.md) | 管理设置驱动的 mcp-client 实例编队：运行时增改启停删、状态、重启、探测 |
 | [`mcp-resources/`](mcp-resources/README.zh.md) | 通过显式选择服务器的共享工具发现和读取资源 |
 | [`rust-anything/`](rust-anything/README.zh.md) | 挂载 rust-anything MCP server，CLI 由 `native/rust-anything` 的 vendored 源码编译 |
+| [`rea/`](rea/README.zh.md) | 挂载 rea MCP server，server 由 `native/rea` 的 vendored 源码构建 |
 
 -----
 

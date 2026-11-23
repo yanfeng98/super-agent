@@ -371,6 +371,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-mcp-client` | yes | MCP client bridge: connects to MCP servers and registers their tools on ctx.tools |
 | `@deepseek-ai/dsh-mcp-manager` | yes | MCP server manager: a settings-driven fleet of mcp-client instances with runtime status, restart, and probe |
 | `@deepseek-ai/dsh-mcp-resources` | no | Scoped MCP resource discovery and reading through shared model tools |
+| `@deepseek-ai/dsh-rea` | yes | Mounts the rea MCP server (evidence-based reverse engineering of binaries, apps and runtime behavior) from the source vendored at native/rea |
 | `@deepseek-ai/dsh-rust-anything` | yes | Mounts the rust-anything MCP server (verified, unit-by-unit ports to Rust) from the crate vendored at native/rust-anything |
 
 ## plan
@@ -468,6 +469,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-skill-engineering` | yes | Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, domain modeling, and writing |
 | `@deepseek-ai/dsh-skill-filesystem` | yes | Local filesystem skill provider for the DeepSeek Harness |
 | `@deepseek-ai/dsh-skill-office` | yes | Bundled Word, PowerPoint, and Excel workflows and Office operation guidance |
+| `@deepseek-ai/dsh-skill-rea` | yes | Built-in rea skill: reverse engineer binaries, applications and runtime behavior from evidence |
 | `@deepseek-ai/dsh-skill-rust-anything` | yes | Built-in rust-anything skill: profile, plan, bridge, record, port, diff, bench, shadow and gate a verified migration to Rust |
 | `@deepseek-ai/dsh-tool-skill` | yes | Model-facing skill loading tool for the DeepSeek Harness |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | yes | The load_workspace_dependencies tool: absolute paths into a bundled Python, Node.js, and pnpm payload |

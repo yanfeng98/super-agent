@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Compétence d'ingénierie inverse",
+    "description": "Fournit le flux de travail rea intégré : inspecte les binaires, applications et comportements d'exécution à partir de preuves."
+  }
+}

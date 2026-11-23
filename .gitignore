@@ -39,6 +39,11 @@ python/**/.pytest_cache/
 apps/web/dist/
 native/rust-anything/target/
 native/rust-anything/bin/
+native/rea/node_modules/
+native/rea/dist/
+native/rea/skills/
+native/rea/.turbo/
+native/rea/.cache/
 apps/cli/docs/
 .artifacts/
 .dsh-build/

@@ -99,6 +99,9 @@ export function buildGates(
     // The rust-anything MCP server compiles from its vendored crate; the
     // staged executable is what the Web standard preset spawns at runtime.
     gates.push(pnpmGate('rust-anything', 'rust-anything CLI', ['run', 'build:rust-anything'], [], env))
+    // The rea MCP server installs and builds its vendored npm tree; the Web
+    // standard preset spawns the launcher that build produces.
+    gates.push(pnpmGate('rea', 'rea MCP server', ['run', 'build:rea'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push(libraryGate(step, step.id === 'host-src' ? ['native', ...step.needs] : step.needs, env))
     }

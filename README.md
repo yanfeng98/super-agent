@@ -22,7 +22,7 @@ DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来
 
 ### 从源码运行
 
-安装 `Node.js`（≥ 24.9）、pnpm 11.28.5（推荐 `corepack enable pnpm`）与 Rust（通过 [`rustup`](https://rustup.rs) 安装；构建按 crate 固定的 1.97.0 拉取工具链），然后：
+安装 `Node.js`（≥ 24.22.3，与 `package.json` 的 `engines` 一致）、pnpm 11.28.5（推荐 `corepack enable pnpm`）与 Rust（通过 [`rustup`](https://rustup.rs) 安装；构建按 crate 固定的 1.97.0 拉取工具链），然后：
 
 ```sh
 git clone https://github.com/yanfeng98/super-agent.git
@@ -32,7 +32,7 @@ pnpm run build
 pnpm dsh web
 ```
 
-`pnpm run build` 会生成运行所需的产物，其中包含从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 现场编译的 rust-anything CLI（首次几分钟，中间产物在 `native/rust-anything/target/`，不纳入版本控制；缺少 `cargo` 时整个构建会失败）；`pnpm dsh web` 不会重新构建：宿主端代码由 tsx 直接从 `src` 运行，浏览器端加载构建出的 bundle 与 `apps/web/dist`。首次运行前必须构建；之后宿主端改动重启进程即可生效，浏览器端改动需要重新构建。
+`pnpm run build` 会生成运行所需的产物，其中包含从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 现场编译的 rust-anything CLI（首次几分钟，中间产物在 `native/rust-anything/target/`，不纳入版本控制；缺少 `cargo` 时整个构建会失败），以及从 [`native/rea`](native/rea/NATIVE.md) 安装并构建的 rea MCP server（首次约 3 分钟，`node_modules/` 与 `dist/` 不纳入版本控制，需要网络）；`pnpm dsh web` 不会重新构建：宿主端代码由 tsx 直接从 `src` 运行，浏览器端加载构建出的 bundle 与 `apps/web/dist`。首次运行前必须构建；之后宿主端改动重启进程即可生效，浏览器端改动需要重新构建。
 
 该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.zh.md)。
 
@@ -60,6 +60,7 @@ pnpm dsh web
 | Superagent | 侧栏「Superagent」→「执行」→「新建工单」，默认只用本地工单、不需要远端账号、没有 GitHub 集成；见[快速开始](apps/web/native/dsh-superagent/docs/006-deployment.md#quick-start) |
 | 工程工作流技能 | 32 个都在 `/` 菜单里可点名，其中 11 个还能由模型按任务自动加载；见[使用指南](docs/user/guide/engineering-skills.zh.md)与[技能包](packages/skill/skill-engineering/README.zh.md) |
 | 启动片头 | 默认播放，点按钮或按 Esc 跳过；设置页可调序列参数、换用自己的片头视频，见[启动片头包](packages/client/ui-boot-animation/README.zh.md) |
+| 逆向分析 | `standard` preset 自带 rea MCP server 与 `dsh-rea` 技能，用于分析已发布的二进制、应用与运行时行为；见[rea 集成报告](rea-integration.zh.md) |
 
 ### 把代码迁移到 Rust
 
@@ -68,6 +69,14 @@ pnpm dsh web
 CLI 由 `pnpm run build` 从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 编译到 `native/rust-anything/bin/rust-anything`，终端里可以直接用同一套命令（`analyze`、`gate`、`doctor` 等）。生成的 crate 写在**你指定的目标仓库**（要迁移的那个，不是本仓库）的 `rust/<unit>-rs/`，直接出现在它的工作树里；`record`、`bench`、`shadow` 和 `app record` 会真的运行目标项目的代码（`record --from-tests -- <测试命令>` 还会跑它自己的测试套件），这些代码以你的用户身份读写文件、访问网络，所以迁移在副本或临时 worktree 上做，并且不要把生产凭据留在环境里。不需要这项能力时，删掉 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml) 里的 `mcp-rust-anything` 行；嫌 22 个工具占请求 token，就把该行的 `toolLoading` 改成 `on-demand`，重启后生效。
 
 单元级流程见[rust-anything 使用指南](docs/user/guide/rust-anything.zh.md)，整应用重写见[技能正文](packages/skill/skill-rust-anything/assets/dsh-rust-anything/whole-app.md)，源码基线与上游同步见 [NATIVE.md](native/rust-anything/NATIVE.md)。
+
+### 逆向分析已发布的应用
+
+`standard` preset 的会话同时挂载 rea MCP server 与随包技能 `dsh-rea`，不需要安装：说一句「分析这个应用里的搜索是怎么实现的」「比较这两个构建」或「从这个二进制里还原这个功能」，Agent 会先按目标物（原生二进制、ASAR/Electron 应用、.NET 程序集、APK、网站等）选入口，再用 `discover_tools` 按需加载 263 个工具里相关的那几个。默认的 `hot-cold` 目录只先 advertise 5 个工具，上下文不会因为完整工具面而膨胀；加载工具本身会改动系统提示，从那一刻起热 prefix 失效。
+
+server 由 `pnpm run build` 从 [`native/rea`](native/rea/NATIVE.md) 的 vendored 源码安装并构建，运行在 Host 自己的 Node.js 上；深度原生分析仍需要另行安装的 Hopper、Ghidra、IDA 或 JADX，工具会报告 provider 是否可用。运行时观察、截图与环境录制会以你的用户身份执行被分析的目标，所以请在副本上操作，并且不要把生产凭据留在环境里。CLI 是同一份构建：在仓库根目录运行 `node native/rea/scripts/rea.mjs <command>`。不需要这项能力时，删掉 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml) 里的 `mcp-rea` 行。
+
+工具面、目录配置与已知限制见 [rea 包说明](packages/mcp/rea/README.zh.md)，技能见 [skill-rea](packages/skill/skill-rea/README.zh.md)，源码基线与上游同步见 [NATIVE.md](native/rea/NATIVE.md)。
 
 ### 命令行模式
 
@@ -114,6 +123,7 @@ pnpm dsh plugin --profile <名称> add <包名>   # 给已有 profile 安装插�
 | 提供商登录入口 | 模型设置页对「没有密钥可填」且 Host 提供登录流程的路由（当前为 `openai-codex`）显示登录按钮而不是密钥框：弹窗逐条显示流程通知（要打开的页面、设备码），回答问题（如浏览器登录 / 设备码二选一），凭据写入本地凭据存储后该路由立即可用。每个凭据 key 同时只运行一次登录；关闭弹窗即撤回，刷新页面会接回仍在运行的那次，Host 已不持有的尝试报告为「已结束」并可重试；登录刚确认时取消不会把成功显示成取消。 | [`AuthorizationController`](packages/api/settings-controller/src/authorization.ts)（`authorization` Remote namespace）、[`sign-in.ts`](packages/client/ui-settings-models/src/client/sign-in.ts)、[`ProviderSignIn.tsx`](packages/client/ui-settings-models/src/client/ProviderSignIn.tsx)；[用户指南](docs/user/guide/providers.zh.md)、[包契约](packages/client/ui-settings-models/README.zh.md)、[日志](logs/00035-接通提供商登录入口.md) |
 | 内置工程工作流技能 | 每个以 base 为基础的 profile 自带 32 个工程工作流技能：全部可在输入框的 `/` 菜单里点名，其中 11 个还会进入会话技能目录、由模型按任务加载，另外 21 个不进入会话技能目录、只能由用户点名，菜单里标着「仅用户」；技能名统一带 `eng-` 前缀，项目或用户目录里用上游原名的同名技能与它并存，只有同名 `eng-…` 才会覆盖；需要关闭时在 profile patch 里禁用 `skill-engineering` 行。技能文本取自上游 `mattpocock/skills` 的 `main`（MIT），并套用本仓库的 `skill` 工具名与「开新会话」措辞。 | 新包 [`skill-engineering`](packages/skill/skill-engineering/README.zh.md)（随 `dsh-base` 挂载）：[用户指南](docs/user/guide/engineering-skills.zh.md)、[子系统页](docs/subsystems/skills.zh.md)、[日志 00088](logs/00088-内置工程工作流技能.md)。 |
 | rust-anything 迁移能力 | 默认 `standard` preset 的 agent 直接获得 22 个 `mcp__rust-anything__*` 工具、3 个共享资源工具与随包的 `dsh-rust-anything` 技能，用于按单元把 TypeScript/JavaScript、Python、C、Go、Ruby、Java、Kotlin、PHP、C# 代码迁移到 Rust：`analyze` → `bridge` → `record` → 写 `port.rs` → `build`/`diff`/`bench`/`gate`（单个热点函数走 `go`，整应用走 `app_*`）。CLI 源码 vendored 在 [`native/rust-anything`](native/rust-anything/NATIVE.md)，`pnpm run build` 现场编译，不需要全局安装、也不需要下载预编译二进制；每次挂载约 8k tokens，`minimal`/`ptc` 不受影响。 | 新包 [`rust-anything`](packages/mcp/rust-anything/README.zh.md) 与随包技能 [`skill-rust-anything`](packages/skill/skill-rust-anything/README.zh.md)，同挂于 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml)；[使用指南](docs/user/guide/rust-anything.zh.md)；[日志 00099](logs/00099-源码vendored集成rust-anything.md)、[集成报告](rust-anything-integration.zh.md)。 |
+| rea 逆向分析能力 | 默认 `standard` preset 的 agent 获得 rea MCP server 与随包的 `dsh-rea` 技能，用于分析已发布的二进制、托管程序集、Electron/JavaScript 应用、APK、固件、网站与运行时行为：先按目标物选入口，用 `discover_tools` 按需加载 263 个工具中相关的一组，再把证据、推断与未知分开汇报。默认 `hot-cold` 目录只 advertise 5 个工具（约 2.8k tokens），完整 263 个工具按需加载；`minimal`/`ptc` 不受影响。server 源码 vendored 在 [`native/rea`](native/rea/NATIVE.md)，`pnpm run build` 执行 `npm ci` 与上游构建，不需要全局安装、`npx` 或 `rea setup`；深度原生分析仍依赖另行安装的 Hopper/Ghidra/IDA/JADX，工具只报告可用性。 | 新包 [`rea`](packages/mcp/rea/README.zh.md) 与随包技能 [`skill-rea`](packages/skill/skill-rea/README.zh.md)，同挂于 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml)；[集成报告](rea-integration.zh.md)；[日志 00127](logs/00127-内建rea.md)。 |
 | pi-ai 目录升级到 1.6.0 | 模型目录随 `@earendil-works/pi-ai` 1.3.0 → 1.6.0：`openai-codex` 新增 GPT-6.1 Terra 与 GPT-6.2 Astra/Sol，移除被 Codex 后端对 ChatGPT 账号拒绝的 `gpt-5.5` 与 `gpt-5.3-codex-spark`；`openai`、`github-copilot`、`google`、`opencode-go` 等路由的 id 随之增删；服务端 `anthropic` 路由默认改用 message threads；新增 `qwen-token-plan-individual-cn` 路由与若干网关 compat 开关 | [`packages/llm/llm-pi-ai`](packages/llm/llm-pi-ai/README.md)、[`升级指南`](docs/upgrade-guide/v0.2.2-rc.5/pi-ai-catalog-model-removals/guide.zh.md)、[`logs/00110`](logs/00110-pi-ai升级到1.6.0.md) |
 
 ### 移除或收紧的能力

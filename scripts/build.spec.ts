@@ -7,8 +7,9 @@ const root = resolve(import.meta.dirname, '..')
 
 const artifactGraph = {
   'native': [],
-  // Native CLI, IM panel, and proactive-agent builds precede the Web shell.
+  // Native CLI, rea server, IM panel, and proactive-agent builds precede the Web shell.
   'rust-anything': [],
+  'rea': [],
   'host-typert': [],
   'host-src': ['native', 'host-typert'],
   'host-bundle': ['host-src'],

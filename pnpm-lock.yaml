@@ -3695,6 +3695,9 @@ importers:
       '@deepseek-ai/dsh-pwsh-sandbox':
         specifier: workspace:*
         version: link:../../shell/pwsh-sandbox
+      '@deepseek-ai/dsh-rea':
+        specifier: workspace:*
+        version: link:../../mcp/rea
       '@deepseek-ai/dsh-rust-anything':
         specifier: workspace:*
         version: link:../../mcp/rust-anything
@@ -3719,6 +3722,9 @@ importers:
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../skill/skill-office
+      '@deepseek-ai/dsh-skill-rea':
+        specifier: workspace:*
+        version: link:../../skill/skill-rea
       '@deepseek-ai/dsh-skill-rust-anything':
         specifier: workspace:*
         version: link:../../skill/skill-rust-anything
@@ -16058,6 +16064,24 @@ importers:
         specifier: workspace:*
         version: link:../../core/tools
 
+  packages/mcp/rea:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: workspace:*
+        version: link:../mcp-client
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+
   packages/mcp/rust-anything:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -18342,6 +18366,28 @@ importers:
       '@deepseek-ai/dsh-tool-executor-ptc':
         specifier: workspace:*
         version: link:../../core/tool-executor-ptc
+
+  packages/skill/skill-rea:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      yaml:
+        specifier: ^2.4.2
+        version: 2.9.0
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:~
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:~
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../skill
 
   packages/skill/skill-rust-anything:
     dependencies:
@@ -21125,6 +21171,9 @@ importers:
       '@deepseek-ai/dsh-pwsh-sandbox':
         specifier: workspace:*
         version: link:../../packages/shell/pwsh-sandbox
+      '@deepseek-ai/dsh-rea':
+        specifier: workspace:*
+        version: link:../../packages/mcp/rea
       '@deepseek-ai/dsh-repeat-tool-reminder':
         specifier: workspace:*
         version: link:../../packages/guard/repeat-tool-reminder
@@ -21206,6 +21255,9 @@ importers:
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../packages/skill/skill-office
+      '@deepseek-ai/dsh-skill-rea':
+        specifier: workspace:*
+        version: link:../../packages/skill/skill-rea
       '@deepseek-ai/dsh-skill-rust-anything':
         specifier: workspace:*
         version: link:../../packages/skill/skill-rust-anything

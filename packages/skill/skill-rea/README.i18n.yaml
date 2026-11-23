@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/skill/skill-rea/README.md
+/:
+  en: 367b609af86dd40c
+  zh: de16b37f13ddcf1b
+/deepseek-ai-dsh-skill-rea:
+  en: 8d7f11085987b12d
+  zh: 88caa3ac3f5fdcea
+/deepseek-ai-dsh-skill-rea/summary:
+  en: 9ab8f6a7734a6903
+  zh: 11c5583241ea28d0
+/deepseek-ai-dsh-skill-rea/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5134953c4f443383
+/deepseek-ai-dsh-skill-rea/use-this-package:
+  en: f7ab59d5b77ddbbb
+  zh: b1d683daf7481072
+/deepseek-ai-dsh-skill-rea/use-this-package/what-the-catalog-contains:
+  en: 8307b212091a736f
+  zh: 299370fb2bcbef33
+/deepseek-ai-dsh-skill-rea/use-this-package/observable-success-and-failures:
+  en: f1224a318472329a
+  zh: b270d1db43946e08
+/deepseek-ai-dsh-skill-rea/understand-the-implementation:
+  en: 8b603e6c315451e9
+  zh: 803ffaff9086f09a
+/deepseek-ai-dsh-skill-rea/further-exploration:
+  en: cde3f275dd791471
+  zh: d00263b9f2c2e29f
+/deepseek-ai-dsh-skill-rea/model-experience:
+  en: 4005a9b9985196af
+  zh: 08847f75d1c83e1e
+/deepseek-ai-dsh-skill-rea/model-experience/kv-cache-effect:
+  en: 3d5dc9e2727588ba
+  zh: ced12bdb99420af7
+/deepseek-ai-dsh-skill-rea/known-limitations-and-deferred-work:
+  en: f9bce53d10f59dc8
+  zh: bac5e7753c73b2b1
+/deepseek-ai-dsh-skill-rea/known-limitations-and-deferred-work/dev-note:
+  en: 315101848e10030c
+  zh: 3fbe556f30880dcd
