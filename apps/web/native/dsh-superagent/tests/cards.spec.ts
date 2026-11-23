@@ -66,7 +66,7 @@ const RULES: [rule: string, file: string, says: string[], gone?: string[]][] = [
     ['a question raised by a person\'s message is asked where that message was written, and any other question in the original ticket conversation'],
     ['must also reach the original ticket conversation']],
   ['A question goes back where the person who raised it wrote', 'dispatch',
-    ['the host routes it to the conversation of the human message that raised it, else to the original ticket source']],
+    ['the host posts the stored question to the conversation of the human message that raised it, else to the original ticket source']],
   ['A question goes back where the person who raised it wrote', 'handoff-orchestrator', ['purpose=attention with ticket_id'], ['The host selects the original ticket source']],
   ['A dropped message never arrives, and nobody resends it elsewhere', 'replies',
     ['A dropped reply will never arrive, because its conversation can no longer receive it or its Source no longer listens to it; do not resend it elsewhere.',

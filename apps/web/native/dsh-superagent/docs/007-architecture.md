@@ -445,6 +445,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/views.spec.ts` | What the management views derive from the Store, such as the Thread a dropped message belongs to, the ended Tickets the review worklist still lists, and when Undo merge is offered |
 | `tests/timeline.spec.ts` | A Thread's pages and a Trigger's neighbours by time and then id, with every received Trigger's time in one form |
 | `tests/migration.spec.ts` | The schema 11 migration: every stored record in its current shape, and the refusal of older schemas |
+| `tests/repair.spec.ts` | The startup repair: a Feishu Topic Thread re-keyed to its opening message with its Ticket, Triggers, Decisions and read cursors, the merge into a Thread already recorded there, an unknown opening message, and a Thread left for the next start when the repair fails |
 | `tests/store.spec.ts` | Repositories and their working sets, in SQLite as in memory, the kv area, with every key of `KV` spelled only in `src/kv.ts` and the migration, settings history and queries |
 | `tests/prompts.spec.ts` | Prompt validation, assembly and versions |
 | `tests/cards.spec.ts` | The rules the built-in text must state, file by file |

@@ -4,7 +4,7 @@ import { KV } from '../src/kv.ts'
 import { sourceLink } from '../src/app/links.ts'
 import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
-import { feishuImKind, imTrigger, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
+import { feishuImKind, imTrigger, isStopCommand, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
 import type { SourceContext } from '../src/sources/host.ts'
 import { backfillChat, runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
 
@@ -222,6 +222,18 @@ describe('the dsh-im-backed Feishu Source', () => {
     controller.abort()
     await running
   }, 15_000)
+
+  it('recognizes a spoken or rich-text /stop, and only as the whole message', () => {
+    // dsh-im hands a transcribed voice message over with the transcript as its text.
+    expect(isStopCommand(event({ text: '/stop', messageType: 'audio' }))).toBe(true)
+    expect(isStopCommand(event({ text: '[语音] 3s file_x', messageType: 'audio' }))).toBe(false)
+    expect(isStopCommand(event({ text: '/stop', messageType: 'post' }))).toBe(true)
+    expect(isStopCommand(event({ text: '@_user_1 /stop', messageType: 'text' }))).toBe(true)
+    // Only the whole message counts, and only from a person.
+    expect(isStopCommand(event({ text: 'please /stop', messageType: 'text' }))).toBe(false)
+    expect(isStopCommand(event({ text: '/stop', messageType: 'text', actor: { kind: 'bot', id: 'cli_ci' } }))).toBe(false)
+    expect(isStopCommand(event({ text: '/stop', messageType: 'image' }))).toBe(false)
+  })
 
   it('answers a person\'s /stop by ending this Thread\'s ticket instead of treating it as work', async () => {
     let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined

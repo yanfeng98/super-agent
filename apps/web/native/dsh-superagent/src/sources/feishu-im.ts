@@ -114,13 +114,16 @@ const stoppedText = (stopped: readonly { title: string }[]): string => {
 
 /** A person's stop command: `/stop` alone, optionally after the mentions a group message carries in its raw text. */
 const STOP_COMMAND = /^\s*(?:@[A-Za-z0-9_]+\s+)*\/stop\s*$/i
+/** Message kinds whose body is the person's own words: plain text, a rich-text body rendered to text, or a transcript. */
+const STOP_KINDS = new Set(['text', 'post', 'audio'])
 /**
  * Whether one inbound event asks to stop the work on its Thread rather than to start or continue work.
- * @param event - The authenticated inbound message.
- * @returns True for a plain-text `/stop` from a person.
+ * @param event - The authenticated inbound message, whose `text` is a voice message's transcript when dsh-im read one.
+ * @returns True for a `/stop` a person wrote or spoke as the whole message.
  */
 export const isStopCommand = (event: DshImEvent): boolean =>
-  event.actor.kind === 'user' && event.messageType === 'text' && STOP_COMMAND.test(event.text)
+  event.actor.kind === 'user' && (event.messageType === undefined || STOP_KINDS.has(event.messageType))
+  && STOP_COMMAND.test(event.text)
 
 /** The Trigger id of the message a Feishu reply answers, when Feishu supplied the parent id. */
 export const imRepliesTo = (trigger: Trigger): string | undefined =>
