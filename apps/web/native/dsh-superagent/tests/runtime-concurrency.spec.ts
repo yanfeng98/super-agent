@@ -614,6 +614,29 @@ describe('a worker whose work runs in the background', () => {
     await vi.waitFor(() => expect(h.subagents.service.drainChildren).toHaveBeenCalled())
     await vi.waitFor(() => expect(other.cancel.mock.invocationCallOrder.at(-1)).toBeGreaterThan(h.subagents.service.drainChildren.mock.invocationCallOrder.at(-1)!))
   })
+  it('stops a worker\'s live subagents through DSH\'s interrupt API when release-by-id is gone, keeping them resident', async () => {
+    const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
+    const agent = h.agents.get(one.sessionId)!
+    const child = h.subagents.spawn(one.sessionId)
+    // DSH 0.2.2 no longer offers release-by-id.
+    const service = h.subagents.service as unknown as Record<string, unknown>
+    delete service.listChildren
+    delete service.drainChildren
+    h.runtime.engine.stopTicket(one.ticket.id)
+    await vi.waitFor(() => expect(h.subagents.service.interrupt).toHaveBeenCalledWith(child, { kind: 'ancestor', agent }))
+    // Interrupting keeps the Activation for a resumed Ticket, and the worker's turn after the stop is cancelled.
+    expect(h.subagents.live(child)).toBe(true)
+    await vi.waitFor(() => expect(agent.cancel).toHaveBeenLastCalledWith({ kind: 'user' }, { keepInbox: false }))
+  })
+  it('keeps a failed background stop out of the worker health entry and leaves it in the log', async () => {
+    const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
+    const warn = vi.spyOn(h.ctx.logger, 'warn')
+    h.subagents.service.listChildren.mockImplementationOnce(async () => { throw new Error('SESSION_QUERY_UNAVAILABLE') })
+    h.runtime.engine.stopTicket(one.ticket.id); await h.runtime.idle()
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('dsh-superagent: stopping the background work of ticket %s failed: %s',
+      one.ticket.id, expect.stringContaining('AggregateError')))
+    expect(h.runtime.health.worker?.state).not.toBe('error')
+  })
   it('stops the jobs and the turn of a worker a restart in this process left running, before its Assignment starts again', async () => {
     const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
     const job = h.jobs.run(one.sessionId)

@@ -5,15 +5,30 @@ import { expect, it, vi } from 'vitest'
 import { stopSubagents, untilQuiet } from '../src/executor/background.ts'
 import { jobRegistry } from './fixtures/host.ts'
 
-/** A context with DSH's job registry and subagents, and an idle worker agent with one live subagent, `child-1`. */
-function setup(waitForChildren: (agent: Agent) => Promise<boolean>, drainChildren: () => Promise<void> = async () => {}) {
+/**
+ * A context with DSH's job registry and subagents, and an idle worker agent with live subagents, the first `child-1`.
+ * `release` selects the pre-0.2.2 release-by-id API between the current one that interrupts live descendants.
+ */
+function setup(waitForTreeWork: (root: Agent) => Promise<boolean>, options: { release?: boolean; childIdle?: Promise<void>;
+  children?: string[]; interrupt?: (id: string, authority: { kind: 'ancestor'; agent: Agent }) => void } = {}) {
   const jobs = jobRegistry()
-  const agent = { id: 'worker-t1', status: 'idle', whenIdle: async () => {}, inbox: { nextTurn: [], nextStep: [] }, cancel: vi.fn() } as unknown as
+  const parent = { id: 'worker-t1', status: 'idle', whenIdle: async () => {}, inbox: { nextTurn: [], nextStep: [] }, cancel: vi.fn() } as unknown as
     Agent & { status: string; cancel: ReturnType<typeof vi.fn> }
-  const subagents = { waitForChildren: vi.fn(waitForChildren), listChildren: async () => [{ id: 'child-1' }], drainChildren: vi.fn(drainChildren) }
+  const ids = options.children ?? ['child-1']
+  const childAgents = new Map(ids.map(id => [id, { id, status: 'running', whenIdle: () => options.childIdle ?? Promise.resolve(),
+    cancel: vi.fn() } as unknown as Agent]))
+  const agents = { get: (id: string) => childAgents.get(id) ?? (id === parent.id ? parent : undefined) }
+  const subagents: Record<string, unknown> = { waitForTreeWork: vi.fn(waitForTreeWork) }
+  if (options.release === false) {
+    subagents.listDescendants = vi.fn(async () => ids.map(id => ({ id })))
+    subagents.interrupt = vi.fn((id: string, authority: { kind: 'ancestor'; agent: Agent }) => options.interrupt?.(id, authority))
+  } else {
+    subagents.listChildren = vi.fn(async () => ids.map(id => ({ id })))
+    subagents.drainChildren = vi.fn(async () => {})
+  }
   const services: Record<string, unknown> = { jobs: jobs.service, subagents }
-  const ctx = { get: (name: string) => services[name], agents: { get: () => agent } } as unknown as Context
-  return { ctx, agent, jobs, subagents }
+  const ctx = { get: (name: string) => services[name], agents } as unknown as Context
+  return { ctx, agent: parent, children: ids.map(id => childAgents.get(id)!), jobs, subagents }
 }
 
 it('is not quiet when an end during the subagent check woke the worker, whose own idle looks again', async () => {
@@ -59,19 +74,42 @@ it('joins a worker\'s subagents once for the looks that wait on them, as DSH can
     stop.abort()
     expect(await quiet).toBe(false)
   }
-  expect(subagents.waitForChildren).toHaveBeenCalledTimes(1)
+  expect(subagents.waitForTreeWork).toHaveBeenCalledTimes(1)
 })
 
-it('gives up a release of subagents that does not end within 10 seconds, and cancels the turn their ends woke', async () => {
-  const { ctx, agent } = setup(async () => false, () => new Promise(() => {}))
+it('gives up waiting for interrupted subagents after 10 seconds, and cancels the turn their stop woke', async () => {
+  let childIdle!: () => void
+  const idle = new Promise<void>(resolve => { childIdle = resolve })
+  const { ctx, agent, children, subagents } = setup(async () => false, { release: false, childIdle: idle })
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
     let stopped = false
     const stopping = stopSubagents(ctx, agent).then(() => { stopped = true })
     await vi.advanceTimersByTimeAsync(9_999)
     expect(stopped).toBe(false)
+    childIdle()
     await vi.advanceTimersByTimeAsync(1)
     await stopping
   } finally { vi.useRealTimers() }
+  expect(subagents.interrupt).toHaveBeenCalledWith('child-1', { kind: 'ancestor', agent })
+  expect(children[0]!.status).toBe('running')
+  expect(agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: false })
+})
+
+it('keeps interrupting the other descendants when one refuses, and then cancels the worker turn', async () => {
+  const { ctx, agent, children, subagents } = setup(async () => false, { release: false, children: ['child-1', 'child-2'],
+    interrupt: id => { if (id === 'child-1') throw new Error('ACTIVATION_TEARDOWN_FAILED') } })
+  await expect(stopSubagents(ctx, agent)).rejects.toThrow(AggregateError)
+  expect(subagents.interrupt).toHaveBeenCalledWith('child-2', { kind: 'ancestor', agent })
+  // Interrupting keeps each Activation, so both descendants stay resident for a resumed Ticket.
+  expect(children.map(child => child.status)).toEqual(['running', 'running'])
+  expect(agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: false })
+})
+
+it('releases resident children by id when the profile still offers the pre-0.2.2 API', async () => {
+  const { ctx, agent, subagents } = setup(async () => false)
+  await stopSubagents(ctx, agent)
+  expect(subagents.drainChildren).toHaveBeenCalledWith(agent, ['child-1'])
+  expect(subagents.interrupt).toBeUndefined()
   expect(agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: false })
 })

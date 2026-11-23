@@ -54,6 +54,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
    - Session persistence gained `remove`, which the SQLite backend refuses; the plugin deletes nothing and needs no change.
    - The `working_directory` model tool and the `subagent` `cwd` parameter are gone; the preset rows already name neither,
      and `enter_worktree`/`exit_worktree` replace `create_worktree`.
+   - `ctx.subagents` renamed `waitForChildren` to `waitForTreeWork` and removed release-by-id (`listChildren`/`drainChildren`);
+     `src/executor/background.ts` joins through the former and stops live descendants through `listDescendants`/`interrupt`,
+     which keeps their Activations for a resumed Ticket.
    - `src/app/resources.ts` reads a Ticket's transcript from the live Agent's Session (`ctx.agents.get(...).session.snapshotEvents()`),
      and falls back to the stored log through `sessionPersistence.open(id, 'read')` when an earlier process left the Session
      unloaded; the 0.2.1 `sessionController.inspect()` method no longer exists.

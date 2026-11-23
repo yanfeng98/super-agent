@@ -111,8 +111,9 @@ export function jobRegistry(owner: (sessionId: string) => FakeAgent | undefined 
 /**
  * DSH's subagents as the Executor uses them. `spawn` starts a child of a Session, an agent while it lives, which a drain of
  * the Session's descendants refuses from then on; `settle` ends one, whose end wakes its idle parent or steers a running one
- * before a wait for the parent's children returns. Releasing or interrupting a child settles it; a drain of descendants
- * injects their ends. The catalog lists every child a Session had.
+ * before a wait for the parent's children returns. Interrupting a child stops its turn and keeps its Activation, as DSH
+ * 0.2.2 does; releasing it settles it, and a drain of descendants injects their ends. The catalog lists every child a
+ * Session had.
  */
 export function subagentRuntime(agents: Map<string, FakeAgent>) {
   const children = new Map<string, { parent: string; live: boolean; settled: PromiseWithResolvers<void> }>()
@@ -129,11 +130,23 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
     child.settled.resolve()
   }
   const service = {
+    waitForTreeWork: vi.fn(async (root: { id: string }) => {
+      const live = [...children.values()].filter(child => child.parent === root.id && child.live)
+      await Promise.all(live.map(child => child.settled.promise))
+      return live.length > 0
+    }),
     waitForChildren: vi.fn(async (parent: { id: string }) => {
       const live = [...children.values()].filter(child => child.parent === parent.id && child.live)
       await Promise.all(live.map(child => child.settled.promise))
       return live.length > 0
     }),
+    listDescendants: vi.fn(async (id: string) => {
+      const descendants = (parent: string): string[] => [...children].filter(([, child]) => child.parent === parent)
+        .flatMap(([childId]) => [childId, ...descendants(childId)])
+      return descendants(id).map(childId => ({ id: childId }))
+    }),
+    // DSH 0.2.2 interrupts a child without releasing its Activation, so it stays resident and wakes no parent.
+    interrupt: vi.fn((id: string) => { agents.get(id)?.cancel({ kind: 'parent' }, { keepInbox: true }) }),
     listChildren: vi.fn(async (id: string) => [...children].filter(([, child]) => child.parent === id).map(([childId]) => ({ id: childId }))),
     drainChildren: vi.fn(async (_parent: { id: string }, ids: readonly string[]) => { for (const id of ids) settle(id) }),
     drainDescendants: vi.fn(async (parents: readonly { id: string }[]) => {
@@ -142,7 +155,6 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
         for (const [id, child] of children) if (child.parent === parent.id) settle(id, false)
       }
     }),
-    interrupt: vi.fn((id: string) => { settle(id) }),
   }
   const spawn = (parent: string) => {
     if (closed.has(parent)) throw new Error('DRAINING: the Session admits no new subagents')

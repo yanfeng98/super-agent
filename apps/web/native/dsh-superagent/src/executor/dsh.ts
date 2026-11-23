@@ -400,7 +400,11 @@ export class DshExecutor implements Executor {
     const entry: Promise<void> = Promise.all([this.stopping.get(ticketId), stop.catch(() => {})]).then(() => {})
       .finally(() => { if (this.stopping.get(ticketId) === entry) this.stopping.delete(ticketId) })
     this.stopping.set(ticketId, entry)
-    void this.background(stop)
+    // A stop that fails leaves nothing for a person to act on: its Assignment already ended or handed off. Keep it out of
+    // the `worker` health entry, which reports failures in event handling itself, and leave the reason in the log.
+    void stop.catch((error: unknown) => {
+      this.host.context.logger.warn('dsh-superagent: stopping the background work of ticket %s failed: %s', ticketId, String(error))
+    })
   }
   /** Wait for a stop of the ticket's background work that runs, unless the host stops first. */
   private async stopped(ticketId: string): Promise<void> {
