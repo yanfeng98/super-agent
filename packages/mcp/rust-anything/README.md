@@ -85,7 +85,7 @@ Mounting happens before the first turn and does not change mid-session, so it do
 - Packaged runtimes cannot ship it: the executable lives outside every package, so the Desktop app and the Python SDK executable stage the plugin without its CLI and expose no rust-anything tools. Shipping them needs per-platform staging, as `native/system` does for its launcher.
 - Building needs Rust 1.97: `native/rust-anything/rust-toolchain.toml` pins that channel and rustup installs it on demand. A missing cargo fails the build with an actionable error.
 - Generated crates declare `rust-version = "1.97"`. An older default toolchain fails at build time; `rust-anything doctor` reports it.
-- The crates a port generates compile into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so a migrated repository's worktree gains only its `rust/` crates.
+- The crates a port generates compile into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so compiling a port leaves nothing in a migrated repository beyond its own `rust/` crates.
 - PHP and C# units need `php` with `ext-ffi`, or `dotnet`, on `PATH`; the other languages need their own runtime. `rust-anything doctor` reports each one.
 - The tool executes the code it records, writes crates into the repository, and `enable` rewrites the call sites of the ported functions in your sources. Treat a run as code execution with the agent's full environment, and review `enable`'s diff.
 

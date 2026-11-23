@@ -85,7 +85,7 @@ CLI 作为普通子进程运行：它会往仓库写 `rust/<unit>-rs` crate，�
 - 打包运行时无法带上它：可执行文件在所有包目录之外，所以 Desktop 应用与 Python SDK 可执行文件只装了插件、没有 CLI，那里不会出现 rust-anything 工具。要让它们可用，需要像 `native/system` 那样按平台暂存二进制。
 - 编译需要 Rust 1.97：`native/rust-anything/rust-toolchain.toml` 固定该 channel，rustup 会在缺失时自动安装；没有 cargo 时构建会给出可操作的报错。
 - 生成的 crate 声明 `rust-version = "1.97"`，默认工具链更旧会在构建时失败；`rust-anything doctor` 会指出。
-- 迁移生成的 crate 统一编译到一个共享 cargo target 目录（设置了 `CARGO_TARGET_DIR` 用它，否则用平台缓存目录下的 `rust-anything/target`），所以被迁移的仓库工作树里只多出它自己的 `rust/` crate。
+- 迁移生成的 crate 统一编译到一个共享 cargo target 目录（设置了 `CARGO_TARGET_DIR` 用它，否则用平台缓存目录下的 `rust-anything/target`），所以编译一个端口只会在被迁移仓库里留下它自己的 `rust/` crate。
 - PHP 与 C# 单元需要 `PATH` 上有带 `ext-ffi` 的 `php` 或 `dotnet`，其他语言各自的运行时也一样；`rust-anything doctor` 会逐个报告。
 - 工具会执行被录制的代码、往仓库写 crate，`enable` 还会改写你源码里被迁移函数的调用点：等同于以 Agent 的完整环境执行代码，请谨慎，并检查 `enable` 的 diff。
 

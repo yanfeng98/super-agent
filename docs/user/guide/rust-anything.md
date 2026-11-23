@@ -41,7 +41,7 @@ Each unit gets a crate under `rust/<unit>-rs/` with its `src/port.rs`, the recor
 ./native/rust-anything/bin/rust-anything doctor
 ```
 
-A port's crate compiles into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so the migrated repository gains only its own `rust/` crates.
+A port's crate compiles into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so compiling a port leaves nothing in the migrated repository beyond its own `rust/` crates.
 
 ## Tune it
 

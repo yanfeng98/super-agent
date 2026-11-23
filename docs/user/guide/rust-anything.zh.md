@@ -41,7 +41,7 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 ./native/rust-anything/bin/rust-anything doctor
 ```
 
-迁移生成的 crate 统一编译到一个共享 cargo target 目录（设置了 `CARGO_TARGET_DIR` 用它，否则用平台缓存目录下的 `rust-anything/target`），被迁移的仓库工作树里只多出它自己的 `rust/` crate。
+迁移生成的 crate 统一编译到一个共享 cargo target 目录（设置了 `CARGO_TARGET_DIR` 用它，否则用平台缓存目录下的 `rust-anything/target`），编译一个端口只会在被迁移仓库里留下它自己的 `rust/` crate。
 
 ## 调整行为
 

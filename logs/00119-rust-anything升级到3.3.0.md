@@ -54,7 +54,7 @@
 
 ## 5. 复查修正
 
-本轮自查改掉四处不准确或不稳的表述：
+本轮自查改掉五处不准确或不稳的表述：
 
 | 位置 | 修正 |
 |---|---|
@@ -62,6 +62,7 @@
 | `packages/mcp/rust-anything/README{,.zh}.md` | 超时字段补 `go`；执行注意事项补一句 `enable` 会改写源码里被迁移函数的调用点 |
 | `packages/mcp/rust-anything/tests/mount.spec.ts` | 工具集断言改成排序后比较：新增或改名会红，顺序变化不会 |
 | `native/rust-anything/NATIVE.md` | `c_server` 的宿主条件改成实际观察到的现象：记到空 POST body，随后用例超时 |
+| 包 README 与用户指南（中英） | 共享 target 目录那句原来写成「工作树里只多出 `rust/` crate」，夸大了：`enable` 会改原始源码，录制、`map --write` 与 shadow 模块也落在 crate 旁。改成「编译一个端口只在被迁移仓库里留下它自己的 `rust/` crate」 |
 
 自查同时确认了几条容易被当成「改坏了」的判断：`git archive <tag> .mcp.json` 可用（同步步骤写法成立）；`native/rust-anything/` 确实在 `translation-pairing.manifest.json` 的排除项里；仓库的 skill 提供方只扫 `<project>/.agents/skills`，新增的 `plugin/skills/` 不会冒充第二个技能。
 
