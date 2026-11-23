@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { FeishuRuntime } from '../../../src/channels/feishu/feishu-runtime.mjs';
 import { FeishuHarnessBridge } from '../../../src/channels/feishu/bridge.mjs';
 import { rememberConnectionTestTarget } from '../../../src/channels/shared/connection-test.mjs';
@@ -1086,6 +1088,66 @@ test('expands a merged forward for the external consumer and keeps the placehold
   client.im.v1.message.get = async () => ({ code: 230027 });
   await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](event());
   assert.equal(seen[1].message.content, forward.content);
+  await runtime.stop();
+});
+
+// 无 ffmpeg 环境:用可执行 sh 替身(见 fixtures/ffmpeg-stub.sh)。Windows 不能直接 spawn
+// 脚本,这里只覆盖转写的时间点与结果,转写能力本身由 voice.test.mjs 覆盖。
+const FFMPEG_STUB = fileURLToPath(new URL('./fixtures/ffmpeg-stub.sh', import.meta.url));
+const VOICE_SPAWN_SKIP = process.platform === 'win32' ? 'requires the POSIX ffmpeg stub fixture' : false;
+
+async function externalAudioRuntime(acceptExternal, { resource } = {}) {
+  const runtime = new FeishuRuntime({
+    lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+    consumerMode: 'external-consumer',
+    acceptExternal,
+    voice: { config: { enabled: true, secretRef: 'DASHSCOPE_API_KEY', ffmpeg: FFMPEG_STUB }, secret: 'key' },
+    harness: { async ensureRunning() {} }, state: {}, logger: { warn() {} },
+  });
+  const starting = runtime.start();
+  await waitFor(() => FakeWSClient.instances.length === 1);
+  FakeWSClient.instances[0].becomeReady(); await starting;
+  FakeClient.instances[0].im.v1.messageResource = { get: resource };
+  return runtime;
+}
+
+test('transcribes a voice message for the external consumer and keeps the provider body',
+  { skip: VOICE_SPAWN_SKIP }, async () => {
+    const seen = [];
+    const runtime = await externalAudioRuntime(async (event) => { seen.push(event); return { accepted: true }; }, {
+      resource: async () => ({ writeFile: async (path) => writeFileSync(path, Buffer.from('opus')) }),
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: '把导出按钮改成保存' } }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } });
+    const content = JSON.stringify({ file_key: 'file_v3_voice', duration: 3200 });
+    try {
+      await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1']({
+        message: { message_id: 'om-voice', chat_id: 'chat', chat_type: 'group', message_type: 'audio', content,
+          create_time: '1790787600000' },
+        sender: { sender_type: 'user', sender_id: { open_id: 'human' } },
+      });
+      assert.equal(seen[0].voiceTranscript, '把导出按钮改成保存');
+      // The transcript rides beside the provider body instead of replacing it, so a consumer still sees the audio resource.
+      assert.equal(seen[0].message.content, content);
+      assert.equal(seen[0].message.message_type, 'audio');
+    } finally {
+      globalThis.fetch = originalFetch;
+      await runtime.stop();
+    }
+  });
+
+test('hands a voice message over unchanged when it cannot be transcribed', async () => {
+  const seen = [];
+  const runtime = await externalAudioRuntime(async (event) => { seen.push(event); return { accepted: true }; }, {
+    resource: async () => { throw new Error('resource read failed'); },
+  });
+  const content = JSON.stringify({ file_key: 'file_v3_voice', duration: 3200 });
+  const delivered = { message: { message_id: 'om-voice', chat_id: 'chat', chat_type: 'group', message_type: 'audio',
+    content, create_time: '1790787600000' }, sender: { sender_type: 'user', sender_id: { open_id: 'human' } } };
+  await FakeWSClient.instances[0].dispatcher.handlers['im.message.receive_v1'](delivered);
+  assert.equal(seen[0].voiceTranscript, undefined);
+  assert.equal(seen[0].message.content, content);
   await runtime.stop();
 });
 

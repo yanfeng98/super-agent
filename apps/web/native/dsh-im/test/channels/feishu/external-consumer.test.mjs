@@ -54,6 +54,21 @@ test('renders resource, card and system bodies instead of dropping them', () => 
   assert.throws(() => body('file', {}), { code: 'invalid-inbound' });
 });
 
+test('reads what a voice message said when the runtime transcribed it', () => {
+  const audio = { ...event(), message: { ...event().message, message_type: 'audio',
+    content: JSON.stringify({ file_key: 'file_v3_5', duration: 3200 }) } };
+  const spoken = normalized({ ...audio, voiceTranscript: '  把导出按钮改成保存  ' });
+  assert.equal(spoken.text, '把导出按钮改成保存');
+  assert.equal(spoken.messageType, 'audio');
+  // Without a transcript, or with a blank one, the placeholder that names the audio resource stays.
+  assert.equal(normalized(audio).text, '[语音] 3s file_v3_5');
+  assert.equal(normalized({ ...audio, voiceTranscript: '   ' }).text, '[语音] 3s file_v3_5');
+  // Only an audio body gives way to a transcript.
+  assert.equal(normalized({ ...event(), voiceTranscript: 'ignored' }).text, '@_user_1 hello');
+  const long = normalized({ ...audio, voiceTranscript: 'x'.repeat(20000) });
+  assert.equal(long.text, `${'x'.repeat(16000)}\n[内容过长，已截断]`);
+});
+
 test('keeps an over-long body instead of dropping it, and says it was cut', () => {
   const long = normalized({ ...event(), message: { ...event().message, content: JSON.stringify({ text: 'x'.repeat(20000) }) } });
   assert.equal(long.text, `${'x'.repeat(16000)}\n[内容过长，已截断]`);

@@ -178,6 +178,8 @@ export function mergedForwardText(items) {
 /**
  * Normalizes one Feishu event into the exclusive consumer's evidence. Human text is the default; `includeBots`
  * also admits bot-authored messages, and post/image bodies are rendered so a consumer receives text plus image keys.
+ * The runtime adds `voiceTranscript` to an audio event once the channel's voice capability transcribed it: that text
+ * replaces the placeholder naming the audio resource, while the message type and the provider body stay unchanged.
  */
 export function normalizeExternalText(event, { botId, appId, botOpenId, fingerprint }, { includeBots = false } = {}) {
   const message = event?.message;
@@ -205,6 +207,9 @@ export function normalizeExternalText(event, { botId, appId, botOpenId, fingerpr
   if (!actorId || !messageId || !conversationId || !eventId
     || !/^[a-f0-9]{64}$/.test(fingerprint ?? '')) throw refusal('invalid-inbound');
   const body = messageBody(message.message_type, message.content);
+  // A voice message carries no readable text of its own, so the runtime transcribes it first and hands the words over
+  // here; without a transcript the placeholder that names the audio resource stays the body.
+  const transcript = message.message_type === 'audio' ? textValue(event?.voiceTranscript)?.trim() : undefined;
   const milliseconds = Number(message.create_time);
   const timestamp = new Date(milliseconds);
   if (!Number.isFinite(milliseconds) || milliseconds <= 0 || !Number.isFinite(timestamp.getTime()))
@@ -223,7 +228,7 @@ export function normalizeExternalText(event, { botId, appId, botOpenId, fingerpr
     mentions, mentionedAccount: mentions.some(mention => mention.id === botOpenId)
       || body.mentioned.includes(botOpenId),
     messageType: message.message_type, images: Object.freeze(body.images),
-    at: timestamp.toISOString(), text: body.text, reply: route,
+    at: timestamp.toISOString(), text: transcript ? bounded(transcript) : body.text, reply: route,
     ...(identifier(message.message_app_link) ? { appLink: message.message_app_link } : {}),
     replay: Object.freeze({ kind: 'provider-redelivery', resumeCursor: false, gapPossible: true }),
   });

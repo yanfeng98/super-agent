@@ -8,6 +8,9 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ### Added / 新增
 
+- 「交给 Superagent」时语音消息也会转写：接管路径在把手前复用机器人自己的语音能力（与独立模式同一 `transcribeIncoming`），把音频转成文字交给消费者，消费者读到的是「说了什么」，而不是 `[语音] 12s file_<key>` 占位；音频资源仍留在事件正文里可回读，转写关闭或失败时保持原来的占位，既不丢消息也不阻塞接管。
+  A voice message is transcribed on the way to Superagent too: before handoff the consumer path reuses the bot's own voice capability (the same `transcribeIncoming` as standalone mode) and hands the words over, so the consumer reads what was said instead of a `[语音] 12s file_<key>` placeholder; the audio resource stays in the event body for a read-back, and a disabled or failed transcription keeps the placeholder without dropping the message or blocking the handoff.
+
 - 历史读法可以把「自己说过的话」和撤回占位留在页面里：`readChatHistory`/`readThreadHistory` 新增 `includeSelf`（保留机器人自己的消息，补收仍默认跳过）与 `includeDeleted`（撤回消息不再是只记进 `omitted`，而是作为正文为空、`deleted: true` 的占位事件留在原来的位置）；`readExternalHistory`（即 `historyChecked` 的 group/nearby/thread 读法）也接受 `includeDeleted`。占位事件沿用发送者可见性规则：机器人发的撤回消息仍需要 `includeBots`；缺少事件所需的 id 或时间时仍计入 `omitted`。
   A history read can now keep the bot's own messages and recalled placeholders: `readChatHistory`/`readThreadHistory` take `includeSelf` (keep the bot's own messages; a backfill still skips them) and `includeDeleted` (a recalled message is no longer only counted in `omitted` but stays in place as a bodiless event marked `deleted`); `readExternalHistory` — the `group`/`nearby`/`thread` reads behind `historyChecked` — takes `includeDeleted` as well. A placeholder follows the same sender visibility rule as a live message: a recalled message a bot sent still needs `includeBots`, and one without the ids or time an event needs is still counted in `omitted`.
 

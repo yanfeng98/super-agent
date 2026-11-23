@@ -419,7 +419,8 @@ export class FeishuRuntime {
             assertCurrentStart();
             if (typeof this.#acceptExternal !== 'function')
               throw Object.assign(new Error('consumer-unavailable'), { code: 'consumer-unavailable' });
-            return this.#withMergedForward(event, signal).then(expanded => this.#acceptExternal(expanded, { signal }));
+            return Promise.resolve(this.#preparedForConsumer(event, signal))
+              .then(ready => this.#acceptExternal(ready, { signal }));
           }
           if (isCurrentStart()) void bridge.accept(event);
         },
@@ -809,6 +810,34 @@ export class FeishuRuntime {
     catch { signal?.throwIfAborted(); return event; }
     const text = mergedForwardText(items);
     return text ? { ...event, message: { ...event.message, content: JSON.stringify({ text }) } } : event;
+  }
+
+  /**
+   * Prepares one inbound event for the exclusive consumer: a merged forward carries its sub-messages, and a voice
+   * message carries its transcript. Every other message, and a failed preparation, reaches the consumer unchanged.
+   */
+  #preparedForConsumer(event, signal) {
+    if (event?.message?.message_type === 'merge_forward') return this.#withMergedForward(event, signal);
+    return this.#withVoiceTranscript(event, signal);
+  }
+
+  /**
+   * Transcribes a voice message before the consumer sees it, so the consumer reads what was said instead of only the
+   * placeholder naming the audio resource. The channel's voice capability is optional, and a failed transcription
+   * leaves the event unchanged rather than delaying or dropping it.
+   */
+  async #withVoiceTranscript(event, signal) {
+    if (event?.message?.message_type !== 'audio' || !this.#voice?.enabled || !this.#client) return event;
+    let transcript;
+    try { transcript = await this.#voice.transcribeIncoming(event, this.#client); }
+    catch (error) {
+      signal?.throwIfAborted();
+      this.#logger.warn?.('[dsh-feishu-voice] 语音转写失败:', error?.message ?? String(error));
+      return event;
+    }
+    signal?.throwIfAborted();
+    const text = typeof transcript === 'string' ? transcript.trim() : '';
+    return text ? { ...event, voiceTranscript: text } : event;
   }
 
   async #checkedRead(operation, signal) {
