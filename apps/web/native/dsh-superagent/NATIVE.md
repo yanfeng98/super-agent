@@ -359,7 +359,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     backfill asks for neither; events carry `appLink`, the
     Trigger keeps it as `url`, and so do context messages, and the
     page body an assessment reads carries the mapped messages instead of dsh-im's event records and account fingerprint,
-    and the initial window's payload carries the window's `status`, so a fallback window is not read as an empty discussion.
+    and the initial window's payload carries the `status` the read reported, so a fallback window is not read as an
+    empty discussion.
     An image of any message those reads return is downloaded from
     that message (`resourceChecked({ messageId })`, validated against the retained route), not only from the Trigger's own
     message. The live path describes each Thread with its chat name and chat link, `linkTimeoutMs` bounds link resolution,

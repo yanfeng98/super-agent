@@ -225,7 +225,8 @@ async function readHistoryPage(client, identity, options, signal) {
 
 /**
  * Reads one chat's messages between two times, oldest first, with an explicit continuation cursor.
- * `includeDeleted` keeps a recalled message as a bodiless, `deleted` event instead of counting it as omitted.
+ * `includeSelf` keeps the bot's own messages, which a backfill always skips; `includeDeleted` keeps a recalled message as
+ * a bodiless, `deleted` event instead of counting it as omitted. A bot-authored message still needs `includeBots`.
  */
 export async function readChatHistory(client, identity, query, signal) {
   const chatId = typeof query?.chatId === 'string' && identifier(query.chatId) ? query.chatId : undefined;

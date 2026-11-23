@@ -420,7 +420,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
 | `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
-| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context with its statuses and mapped page body, the chat around a message, image and file reads from any message, a failed message kept in health, Topic recovery its subscribed Threads do not cover, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
+| `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context with its statuses, own answers and recalled placeholders in the window, the chat around a message (including one whose source no longer resolves), image and file reads from any message, a failed message kept in health, Topic recovery its subscribed Threads do not cover, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
 | `tests/feishu-read.spec.ts` | Feishu reads |
 | `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu attachment keys and image reads |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
@@ -556,7 +556,7 @@ Settings and prompt saves return the saved configuration. Policy sync returns th
 - The Trigger text, up to 4,000 characters, with image and file ids and other Triggers in the batch.
 - Up to eight `related_tickets`, open ones first, and `tickets_total`.
 - The Eval's `policy_version`.
-- A Thread window: the first five messages and five on either side of the Trigger. Messages use `{id, from, at, text}`, normally limited to 400 characters, or 1,200 for the two on either side. Truncated messages include `chars`; image references use `images` and file references use `files`, both read by `orchestrator_eval_read`; its `status` names a fallback window (`chat_neighbours`, `unavailable`), so an empty window is not read as an empty discussion.
+- A Thread window: the first five messages and five on either side of the Trigger. Messages use `{id, from, at, text}`, normally limited to 400 characters, or 1,200 for the two on either side. Truncated messages include `chars`; image references use `images` and file references use `files`, both read by `orchestrator_eval_read`; a `status`, when the read reports one, names a fallback window (`chat_neighbours`, `unavailable`), so an empty window is not read as an empty discussion.
 - Other loaded messages as `{id, from, preview}` stubs of 50 characters. `orchestrator_eval_read` expands them by id.
 
 Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open stage such as `person/review` or `working/queued`, or an ended outcome. Acknowledgements are limited to 100 words whether submitted through accept, assessment or `orchestrator_ack`.
