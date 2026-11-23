@@ -71,7 +71,7 @@ type PushTarget = { merge: string } | { revert: string }
 /**
  * Composition root of dsh-superagent that connects `Store`, `Setup`, `Engine`, `SourceRegistry`, `Effects`, `Outbox`, `Passes`, `Sessions`, `Settings`, `Prompts`, `DshExecutor`, and `MasterAssessor`.
  * Exposes the `SourceHost` service on the Cordis context for source plugins and coordinates startup, setup checks, HTTP route registration, and graceful shutdown.
- * Locks the state directory before opening SQLite so concurrent processes cannot corrupt or double-migrate state.
+ * Locks the state directory before opening SQLite so concurrent processes cannot corrupt state.
  */
 export class Runtime extends Service implements SourceHost {
   readonly store: Store
@@ -116,7 +116,7 @@ export class Runtime extends Service implements SourceHost {
   constructor(ctx: Context, readonly machine: Machine, restart: () => void) {
     super(ctx, 'orchestrator')
     const runtime = this
-    // Lock the state directory before opening the database so another process cannot migrate or write concurrently.
+    // Lock the state directory before opening the database so another process cannot write concurrently.
     mkdirSync(machine.stateDir, { recursive: true, mode: 0o700 })
     const compromised = (error: Error) => { this.runtimeHealth.set({ state: 'error', detail: error.message }); this.stopped.abort() }
     const release = lockSync(machine.stateDir, { stale: 30_000, onCompromised: compromised })

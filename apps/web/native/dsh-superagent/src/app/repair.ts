@@ -112,7 +112,7 @@ function rekey(store: Store, old: Thread, target: ThreadRef): void {
  * merging them with a Thread already recorded there, so a Ticket following one receives the Topic's replies again.
  * The repair is idempotent: a re-keyed Thread no longer has a Topic id, and a Thread whose opening message is unknown is
  * left alone.
- * @param store - The opened store, after schema migrations.
+ * @param store - The opened store.
  * @param report - Receives a Thread the repair could not re-key, which it leaves for the next start.
  * @returns How many Threads it re-keyed.
  */

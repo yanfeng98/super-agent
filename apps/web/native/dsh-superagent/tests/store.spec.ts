@@ -136,7 +136,7 @@ it('spells every kv key in KV alone, so each record is named by its entry there'
   // Ignore single-word keys that collide with unrelated string literals.
   const keys = entries.map(entry => typeof entry === 'string' ? entry : entry.prefix).filter(name => /[-:]/.test(name))
   const modules = readdirSync(src, { recursive: true, encoding: 'utf8' })
-    .filter(path => /\.tsx?$/.test(path) && !['kv.ts', join('app', 'migration.ts')].includes(path))
+    .filter(path => /\.tsx?$/.test(path) && path !== 'kv.ts')
   const spelled = modules.flatMap(path => {
     const text = readFileSync(join(src, path), 'utf8')
     return keys.filter(name => text.includes(`'${name}`) || text.includes(`\`${name}`)).map(name => `${path}: ${name}`)
@@ -188,6 +188,14 @@ it('closes a database it cannot open as this version\'s, so a later attempt can 
     expect(() => new Store(path)).toThrow('Unsupported orchestrator database version')
     expect(close).toHaveBeenCalledOnce()
   } finally { close.mockRestore() }
+})
+it('refuses a database at an older schema and asks for a new state directory', () => {
+  const path = join(directory, 'orchestrator.sqlite')
+  const store = new Store(path)
+  store.set(KV.store.schema, SCHEMA_VERSION - 1)
+  store.close()
+  expect(() => new Store(path)).toThrow(`Orchestrator database schema ${SCHEMA_VERSION - 1} predates schema ${SCHEMA_VERSION}, `
+    + 'which this build does not migrate; start with a new state directory')
 })
 it('keeps the settings as versions: the current settings are the snapshot of the current revision, kept nowhere else', () => {
   const store = new Store(join(directory, 'orchestrator.sqlite'))

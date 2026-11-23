@@ -309,7 +309,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     a database written by a GitHub-enabled build is not cleaned, so start with a new state directory if its old records
     must not remain. The plugin locale metadata no longer names GitHub. The worker environment still keeps `gh`
     unavailable and clears `GH_TOKEN`/`GITHUB_TOKEN`, so a worker cannot reach the operator's GitHub credentials.
-    `tests/local.spec.ts`, `tests/migration.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and
+    `tests/local.spec.ts`, `tests/deployment.spec.ts`, `tests/tools.spec.ts` and
     `tests/merge.spec.ts` cover the local behavior.
 
 29. **Feishu intake through dsh-im.** The Feishu Source is now `src/sources/feishu-im.ts`, exported as `./feishu-watch`.
@@ -406,6 +406,18 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `tests/sources.spec.ts` keeps only the Source-context coverage, and the fixtures build Triggers through `imTrigger`
     over a fake dsh-im service.
 
+32. **Removal of the pre-release schema 10 migration.** `src/app/migration.ts` and `tests/migration.spec.ts` are gone.
+    The app was vendored at schema 11, so the one-time conversion from schema 10 never had a database here to convert.
+    `SCHEMA_VERSION` now sits in `src/app/store.ts` beside the only check it serves: a database recording a higher version
+    fails with `Unsupported orchestrator database version`, one recording a lower version says it predates schema 11 and asks
+    for a new state directory, and opening a database of this version only creates the tables and any column this build adds.
+    The migration took `migrateSettings`, `basisOf`, `ticketOf`, `withoutCopies`, `reasonsOf`, the `KV.queues` family
+    (`relay-queue`, `subscription-results`, `prompt-notification`, `settings-notification`), the three Feishu backfills
+    (direct-chat flags, thread links, pending assessments), and the `historySource.*-migration` labels with it.
+    `tests/store.spec.ts` covers the refusal of an older database; the kv spelling check no longer exempts a migration module.
+    `src/app/repair.ts` keeps its idempotent Feishu Topic re-key, because a schema 11 database can still hold the Threads it
+    rewrites.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.
@@ -417,7 +429,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,327 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,304 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a

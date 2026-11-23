@@ -1212,8 +1212,8 @@ it('keeps replies and acknowledgements to an IM conversation within the IM limit
   await expect(runTool(sessionId, 'orchestrator_ack', { trigger_id: follow.id, text: long })).rejects.toThrow(`at most ${IM_WORDS} words`)
 })
 
-it('refuses a second process on the same state directory before it opens the database, so it migrates nothing', () => {
-  // A database the running build would read as schema 10 stays as it is.
+it('refuses a second process on the same state directory before it opens the database, so it reads nothing', () => {
+  // A database this build would refuse as an older schema stays as it is.
   const db = new DatabaseSync(join(directory, 'orchestrator.sqlite'))
   db.prepare("UPDATE kv SET value='10' WHERE key='schema'").run()
   db.close()
@@ -1486,7 +1486,7 @@ it('shows the settings history when one revision holds values its Source kind no
   const settings = runtime.store.settings()
   await runtime.settings.save('executor', { ...settings.executor, maxWorkers: 4 }, runtime.store.blockRevision('executor'), 'panel')
   await runtime.settings.save('executor', { ...runtime.store.settings().executor, maxWorkers: 5 }, runtime.store.blockRevision('executor'), 'panel')
-  // A revision the migration left as an earlier version wrote it, which the Feishu kind's schema rejects.
+  // A revision stored as an earlier version wrote it, which the Feishu kind's schema rejects.
   const revision = runtime.store.get(KV.settings.revision)!
   const stored = runtime.store.get(KV.settings.version(revision - 1))!
   runtime.store.set(KV.settings.version(revision - 1), { ...stored, settings: { ...stored.settings,

@@ -34,9 +34,6 @@ export const KV = {
     mergeQueuePaused: record<boolean>('merge-queue-paused') },
   /** Sessions: prompt revisions each Session has worked under, ordered oldest first; the last entry (`.at(-1)`) is its active revision. */
   sessions: { prompts: family<number[], [session: string]>('session-prompts:') },
-  /** Schema 11 migration: legacy main-Session queues imported into the effect table. */
-  queues: { relays: record<{ id: string; text: string }[]>('relay-queue'), unsubscribed: record<string[]>('subscription-results'),
-    prompts: record<number | null>('prompt-notification'), settings: record<number | null>('settings-notification') },
   /** Per-Source resolved display names mapping a named ID (such as a Feishu chat ID) to its display name. */
   sources: { labels: family<Record<string, string>, [source: string]>('source-labels:') },
   /** Feishu Source: known chats (`true` for direct messages) and the per-chat history cursor. */

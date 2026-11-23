@@ -148,7 +148,7 @@ Trigger and Thread `meta` belong to the Source. The core does not interpret them
 
 ### Store
 
-`Store` (`src/app/store.ts`) owns one SQLite database. Runtime acquires the directory lock before opening it, preventing a second process from migrating or writing the same state.
+`Store` (`src/app/store.ts`) owns one SQLite database. Runtime acquires the directory lock before opening it, preventing a second process from opening or writing the same state.
 
 Its interfaces are grouped by purpose:
 
@@ -159,7 +159,7 @@ Its interfaces are grouped by purpose:
 - **Outbox receipts:** `replyStatus` and `receipts`, written only by Outbox. Receipt operations are `get`, `waiting`, `behind`, `add`, `settle` and `withdraw`. `behind` checks whether an earlier message for the same Ticket and conversation is waiting with fewer than three failures. A withdrawn message settles with `channelGone` or `channelIgnored`. Read queries expose failed and dropped replies through `failingReplies`, `droppedReplies` and `droppedSince`.
 - **Typed key-value records:** `get`, `set`, `delete` and `keys`, using entries from `KV`.
 
-`afterCommit` runs an action only after the transaction commits, never after rollback. Runtime reads records in their stored shape; the schema 11 migration converts older supported records at startup.
+`afterCommit` runs an action only after the transaction commits, never after rollback. Runtime reads records in their stored shape; a database that records another schema is refused when the Store opens it, so no reader converts legacy records.
 
 ### Effects
 
@@ -319,7 +319,6 @@ Some generic modules still refer directly to Feishu:
 | `src/app/merge-queue.ts` | The merge queue a person asks for: the Tickets waiting for their turn in order, enqueuing, cancelling, retrying a failed entry, the gate a failure names so one whose dependency merged or review was approved is retried by the host, taking the next one that has not failed, and a Ticket's place |
 | `src/app/store.ts` | The Store, and `Receipt`, a message of the outbox |
 | `src/app/store-read.ts` | `storeReads`: the Store's read queries for the views, the tools and the Sources' polls, which never write |
-| `src/app/migration.ts` | The schema 11 migration: one step from schema 10 that writes every stored record in its current shape |
 | `src/app/repair.ts` | The startup repair for records an earlier version keyed wrongly: a Feishu Topic Thread recorded under its Topic id is re-keyed to the message that opened the Topic and merged with the Thread already recorded there |
 | `src/app/effects.ts` | Effects |
 | `src/app/versions.ts` | `Versions`: a record kept as numbered snapshots with a pointer to the current one, for the settings and the prompts |
@@ -404,7 +403,7 @@ Some generic modules still refer directly to Feishu:
 | --- | --- |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems, and dependencies that optionally hold the first Assignment |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
-| `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
+| `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Source context: a kind's own health entries, Thread meta patched as it is now, and an instance's configuration |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
@@ -437,9 +436,8 @@ Some generic modules still refer directly to Feishu:
 | `tests/settings.spec.ts` | Settings saves that race a model or account check, a Policy sync that a save outran, and the refusals of the pause, a sync and a block |
 | `tests/views.spec.ts` | What the management views derive from the Store, such as the Thread a dropped message belongs to, the ended Tickets the review worklist still lists, and when Undo merge is offered |
 | `tests/timeline.spec.ts` | A Thread's pages and a Trigger's neighbours by time and then id, with every received Trigger's time in one form |
-| `tests/migration.spec.ts` | The schema 11 migration: every stored record in its current shape, and the refusal of older schemas |
 | `tests/repair.spec.ts` | The startup repair: a Feishu Topic Thread re-keyed to its opening message with its Ticket, Triggers, Decisions and read cursors, the merge into a Thread already recorded there, an unknown opening message, and a Thread left for the next start when the repair fails |
-| `tests/store.spec.ts` | Repositories and their working sets, in SQLite as in memory, the kv area, with every key of `KV` spelled only in `src/kv.ts` and the migration, settings history and queries |
+| `tests/store.spec.ts` | Repositories and their working sets, in SQLite as in memory, the kv area, with every key of `KV` spelled only in `src/kv.ts`, settings history and queries |
 | `tests/prompts.spec.ts` | Prompt validation, assembly and versions |
 | `tests/cards.spec.ts` | The rules the built-in text must state, file by file |
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
@@ -467,13 +465,13 @@ One SQLite file, `<stateDir>/orchestrator.sqlite`, which only the Store opens.
 | `thread` | Threads: Subscriptions, the Tickets that follow it for context, queued Triggers, the Eval in progress, the count of its expiries and `meta`; the generated columns `active`, set while Triggers are queued or an Eval runs, and `subscribed`, its Source while a Ticket subscribes to it | Engine; Sources write `meta` |
 | `ticket` | Tickets with their Mandate, origin, execution, Assignments, Channels, Inputs and the Threads they follow; the generated columns `open`, set while it has not ended, and `active`, set while Inputs are undelivered or the latest Assignment is pending or running | Engine |
 | `decision` | Decisions, by Thread | Engine |
-| `effect` | The effect queue: per kind and key, the payload, its order, failed attempts with the last error, and when it is due | Effects; the schema 11 migration queues what earlier versions kept for the main Session |
+| `effect` | The effect queue: per kind and key, the payload, its order, failed attempts with the last error, and when it is due | Effects |
 | `outbox` | The receipt of each message for a Channel, by id, with the Ticket it is for and its `status`, `pending`, `sent` or `dropped`, kept so an id is never queued twice; for a dropped message, when and why, as the generated column `dropped`, its time, and a reason code. A message that waits has a `reply` effect, which holds its attempts | The Outbox |
 | `kv` | Every other record, by key | The part that names it |
 
 A generated column is computed from its row's JSON and is empty outside its set, and each has an index over its set, so a pass reads only active work. A database that predates a column gets it when the Store opens it.
 
-`KV` (`src/kv.ts`) defines each key-value record's owner, key and type. All readers and writers use these entries; only migration code names older keys.
+`KV` (`src/kv.ts`) defines each key-value record's owner, key and type. All readers and writers use these entries.
 
 | Records | Keys or contents |
 | --- | --- |
@@ -491,7 +489,7 @@ Read caches use bounded in-memory `TextCache` instances and are lost on restart.
 
 Nothing deletes old records yet, so these grow without bound: the `trigger`, `disposition` and `decision` rows; ended Tickets and their Threads; the outbox's receipts; and in `kv`, every saved settings revision and prompt version, the prompt revisions each Session worked under, and the Sources' records per Thread.
 
-`SCHEMA_VERSION` only increases. A database of a newer version refuses to start; `src/app/migration.ts` upgrades a database of the pre-release schema 10 once, at start, and refuses an older one. `src/app/repair.ts` runs after that on every start and is idempotent: it rewrites a Feishu Topic Thread an earlier build keyed by its Topic id, merging it into the Thread the Topic uses now, so a Ticket that followed the old one receives the Topic's replies again.
+`SCHEMA_VERSION` only increases, and a database that records another version refuses to start: this build writes schema 11 and migrates none, so a database that records an earlier schema needs a new state directory. `src/app/repair.ts` runs on every start and is idempotent: it rewrites a Feishu Topic Thread an earlier build keyed by its Topic id, merging it into the Thread the Topic uses now, so a Ticket that followed the old one receives the Topic's replies again.
 
 ## Model-facing interfaces
 
