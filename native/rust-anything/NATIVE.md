@@ -76,7 +76,7 @@ remaining cases time out. Neither is a property of this vendored copy.
 ## Upstream sync
 
 1. Fetch the new tag in a scratch clone and confirm its `Cargo.toml` version.
-2. Replace this directory's contents with the same path list used for the current baseline (the three local files listed above stay):
+2. Replace this directory's contents with the same path list used for the current baseline (the local additions and trims listed above stay):
    `git archive <tag> ACCESSIBILITY.md CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md Cargo.lock Cargo.toml DECISIONS.md LICENSE README.md SECURITY.md server.json .mcp.json directory docs plugin skills src tests`.
    `.mcp.json` is a dotfile, so `git archive` takes it as its own pathspec alongside the listed paths.
 3. Re-apply the `rust-toolchain.toml` pin (or update it when upstream's `rust-version` moves), keep the `.gitignore` negation, trim the trailing
