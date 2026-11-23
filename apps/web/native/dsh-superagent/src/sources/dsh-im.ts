@@ -25,6 +25,8 @@ export interface DshImEvent {
   reply: { messageId: string; conversationId: string; actorId: string; threadId?: string; rootId?: string; parentId?: string }
   /** Feishu AppLink that opens the message, present on history reads. */
   appLink?: string
+  /** True for a recalled message a context read keeps in place: its sender and time stay, and `text` is empty. */
+  deleted?: true
 }
 
 /** A bot dsh-im owns, as listed for a Source picker. */
@@ -78,6 +80,8 @@ export interface DshImService {
     beforeCount?: number
     afterCount?: number
     includeBots?: boolean
+    /** Keeps a recalled message as a bodiless event instead of counting it as omitted. */
+    includeDeleted?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   replyChecked(botId: string, route: DshImEvent['reply'], text: string,
     options: {
@@ -96,6 +100,10 @@ export interface DshImService {
   threadHistoryChecked?(botId: string, query: {
     chatId: string; threadId: string; limit: number; since?: string; until?: string; cursor?: string; includeBots?: boolean
     direct?: boolean
+    /** Keeps the bot's own messages, which a backfill skips; a bot-authored message still needs `includeBots`. */
+    includeSelf?: boolean
+    /** Keeps a recalled message as a bodiless event instead of counting it as omitted. */
+    includeDeleted?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   /**
    * Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat.

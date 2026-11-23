@@ -8,6 +8,9 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ### Added / 新增
 
+- 历史读法可以把「自己说过的话」和撤回占位留在页面里：`readChatHistory`/`readThreadHistory` 新增 `includeSelf`（保留机器人自己的消息，补收仍默认跳过）与 `includeDeleted`（撤回消息不再是只记进 `omitted`，而是作为正文为空、`deleted: true` 的占位事件留在原来的位置）；`readExternalHistory`（即 `historyChecked` 的 group/nearby/thread 读法）也接受 `includeDeleted`。占位事件沿用发送者可见性规则：机器人发的撤回消息仍需要 `includeBots`；缺少事件所需的 id 或时间时仍计入 `omitted`。
+  A history read can now keep the bot's own messages and recalled placeholders: `readChatHistory`/`readThreadHistory` take `includeSelf` (keep the bot's own messages; a backfill still skips them) and `includeDeleted` (a recalled message is no longer only counted in `omitted` but stays in place as a bodiless event marked `deleted`); `readExternalHistory` — the `group`/`nearby`/`thread` reads behind `historyChecked` — takes `includeDeleted` as well. A placeholder follows the same sender visibility rule as a live message: a recalled message a bot sent still needs `includeBots`, and one without the ids or time an event needs is still counted in `omitted`.
+
 - 合并转发消息现在能读到内容：`merge_forward` 的 `content` 只有固定占位文本，dsh-im 现在在入站事件和历史/上下文读取里再读一次同一条消息（`im.v1.message.get`），把子消息渲染成 `<发送者>: <正文>` 行；读不到时保留 `[合并转发]` 占位。超过 16000 字符的正文不再整条丢弃，而是保留前 16000 字并以 `[内容过长，已截断]` 结尾；富文本里超过 512 字符的段落也不再被当成非法 id 整段丢掉。
   A merged forward now carries its contents: its `content` is only a fixed placeholder, so dsh-im reads the same message once more (`im.v1.message.get`) on the inbound path and in history and context reads and renders the sub-messages as `<sender>: <text>` lines, keeping `[合并转发]` when they cannot be read. A body over 16 000 characters keeps its first 16 000 characters and ends with `[内容过长，已截断]` instead of being dropped, and a rich-text paragraph longer than 512 characters is no longer dropped as an invalid id.
 

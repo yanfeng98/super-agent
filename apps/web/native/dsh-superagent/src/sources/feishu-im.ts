@@ -111,12 +111,14 @@ const eventView = (event: DshImEvent): ContextMessage => ({
   id: event.messageId, from: event.actor.name || event.actor.id, at: event.at,
   text: withMentionNames(event.text, event.mentions),
   ...event.actor.kind === 'bot' ? { bot: true as const } : {},
+  ...event.deleted ? { deleted: true as const } : {},
   ...event.reply.parentId ? { reply_to: event.reply.parentId } : {},
   ...event.appLink ? { url: event.appLink } : {},
 })
 const messageView = (message: DshImMessage): ContextMessage => ({
   id: message.messageId, from: message.sender.name || message.sender.id, at: message.at, text: message.text,
   ...message.sender.kind === 'bot' ? { bot: true as const } : {},
+  ...message.deleted ? { deleted: true as const } : {},
   ...message.parentId ? { reply_to: message.parentId } : {},
   ...message.appLink ? { url: message.appLink } : {},
 })
@@ -232,14 +234,17 @@ export const feishuImThreadContext: ThreadContext<FeishuConfig> = {
       // A topic is read oldest-first through its own history, so the message that started it is on the first page — the
       // anchor an assessment window begins from. An older dsh-im has only the newest-first topic page, and the chat
       // around a message is always the neighbouring window.
+      // A context window is the conversation as the reader saw it: the Source's own answers stay in it, and a recalled
+      // message keeps its place as a placeholder rather than disappearing from the window.
       if (part === 'thread' && route.threadId && im.threadHistoryChecked) {
         page = await im.threadHistoryChecked(botId, { chatId: route.conversationId, threadId: route.threadId,
-          limit: config.readPageSize, includeBots: true, ...cursor ? { cursor } : {} },
+          limit: config.readPageSize, includeBots: true, includeSelf: true, includeDeleted: true,
+          ...cursor ? { cursor } : {} },
           { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })
       } else {
         const scope: 'nearby' | 'thread' = part === 'thread' && route.threadId ? 'thread' : 'nearby'
         page = await im.historyChecked(botId, route, {
-          scope, limit: config.readPageSize, includeBots: true, ...cursor ? { cursor } : {},
+          scope, limit: config.readPageSize, includeBots: true, includeDeleted: true, ...cursor ? { cursor } : {},
           // `around` reads back further than the window an assessment needs: dsh-im caps the preceding count at 20.
           ...scope === 'nearby' ? { beforeCount: part === 'around' ? 20 : 5, afterCount: 5 } : {},
         }, { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000) })

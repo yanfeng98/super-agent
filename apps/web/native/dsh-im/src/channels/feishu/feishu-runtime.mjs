@@ -826,12 +826,16 @@ export class FeishuRuntime {
     return this.#checkedRead((client) => readExternalHistory(client, identity, route, query, signal), signal);
   }
 
-  /** Reads one chat's messages between two times; the caller owns the backfill cursor. */
+  /** Reads one chat's messages between two times; the caller owns the backfill cursor. `includeDeleted` keeps recalled messages as placeholders. */
   async chatHistoryChecked(identity, query, { signal } = {}) {
     return this.#checkedRead((client) => readChatHistory(client, identity, query, signal), signal);
   }
 
-  /** Reads one topic thread's messages between two times; the caller owns the polling cursor. */
+  /**
+   * Reads one topic thread's messages between two times; the caller owns the polling cursor. `includeSelf` keeps the
+   * bot's own messages and `includeDeleted` keeps recalled ones, which a context read asks for and a backfill does not;
+   * a bot-authored message, its own included, still needs `includeBots`.
+   */
   async threadHistoryChecked(identity, query, { signal } = {}) {
     return this.#checkedRead((client) => readThreadHistory(client, identity, query, signal), signal);
   }

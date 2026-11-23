@@ -156,6 +156,49 @@ test('thread history reads one thread and refuses messages outside it', async ()
  await assert.rejects(readThreadHistory(bot, identity, { chatId: 'oc-team', limit: 2 }), { code: 'bad-request' });
 });
 
+test('a context read keeps the bot own messages and recalled placeholders a backfill leaves out', async () => {
+ const own = { ...item('om-own'), sender: { sender_type: 'app', id_type: 'app_id', id: 'cli-1' } };
+ const recalled = { ...item('om-recalled'), deleted: true };
+ const bot = client([item('om-human'), own, recalled, item('om-other')]);
+ const context = await readThreadHistory(bot, identity, { chatId: 'oc-team', threadId: 'omt-topic', limit: 20,
+  includeBots: true, includeSelf: true, includeDeleted: true });
+ assert.deepEqual(context.events.map(event => event.messageId), ['om-human', 'om-own', 'om-recalled', 'om-other']);
+ assert.equal(context.omitted, 0);
+ const placeholder = context.events[2];
+ assert.equal(placeholder.deleted, true);
+ assert.equal(placeholder.text, '');
+ assert.equal(placeholder.actor.id, 'ou-human');
+ assert.equal(placeholder.at, new Date(1790830000000).toISOString());
+ // The same page read for a backfill keeps neither: the bot's own answer is not inbound work, and a recalled message
+ // has no body to receive.
+ const backfill = await readThreadHistory(bot, identity, { chatId: 'oc-team', threadId: 'omt-topic', limit: 20,
+  includeBots: true });
+ assert.deepEqual(backfill.events.map(event => event.messageId), ['om-human', 'om-other']);
+ assert.equal(backfill.omitted, 1);
+ await assert.rejects(readThreadHistory(bot, identity, { chatId: 'oc-team', threadId: 'omt-topic', limit: 1,
+  includeSelf: 'yes' }), { code: 'bad-request' });
+});
+
+test('a nearby window shows a recalled message in place only when it asks and the sender is visible', async () => {
+ const recalledBot = { ...item('om-recall-bot'), deleted: true, sender: { sender_type: 'app', id_type: 'app_id', id: 'cli-2' } };
+ const bot = client([item('om-human'), recalledBot]);
+ const shown = await readExternalHistory(bot, identity, route, { scope: 'nearby', limit: 20, includeBots: true,
+  includeDeleted: true });
+ assert.deepEqual(shown.events.map(event => `${event.messageId}${event.deleted ? ':deleted' : ''}`),
+  ['om-human', 'om-recall-bot:deleted']);
+ assert.equal(shown.events[1].actor.kind, 'bot');
+ // Without the option the recalled message is only counted, as before.
+ const counted = await readExternalHistory(bot, identity, route, { scope: 'nearby', limit: 20, includeBots: true });
+ assert.deepEqual(counted.events.map(event => event.messageId), ['om-human']);
+ assert.equal(counted.omitted, 1);
+ // A recalled bot message follows the same sender rule as a live one.
+ const hidden = await readExternalHistory(bot, identity, route, { scope: 'nearby', limit: 20, includeDeleted: true });
+ assert.deepEqual(hidden.events.map(event => event.messageId), ['om-human']);
+ assert.equal(hidden.omitted, 1);
+ await assert.rejects(readExternalHistory(bot, identity, route, { scope: 'nearby', limit: 20, includeDeleted: 'yes' }),
+  { code: 'bad-request' });
+});
+
 test('single message read returns its AppLink and refuses a changed route', async () => {
  const bot = client();
  bot.im.v1.message.get = async () => ({ code: 0, data: { items: [{ ...item('om-anchor'), message_app_link: 'https://applink.feishu.cn/client/message/open?message_id=om-anchor' }] } });

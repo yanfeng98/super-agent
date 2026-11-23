@@ -665,7 +665,7 @@ describe('dsh-im Feishu context parts and images', () => {
     // return before the message, since dsh-im cannot page further back than that window.
     const around = await feishuImKind.threadContext!.read({} as never, trigger, 'around', undefined, config())
     expect(around.messages.map(message => message.id)).toEqual(['om_1'])
-    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 20, afterCount: 5 })
+    expect(asked[0]?.[2]).toMatchObject({ scope: 'nearby', beforeCount: 20, afterCount: 5, includeDeleted: true })
     const own = await feishuImKind.threadContext!.read({} as never, trigger, 'message', undefined, config())
     expect(own.messages[0]).toMatchObject({ id: 'om_1', reply_to: 'om_parent' })
     expect(asked[1]?.[2]).toMatchObject({ messageId: 'om_1' })
@@ -696,9 +696,30 @@ describe('dsh-im Feishu context parts and images', () => {
       },
     }))
     const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event()), 'thread', 'cursor_1', config())
-    expect(asked[0]?.[1]).toEqual({ chatId: 'oc_team', threadId: 'omt_1', limit: 20, includeBots: true, cursor: 'cursor_1' })
+    // A context window is the conversation the reader saw: the Source's own answers stay in it, and a recalled message
+    // keeps its place as a placeholder.
+    expect(asked[0]?.[1]).toEqual({ chatId: 'oc_team', threadId: 'omt_1', limit: 20, includeBots: true,
+      includeSelf: true, includeDeleted: true, cursor: 'cursor_1' })
     expect(page.messages.map(message => message.id)).toEqual(['om_first'])
     expect(page.next).toBe('cursor_2')
+  })
+
+  it('keeps the Source own answers and a recalled message in a topic window', async () => {
+    setDshIm(service({
+      threadHistoryChecked: async () => ({ version: 1, scope: 'thread', omitted: 0, hasMore: false,
+        coverage: 'provider-visible-messages', events: [
+          event({ messageId: 'om_q', text: 'why did the build fail?' }),
+          event({ messageId: 'om_a', text: 'the lint gate failed', actor: { kind: 'bot', id: 'cli_bot', name: 'Bot' } }),
+          event({ messageId: 'om_gone', text: '', deleted: true,
+            reply: { messageId: 'om_gone', conversationId: 'oc_team', actorId: 'ou_alice' } }),
+        ] }),
+    }))
+    const page = await feishuImKind.threadContext!.read({} as never, imTrigger(event()), 'thread', undefined, config())
+    expect(page.messages.map(message => message.id)).toEqual(['om_q', 'om_a', 'om_gone'])
+    expect(page.messages[1]).toMatchObject({ from: 'Bot', bot: true })
+    // A recalled message stays in place with no text, so an assessment sees that something was withdrawn.
+    expect(page.messages[2]).toMatchObject({ id: 'om_gone', deleted: true, text: '' })
+    expect(page.body).toMatchObject({ status: 'available', messages: page.messages })
   })
 
   it('reads the chat around a message that sits in no topic', async () => {

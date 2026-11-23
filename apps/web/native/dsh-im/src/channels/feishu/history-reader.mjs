@@ -1,5 +1,5 @@
 import { readNearbyHistory } from './nearby-history.mjs';
-import { MESSAGE_TYPES, mergedForwardText, normalizeExternalText, senderMatches } from './external-consumer.mjs';
+import { deletedHistoryEvent, MESSAGE_TYPES, mergedForwardText, normalizeExternalText, senderMatches } from './external-consumer.mjs';
 
 function refuse(code) { throw Object.assign(new Error(code), { code }); }
 function identifier(value) {
@@ -85,6 +85,7 @@ export async function readExternalHistory(client, identity, route, query, signal
     || !identifier(route.actorId) || ['threadId', 'rootId', 'parentId'].some(key => route[key] !== undefined && !identifier(route[key])) || !['group', 'nearby', 'thread'].includes(query?.scope)
     || !Number.isInteger(query.limit) || query.limit < 1 || query.limit > 20
     || (query.includeBots !== undefined && typeof query.includeBots !== 'boolean')
+    || (query.includeDeleted !== undefined && typeof query.includeDeleted !== 'boolean')
     || (query.cursor !== undefined && (typeof query.cursor !== 'string' || !query.cursor || query.cursor.length > 4096)))
     refuse('bad-request');
   if (query.scope === 'nearby' && [query.beforeCount ?? 10, query.afterCount ?? 5]
@@ -109,9 +110,17 @@ export async function readExternalHistory(client, identity, route, query, signal
     for (const item of items) {
       if (!item || item.chat_id !== route.conversationId
         || (query.scope === 'thread' && item.thread_id !== route.threadId)) refuse('untrusted-source');
-      if (item.deleted || !MESSAGE_TYPES.includes(item.msg_type)
-        || (item.sender?.sender_type !== 'user'
-          && !(query.includeBots === true && ['app', 'bot'].includes(item.sender?.sender_type)))) { ++omitted; continue; }
+      const senderVisible = item.sender?.sender_type === 'user'
+        || (query.includeBots === true && ['app', 'bot'].includes(item.sender?.sender_type));
+      if (item.deleted) {
+        // A context read shows a recalled message in place; a read that did not ask for it counts it as omitted.
+        const recalled = senderVisible && query.includeDeleted === true
+          ? deletedHistoryEvent(item, identity, { chatId: route.conversationId }) : undefined;
+        if (!recalled) { ++omitted; continue; }
+        events.push(recalled);
+        continue;
+      }
+      if (!MESSAGE_TYPES.includes(item.msg_type) || !senderVisible) { ++omitted; continue; }
       if (item.mentions !== undefined && (!Array.isArray(item.mentions) || item.mentions.length > 100)) { ++omitted; continue; }
       let event;
       try { event = historyEvent(await expandMergedForward(client, item, signal), identity,
@@ -152,20 +161,23 @@ const HISTORY_LIMIT = 50;
 
 function historyQuery(query) {
   if (!query || typeof query !== 'object') refuse('bad-request');
-  const { since, until, cursor, includeBots, direct } = query;
+  const { since, until, cursor, includeBots, direct, includeSelf, includeDeleted } = query;
   const limit = query.limit;
   if (!Number.isInteger(limit) || limit < 1 || limit > HISTORY_LIMIT) refuse('bad-request');
   for (const value of [since, until]) {
     if (value !== undefined && (typeof value !== 'string' || !Number.isFinite(Date.parse(value)))) refuse('bad-request');
   }
   if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || cursor.length > 4096)) refuse('bad-request');
-  if (includeBots !== undefined && typeof includeBots !== 'boolean') refuse('bad-request');
-  if (direct !== undefined && typeof direct !== 'boolean') refuse('bad-request');
-  return { since, until, cursor, includeBots: includeBots === true, direct: direct === true, limit };
+  for (const value of [includeBots, direct, includeSelf, includeDeleted]) {
+    if (value !== undefined && typeof value !== 'boolean') refuse('bad-request');
+  }
+  return { since, until, cursor, includeBots: includeBots === true, direct: direct === true,
+    includeSelf: includeSelf === true, includeDeleted: includeDeleted === true, limit };
 }
 
 async function readHistoryPage(client, identity, options, signal) {
-  const { containerIdType, containerId, chatId, threadId, direct, includeBots, limit, since, until, cursor } = options;
+  const { containerIdType, containerId, chatId, threadId, direct, includeBots, includeSelf, includeDeleted,
+    limit, since, until, cursor } = options;
   const params = {
     container_id_type: containerIdType, container_id: containerId, sort_type: 'ByCreateTimeAsc',
     page_size: limit, with_sender_name: true,
@@ -181,13 +193,22 @@ async function readHistoryPage(client, identity, options, signal) {
   let omitted = 0;
   for (const item of items) {
     if (!item || item.chat_id !== chatId || (threadId !== undefined && item.thread_id !== threadId)) refuse('untrusted-source');
-    // A bot's own messages are never inbound work for its consumer: skip them without counting them as unreadable.
+    // A bot's own messages are never inbound work for its consumer, so a backfill skips them without counting them as
+    // unreadable; a context read asks for them, since its reader shows what the bot itself said.
     const senderId = item.sender?.id;
-    if (senderId && ((senderId === identity.appId && item.sender?.sender_type === 'app')
+    if (includeSelf !== true && senderId && ((senderId === identity.appId && item.sender?.sender_type === 'app')
       || (senderId === identity.botOpenId && item.sender?.sender_type === 'bot'))) continue;
-    if (item.deleted || !MESSAGE_TYPES.includes(item.msg_type)
-      || (item.sender?.sender_type !== 'user'
-        && !(includeBots && ['app', 'bot'].includes(item.sender?.sender_type)))) { ++omitted; continue; }
+    const senderVisible = item.sender?.sender_type === 'user'
+      || (includeBots === true && ['app', 'bot'].includes(item.sender?.sender_type));
+    if (item.deleted) {
+      // A recalled message keeps its place in a context window; a backfill skips it, since there is no body to receive.
+      const recalled = senderVisible && includeDeleted === true
+        ? deletedHistoryEvent(item, identity, { chatId, direct }) : undefined;
+      if (!recalled) { ++omitted; continue; }
+      events.push(recalled);
+      continue;
+    }
+    if (!MESSAGE_TYPES.includes(item.msg_type) || !senderVisible) { ++omitted; continue; }
     let event;
     try { event = historyEvent(await expandMergedForward(client, item, signal), identity, { chatId, threadId, direct, includeBots }); } catch (error) {
       if (error?.code !== 'invalid-inbound') throw error;
@@ -202,7 +223,10 @@ async function readHistoryPage(client, identity, options, signal) {
   return { events, omitted, hasMore: response.data.has_more, ...(nextCursor ? { nextCursor } : {}) };
 }
 
-/** Reads one chat's messages between two times, oldest first, with an explicit continuation cursor. */
+/**
+ * Reads one chat's messages between two times, oldest first, with an explicit continuation cursor.
+ * `includeDeleted` keeps a recalled message as a bodiless, `deleted` event instead of counting it as omitted.
+ */
 export async function readChatHistory(client, identity, query, signal) {
   const chatId = typeof query?.chatId === 'string' && identifier(query.chatId) ? query.chatId : undefined;
   if (!chatId) refuse('bad-request');
@@ -211,7 +235,11 @@ export async function readChatHistory(client, identity, query, signal) {
   return { version: 1, scope: 'chat', chatId, ...page, coverage: 'provider-visible-messages' };
 }
 
-/** Reads one topic thread's messages between two times, oldest first, with an explicit continuation cursor. */
+/**
+ * Reads one topic thread's messages between two times, oldest first, with an explicit continuation cursor.
+ * `includeSelf` keeps the bot's own messages, which a backfill always skips; `includeDeleted` keeps a recalled message as
+ * a bodiless, `deleted` event instead of counting it as omitted. A bot-authored message still needs `includeBots`.
+ */
 export async function readThreadHistory(client, identity, query, signal) {
   const threadId = typeof query?.threadId === 'string' && identifier(query.threadId) ? query.threadId : undefined;
   const chatId = typeof query?.chatId === 'string' && identifier(query.chatId) ? query.chatId : undefined;

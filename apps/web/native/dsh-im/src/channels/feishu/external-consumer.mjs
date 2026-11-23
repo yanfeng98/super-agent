@@ -230,6 +230,40 @@ export function normalizeExternalText(event, { botId, appId, botOpenId, fingerpr
 }
 
 /**
+ * Builds the event a context read keeps for a recalled message: it names the sender and the time, carries the reply
+ * route, and has an empty `text` plus `deleted: true`, so a reader shows that a message was withdrawn instead of
+ * dropping it from the window. Returns undefined when the provider no longer returns the ids an event needs.
+ */
+export function deletedHistoryEvent(item, identity, { chatId, direct = false } = {}) {
+  if (!item || item.chat_id !== chatId) return undefined;
+  const senderType = item.sender?.sender_type;
+  if (senderType !== 'user' && !['app', 'bot'].includes(senderType)) return undefined;
+  const actorId = identifier(item.sender?.id);
+  const messageId = identifier(item.message_id);
+  const conversationId = identifier(item.chat_id);
+  const milliseconds = Number(item.create_time);
+  const timestamp = new Date(milliseconds);
+  if (!actorId || !messageId || !conversationId || !Number.isFinite(milliseconds) || milliseconds <= 0
+    || !Number.isFinite(timestamp.getTime()) || !/^[a-f0-9]{64}$/.test(identity?.fingerprint ?? '')) return undefined;
+  const route = Object.freeze({
+    messageId, conversationId, actorId,
+    ...(identifier(item.thread_id) ? { threadId: item.thread_id } : {}),
+    ...(identifier(item.root_id) ? { rootId: item.root_id } : {}),
+    ...(identifier(item.parent_id) ? { parentId: item.parent_id } : {}),
+  });
+  return Object.freeze({
+    version: 1, channel: 'feishu', botId: identity.botId, fingerprint: identity.fingerprint,
+    eventId: `history:${messageId}`, messageId,
+    actor: Object.freeze({ kind: senderType === 'user' ? 'user' : 'bot', id: actorId,
+      ...(identifier(item.sender?.sender_name) ? { name: item.sender.sender_name } : {}) }),
+    conversation: Object.freeze({ kind: direct ? 'dm' : 'group', id: conversationId }),
+    mentions: Object.freeze([]), mentionedAccount: false, images: Object.freeze([]),
+    at: timestamp.toISOString(), text: '', reply: route, deleted: true,
+    replay: Object.freeze({ kind: 'provider-redelivery', resumeCursor: false, gapPossible: true }),
+  });
+}
+
+/**
  * Whether one fetched message's sender is the actor a retained route names. Users are matched by `open_id`; app and bot
  * messages carry the app id instead, so only the id is compared.
  */

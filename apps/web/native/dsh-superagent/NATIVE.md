@@ -352,7 +352,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     half of dsh-im's nearby window (20 messages, its cap) and reporting that window's bounds; a `thread` read of a message
     Feishu placed in no Topic is the surrounding chat and reports `chat_neighbours`; a `/root` or `/parent` read reports
     `deleted` when that related message was recalled, and every read of a Trigger whose own message was recalled reports
-    `unavailable`, because dsh-im's route check refuses a route to a recalled message; events carry `appLink`, the
+    `unavailable`, because dsh-im's route check refuses a route to a recalled message; a window keeps the Source's own
+    answers (`includeSelf`) and a recalled message's place as a bodiless `deleted` entry (`includeDeleted`), while a
+    backfill asks for neither; events carry `appLink`, the
     Trigger keeps it as `url`, and so do context messages, and the
     page body an assessment reads carries the mapped messages instead of dsh-im's event records and account fingerprint.
     An image of any message those reads return is downloaded from
