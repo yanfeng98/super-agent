@@ -29,6 +29,7 @@ import { dequeueMerges, enqueueMerges, markMergeFailed, mergeQueuePaused, mergeQ
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
 import { Store } from './store.ts'
+import { rekeyFeishuTopicThreads } from './repair.ts'
 import { evalsHealth } from './views/overview.ts'
 import { TextCache } from './cache.ts'
 import { Effects } from './effects.ts'
@@ -125,6 +126,9 @@ export class Runtime extends Service implements SourceHost {
     try {
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
       const store = opened = this.store = new Store(join(machine.stateDir, 'orchestrator.sqlite'), report)
+      // A Feishu Topic Thread an earlier build keyed by its Topic id is re-keyed to the message that opened the Topic.
+      const rekeyed = rekeyFeishuTopicThreads(store)
+      if (rekeyed) ctx.logger.info('dsh-superagent: re-keyed %d Feishu Topic Thread(s) to the messages that opened them', rekeyed)
       const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart })
       const deployed = () => setup.configured()
         ? environmentOf({ deployment: setup.deployment, sources: this.sources, settings: store.settings() }) : undefined

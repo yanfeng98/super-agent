@@ -658,6 +658,20 @@ it('links Channels and Threads for people, finds tickets by a message id on a Th
   expect(search(viewsOf(runtime), '别的群', new TextCache(0)).items).toEqual([expect.objectContaining({ filtered: { code: 'chat_not_allowed' }, threadTitle: undefined })])
 })
 
+it('re-keys a Feishu Topic Thread recorded under its Topic id when the database is opened', async () => {
+  await runtime.stop()
+  const store = new Store(join(directory, 'orchestrator.sqlite'))
+  store.threads.save({ key: 'feishu:oc_team:omt_1', ref: { source: 'feishu', id: 'oc_team:omt_1' },
+    createdAt: '2026-01-01T00:00:00.000Z', subscriptions: [], correlated: [], pending: [], meta: { threadId: 'omt_1' } })
+  store.triggers.save({ id: 'om_root', source: 'feishu', threads: [{ source: 'feishu', id: 'oc_team:omt_1' }],
+    actor: { source: 'feishu', id: 'ou_alice' }, human: true, at: '2026-01-01T00:00:00.000Z', text: 'opened',
+    meta: { messageId: 'om_root', chatId: 'oc_team' } })
+  store.close()
+  await restart()
+  expect(runtime.store.threads.get('feishu:oc_team:omt_1')).toBeUndefined()
+  expect(runtime.store.threads.get('feishu:oc_team:om_root')).toMatchObject({ ref: { source: 'feishu', id: 'oc_team:om_root' } })
+})
+
 it('stops the ticket that follows a Thread when a person says /stop there, and refuses a machine sender', async () => {
   const { ticket } = await acceptedTicket(feishu('1', '@_user_1 修一下回归', { mentions: [{ id: 'ou_bot', key: '@_user_1', name: 'dsh-superagent' }] }))
   const context = runtime.context(feishuKind)
