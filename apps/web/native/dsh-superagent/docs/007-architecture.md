@@ -159,7 +159,7 @@ Its interfaces are grouped by purpose:
 - **Outbox receipts:** `replyStatus` and `receipts`, written only by Outbox. Receipt operations are `get`, `waiting`, `behind`, `add`, `settle` and `withdraw`. `behind` checks whether an earlier message for the same Ticket and conversation is waiting with fewer than three failures. A withdrawn message settles with `channelGone` or `channelIgnored`. Read queries expose failed and dropped replies through `failingReplies`, `droppedReplies` and `droppedSince`.
 - **Typed key-value records:** `get`, `set`, `delete` and `keys`, using entries from `KV`.
 
-`afterCommit` runs an action only after the transaction commits, never after rollback. Runtime reads records in their stored shape; a database that records another schema is refused when the Store opens it, so no reader converts legacy records.
+`afterCommit` runs an action only after the transaction commits, never after rollback. Runtime reads records in their stored shape; a database that records another schema is refused when the Store opens it, so no reader converts records across schema versions.
 
 ### Effects
 
@@ -280,7 +280,7 @@ Some generic modules still refer directly to Feishu:
 - Outbox applies the Feishu chat word limit.
 - `src/app/links.ts` resolves Feishu message links through dsh-im and `repliedTo`.
 - `src/app/resources.ts` serves the `feishu-im/` originals.
-- Sessions and Prompts register the built-in Feishu skill. Migration converts the schema-10 records.
+- Sessions and Prompts register the built-in Feishu skill.
 
 
 ## Modules
@@ -423,7 +423,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/passes.spec.ts` | Passes: one at a time, the ones asked for during a pass run as one after it, and the runtime health a failed pass reports |
 | `tests/outbox.spec.ts` | The Outbox on a running Runtime: messages wait while processing is paused or their Source is not installed, and a reply to a Trigger written before the handoff is dropped as `channelGone` |
 | `tests/cache.spec.ts` | `TextCache` |
-| `tests/queue.spec.ts` | The Runtime's work through the effect queue, and what earlier versions stored |
+| `tests/queue.spec.ts` | The latest settings notice, kept once by the effect queue while the main Session cannot take it |
 | `tests/followups.spec.ts` | A person's follow-up on a Ticket's Thread: its notice to the main Session, the tools that act on it, what a burst costs; a worker's hand-back and context follow, and the main Session's note |
 | `tests/health.spec.ts` | One health entry per part, each cleared by its own next success |
 | `tests/delivery.spec.ts` | `AgentDelivery` |

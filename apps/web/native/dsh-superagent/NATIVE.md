@@ -305,7 +305,7 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     prompt text and UI. `stateView.accounts` has only `feishu`; `orchestrator_report` has no `pr_number`; `orchestrator_eval_read`
     reads only Thread context; `orchestrator_read` exposes the Feishu originals item 31 describes and no `github/` resources;
     and the merge gate is local: review decision, `executor.requireReview`, open notes, configured checks, dependencies, target
-    containment, rebase, queue and the post-merge target check. No migration or startup cleanup handles GitHub records:
+    containment, rebase, queue and the post-merge target check. No startup cleanup handles GitHub records:
     a database written by a GitHub-enabled build is not cleaned, so start with a new state directory if its old records
     must not remain. The plugin locale metadata no longer names GitHub. The worker environment still keeps `gh`
     unavailable and clears `GH_TOKEN`/`GITHUB_TOKEN`, so a worker cannot reach the operator's GitHub credentials.

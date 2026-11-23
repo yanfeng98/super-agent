@@ -41,4 +41,8 @@
 
 ## 4. 未做
 
-- `src/app/repair.ts` 的飞书 Topic Thread 重键、`TicketInput` 的 `reopen` 种类、`Trigger.deliveredAt` 这类「早期版本写入」的字段仍保留：它们与 schema 版本无关，或牵动读工具与序列化，留待单独判断。
+- 下面这些只服务 schema 10 时代数据的形状仍在，删除会牵动读工具、序列化或面板文案，留待单独判断：
+  - `MandateBasis` 的 `via: 'listed'` 与 `authority`：只有被删的 `basisOf` 产出过，`src/policy.ts` 与 `src/app/views/tickets.ts` 仍在处理；
+  - `TicketInput` 的 `reopen` 种类：`src/app/cards.ts` 与 `orchestrator_read` 仍渲染它；
+  - `Trigger.deliveredAt`、`PromptVersion.legacy` 这类「早期版本写入」的字段及其中文/英文文案（`src/client/ticket.tsx`、`locales.ts` 仍在显示）。
+- 保留 `src/app/repair.ts` 的飞书 Topic Thread 重键：它处理 schema 11 库也可能存在的、按 Topic id 建 key 的 Thread，与 schema 版本无关，幂等且每次启动零成本。

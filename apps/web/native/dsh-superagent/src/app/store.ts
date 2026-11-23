@@ -86,7 +86,7 @@ export class Store implements Repositories {
           CREATE INDEX IF NOT EXISTS effect_due ON effect(kind, due, seq);
         `)
         this.addColumns()
-        if (version === undefined) this.set(KV.store.schema, SCHEMA_VERSION)
+        if (version !== SCHEMA_VERSION) this.set(KV.store.schema, SCHEMA_VERSION)
       })
     } catch (error) {
       this.db.close()
