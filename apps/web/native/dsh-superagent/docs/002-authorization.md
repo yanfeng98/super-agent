@@ -143,7 +143,7 @@ The Source must still listen to the original Thread. The remaining checks depend
 
 If revalidation fails, the Ticket stays ended and takes none of its waiting messages. Each message is treated as having reached no Ticket; if no other Ticket owns it, it goes to Eval. The main Session is not told it reached a worker. This also applies after a processing pause. Attaching to the Ticket is refused, and further work requires a new accept.
 
-- **A person saying "stop" in a Thread is an ordinary Trigger,** and Eval decides stop. An Executor cannot declare that a person asked it to stop.
+- **A person's `/stop` in a Feishu chat is a Source control message.** The Source ends the live Ticket of that Thread itself, after the same Policy gate that admits a message there, so the stop neither becomes work nor waits for Eval; the bot answers with the Ticket it stopped. Any other wording is an ordinary Trigger, and Eval decides stop. An Executor cannot declare that a person asked it to stop.
 - **Stop in the panel is a command.** It acts on the Ticket directly and is recorded as a manual stop.
 - **Waiting conditions belong to Sources.** A condition such as "no assignee for N hours" would be a Source that waits and checks again itself; Eval never waits.
 

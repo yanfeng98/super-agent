@@ -658,6 +658,19 @@ it('links Channels and Threads for people, finds tickets by a message id on a Th
   expect(search(viewsOf(runtime), '别的群', new TextCache(0)).items).toEqual([expect.objectContaining({ filtered: { code: 'chat_not_allowed' }, threadTitle: undefined })])
 })
 
+it('stops the ticket that follows a Thread when a person says /stop there, and refuses a machine sender', async () => {
+  const { ticket } = await acceptedTicket(feishu('1', '@_user_1 修一下回归', { mentions: [{ id: 'ou_bot', key: '@_user_1', name: 'dsh-superagent' }] }))
+  const context = runtime.context(feishuKind)
+  // The follow-up is admitted on the Thread the ticket follows, so the person's stop ends it.
+  const onThread = (id: string, overrides: Record<string, unknown> = {}) => feishu(id, '/stop', { root_id: 'om_1', ...overrides })
+  expect((await context.tickets.stopOnThread(onThread('2')) ?? []).map(item => item.id)).toEqual([ticket.id])
+  expect(runtime.store.tickets.get(ticket.id)!.ended).toMatchObject({ reason: 'a person asked in the conversation' })
+  // Nothing is left to stop on that Thread.
+  expect(await context.tickets.stopOnThread(onThread('3'))).toEqual([])
+  // A machine sender never gets a person's stop.
+  expect(await context.tickets.stopOnThread(onThread('4', { sender_type: 'bot' }))).toBeUndefined()
+})
+
 it('counts every step of the day\'s flow over the same arriving messages and lists the same accepted Decisions', async () => {
   const now = String(Date.now())
   await acceptedTicket(feishu('1', '@bot 修一下回归', { create_time: now }))

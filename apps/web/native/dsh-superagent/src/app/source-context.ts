@@ -1,5 +1,5 @@
 /** Scoped runtime context exposed to each Source kind, isolating Sources from direct Store or Engine access. */
-import type { EngineForSources, ReceiveResult, Trigger } from '../core/index.ts'
+import type { EngineForSources, ReceiveResult, Ticket, Trigger } from '../core/index.ts'
 import type { Deployment } from '../deployment.ts'
 import type { Commands } from '../infra/commands.ts'
 import type { SetupProblem } from '../setup.ts'
@@ -24,6 +24,8 @@ export interface SourceContextDeps {
   readonly feishuProblem?: SetupProblem | undefined
   /** Hands a Trigger to the Engine and schedules the pass that assesses it. */
   receive(trigger: Trigger): ReceiveResult | Promise<ReceiveResult>
+  /** Stops the live tickets following a Trigger's Thread when the Policy admits that message there. */
+  stopThreadWork(trigger: Trigger): Promise<Ticket[] | undefined>
 }
 
 /**
@@ -61,6 +63,7 @@ export function sourceContextOf(deps: SourceContextDeps, kind: { kind: string; h
       open: () => store.tickets.open(),
       bindThread: (id, thread, own) => { deps.engine.bindThread(id, thread, own) },
       threadClosed: (thread, outcome, at) => { deps.engine.threadClosed(thread, outcome, at) },
+      stopOnThread: trigger => deps.stopThreadWork(trigger),
     },
     triggers: { get: id => store.triggers.get(id), latest: thread => store.read.threadTriggers(thread, 1)[0] },
     notify: message => { deps.outbox.send(message) },

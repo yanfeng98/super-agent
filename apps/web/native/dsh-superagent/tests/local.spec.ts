@@ -39,7 +39,7 @@ function harness({ allow = true, enabled = true } = {}) {
   const commands = new Commands(() => deployment, {}, new AbortController().signal)
   const receive = (trigger: Trigger) => { const result = engine.receive(trigger); engine.evaluateDue(); return result }
   const parts: SourceContextDeps = { store, engine, outbox, commands, sources, deployment, ready: Promise.resolve(), configured: () => true,
-    receive }
+    receive, stopThreadWork: async () => undefined }
   const host = { ...parts, context: (kind: { kind: string; health: readonly string[] }) => sourceContextOf(parts, kind) }
   return { host, store, engine, sources, assessor, candidates, deployment, commands, executor }
 }

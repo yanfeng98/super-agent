@@ -104,6 +104,24 @@ export function imTrigger(event: DshImEvent, root = event.reply.rootId): Trigger
       ...event.reply.parentId ? { parentId: event.reply.parentId } : {} },
   }
 }
+/** The Source's answer to a `/stop`: which ticket ended, or that the Thread had none. One short line, within the IM limit. */
+const stoppedText = (stopped: readonly { title: string }[]): string => {
+  if (!stopped.length) return 'No ticket is running on this thread.'
+  if (stopped.length > 1) return `Stopped ${stopped.length} tickets.`
+  const title = stopped[0]!.title
+  return `Stopped: ${title.length > 80 ? `${title.slice(0, 80)}…` : title}`
+}
+
+/** A person's stop command: `/stop` alone, optionally after the mentions a group message carries in its raw text. */
+const STOP_COMMAND = /^\s*(?:@[A-Za-z0-9_]+\s+)*\/stop\s*$/i
+/**
+ * Whether one inbound event asks to stop the work on its Thread rather than to start or continue work.
+ * @param event - The authenticated inbound message.
+ * @returns True for a plain-text `/stop` from a person.
+ */
+export const isStopCommand = (event: DshImEvent): boolean =>
+  event.actor.kind === 'user' && event.messageType === 'text' && STOP_COMMAND.test(event.text)
+
 /** The Trigger id of the message a Feishu reply answers, when Feishu supplied the parent id. */
 export const imRepliesTo = (trigger: Trigger): string | undefined =>
   typeof trigger.meta.parentId === 'string' ? key(SOURCE, trigger.meta.parentId) : undefined
@@ -542,7 +560,17 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                   if (current && ctx.configured()) {
                     const trigger = imTrigger(event)
                     try {
-                      await ctx.receive(trigger)
+                      // A person's `/stop` is a control message: it ends this Thread's work instead of becoming
+                      // assessment work, and the Source answers it so the person sees what happened. A sender the Policy
+                      // does not admit on this Thread falls through and is handled like any other message.
+                      const stopped = full && isStopCommand(event) ? await full.tickets.stopOnThread(trigger) : undefined
+                      if (full && stopped) {
+                        if (trigger.channel)
+                          full.notify({ id: key('reply', trigger.id), channel: trigger.channel, text: stoppedText(stopped), kind: 'reply' })
+                      } else {
+                        await ctx.receive(trigger)
+                        describeThreads(full, event, trigger)
+                      }
                     } catch (error) {
                       // dsh-im only logs the rejection, so the Source reports it too instead of letting the next ready report hide it.
                       eventFailure = { at: Date.now(), detail: `Handling ${trigger.id} failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}` }
@@ -550,7 +578,6 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                       throw error
                     }
                     eventFailure = undefined
-                    describeThreads(full, event, trigger)
                   }
                   if (full && event.conversation.kind === 'dm') {
                     const chats = full.state.get(KV.feishu.chats) ?? {}

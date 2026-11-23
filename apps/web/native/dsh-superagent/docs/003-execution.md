@@ -121,7 +121,7 @@ A Source whose Thread lifecycle determines whether work is done can make a Ticke
 
 ### Follow-ups and context Threads
 
-The Executor decides human follow-ups on its Ticket's own Threads. It handles in-scope requests and hands back requests beyond its scope or for another Ticket. Once no Executor owns the message, it becomes a candidate for the main Session. The main Session may otherwise act on the follow-up only to stop work at the person's request.
+The Executor decides human follow-ups on its Ticket's own Threads. It handles in-scope requests and hands back requests beyond its scope or for another Ticket. Once no Executor owns the message, it becomes a candidate for the main Session. The main Session may otherwise act on the follow-up only to stop work at the person's request. A person can end that work without waiting for Eval by sending `/stop` in the chat: the Source stops the Thread's live Ticket itself and answers with the Ticket it stopped, or says that nothing was running there.
 
 An Input counts as read after the Session takes it into a step and subsequently reports or ends a turn. When a Ticket ends, unread messages that were not acknowledged, answered or handed back return to Eval, as described in [002 Authorization](002-authorization.md). Read messages left without action, such as thanks, do not.
 

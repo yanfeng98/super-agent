@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, latestAssignment, latestReport, liveTicket, reasonText, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
+import { Engine, key, latestAssignment, latestReport, liveTicket, reasonText, threadKey, type ActionOrigin, type DomainEvent, type EngineForSettings, type ReceiveResult, type Ticket,
   type TicketCheck, type TicketCheckRun, type TicketNote, type TicketReview, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
@@ -213,6 +213,7 @@ export class Runtime extends Service implements SourceHost {
         automerge: () => { void this.runAutoMerge() }, mergeQueue: () => { void this.runMergeQueue() },
         })
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
+        stopThreadWork: trigger => runtime.stopThreadWork(trigger),
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources,
@@ -1425,6 +1426,39 @@ export class Runtime extends Service implements SourceHost {
     if (options.discard) await this.discardTicket(ticketId)
     return { ticket: this.store.tickets.get(ticketId)!, stopped, discarded: !!options.discard }
   }
+  /**
+   * Stops the live tickets that follow a Trigger's Thread, when the Policy admits that Trigger as a person's message on
+   * the Thread. A conversation's `/stop` reaches this instead of becoming assessment work.
+   * @param trigger - The person's message, already mapped by its Source.
+   * @returns The tickets it stopped, or `undefined` when the Policy does not admit the sender, which leaves the caller to
+   * treat the message as ordinary.
+   */
+  async stopThreadWork(trigger: Trigger): Promise<Ticket[] | undefined> {
+    const ref = trigger.threads[0]
+    if (!ref) return undefined
+    const key = threadKey(ref)
+    const thread = this.store.threads.get(key)
+    // A Thread the store never saw holds no ticket, so a stop there has nothing to end and needs no admission decision.
+    if (!thread) return []
+    const tickets = thread.subscriptions.flatMap(id => {
+      const ticket = this.store.tickets.get(id)
+      return ticket && !thread.context?.includes(id) ? [ticket] : []
+    })
+    if (!settingsPolicy(this.store.settings(), this.sources).gate(trigger, thread, tickets).admissible) return undefined
+    const stopped: Ticket[] = []
+    for (const ticket of tickets) {
+      if (ticket.ended || ticket.merged || ticket.cleaned || ticket.discarded) continue
+      try {
+        const result = await this.stopTicket(ticket.id, { reason: 'a person asked in the conversation' })
+        if (result.stopped) stopped.push(result.ticket)
+      } catch (error) {
+        // A merge or cleanup that moved this ticket between the read and the stop leaves nothing left to stop.
+        this.ctx.logger.warn('dsh-superagent: stopping %s from the conversation failed: %s', ticket.id, String(error))
+      }
+    }
+    return stopped
+  }
+
   /**
    * Removes an ended ticket's linked worktree and branch, then records the discard on the ticket and in its archive.
    * @throws when the ticket is unknown or open, has no workspace, was merged or discarded, or either removal fails.

@@ -223,6 +223,42 @@ describe('the dsh-im-backed Feishu Source', () => {
     await running
   }, 15_000)
 
+  it('answers a person\'s /stop by ending this Thread\'s ticket instead of treating it as work', async () => {
+    let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
+    const received: string[] = []
+    const notices: { channel: { address: Record<string, string> }; text: string }[] = []
+    let stopResult: { id: string; title: string }[] | undefined = [{ id: 'ticket_1', title: '修复登录页' }]
+    const imService = service({
+      inboundStatus: async () => ({ version: 1, botId: 'bot_1', superagent: true, superagentActive: false }),
+      consumeInbound: async (_botId, options) => { accept = options.onEvent; return () => {} },
+    })
+    setDshIm(imService)
+    const controller = new AbortController()
+    const ctx: FeishuWatchContext = { ready: Promise.resolve(), config: () => config(), configured: () => true,
+      receive: trigger => { received.push(trigger.text) }, report: () => {} }
+    const full = { ...ctx,
+      state: { get: () => ({}), set: () => undefined, keys: () => [] },
+      tickets: { stopOnThread: async () => stopResult },
+      notify: (message: { channel: { address: Record<string, string> }; text: string }) => { notices.push(message) },
+    } as unknown as SourceContext
+    const running = watchFeishuIm(ctx, () => imService, controller.signal, full)
+    for (let attempt = 0; attempt < 20 && !accept; attempt += 1) await new Promise(resolve => setTimeout(resolve, 0))
+    await accept!(event({ text: '/stop', messageType: 'text' }), { signal: new AbortController().signal })
+    expect(notices.at(-1)?.text).toBe('Stopped: 修复登录页')
+    expect(received).toEqual([])
+    // Nothing is running: the Source says so and still starts no work.
+    stopResult = []
+    await accept!(event({ messageId: 'om_2', text: '/stop', messageType: 'text' }), { signal: new AbortController().signal })
+    expect(notices.at(-1)?.text).toBe('No ticket is running on this thread.')
+    expect(received).toEqual([])
+    // A sender the Policy does not admit on this Thread is handled like any other message.
+    stopResult = undefined
+    await accept!(event({ messageId: 'om_3', text: '/stop', messageType: 'text' }), { signal: new AbortController().signal })
+    expect(received).toEqual(['/stop'])
+    controller.abort()
+    await running
+  })
+
   it('describes each Thread with its chat name and link as messages arrive', async () => {
     let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
     const described: { key: string; description: Record<string, unknown> }[] = []

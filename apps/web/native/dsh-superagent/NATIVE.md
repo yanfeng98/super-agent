@@ -346,7 +346,10 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     an ambiguous (`reply-result-unknown`) send and Feishu deduplicates it instead of producing a second reply. Replies
     render as rich-text cards in the source message's topic (`format: 'markdown'`, `replyInThread: true`), so a Ticket
     answer looks like the removed lark-cli Source's `--markdown --reply-in-thread` reply, and a bot-authored source can be
-    answered because dsh-im accepts bot senders on the retained route. `root`, `parent` and `message` context reads the
+    answered because dsh-im accepts bot senders on the retained route. A plain-text `/stop` from a person is a control
+    message: the Source ends the live Ticket following that Thread, under the same Policy gate that admits a message
+    there, and answers with the Ticket it stopped or says that nothing was running; a sender the Policy does not admit
+    falls through as an ordinary message. `root`, `parent` and `message` context reads the
     message by id through `messageChecked({ messageId })` instead of searching the nearby window, so a distant parent still
     resolves, and `around` reads the chat around a message even when it sits in a Thread, reporting that window's bounds
     and paging back through older messages one provider page per call until dsh-im's 500-record side limit, so a long

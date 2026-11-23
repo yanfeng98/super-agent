@@ -63,6 +63,14 @@ export interface SourceContext {
     bindThread(id: string, thread: ThreadRef, own: boolean): void
     /** Reports that a followed Thread closed at `at`; each open ticket following it ends once no `own` Thread remains open and no resumed work is still running. */
     threadClosed(thread: ThreadRef, outcome: 'merged' | 'closed', at: string): void
+    /**
+     * Stops the live tickets that follow a Trigger's Thread, when the Policy admits that message as a person's message on
+     * the Thread. A control message such as `/stop` uses this instead of becoming work.
+     * @param trigger - The person's message, already mapped by its Source.
+     * @returns The tickets it stopped, or `undefined` when the Policy does not admit the sender, which leaves the caller to
+     * treat the message as ordinary.
+     */
+    stopOnThread(trigger: Trigger): Promise<Ticket[] | undefined>
   }
   triggers: { get(id: string): Trigger | undefined; /** The newest Trigger on a Thread. */ latest(thread: string): Trigger | undefined }
   notify(message: OutboundMessage): void
