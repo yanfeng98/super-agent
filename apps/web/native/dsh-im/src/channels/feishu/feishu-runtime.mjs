@@ -856,8 +856,14 @@ export class FeishuRuntime {
   }
 
   /** Reads one chat's messages between two times; the caller owns the backfill cursor. `includeDeleted` keeps recalled messages as placeholders. */
+  /**
+   * Reads one chat's messages between two times, oldest first; the caller owns the backfill cursor. `excludeHandled`
+   * drops the messages this bot already handled while it was not handed over, so a consumer that takes over does not
+   * answer them a second time.
+   */
   async chatHistoryChecked(identity, query, { signal } = {}) {
-    return this.#checkedRead((client) => readChatHistory(client, identity, query, signal), signal);
+    const page = await this.#checkedRead((client) => readChatHistory(client, identity, query, signal), signal);
+    return this.#withoutHandled(page, query);
   }
 
   /**
@@ -866,7 +872,14 @@ export class FeishuRuntime {
    * a bot-authored message, its own included, still needs `includeBots`.
    */
   async threadHistoryChecked(identity, query, { signal } = {}) {
-    return this.#checkedRead((client) => readThreadHistory(client, identity, query, signal), signal);
+    const page = await this.#checkedRead((client) => readThreadHistory(client, identity, query, signal), signal);
+    return this.#withoutHandled(page, query);
+  }
+
+  /** Drops the page's messages this bot already handled, when the caller asks for messages nobody answered. */
+  #withoutHandled(page, query) {
+    if (query?.excludeHandled !== true) return page;
+    return { ...page, events: page.events.filter(event => !this.#state.hasSeen(event.messageId)) };
   }
 
   /** Reads one retained message and the AppLink that opens it in Feishu; `messageId` reads another message of the same chat. */

@@ -8,6 +8,9 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ### Added / 新增
 
+- 接管回来补收不再重复回答：`chatHistoryChecked`/`threadHistoryChecked` 新增 `excludeHandled`，为 `true` 时把「托管前机器人自己已经处理过的消息」（状态存储里的 seen 记录）从页面里去掉。superagent 的补收与话题轮询都带这个选项，所以 dsh-im 在独立模式下已经回答过、或按策略决定不处理的消息，不会再被当成新工作回答一次（此前 Host 重启后消费者尚未注册的那段时间会重复作答）。
+  A takeover no longer answers twice: `chatHistoryChecked`/`threadHistoryChecked` take `excludeHandled`, which drops the messages this bot already handled before the handoff (its seen record) from the page. A consumer's backfill and topic polling pass it, so what dsh-im answered — or decided not to handle — while it was not handed over is not answered a second time (previously a Host restart whose consumer had not registered yet could produce a duplicate answer).
+
 - `nearby` 上下文读法的前后条数上限从 20 提到 500：`beforeCount`/`afterCount` 只表示「这一侧至少取多少条」，每次调用仍然只返回一页 provider 记录（≤ `limit`），所以提高上限只是让调用方用 cursor 继续往前翻更久的历史，单次响应不会变大；`/around` 因此能从「前 20 条」翻到「前 500 条」。旧的 20 及以下取值行为不变。
   A `nearby` context read now accepts up to 500 records on either side: `beforeCount`/`afterCount` are minima for that side, and one call still returns a single provider page (at most `limit` records), so a larger minimum only lets the caller continue further back with the cursor and never makes one response larger; `/around` can therefore walk back 500 messages instead of 20. Existing values of 20 or less behave as before.
 

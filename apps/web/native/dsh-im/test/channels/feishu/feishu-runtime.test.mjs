@@ -1189,6 +1189,27 @@ test('checked replies validate the original source before sending and retain unk
   await runtime.stop();
 });
 
+test('a history read leaves out the messages this bot handled when the caller asks for fresh ones', async () => {
+  const runtime = new FeishuRuntime({ lark: fakeLark(), appId: 'app', appSecret: 'secret', ownerOpenIds: ['*'],
+    consumerMode: 'external-consumer', harness: { async ensureRunning() {} },
+    // The state store remembers what the bot handled while it was not handed over.
+    state: { hasSeen: id => id === 'om_handled' } });
+  const starting = runtime.start();
+  await waitFor(() => FakeWSClient.instances.length === 1);
+  FakeWSClient.instances[0].becomeReady(); await starting;
+  const items = ['om_handled', 'om_fresh'].map(id => ({ message_id: id, chat_id: 'chat', msg_type: 'text',
+    body: { content: JSON.stringify({ text: id }) },
+    sender: { id: 'human', sender_type: 'user', id_type: 'open_id' }, create_time: '1790830000000' }));
+  FakeClient.instances[0].im.v1.message.list = async () => ({ code: 0, data: { items, has_more: false } });
+  const identity = { botId: 'bot', appId: 'app', botOpenId: 'bot', fingerprint: 'a'.repeat(64) };
+  const query = { chatId: 'chat', limit: 20, direct: true };
+  assert.deepEqual((await runtime.chatHistoryChecked(identity, query)).events.map(event => event.messageId),
+    ['om_handled', 'om_fresh']);
+  assert.deepEqual((await runtime.chatHistoryChecked(identity, { ...query, excludeHandled: true })).events
+    .map(event => event.messageId), ['om_fresh']);
+  await runtime.stop();
+});
+
 test('checked history refuses a result after the runtime stops during SDK listing', async () => {
  const runtime=new FeishuRuntime({lark:fakeLark(),appId:'app',appSecret:'secret',ownerOpenIds:['*'],
  consumerMode:'external-consumer',harness:{async ensureRunning(){}},state:{}});

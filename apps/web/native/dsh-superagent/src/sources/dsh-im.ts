@@ -95,6 +95,8 @@ export interface DshImService {
   chatHistoryChecked?(botId: string, query: {
     chatId: string; limit: number; since?: string; until?: string; cursor?: string
     includeBots?: boolean; direct?: boolean
+    /** Drops messages this bot already handled before the handoff, so a takeover does not answer them a second time. */
+    excludeHandled?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   /** Reads one topic thread between two times, oldest first; `direct` marks a direct chat. */
   threadHistoryChecked?(botId: string, query: {
@@ -104,6 +106,8 @@ export interface DshImService {
     includeSelf?: boolean
     /** Keeps a recalled message as a bodiless event instead of counting it as omitted. */
     includeDeleted?: boolean
+    /** Drops messages this bot already handled before the handoff, so a takeover does not answer them a second time. */
+    excludeHandled?: boolean
   }, options: { expectedFingerprint: string; signal: AbortSignal }): Promise<DshImHistory>
   /**
    * Reads one retained message plus the AppLink that opens it; `messageId` reads another message of the same chat.

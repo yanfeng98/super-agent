@@ -109,7 +109,7 @@ export async function backfillChat(deps: BackfillDeps, chatId: string, direct: b
     // A round that runs out of time keeps its progress: the cursor below moves only as far as this round read.
     if (Date.now() > deadline) break
     const result = await read(deps.botId,
-      { chatId, limit, since, until: now, direct, includeBots: true, ...cursor ? { cursor } : {} },
+      { chatId, limit, since, until: now, direct, includeBots: true, excludeHandled: true, ...cursor ? { cursor } : {} },
       { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
     if (!deps.config()) return { recovered: count, omitted }
     omitted += result.omitted
@@ -191,7 +191,7 @@ async function recoverTopics(deps: BackfillDeps, chatId: string, direct: boolean
       for (let page = 0; page < MAX_PAGES; page++) {
         if (Date.now() > deadline) break
         const result = await read(deps.botId,
-          { chatId, threadId: topicId, limit, since: cursorAt(from), until, direct, includeBots: true,
+          { chatId, threadId: topicId, limit, since: cursorAt(from), until, direct, includeBots: true, excludeHandled: true,
             ...cursor ? { cursor } : {} },
           { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
         if (!deps.config()) return { recovered, omitted }
@@ -282,7 +282,7 @@ async function pollThread(deps: BackfillDeps, thread: Thread, deadline: number):
     if (deps.signal.aborted) return { recovered: count, omitted }
     if (Date.now() > deadline) break
     const result = await read(deps.botId,
-      { chatId, threadId, limit, since, until: now, includeBots: true, ...cursor ? { cursor } : {} },
+      { chatId, threadId, limit, since, until: now, includeBots: true, excludeHandled: true, ...cursor ? { cursor } : {} },
       { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
     if (!deps.config()) return { recovered: count, omitted }
     omitted += result.omitted

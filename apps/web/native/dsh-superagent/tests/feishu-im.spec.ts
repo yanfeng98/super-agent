@@ -500,6 +500,26 @@ describe('dsh-im Feishu recovery and identity', () => {
     expect(state.get(KV.feishu.imTopics('oc_team'))).toMatchObject({ omt_9: { rootId: 'om_root' } })
   })
 
+  it('asks dsh-im for the messages it has not handled, so a takeover does not answer twice', async () => {
+    const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 300_000).toISOString()]])
+    const asked: Record<string, unknown>[] = []
+    const im = service({
+      chatHistoryChecked: async (_botId: string, query: Record<string, unknown>) => { asked.push(query); return chatPage([]) },
+      threadHistoryChecked: async (_botId: string, query: Record<string, unknown>) => {
+        asked.push(query)
+        return { version: 1 as const, scope: 'thread' as const, chatId: 'oc_team', threadId: String(query.threadId), omitted: 0,
+          hasMore: false, coverage: 'provider-visible-messages', events: [] }
+      },
+    })
+    const at = new Date(Date.now() - 60_000).toISOString()
+    state.set(KV.feishu.imTopics('oc_team'), { omt_1: { at, rootId: 'om_root', readThrough: at } })
+    const { deps } = backfillDeps(im, state)
+    await backfillChat(deps, 'oc_team', false, 50, [])
+    // Both the chat round and the topic round leave out what the bot answered while it was not handed over.
+    expect(asked[0]).toMatchObject({ chatId: 'oc_team', excludeHandled: true })
+    expect(asked[1]).toMatchObject({ threadId: 'omt_1', excludeHandled: true })
+  })
+
   it('advances the topics read longest ago first, so none is starved', async () => {
     const state = new Map<string, unknown>([['feishu-history:oc_team', new Date(Date.now() - 300_000).toISOString()]])
     const base = Date.now() - 3_600_000
