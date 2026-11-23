@@ -1,6 +1,6 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceDiff, workspaceFacts, workspaceHead } from '../src/app/review.ts'
 import { workspaceCheck, workspaceChecks } from '../src/app/check.ts'
 import { queuedMerges } from '../src/app/merge-queue.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
@@ -13,7 +13,7 @@ vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
     rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn(), patchFingerprint: vi.fn(),
-    workspaceDiff: vi.fn() }
+    workspaceDiff: vi.fn(), workspaceFacts: vi.fn() }
 })
 
 let h: Host
@@ -31,6 +31,7 @@ beforeEach(async () => {
   vi.mocked(workspaceChecks).mockReset().mockResolvedValue(passingRuns('2026-11-19T00:02:00.000Z'))
   vi.mocked(patchFingerprint).mockReset().mockResolvedValue('same-changes')
   vi.mocked(workspaceDiff).mockReset().mockResolvedValue({ diff: '', truncated: false, files: [] })
+  vi.mocked(workspaceFacts).mockReset().mockResolvedValue(undefined)
 })
 afterEach(async () => { await h.stop() })
 /** A passing run of the configured checks, as the runtime records them. */
@@ -96,6 +97,17 @@ it('rebases a branch the repository moved past, runs the configured check, and m
   const message = vi.mocked(mergeWorkspace).mock.calls.at(-1)?.[5]
   expect(message).toContain(h.runtime.store.tickets.get(ticket.id)!.title)
   expect(message).toContain(`Ticket ${h.runtime.store.tickets.number(ticket.id)}`)
+})
+
+it('records the workspace facts and review of an ended ticket that had none, so an adopted branch can merge', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)!.execution!.base).toBeUndefined()
+  vi.mocked(workspaceFacts).mockResolvedValue({ branch: 'feat/rea-builtin', head: 'head', root: '/repo', target: 'main', base: 'fork' })
+  await h.runtime.mergeTicket(ticket.id)
+  expect(h.runtime.store.tickets.get(ticket.id)!.execution).toMatchObject({ base: 'fork', target: 'main' })
+  expect(h.runtime.store.tickets.get(ticket.id)!.review).toMatchObject({ head: 'new' })
+  expect(mergeWorkspace).toHaveBeenCalled()
 })
 
 it('reports a failed check and does not merge the rebased branch', async () => {

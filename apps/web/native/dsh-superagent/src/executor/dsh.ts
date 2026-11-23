@@ -2,14 +2,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { mkdir, rmdir, stat } from 'node:fs/promises'
+import { mkdir, readdir, rmdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { key, latestAssignment, latestReport, liveTicket, runningAssignment, threadKey, waitsForPerson } from '../core/index.ts'
 import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Executor, Mandate, PolicyEffect, Ticket, TicketInput, Trigger }
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
 import { runAsWorker, verifyDirectory } from '../infra/environment.ts'
-import { workspaceHead, workspaceRepo } from '../app/review.ts'
+import { workspaceFacts } from '../app/review.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
@@ -27,6 +27,9 @@ export const workerSessionId = (ticketId: string): string => `worker-${ticketId}
 export const ticketOfSession = (sessionId: string): string | undefined => sessionId.startsWith('worker-') ? sessionId.slice('worker-'.length) : undefined
 /** Maximum runtime for a workspace prepare command. */
 const PREPARE_TIMEOUT_MS = 10 * 60_000
+/** True when `directory` is a directory with no entries; false when it is absent or holds any. */
+const emptyDirectory = (directory: string): Promise<boolean> =>
+  readdir(directory).then(entries => entries.length === 0, () => false)
 /** Maximum transient retry attempts for a launch or worker turn, and the initial backoff before resuming a turn. */
 const TRANSIENT_TRIES = 3, TRANSIENT_BACKOFF_MS = 15_000
 /** How long a worker's background work may run on after its turn ended before it is stopped and the worker reported waiting. */
@@ -250,26 +253,42 @@ export class DshExecutor implements Executor {
     return { ...ticket, execution: ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, project),
       ...hold ? { hold: { at: now() } } : {} }
   }
+  /** The prepare command a Ticket's workspace uses: its project's, else the deployment's. */
+  private prepareCommand(ticket: Ticket): string {
+    return (ticket.execution?.prepare ?? this.host.store.settings().executor.prepare).trim()
+  }
   /**
    * Runs the configured `executor.prepare` command for a new ticket workspace in its parent directory with the ticket's
    * execution environment variables, then verifies the directory as the worker sees it.
-   * A failed prepare command throws `PrepareFailed`, which is not retried automatically; an empty directory it left is removed, a non-empty one kept.
-   * @throws PrepareFailed with the command's output when the prepare command fails.
+   * An empty directory left by an earlier attempt is removed first: it is not a prepared workspace, and `git worktree add`
+   * refuses a path that already exists. A configured command that leaves the directory empty fails the Ticket, because the
+   * worker would otherwise start in no checkout and could work in one the Ticket does not own.
+   * A failed prepare command throws `PrepareFailed`, which is not retried automatically; a non-empty directory it left is kept.
+   * @throws PrepareFailed with the command's output when the prepare command fails or creates no checkout.
    */
   private async prepareDirectory(ticket: Ticket): Promise<void> {
     const directory = ticket.execution?.directory ?? ''
     await mkdir(dirname(directory), { recursive: true })
-    const command = (ticket.execution?.prepare ?? this.host.store.settings().executor.prepare).trim()
+    const command = this.prepareCommand(ticket)
     const env = Object.fromEntries(this.host.environment(ticket).map(variable => [variable.key, variable.value]))
     // Enforce a timeout so a hung prepare command (such as on a credential prompt) fails the ticket instead of holding a worker slot indefinitely.
     const signal = AbortSignal.any([this.host.lifetime, AbortSignal.timeout(PREPARE_TIMEOUT_MS)])
-    if (command) await runAsWorker(this.host.context.subprocess, ['sh', '-c', command], dirname(directory), signal, env)
-      .catch(async (error: unknown) => {
-        // Remove an empty directory left by a failed prepare command so a later retry does not treat it as already prepared.
-        await rmdir(directory).catch(() => { /* Absent, or holding what the command wrote, which the output explains. */ })
-        throw new PrepareFailed(`The prepare command failed: ${error instanceof Error ? error.message : String(error)}`)
-      })
+    if (command) {
+      // An empty directory is not a prepared workspace; removing it also lets `git worktree add` create the checkout.
+      await rmdir(directory).catch(() => { /* Absent, or holding what the command must see, such as a failed attempt's files. */ })
+      await runAsWorker(this.host.context.subprocess, ['sh', '-c', command], dirname(directory), signal, env)
+        .catch(async (error: unknown) => {
+          // Remove an empty directory left by a failed prepare command so a later retry does not treat it as already prepared.
+          await rmdir(directory).catch(() => { /* Absent, or holding what the command wrote, which the output explains. */ })
+          throw new PrepareFailed(`The prepare command failed: ${error instanceof Error ? error.message : String(error)}`)
+        })
+    }
     await mkdir(directory, { recursive: true })
+    // A configured command must leave a checkout; an empty directory would let the worker run outside the repository it needs.
+    if (command && await emptyDirectory(directory)) {
+      throw new PrepareFailed(`The prepare command finished without creating the ticket workspace at ${directory}; it is empty. `
+        + `Make the command check the repository out there, such as with git worktree add. The command was: ${command}`)
+    }
     await verifyDirectory(directory, this.host.context.subprocess, this.host.lifetime)
   }
   /** Enqueues a `launch` effect for an accepted or resumed assignment; launches start in queue order as worker slots free up. */
@@ -456,14 +475,15 @@ export class DshExecutor implements Executor {
   private async captureBase(ticket: Ticket): Promise<void> {
     const directory = ticket.execution?.directory
     if (!directory || ticket.execution?.base) return
-    const [head, repo] = await Promise.all([workspaceHead(this.host.context.subprocess, directory, this.host.lifetime),
-      workspaceRepo(this.host.context.subprocess, directory, this.host.lifetime).catch(() => undefined)])
-    if (!head) return
+    const facts = await workspaceFacts(this.host.context.subprocess, directory, this.host.lifetime).catch(() => undefined)
+    if (!facts) return
     this.host.store.atomic(() => {
       const current = this.host.store.tickets.get(ticket.id)
       if (!current?.execution || current.execution.base) return
-      current.execution.base = head
-      if (repo?.target) current.execution.target = repo.target
+      // The fork point keeps a review to the Ticket's own commits when the workspace already held commits, such as a branch
+      // adopted for a Ticket that ended before the environment prepared worktrees.
+      current.execution.base = facts.base ?? facts.head
+      current.execution.target = facts.target
       this.host.store.tickets.save(current)
     })
   }
@@ -477,8 +497,10 @@ export class DshExecutor implements Executor {
     const source = sourceTrigger(this.host, ticket)
     const workspace = ticket.execution?.directory ?? ''
     if (!current()) return
-    // Prepare the workspace directory once; an existing directory counts as already prepared, including worktrees created before `prepare` commands existed.
-    if (!await stat(workspace).then(() => true, () => false)) {
+    // Prepare the workspace directory once; an existing non-empty directory counts as already prepared, including worktrees
+    // created before `prepare` commands existed. An empty one is not prepared when a command can create its checkout.
+    const exists = await stat(workspace).then(() => true, () => false)
+    if (!exists || !!this.prepareCommand(ticket) && await emptyDirectory(workspace)) {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }

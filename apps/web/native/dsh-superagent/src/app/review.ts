@@ -1,5 +1,6 @@
 /** Captures the git facts of a ticket's workspace when it ends, so the panel shows what changed without opening the worktree. */
 import { createHash } from 'node:crypto'
+import { readdir } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { MergeStrategy, Ticket, TicketNote, TicketReview } from '../core/index.ts'
@@ -111,11 +112,15 @@ export async function captureReview(subprocess: SubprocessRuntime, ticket: Ticke
   const directory = ticket.execution?.directory
   if (!directory) return undefined
   const capturedAt = new Date().toISOString()
+  // A missing or empty directory has no git to read; naming that state avoids running git in a directory that is not there.
+  if (!await readdir(directory).then(files => files.length > 0, () => false)) {
+    return { capturedAt, commits: [], files: [], dirty: [], error: await reviewProblem(directory) }
+  }
   const [branch, head] = await Promise.all([
     run(subprocess, directory, ['rev-parse', '--abbrev-ref', 'HEAD'], signal),
     workspaceHead(subprocess, directory, signal),
   ])
-  if (!head) return { capturedAt, commits: [], files: [], dirty: [], error: 'The workspace is not a git repository, or git could not read it' }
+  if (!head) return { capturedAt, commits: [], files: [], dirty: [], error: await reviewProblem(directory) }
   const base = ticket.execution?.base
   const range = base && base !== head ? `${base}..HEAD` : ''
   const [log, files, stat, status] = await Promise.all([
@@ -269,19 +274,94 @@ export interface WorkspaceRepo {
  * @returns undefined when the workspace is not a git repository on a branch.
  */
 export async function workspaceRepo(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<WorkspaceRepo | undefined> {
+  // A missing or empty directory starts no git: git could not run there, and the merge gates describe that state instead.
+  if (!await readdir(directory).then(files => files.length > 0, () => false)) return undefined
   const git = (cwd: string, args: string[]) => runAsWorker(subprocess, ['git', ...args], cwd,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
   const branch = await git(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
   if (!branch || branch === 'HEAD') return undefined
   const head = await git(directory, ['rev-parse', 'HEAD']).catch(() => undefined)
   const common = await git(directory, ['rev-parse', '--path-format=absolute', '--git-common-dir']).catch(() => undefined)
-  if (!head || !common) return undefined
+  const gitDir = await git(directory, ['rev-parse', '--path-format=absolute', '--git-dir']).catch(() => undefined)
+  if (!head || !common || !gitDir) return undefined
   const root = basename(common) === '.git' ? dirname(common) : common
   const target = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
   if (!target || target === 'HEAD') return undefined
   // Untracked files, such as a ticket archive kept in the checkout, do not block a fast-forward; tracked changes do.
   const dirty = (await git(root, ['status', '--porcelain', '--untracked-files=no']).catch(() => '')).length > 0
-  return { root, branch, head, target, dirty, linked: root !== directory }
+  // A linked worktree keeps its own git directory under the repository's; the repository's own tree and a plain
+  // subdirectory of it share theirs.
+  return { root, branch, head, target, dirty, linked: gitDir !== common }
+}
+/** Why a workspace has no reviewable head, in the words that fit its state; a plain directory is a supported workspace. */
+async function reviewProblem(directory: string): Promise<string> {
+  const entries = await readdir(directory).then(files => files.length, () => undefined)
+  if (entries === undefined) return `The ticket workspace ${directory} does not exist`
+  if (entries === 0) return `The ticket workspace ${directory} is empty`
+  return `The ticket workspace ${directory} is not a git repository, or git could not read it`
+}
+/**
+ * Explains why a ticket workspace is not a checkout a Ticket can work in, naming the state a person must repair rather
+ * than git's bare refusal.
+ * @param directory - The ticket's workspace directory.
+ * @returns A sentence naming the real state, with the step that prepares a checkout; a plain directory within a
+ * repository is described, not corrected.
+ */
+export async function workspaceProblem(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<string> {
+  const entries = await readdir(directory).then(files => files.length, () => undefined)
+  if (entries === undefined) {
+    return `The ticket workspace ${directory} does not exist, so it is not a git repository: its prepare command created no checkout. `
+      + 'Fix the prepare command in Execution settings, then retry the Ticket.'
+  }
+  if (entries === 0) {
+    return `The ticket workspace ${directory} is empty, so it is not a git repository: its prepare command created no checkout. `
+      + 'Fix the prepare command in Execution settings, then retry the Ticket.'
+  }
+  const git = (cwd: string, args: string[]) => runAsWorker(subprocess, ['git', ...args], cwd,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
+  const branch = await git(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
+  if (!branch) {
+    return `The ticket workspace ${directory} is not a git repository, or git could not read it. `
+      + 'A Ticket needs its own checkout of the repository it changes; fix the prepare command in Execution settings.'
+  }
+  if (branch === 'HEAD') {
+    return `The ticket workspace ${directory} is on a detached HEAD, not on its Ticket branch. `
+      + 'Check out the Ticket branch there before merging or reviewing it.'
+  }
+  const common = await git(directory, ['rev-parse', '--path-format=absolute', '--git-common-dir']).catch(() => undefined)
+  const gitDir = await git(directory, ['rev-parse', '--path-format=absolute', '--git-dir']).catch(() => undefined)
+  if (!common || !gitDir) return `The ticket workspace ${directory} is not a git repository, or git could not read it.`
+  const root = basename(common) === '.git' ? dirname(common) : common
+  const target = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
+  if (!target || target === 'HEAD') {
+    return `The repository at ${root} is on a detached HEAD, so there is no branch to merge into. Check out its branch.`
+  }
+  if (gitDir === common) {
+    return `The ticket workspace ${directory} is the repository's main working tree, not a linked worktree. `
+      + 'A Ticket works in its own git worktree so the main checkout keeps its branch; fix the prepare command in Execution settings.'
+  }
+  return `The ticket workspace ${directory} is not a git repository on a branch.`
+}
+/** The git facts a Ticket records when it starts: its branch, head, repository root, and the target branch it forked from. */
+export interface WorkspaceFacts {
+  branch: string
+  head: string
+  root: string
+  target: string
+  /** The commit the Ticket branch forked from the target, which an ending's review starts from; absent for unrelated histories. */
+  base?: string
+}
+/**
+ * Reads the facts a Ticket records for its workspace: its branch, head, the repository's checked-out branch, and the commit
+ * its branch forked from that branch.
+ * @returns `undefined` when the workspace is not a linked worktree on a branch with a target branch.
+ */
+export async function workspaceFacts(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<WorkspaceFacts | undefined> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) return undefined
+  const base = await runAsWorker(subprocess, ['git', 'merge-base', 'HEAD', repo.target], directory,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim()).catch(() => undefined)
+  return { branch: repo.branch, head: repo.head, root: repo.root, target: repo.target, ...base ? { base } : {} }
 }
 /**
  * Whether the repository's checked-out commit is already in the ticket branch, which is what lets a fast-forward, a squash
@@ -320,7 +400,7 @@ export async function mergeWorkspace(subprocess: SubprocessRuntime, directory: s
   strategy: MergeStrategy = 'ff', expectedTarget?: string, message?: string):
   Promise<{ branch: string; target: string; head?: string; base?: string; root: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
-  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo) throw new Error(await workspaceProblem(subprocess, directory, signal))
   if (!repo.linked) throw new Error('This ticket works in the repository itself; merge its branch manually')
   if (expectedTarget && repo.target !== expectedTarget) {
     throw new Error(`The repository is on ${repo.target}, not the Ticket's target ${expectedTarget}; check it out and merge again`)
@@ -380,7 +460,7 @@ export class RevertConflictError extends Error {
 export async function revertWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
   commit: string, expectedTarget?: string, base?: string): Promise<{ target: string; head: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
-  if (!repo) throw new Error('The merged branch is not a git repository on a branch')
+  if (!repo) throw new Error(await workspaceProblem(subprocess, directory, signal))
   if (expectedTarget && repo.target !== expectedTarget) {
     throw new Error(`The repository is on ${repo.target}, not the branch that merge moved (${expectedTarget}); check it out and revert again`)
   }
@@ -421,7 +501,7 @@ export async function revertWorkspace(subprocess: SubprocessRuntime, directory: 
 export async function pushWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
   expectedTarget?: string): Promise<void> {
   const repo = await workspaceRepo(subprocess, directory, signal)
-  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo) throw new Error(await workspaceProblem(subprocess, directory, signal))
   if (expectedTarget && repo.target !== expectedTarget) {
     throw new Error(`The repository is on ${repo.target}, not the branch that merge moved (${expectedTarget}); check it out and push again`)
   }
@@ -439,7 +519,7 @@ export async function pushWorkspace(subprocess: SubprocessRuntime, directory: st
 export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
   expectedTarget?: string): Promise<{ branch: string; target: string; base: string }> {
   const repo = await workspaceRepo(subprocess, directory, signal)
-  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo) throw new Error(await workspaceProblem(subprocess, directory, signal))
   if (!repo.linked) throw new Error('This ticket works in the repository itself; rebase its branch manually')
   if (expectedTarget && repo.target !== expectedTarget) {
     throw new Error(`The repository is on ${repo.target}, not the Ticket's target ${expectedTarget}; check it out and rebase again`)
@@ -472,7 +552,7 @@ export async function rebaseWorkspace(subprocess: SubprocessRuntime, directory: 
 export async function discardWorkspace(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal,
   options: { merged?: boolean; squash?: boolean } = {}): Promise<void> {
   const repo = await workspaceRepo(subprocess, directory, signal)
-  if (!repo) throw new Error('The ticket workspace is not a git repository on a branch')
+  if (!repo) throw new Error(await workspaceProblem(subprocess, directory, signal))
   if (!repo.linked) throw new Error('This ticket works in the repository itself; remove its changes yourself')
   if (options.merged && !options.squash) {
     // Refuse before removing the worktree when the target does not contain the branch, so new commits cannot be lost.

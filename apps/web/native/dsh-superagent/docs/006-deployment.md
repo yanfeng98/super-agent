@@ -47,8 +47,10 @@ With the `local` Source on, **Execution → New ticket** takes a title and a req
 - Set **Execution → Directory root** to a checkout or workspace when the work needs files; the archive directory may point into that checkout to keep tickets with the code. To give each ticket a checkout of an existing repository, leave the root at its default and use a prepare command such as:
 
   ```sh
-  git -C /path/to/the/project worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" HEAD
+  git -C /path/to/the/project worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" main
   ```
+
+  The command must leave a checkout: one that leaves the directory empty fails the Ticket. Branch from the branch a merge moves, usually `main`, so the Ticket branch contains it.
 - The worker git configuration carries the neutral author `dsh-superagent <dsh-superagent@localhost>`; a worker that does not set its own identity commits under it, and the Delivery requirements prompt can name another author.
 
 ### Enabling Feishu
@@ -173,7 +175,7 @@ Setup must succeed before polling or work starts. Overview lists missing require
 3. **Execution.** The directory root, a prepare command, and optionally one check command per line, each named by writing `name: command`. The checks run in the worktree when each Ticket ends, and each keeps its own result beside the combined one; once configured, a merge requires all of them to pass after the Ticket's latest ending. To give each Ticket a checkout of the repository:
 
    ```sh
-   git -C /home/me/src/widgets worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" HEAD
+   git -C /home/me/src/widgets worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME" main
    ```
 
    List personal CLIs as blocked commands.
@@ -310,6 +312,8 @@ Setup problems appear on the overview with a link to the fix, in the panel's lan
 | Symptom | Cause and fix |
 | --- | --- |
 | A Ticket fails with `The prepare command failed: …` | The output names the cause, such as a wrong clone path; fix the command, then retry the Ticket |
+| A Ticket fails with `The prepare command finished without creating the ticket workspace …` | The command succeeded but left the directory empty; make it check the repository out there, such as with `git worktree add`, then retry the Ticket |
+| A Ticket's Changes read `The ticket workspace … is empty`, or Merge refuses with that message | No prepare command creates a checkout for the Ticket, so the worker may have worked elsewhere; set **Execution → Prepare command** to create a per-Ticket worktree, retry the Ticket, and restore the main checkout's branch |
 | A Ticket fails with `The git configuration of the repository in … sets …` | Remove the named credential or `http.*.extraheader` settings from the clone's `.git/config` |
 | `… was not written by dsh-superagent` | Move the named file out of `<stateDir>/worker-bin` or `<stateDir>/worker-gitconfig`, or choose another `stateDir` |
 | `The local Source is off; turn it on in Settings → Sources` | Enable the local Source on the Sources settings |

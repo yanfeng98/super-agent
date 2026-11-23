@@ -74,11 +74,21 @@ describe('captureReview', () => {
     const unchanged = (await captureReview(subprocess(), ticket(head), signal))!
     expect(unchanged).toMatchObject({ head, commits: [], files: [], dirty: [] })
     expect(await workspaceHead(subprocess(), repo, signal)).toBe(head)
-    // A directory outside a repository still yields a review, with the reason in `error`.
+    // A directory outside a repository still yields a review, with the reason and the directory in `error`.
     const plain = join(dir, 'plain')
     mkdirSync(plain)
+    writeFileSync(join(plain, 'notes.txt'), 'draft\n')
     const outside = await captureReview(subprocess(), { execution: { name: 't2', directory: plain, assignment: '' } } as Ticket, signal)
     expect(outside).toMatchObject({ commits: [], files: [], dirty: [], error: expect.stringMatching(/not a git repository/) })
+    expect(outside!.error).toContain(plain)
+    // A missing or empty directory names that state, which is how a Ticket ends without a checkout.
+    const missing = join(dir, 'missing')
+    expect((await captureReview(subprocess(), { execution: { name: 't3', directory: missing, assignment: '' } } as Ticket, signal))!.error)
+      .toContain('does not exist')
+    const empty = join(dir, 'empty')
+    mkdirSync(empty)
+    expect((await captureReview(subprocess(), { execution: { name: 't4', directory: empty, assignment: '' } } as Ticket, signal))!.error)
+      .toContain('is empty')
   })
 })
 
@@ -124,6 +134,20 @@ describe('merge and discard', () => {
     writeFileSync(join(repo, 'a.txt'), 'dirty\n')
     await expect(mergeWorkspace(subprocess(), worktree, signal)).rejects.toThrow(/uncommitted/)
   })
+  it('names an unprepared workspace instead of a bare git refusal when a merge is asked for', async () => {
+    base()
+    const empty = join(dir, 'empty-worktree')
+    mkdirSync(empty)
+    await expect(mergeWorkspace(subprocess(), empty, signal)).rejects.toThrow(`The ticket workspace ${empty} is empty`)
+    await expect(mergeWorkspace(subprocess(), join(dir, 'absent'), signal)).rejects.toThrow(`The ticket workspace ${join(dir, 'absent')} does not exist`)
+    const plain = join(dir, 'plain')
+    mkdirSync(plain)
+    writeFileSync(join(plain, 'notes.txt'), 'draft\n')
+    await expect(mergeWorkspace(subprocess(), plain, signal)).rejects.toThrow(`${plain} is not a git repository`)
+    // The repository's own working tree is named too, rather than reported as a missing branch.
+    await expect(mergeWorkspace(subprocess(), repo, signal)).rejects.toThrow(/works in the repository itself/)
+  })
+
   it('squashes a ticket branch into one commit when asked', async () => {
     base()
     const worktree = join(dir, 'worktree-squash')

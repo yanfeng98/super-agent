@@ -19,7 +19,7 @@ import { SCHEMA_VERSION, Store } from '../src/app/store.ts'
 import { TextCache } from '../src/app/cache.ts'
 import { KV } from '../src/kv.ts'
 import { SettingsSchema, policyVersion, type SettingsOrigin } from '../src/policy.ts'
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { feishuBotFor, feishuImKind, imTrigger } from '../src/sources/feishu-im.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { localKind } from '../src/sources/local.ts'
@@ -79,11 +79,15 @@ let services: Record<string, unknown>
 let jobs: ReturnType<typeof jobRegistry>
 /** What worker commands print, by argv; an Error makes the command fail with its message. */
 let answers: Record<string, string | Error>
-const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
+/** What a successful prepare command creates; a test replaces it to leave the ticket directory empty. */
+let prepareEffect: (env: Record<string, string>) => void
+const subprocess = { spawn: vi.fn((spec: { argv: readonly string[]; env?: Record<string, string> }) => {
   // Strip leading `env` and `KEY=VALUE` arguments before looking up the command response.
   const argv = [...spec.argv]
   while (argv[0] === 'env' || /^[A-Z_]+=/.test(argv[0] ?? '')) argv.shift()
   const answer = answers[argv.join(' ')] ?? ''
+  // A successful prepare command creates the checkout it was asked for, as a real one does.
+  if (argv[0] === 'sh' && !(answer instanceof Error) && spec.env?.DSH_SUPERAGENT_DIR) prepareEffect(spec.env)
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
   return { done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
 }) }
@@ -167,6 +171,7 @@ beforeEach(async () => {
   vi.spyOn(Commands.prototype, 'run').mockResolvedValue('{"ok":true,"data":{}}')
   restarts = vi.fn()
   answers = {}
+  prepareEffect = env => { mkdirSync(env.DSH_SUPERAGENT_DIR!, { recursive: true }); writeFileSync(`${env.DSH_SUPERAGENT_DIR}/.prepared`, '') }
   replies = []
   sendReply = async route => ({ sent: true, messageId: `om_reply_${route.messageId}` })
   chatMembers = async () => [{ id: MEMBER, name: 'Alice' }]
@@ -982,6 +987,33 @@ it('runs the prepare command once for a new ticket, under the execution root wit
   expect(waitsForPerson(runtime.store.tickets.get(failed.ticket.id)!)).toBe(true)
 })
 
+it('prepares a ticket directory that exists but is empty, so an empty leftover is not treated as a prepared workspace', async () => {
+  const { ticket, sessionId } = await acceptedTicket()
+  await runTool(sessionId, 'orchestrator_report', { state: 'failed', summary: 'offline' })
+  expect(readdirSync(ticket.execution!.directory)).toEqual([])
+  const prepare = (command: string) => runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, prepare: command } })
+  const prepared = () => subprocess.spawn.mock.calls.filter(([spec]) => (spec as { argv: string[] }).argv[0] === 'sh').length
+  const before = prepared()
+  prepare('git -C /srv/widgets worktree add "$DSH_SUPERAGENT_DIR" -b "agent/$DSH_SUPERAGENT_NAME"')
+  await runtime.engine.retryTicket(ticket.id)
+  await runtime.idle()
+  expect(prepared()).toBe(before + 1)
+  expect(readdirSync(ticket.execution!.directory)).toContain('.prepared')
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'running' })
+})
+
+it('fails a ticket whose prepare command leaves the workspace empty, naming the directory and the command', async () => {
+  prepareEffect = () => {}
+  runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, prepare: 'true' } })
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  const summary = runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report!.summary
+  expect(summary).toContain('The prepare command finished without creating the ticket workspace')
+  expect(summary).toContain(ticket.execution!.directory)
+  expect(summary).toContain('The command was: true')
+  expect(waitsForPerson(runtime.store.tickets.get(ticket.id)!)).toBe(true)
+})
+
 it('counts a ticket whose directory the host prepared before prepare commands existed as prepared', async () => {
   const { ticket, sessionId } = await acceptedTicket()
   await runTool(sessionId, 'orchestrator_report', { state: 'failed', summary: 'offline' })
@@ -1421,10 +1453,13 @@ it('refuses an ended ticket\'s worker its tools, and restricts the main Session 
   expect(restricts.get(sessionId)).toEqual([{ allow: ['read', 'read_image', 'grep', 'bash', 'job_output', 'job_list', 'job_kill', 'web_search', 'skill'] }])
 })
 
-it('gives an explicit ticket\'s worker a prompt without the limits of an inferred Mandate', async () => {
+it('gives an explicit ticket\'s worker a prompt without the limits of an inferred Mandate, and keeps its work in the ticket directory', async () => {
   const { sessionId } = await acceptedTicket()
   await runtime.idle()
-  expect(sections.get(sessionId)!.text({})).not.toContain(mandateInstructions({ strength: 'inferred' }))
+  const prompt = sections.get(sessionId)!.text({})
+  expect(prompt).not.toContain(mandateInstructions({ strength: 'inferred' }))
+  expect(prompt).toContain('Work only in your ticket directory and commit on its branch there')
+  expect(prompt).toContain('If it holds no prepared checkout, report blocked')
 })
 
 it('runs a launch that fails for a passing reason again on the launch backoff three times, then fails its ticket; a failed prepare fails at once', async () => {

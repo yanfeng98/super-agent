@@ -38,7 +38,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { newestFirst, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceFacts, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
@@ -477,6 +477,34 @@ export class Runtime extends Service implements SourceHost {
       this.store.tickets.save(current)
     })
   }
+  /**
+   * Records the workspace facts and review of an ended Ticket that has none, such as one whose directory was empty when it
+   * ran. A workspace that is not a linked worktree on a branch is left for the merge gates to describe.
+   */
+  private async adoptWorkspace(id: string): Promise<void> {
+    const ticket = this.store.tickets.get(id)
+    const directory = ticket?.execution?.directory
+    if (!ticket?.execution || !directory || !ticket.ended) return
+    const facts = await workspaceFacts(this.ctx.subprocess, directory, this.stopped.signal).catch(() => undefined)
+    if (!facts) return
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      if (!current?.execution) return
+      current.execution.base ??= facts.base ?? facts.head
+      current.execution.target ??= facts.target
+      this.store.tickets.save(current)
+    })
+    if (ticket.review?.head) return
+    const review = await captureReview(this.ctx.subprocess, this.store.tickets.get(id) ?? ticket, this.stopped.signal)
+    if (!review) return
+    this.store.atomic(() => {
+      const current = this.store.tickets.get(id)
+      // A Ticket that ended again meanwhile owns a newer review, which this capture must not overwrite.
+      if (!current || current.merged || current.ended?.at !== ticket.ended?.at) return
+      current.review = review
+      this.store.tickets.save(current)
+    })
+  }
   /** Runs one repository operation after the others, so two merges or reverts never move one checkout together. */
   private serialized<T>(run: () => Promise<T>): Promise<T> {
     const task = this.repoLock.then(run, run)
@@ -512,6 +540,10 @@ export class Runtime extends Service implements SourceHost {
     }
     const directory = ticket.execution?.directory
     if (!directory) throw new Error('This ticket has no workspace')
+    // A Ticket that ended before its workspace held a checkout records neither a base, a target, nor a review. A worktree
+    // restored for it, such as the branch of a commit made outside one, gets those facts now so it can still be reviewed
+    // and merged; an unprepared workspace is left for the merge gates to explain.
+    if (!ticket.execution?.base || !ticket.execution?.target || !ticket.review?.head) await this.adoptWorkspace(id)
     if (ticket.reviewed?.decision === 'changes-requested') {
       throw new Error('A review requested changes; address them and approve the review before merging')
     }
