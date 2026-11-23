@@ -3,7 +3,7 @@
  * allowed member Alice (`ou_alice`), listened chat `oc_team`, and `auto` eval mode. Stop it with `stop()`.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, type Mock } from 'vitest'
@@ -11,7 +11,8 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { Runtime } from '../../src/app/runtime.ts'
 import { Store } from '../../src/app/store.ts'
 import { SettingsSchema } from '../../src/policy.ts'
-import { feishuKind, feishuTrigger } from '../../src/sources/feishu.ts'
+import { feishuImKind, imTrigger } from '../../src/sources/feishu-im.ts'
+import { setDshIm, type DshImEvent, type DshImService } from '../../src/sources/dsh-im.ts'
 import { localKind } from '../../src/sources/local.ts'
 import { Commands } from '../../src/infra/commands.ts'
 import type { Trigger } from '../../src/core/index.ts'
@@ -20,11 +21,34 @@ import { testMachine } from './deployment.ts'
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
 
+/** The dsh-im bot the fixture's Source is bound to, and the account fingerprint dsh-im would report for it. */
+export const BOT_ID = 'bot_1'
+export const FINGERPRINT = 'f'.repeat(64)
+/**
+ * One authenticated dsh-im event as the handoff delivers it; `overrides` take the Feishu field names a test sets
+ * (`root_id`, `chat_id`, `sender_id`, `sender_type`, `chat_type`, `create_time`, `mentions`).
+ */
+export function feishuEvent(id: string, text: string, overrides: Record<string, unknown> = {}): DshImEvent {
+  const at = overrides.create_time === undefined
+    ? new Date(Date.parse('2026-09-09T00:00:00Z') + Number(id.replace(/\D/g, '') || 0) * 1000).toISOString()
+    : new Date(Number(overrides.create_time)).toISOString()
+  const chatId = String(overrides.chat_id ?? CHAT)
+  const sender = String(overrides.sender_id ?? MEMBER)
+  const mentions = (overrides.mentions as { id: string; key?: string; name?: string }[] | undefined) ?? [{ id: 'ou_bot' }]
+  return { version: 1, channel: 'feishu', botId: BOT_ID, fingerprint: FINGERPRINT, eventId: `event_${id}`, messageId: `om_${id}`,
+    actor: { kind: overrides.sender_type === 'bot' ? 'bot' : 'user', id: sender, name: 'Alice' },
+    conversation: { kind: overrides.chat_type === 'p2p' ? 'dm' : 'group', id: chatId },
+    mentions: mentions.map((mention, index) => ({ id: mention.id, key: (mention as { key?: string }).key ?? `@_user_${index + 1}`,
+      ...mention.name ? { name: mention.name } : {} })),
+    mentionedAccount: mentions.length > 0, messageType: 'text', at, text,
+    reply: { messageId: `om_${id}`, conversationId: chatId, actorId: sender,
+      ...overrides.thread_id ? { threadId: String(overrides.thread_id) } : {},
+      ...overrides.root_id ? { rootId: String(overrides.root_id) } : {},
+      ...overrides.parent_id ? { parentId: String(overrides.parent_id) } : {} } }
+}
 /** Build a Feishu mention trigger from Alice in `oc_team`, using the digits in `id` as the timestamp offset in seconds. */
 export function feishu(id: string, text: string, overrides: Record<string, unknown> = {}): Trigger {
-  const at = String(Date.parse('2026-09-09T00:00:00Z') + Number(id.replace(/\D/g, '') || 0) * 1000)
-  return feishuTrigger({ message_id: `om_${id}`, chat_id: CHAT, chat_type: 'group', sender_id: MEMBER, sender_type: 'user', content: text, create_time: at,
-    mentions: [{ id: 'ou_bot' }], ...overrides }, 'ou_bot', 'cli_bot')!
+  return imTrigger(feishuEvent(id, text, overrides))
 }
 
 type RegisteredTool = { name: string; execute: (args: unknown, execution: { signal: AbortSignal }) => Promise<unknown> }
@@ -130,18 +154,37 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
   return { service, settle, spawn, live: (id: string) => !!children.get(id)?.live }
 }
 
+/** The dsh-im service the fixture's Host offers, recording what the Source asks it to send. */
+function dshImService(replies: { botId: string; route: DshImEvent['reply']; text: string; options: unknown }[]): DshImService {
+  return { contractVersion: 1, inboundVersion: 1,
+    listBots: async () => [{ botId: BOT_ID, channel: 'feishu' }],
+    listTargets: async () => [{ targetId: CHAT, kind: 'group', name: 'Team', route: { chatId: CHAT } }],
+    chatMembersChecked: async () => ({ version: 1, chatId: CHAT, users: [{ id: MEMBER, name: 'Alice' }] }),
+    chatListChecked: async () => ({ version: 1, chats: [{ chatId: CHAT, name: 'Team' }] }),
+    describeBot: async () => ({ version: 1, botId: BOT_ID, channel: 'feishu', domain: 'feishu',
+      account: { fingerprint: FINGERPRINT, name: 'Widgets Bot' }, connected: true, superagent: true, superagentActive: true,
+      capabilities: ['exclusive-text-consumer'] }),
+    inboundStatus: async () => ({ version: 1, botId: BOT_ID, superagent: true, superagentActive: true }),
+    consumeInbound: async () => () => {},
+    historyChecked: async () => ({ version: 1, scope: 'thread', events: [], omitted: 0, hasMore: false,
+      coverage: 'provider-visible-human-text' }),
+    replyChecked: async (botId, route, text, options) => {
+      replies.push({ botId, route, text, options })
+      return { sent: true, messageId: `om_reply_${replies.length}` }
+    },
+    messageChecked: async () => ({ version: 1, messageId: 'om_1', chatId: CHAT, at: '2026-09-09T00:00:00.000Z', text: '',
+      messageType: 'text', sender: { kind: 'user', id: MEMBER, name: 'Alice' }, appLink: 'https://applink.feishu.cn/client/message/open?message_id=om_1',
+      deleted: false }),
+  }
+}
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
 export async function startRuntime(seed?: (store: Store) => void, options: { local?: boolean } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
-  const BOT = join(directory, 'lark-bot')
-  vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ users: [{ member_id: MEMBER, name: 'Alice' }], has_more: false })
+  // What the Source sent through dsh-im, in order: the assertions on a reply read it instead of a CLI call.
+  const replies: { botId: string; route: DshImEvent['reply']; text: string; options: unknown }[] = []
+  setDshIm(dshImService(replies))
   vi.spyOn(Commands.prototype, 'git').mockResolvedValue('')
   vi.spyOn(Commands.prototype, 'run').mockResolvedValue('{"ok":true,"data":{}}')
-  const answers: Record<string, string> = {
-    [`${BOT} auth status`]: JSON.stringify({ appId: 'cli_bot', brand: 'feishu', identities: { bot: { status: 'ready' } } }),
-    [`${BOT} config strict-mode`]: 'strict-mode: bot (source: profile)',
-    [`${BOT} api GET /open-apis/bot/v3/info --as bot --format ndjson`]: '{"bot":{"open_id":"ou_bot"},"code":0,"msg":"ok"}',
-  }
   /** A prepare command (`sh -c`) waits for this while it is set. */
   const hooks: { prepare?: Promise<void> } = {}
   const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
@@ -150,7 +193,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
     const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
     const exited = { exitCode: 0, signal: null }
     const done = argv[0] === 'sh' && hooks.prepare ? hooks.prepare.then(() => exited) : Promise.resolve(exited)
-    return { done, collected: { stdout: reader(answers[argv.join(' ')] ?? ''), stderr: reader('') } }
+    return { done, collected: { stdout: reader(''), stderr: reader('') } }
   }) }
   const agents = new Map<string, FakeAgent>()
   /** Each Session's next step, which takes the messages that wait for one. */
@@ -235,21 +278,20 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
     jobs: jobs.service, subagents: subagents.service }
   const ctx = new Context()
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
-  writeFileSync(BOT, '#!/bin/sh\n', { mode: 0o755 })
   const seeded = new Store(join(directory, 'orchestrator.sqlite'))
-  const sources = { feishu: { enabled: true, config: { cli: BOT } },
+  const feishuConfig = { botId: BOT_ID, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true }
+  const sources = { feishu: { enabled: true, config: feishuConfig },
     ...options.local ? { local: { enabled: true, config: {} } } : {} }
   seeded.saveSettings(SettingsSchema.parse({ ...seeded.settings(), sources }))
   seed?.(seeded)
   seeded.close()
   const runtime = new Runtime(ctx, testMachine({ stateDir: directory }), vi.fn())
   await runtime.ready
-  runtime.sources.register(feishuKind)
+  runtime.sources.register(feishuImKind)
   if (options.local) runtime.sources.register(localKind)
   const settings = runtime.store.settings()
   runtime.store.saveSettings({ ...settings, eval: { ...settings.eval, mode: 'auto' },
-    policy: { ...settings.policy, sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } } },
-    sources: { ...sources, feishu: { enabled: true, config: { cli: BOT, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } } } })
+    policy: { ...settings.policy, sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } } } })
   deliveries.mockClear()
 
   /** Parsed JSON payloads delivered to `sessionId`. */
@@ -282,12 +324,12 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
     await http(req, { writeHead: (code: number) => { status = code }, end: (data: string) => { text = data } })
     return { status, body: JSON.parse(text) as Record<string, unknown> }
   }
-  async function stop() { await runtime.stop(); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) }
+  async function stop() { await runtime.stop(); setDshIm(undefined); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) }
   /** The Session's model takes its next step, which takes the messages steered in since its last. */
   const step = (sessionId: string) => { steps.get(sessionId)!() }
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, route, acceptedTicket, api, controller, persistence, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim }
+    jobs, subagents, step, claim, replies }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

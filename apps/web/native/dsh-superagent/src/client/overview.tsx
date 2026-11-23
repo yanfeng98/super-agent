@@ -24,10 +24,9 @@ function ProblemLine({ problem, onChanged }: { problem: Problem; onChanged: () =
   const raw = (text: string | undefined) => text && <p className="dt-error dt-clamp dt-mono">{text}</p>
   const worded = (text: string) => <p className="dt-error">{text}</p>
   switch (problem.kind) {
-    // A failed Feishu bot check pauses only the Feishu Source; other setup problems halt the entire service.
-    case 'setup': return row(t(problem.place === 'feishu' ? 'problemSetupFeishu' : 'problemSetup'), <p className="dt-error"><SetupMessage
+    case 'setup': return row(t('problemSetup'), <p className="dt-error"><SetupMessage
       problem={problem} /></p>,
-      setupPage(problem.place), t(`problemSetupFix.${problem.place}`), <CheckSetupButton />)
+      setupPage(), t(`problemSetupFix.${problem.place}`), <CheckSetupButton />)
     case 'no-source': return row(t('problemNoSource'), undefined, settingsRoute('source'), undefined, go(t('actionOpenSources'),
       settingsRoute('source')))
     case 'no-allowed': return row(t('problemNoAllowed'), undefined, settingsRoute('eval'), undefined, go(t('actionAddAllowed'),

@@ -7,6 +7,7 @@ import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh
 import { feishuImKind, imTrigger, isStopCommand, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
 import type { SourceContext } from '../src/sources/host.ts'
 import { backfillChat, runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
+import { consumerRetry } from '../src/sources/poll.ts'
 
 const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
   version: 1, channel: 'feishu', botId: 'bot_1', fingerprint: 'f'.repeat(64), eventId: 'event_1',
@@ -884,5 +885,14 @@ describe('dsh-im Feishu context parts and images', () => {
   it('keeps the AppLink dsh-im already read on the Trigger', () => {
     const link = 'https://applink.feishu.cn/client/message/open?message_id=om_1'
     expect(imTrigger(event({ appLink: link })).url).toBe(link)
+  })
+
+  it('waits a second before retrying a consumer that stayed up for a minute, and backs off from one second otherwise', () => {
+    // A first failure retries at once, a run that ended quickly doubles the wait, and a minute of service starts over.
+    expect(consumerRetry(undefined, 5_000)).toBe(1_000)
+    expect(consumerRetry(1_000, 5_000)).toBe(2_000)
+    expect(consumerRetry(30_000, 5_000)).toBe(60_000)
+    expect(consumerRetry(60_000, 5_000)).toBe(60_000)
+    expect(consumerRetry(60_000, 60_000)).toBe(1_000)
   })
 })

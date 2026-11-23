@@ -3,7 +3,6 @@ import type { ChannelRef, ReceiveResult, OutboundMessage, Thread, ThreadFact, Th
 import type { Commands } from '../infra/commands.ts'
 import type { Deployment } from '../deployment.ts'
 import type { SourceRegistry } from './registry.ts'
-import type { SetupProblem } from '../setup.ts'
 import type { Family, Key } from '../kv.ts'
 import { fill } from '../infra/text.ts'
 
@@ -11,8 +10,6 @@ import { fill } from '../infra/text.ts'
 export const HEALTH_TEXT = {
   setupPending: 'Waiting for the deployment check',
   sourceOff: 'Off',
-  feishuCliUnset: 'The Source is on, and its bot lark-cli is not set',
-  feishuBotMissing: 'Waiting for the Feishu bot',
   imMissing: 'dsh-im is not mounted',
   imBotUnset: 'Choose an IM Feishu bot',
   imHandoffOff: 'Hand to Superagent is off for this bot',
@@ -39,8 +36,6 @@ export interface SourceContext {
   readonly ready: Promise<void>
   /** True once setup resolved the repository and accounts; Sources poll only then. */
   configured(): boolean
-  /** Setup problem keeping this Source's account from running; only the Feishu bot check reports one. */
-  readonly problem?: SetupProblem | undefined
   /** Returns a Source's configuration while enabled, or undefined while disabled or uninstalled. */
   config<C extends Record<string, unknown>>(kind: string): C | undefined
   /** Ingests a trigger into the Engine and schedules the next evaluation pass; callers should await completion before advancing read cursors. */

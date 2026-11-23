@@ -6,14 +6,28 @@ import { UserError } from '../src/core/index.ts'
 import { localKind } from '../src/sources/local.ts'
 import { KV } from '../src/kv.ts'
 import { RESOURCES } from '../src/app/resources.ts'
-import { CliError, Commands } from '../src/infra/commands.ts'
 import { IM_WORDS, NOTE_WORDS } from '../src/infra/text.ts'
-import { CHAT, feishu, startRuntime, type Host } from './fixtures/host.ts'
+import { setDshIm, type DshImService } from '../src/sources/dsh-im.ts'
+import { BOT_ID, CHAT, FINGERPRINT, feishu, startRuntime, type Host } from './fixtures/host.ts'
 
 let h: Host
 beforeEach(async () => { h = await startRuntime() })
 afterEach(async () => { await h.stop() })
 const words = (count: number) => Array.from({ length: count }, () => 'word').join(' ')
+/** A dsh-im service whose account read describes the fixture's Feishu bot. */
+const dshImService = (overrides: Partial<DshImService> = {}): DshImService => ({
+  contractVersion: 1, inboundVersion: 1,
+  listBots: async () => [{ botId: BOT_ID, channel: 'feishu' }],
+  listTargets: async () => [],
+  describeBot: async () => ({ version: 1, botId: BOT_ID, channel: 'feishu', domain: 'feishu',
+    account: { fingerprint: FINGERPRINT, name: 'Widgets Bot' }, connected: true, superagent: true, superagentActive: true,
+    capabilities: ['exclusive-text-consumer'] }),
+  consumeInbound: async () => () => {},
+  historyChecked: async () => ({ version: 1, scope: 'thread', events: [], omitted: 0, hasMore: false,
+    coverage: 'provider-visible-human-text' }),
+  replyChecked: async () => ({ sent: true, messageId: 'om_reply' }),
+  ...overrides,
+})
 const read = (resource: string, page: { offset?: number; limit?: number } = {}) =>
   h.runTool(h.runtime.masterId, 'orchestrator_read', { resource, ...page })
 
@@ -285,7 +299,9 @@ it('returns where a reply stands: sent, or dropped when its conversation can no 
   await h.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'Done.' })
   const reply = (text: string) => h.runTool(h.runtime.masterId, 'orchestrator_reply', { ticket_id: ticket.id, purpose: 'result', text })
   expect(await reply('修好了。')).toEqual({ status: 'sent' })
-  vi.mocked(Commands.prototype.lark).mockRejectedValue(new CliError('the message was withdrawn', 230011))
+  expect(h.replies.map(item => item.text)).toContain('修好了。')
+  // A retained route that no longer resolves means the conversation can never receive the reply.
+  setDshIm(dshImService({ replyChecked: async () => { throw Object.assign(new Error('the route is stale'), { code: 'stale-route' }) } }))
   expect(await reply('修好了，请看 PR。')).toEqual({ status: 'dropped' })
 })
 
@@ -395,7 +411,9 @@ it('reads a ticket with the ids it is tied to, its reports by assignment, and it
 it('reads a trigger once with the message it replies to and the messages around it on its thread', async () => {
   const at = (minute: number) => `2026-10-06T00:0${minute}:00.000Z`
   const message = (id: string, minute: number, overrides: Record<string, unknown> = {}) => ({ ...feishu(id, `message ${id}`, { root_id: 'om_root', ...overrides }), at: at(minute) })
-  const asked = message('asked', 1), replying = message('reply', 3, { parent_id: 'om_asked' })
+  const asked = message('asked', 1)
+  // The fixture maps the Feishu fields it reads; a reply's parent id is recorded on the Trigger's meta.
+  const reply = message('reply', 3), replying = { ...reply, meta: { ...reply.meta, parentId: 'om_asked' } }
   for (const item of [message('root', 0, { root_id: undefined }), asked, replying, message('later', 5)]) h.runtime.store.triggers.save(item)
   const page = await read(`trigger/${replying.id}`)
   expect(page).toMatchObject({ trigger_id: replying.id, replied_to: { trigger_id: asked.id, read: `trigger/${asked.id}` },
@@ -478,7 +496,8 @@ it('tells the main Session of the settings, prompts, requeues and unsubscription
 })
 
 it('answers a policy sync with the counts and what changed, not the whole list', async () => {
-  vi.mocked(Commands.prototype.lark).mockResolvedValue({ users: [{ member_id: 'ou_alice', name: 'Alice' }, { member_id: 'ou_bob', name: 'Bob' }], has_more: false })
+  setDshIm(dshImService({ chatMembersChecked: async () => ({ version: 1, chatId: CHAT,
+    users: [{ id: 'ou_alice', name: 'Alice' }, { id: 'ou_bob', name: 'Bob' }] }) }))
   expect(await h.runTool(h.runtime.masterId, 'orchestrator_policy_sync', { source: 'feishu' })).toEqual({ source: 'feishu', allowed: 2, added: ['Bob'], removed: [] })
 })
 

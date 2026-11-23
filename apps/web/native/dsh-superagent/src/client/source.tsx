@@ -148,7 +148,7 @@ export function SourceStatus() {
     <StatusHead hint={t('sourceStatusIntro')} settings="source" />
     {elsewhere && <p className="dt-error">
       <SetupMessage problem={elsewhere} lead /> <button type="button" className="dt-textlink"
-        onClick={() => navigate(setupPage(elsewhere.place))}>{t('setupFixLink')}</button>
+        onClick={() => navigate(setupPage())}>{t('setupFixLink')}</button>
     </p>}
     <LoadState error={error} loading={!data} />
     {data && <ul className="dt-list">{data.map(source => <SourceRow key={source.id} source={source} />)}</ul>}

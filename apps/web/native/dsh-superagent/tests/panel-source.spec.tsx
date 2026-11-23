@@ -7,7 +7,7 @@ import { usePanel, mount, remount, settle, all, find, tab, click, type, text, fi
 import { server, problemOf, droppedReply } from './fixtures/panel-server.ts'
 
 usePanel()
-it('shows each Source\'s state on the Source status and opens its settings from a setup problem', async () => {
+it('shows each Source\'s state on the Source status and opens the deployment settings from a setup problem', async () => {
   await mount()
   await click(zh['tab.source'])
   expect(document.querySelector('.dt-status-title')?.textContent).toBe(zh.statusTitle)
@@ -16,13 +16,13 @@ it('shows each Source\'s state on the Source status and opens its settings from 
   expect(text()).toContain(zh['sourceState.error'])
   expect(text()).toContain('socket closed')
   expect(all('.dt-card')).toHaveLength(0)
-  server.setup = { ...server.setup, feishuProblem: problemOf('feishuCliFailed') }
+  server.setup = { ...server.setup, problem: problemOf('environmentFailed'), accounts: null }
   await remount()
   await click(zh['tab.source'])
-  await click(zh.sourceOpenSettings)
+  expect(text()).toContain(`部署检查未通过：${zh['setup.environmentFailed']}`)
+  await click(find(zh.setupFixLink, 'button, a, [role="button"]'))
   expect(tab(zh['tab.settings']).getAttribute('aria-selected')).toBe('true')
-  expect(document.querySelector('.dt-settings-link[aria-current="page"]')?.textContent).toBe(zh['term.source'])
-  expect(all('.dt-card')[0]!.textContent).toContain('部署检查未通过：机器人的 lark-cli 不可用。')
+  expect(document.querySelector('.dt-settings-link[aria-current="page"]')?.textContent).toBe(zh['settingsGroup.deployment'])
 })
 
 it('folds more than six chats into a line of their names', async () => {
@@ -51,9 +51,9 @@ it('rereads the chats the bot has joined on request and says which are new, keep
   expect([...pick.options].map(option => option.textContent)).toEqual(['选择机器人已加入的群', '另一个群', '新群'])
   await click(button())
   expect([...document.querySelectorAll('.dt-toast')].at(-1)?.textContent).toBe(zh.labelsCurrent)
-  server.joinError = 'lark-cli: token expired'
+  server.joinError = 'dsh-im: The bot is not handed over'
   await click(button())
-  expect([...document.querySelectorAll('.dt-toast')].at(-1)?.textContent).toBe('读取失败，列表保持不变：lark-cli: token expired')
+  expect([...document.querySelectorAll('.dt-toast')].at(-1)?.textContent).toBe('读取失败，列表保持不变：dsh-im: The bot is not handed over')
   expect(button().disabled).toBe(false)
   // Only a field whose key column offers a refresh shows the button.
   expect([...all('.dt-card')[1]!.querySelectorAll('button')].some(item => item.textContent === '刷新群列表')).toBe(false)
@@ -93,28 +93,27 @@ it('renders each Source\'s settings from its kind\'s fields and saves one Source
   expect(server.revisions['source:local']).toBe(6)
 })
 
-it('shows the bot each CLI signs in as, and keeps a saved CLI on screen while dsh-superagent restarts', async () => {
+it('shows the bot each dsh-im account signs in as, hides its fact on an unsaved edit, and offers the advanced fields', async () => {
+  server.joined = { bot_1: 'Widgets Bot', bot_2: 'Other Bot' }
   await mount()
   await click(tab(zh['tab.settings']))
   const feishu = all('.dt-card')[0]!
   expect(feishu.textContent).toContain('当前机器人 Widgets Bot')
-  expect(field<HTMLInputElement>('机器人的 lark-cli').value).toBe('lark-bot')
-  // A fact describes the saved value, so an edited CLI shows none until it is saved.
-  await type(field<HTMLInputElement>('机器人的 lark-cli'), 'lark-other')
+  expect(field<HTMLSelectElement>('IM 飞书机器人').value).toBe('bot_1')
+  // A fact describes the saved value, so an edited bot shows none until it is saved.
+  await type(field<HTMLSelectElement>('IM 飞书机器人'), 'bot_2')
   expect(feishu.textContent).not.toContain('当前机器人 Widgets Bot')
   await click(zh.discard)
   expect(feishu.textContent).toContain('当前机器人 Widgets Bot')
   await click([...feishu.querySelectorAll<HTMLElement>('[data-disclosure-row]')].find(row => row.textContent?.includes('高级'))!)
   expect(field('每页消息数').closest('.dt-field')).not.toBeNull()
   expect(field('原消息链接的查询时限 / 毫秒').closest('.dt-field')).not.toBeNull()
-  await type(field<HTMLInputElement>('机器人的 lark-cli'), '/opt/bin/lark-bot')
-  expect(feishu.textContent).toContain('保存会重启 dsh-superagent：2 个进行中的派工会中断，并带恢复说明重新开始。')
+  await type(field<HTMLSelectElement>('IM 飞书机器人'), 'bot_2')
   await act(async () => { feishu.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }); await settle()
-  expect(server.settings.sources.feishu!.config).toMatchObject({ cli: '/opt/bin/lark-bot' })
-  expect(text()).toContain(zh.savedRestarting)
-  // The saved value stays, and the card's fields are disabled, until the saved revision returns with the restarted dsh-superagent.
-  expect(field<HTMLInputElement>('机器人的 lark-cli').value).toBe('/opt/bin/lark-bot')
-  expect(field('机器人的 lark-cli').matches(':disabled')).toBe(true)
+  expect(server.settings.sources.feishu!.config).toMatchObject({ botId: 'bot_2' })
+  expect(text()).toContain(zh.saved)
+  expect(field<HTMLSelectElement>('IM 飞书机器人').value).toBe('bot_2')
+  expect(field('IM 飞书机器人').matches(':disabled')).toBe(false)
   expect(sessionStorage.getItem('dsh-superagent/draft/master/source:feishu')).toBeNull()
 })
 
@@ -137,26 +136,6 @@ it('points a setup problem at the settings that fix it', async () => {
   expect(text()).toContain(zh.setupChecking)
 })
 
-it('shows a failed Feishu bot check as a problem of the Feishu Source only, with a check after a fix outside dsh-superagent', async () => {
-  server.setup = { ...server.setup, feishuProblem: problemOf('feishuBotNotReady', { app: 'cli_bot', status: 'missing' }),
-    accounts: { feishu: null } }
-  await mount()
-  expect(text()).toContain(zh.problemSetupFeishu)
-  expect(text()).not.toContain('飞书 来源异常')
-  await click(find(zh.problemSetupFeishu, 'button, a, [role="button"]'))
-  const feishu = all('.dt-card')[0]!
-  expect(feishu.textContent).toContain('部署检查未通过：应用 cli_bot 的机器人身份状态是 missing；用 lark-cli 配置应用密钥。')
-  // dsh-superagent runs meanwhile, so checking again asks first: the restart interrupts running Executor Sessions.
-  await click([...feishu.querySelectorAll('button')].find(button => button.textContent === '重新检查')!)
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('重新检查会重启 dsh-superagent：2 个进行中的派工会中断')
-  expect(server.requests.some(request => request.path === 'setup/check')).toBe(false)
-  await click(zh.confirm)
-  expect(server.requests.some(request => request.path === 'setup/check')).toBe(true)
-  await click(tab(zh['tab.source']))
-  // The Source's state carries the problem once, not again as its health.
-  expect(all('.dt-form > .dt-list > .dt-row')[0]!.textContent?.match(/cli_bot 的机器人身份状态是 missing/g)).toHaveLength(1)
-})
-
 it('leaves the Feishu skill out when no Feishu bot is configured', async () => {
   server.setup = { ...server.setup, accounts: { feishu: null } }
   at({ page: 'settings', query: { group: 'prompts' } })
@@ -164,19 +143,6 @@ it('leaves the Feishu skill out when no Feishu bot is configured', async () => {
   await click(tab(zh.promptViewFull))
   expect([...field<HTMLSelectElement>(zh.promptPreviewTarget).options].map(option => option.textContent)).toEqual(['主 Session',
     '执行器 Session'])
-})
-
-it('shows the Sources waiting for the deployment check, and the problem on the Source that fixes it, with its link', async () => {
-  server.setup = { ...server.setup, feishuProblem: problemOf('feishuCliFailed'), accounts: null }
-  await mount()
-  await click(zh['tab.source'])
-  const rows = all('.dt-form > .dt-list > .dt-row')
-  // The Feishu Source is where the problem is fixed, so it shows the error; the local Source keeps running.
-  expect(rows.map(row => row.querySelector('.dt-status-text')?.textContent)).toEqual(['出错', '运行中'])
-  expect(text()).not.toContain('Waiting for setup')
-  expect(rows[0]!.textContent).toContain('部署检查未通过：机器人的 lark-cli 不可用。')
-  await click(find(zh.sourceOpenSettings, '.dt-row button'))
-  expect(document.querySelector('.dt-settings-link[aria-current="page"]')?.textContent).toBe(zh['term.source'])
 })
 
 it('shows a Source\'s health in the interface language, and a diagnostic as reported', async () => {
@@ -189,31 +155,6 @@ it('shows a Source\'s health in the interface language, and a diagnostic as repo
   expect(feishu.textContent).not.toContain('consecutive')
   const local = all('.dt-form > .dt-list > .dt-row').find(row => row.querySelector('.dt-row-name')?.textContent === '本地工单')!
   expect(local.querySelector('.dt-mono')).toBeNull()
-})
-
-it('shows a refused Source save with the output of the tool that failed on its own line', async () => {
-  await mount()
-  await click(zh['tab.source'])
-  await click(find(zh['tab.settings'], '.dt-status-head button'))
-  const feishu = all('.dt-card')[0]!
-  await type(field<HTMLInputElement>('机器人的 lark-cli'), 'lark-broken')
-  await act(async () => { feishu.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }); await settle()
-  expect(feishu.querySelector('.dt-savebar [role="alert"]')?.textContent).toBe('机器人的 lark-cli 不可用。\nlark-cli: app secret missing')
-})
-
-it('shows a setup problem on its Source card within one read of the settings, which the settings groups share', async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true })
-  onTestFinished(() => { vi.useRealTimers() })
-  at({ page: 'settings', query: { group: 'source' } })
-  await mount()
-  const card = () => document.getElementById('dt-source-feishu')!
-  expect(card().textContent).not.toContain(zh['setup.feishuCliFailed'])
-  server.setup = { ...server.setup, feishuProblem: problemOf('feishuCliFailed') }
-  // The settings are read every five seconds, as the state is; the Source settings do not read the Source status.
-  await act(async () => { await vi.advanceTimersByTimeAsync(5000) }); await settle()
-  expect(server.requests.filter(request => request.path === 'settings')).toHaveLength(2)
-  expect(server.requests.some(request => request.path === 'sources')).toBe(false)
-  expect(card().textContent).toContain(zh['setup.feishuCliFailed'])
 })
 
 it('lists the messages a Source did not send in the last day under it, newest first, with why and where they belong', async () => {
@@ -247,24 +188,4 @@ it('takes no space for messages that were all sent', async () => {
   await mount()
   await click(zh['tab.source'])
   expect(text()).not.toContain(zh.sourceDroppedTitle)
-})
-
-it('reads the settings again as soon as dsh-superagent answers after a save restarted it', async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true })
-  onTestFinished(() => { vi.useRealTimers() })
-  at({ page: 'settings', query: { group: 'source' } })
-  await mount()
-  await type(field<HTMLInputElement>('机器人的 lark-cli'), '/opt/bin/lark-bot')
-  const feishu = all('.dt-card')[0]!
-  await act(async () => { feishu.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }); await settle()
-  expect(field('机器人的 lark-cli').matches(':disabled')).toBe(true)
-  // dsh-superagent restarts: DSH answers with empty 404s, then it answers again.
-  server.down = true
-  await act(async () => { await vi.advanceTimersByTimeAsync(1000) }); await settle()
-  server.down = false
-  const reads = server.requests.filter(request => request.path === 'settings').length
-  await act(async () => { await vi.advanceTimersByTimeAsync(1000) }); await settle()
-  expect(server.requests.filter(request => request.path === 'settings').length).toBeGreaterThan(reads)
-  expect(field('机器人的 lark-cli').matches(':disabled')).toBe(false)
-  expect(field<HTMLInputElement>('机器人的 lark-cli').value).toBe('/opt/bin/lark-bot')
 })

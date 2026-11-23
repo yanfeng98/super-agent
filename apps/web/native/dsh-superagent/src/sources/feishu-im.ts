@@ -7,10 +7,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { key, threadKey, type OutboundMessage, type Trigger } from '../core/index.ts'
 import { checkedImText } from '../infra/text.ts'
-import { admissionFileKeys, admissionImageKeys } from './feishu-image.ts'
+import { admissionFileKeys, admissionImageKeys, feishuChatLink, SOURCE, withMentionNames } from './feishu-shared.ts'
 import { dshIm, dshImOf, setDshIm, type DshImEvent, type DshImHistory, type DshImMessage, type DshImService } from './dsh-im.ts'
-import { feishuChatLink } from './feishu-channel.ts'
-import { withMentionNames } from './feishu-trigger.ts'
 import { runFeishuImBackfill } from './feishu-im-loops.ts'
 import { consumerRetry } from './poll.ts'
 import { KV } from '../kv.ts'
@@ -18,7 +16,7 @@ import { health, sourceContext, type Health, type SourceContext } from './host.t
 import type { ContextMessage, ContextPart, Localized, SourceKind, ThreadContext } from './kind.ts'
 import type { SourceRegistry } from './registry.ts'
 
-export const SOURCE = 'feishu'
+export { SOURCE }
 const POLL_MS = 2_000
 /** How long a failed message stays visible in the Source's health, cleared earlier by the next message that is handled. */
 const EVENT_FAILURE_MS = 10 * 60_000
@@ -29,7 +27,7 @@ const cachedBots = new Map<string, CachedBot>()
 export const setFeishuConfig = (value: FeishuConfig | undefined): void => { currentConfig = value }
 /** dsh-im's page cap for a history read; Feishu itself lists at most this many messages a page. */
 const PAGE_LIMIT = 50
-/** The page size the lark-cli Source used, kept as the default so a negotiated page does not change on its own. */
+/** The page size an unset configuration reads, matching what earlier versions saved. */
 const DEFAULT_PAGE = 20
 
 const FeishuConfigSchema = z.object({
@@ -43,7 +41,7 @@ const FeishuConfigSchema = z.object({
   linkTimeoutMs: z.number().int().min(1).max(90_000).default(5_000),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
-/** Parses a stored Feishu Source config, ignoring keys the lark-cli Source used. */
+/** Parses a stored Feishu Source config, ignoring keys it does not use. */
 export const feishuImConfig = (value: unknown): FeishuConfig => FeishuConfigSchema.parse(value ?? {})
 
 /** Returns the cached account facts of one dsh-im Feishu bot, verifying it only when the cache misses. */

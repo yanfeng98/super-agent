@@ -5,16 +5,28 @@ import { Later } from '../src/app/effects.ts'
 import { reportRelay } from '../src/app/notices.ts'
 import { WorkerSlots, inputMessage, mandateInstructions, ticketExecution, transient, triggerMessage } from '../src/executor/dsh.ts'
 import { SettingsSchema } from '../src/policy.ts'
-import { Commands } from '../src/infra/commands.ts'
+import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
+import { imTrigger } from '../src/sources/feishu-im.ts'
 import { deferred, waitUntil } from './fixtures/async.ts'
-import { CHAT, MEMBER, feishu, startRuntime, type Host } from './fixtures/host.ts'
+import { BOT_ID, CHAT, FINGERPRINT, MEMBER, feishu, feishuEvent, startRuntime, type Host } from './fixtures/host.ts'
 
 let h: Host
 beforeEach(async () => { h = await startRuntime() })
 afterEach(async () => { await h.stop() })
-const lark = { users: [{ member_id: MEMBER, name: 'Alice' }], has_more: false }
-const linkLookedUp = (messageId: string) =>
-  vi.mocked(Commands.prototype.lark).mock.calls.some(([args]) => args.includes('+messages-mget') && args.includes(messageId))
+/** A dsh-im service whose account read describes the fixture's Feishu bot. */
+const dshImService = (overrides: Partial<DshImService> = {}): DshImService => ({
+  contractVersion: 1, inboundVersion: 1,
+  listBots: async () => [{ botId: BOT_ID, channel: 'feishu' }],
+  listTargets: async () => [],
+  describeBot: async () => ({ version: 1, botId: BOT_ID, channel: 'feishu', domain: 'feishu',
+    account: { fingerprint: FINGERPRINT, name: 'Widgets Bot' }, connected: true, superagent: true, superagentActive: true,
+    capabilities: ['exclusive-text-consumer'] }),
+  consumeInbound: async () => () => {},
+  historyChecked: async () => ({ version: 1, scope: 'thread', events: [], omitted: 0, hasMore: false,
+    coverage: 'provider-visible-human-text' }),
+  replyChecked: async () => ({ sent: true, messageId: 'om_reply' }),
+  ...overrides,
+})
 /** Hold the first resolution of a Session until `gate` resolves; `held()` says whether it began. */
 function holdSession(sessionId: string, gate: Promise<void>) {
   let held = false
@@ -31,7 +43,14 @@ const idle = (sessionId: string) => {
 it('evaluates a message that arrives on a thread while an earlier candidate\'s card waits for its link, in the thread\'s next Eval', async () => {
   const gate = deferred()
   // The first candidate's source link lookup is slow; Feishu allows it up to linkTimeoutMs.
-  vi.mocked(Commands.prototype.lark).mockImplementation(async args => { if (args.includes('+messages-mget') && args.includes('om_1')) await gate.promise; return lark })
+  const messageChecked = vi.fn(async (_botId: string, route: DshImEvent['reply']) => {
+    if (route.messageId === 'om_1') await gate.promise
+    return { version: 1 as const, messageId: route.messageId, chatId: route.conversationId, at: '2026-09-09T00:00:00.000Z', text: '',
+      messageType: 'text' as const, sender: { kind: 'user' as const, id: MEMBER, name: 'Alice' },
+      appLink: `https://applink.feishu.cn/client/message/open?message_id=${route.messageId}`, deleted: false }
+  })
+  setDshIm(dshImService({ messageChecked }))
+  const linkLookedUp = (messageId: string) => messageChecked.mock.calls.some(([, route]) => route.messageId === messageId)
   await h.runtime.settings.pause(true, 'panel')
   const a1 = feishu('1', '@bot 修 A'), b1 = feishu('2', '@bot 修 B'), b2 = feishu('3', '@bot B 还有这个', { root_id: 'om_2' })
   h.runtime.receive(a1); h.runtime.receive(b1)
@@ -124,7 +143,8 @@ it('keeps a launch that a pause cut short queued, and finishes it once processin
   expect(h.runtime.store.tickets.get(ticket!.id)!.assignments).toEqual([expect.objectContaining({ state: 'running' })])
 })
 
-const botMessage = () => feishu('2', 'CI 失败', { mentions: [], root_id: 'om_1', sender_id: 'cli_ci', sender_type: 'bot' })
+const botMessage = () => imTrigger({ ...feishuEvent('2', 'CI 失败', { mentions: [], root_id: 'om_1', sender_id: 'cli_ci' }),
+  actor: { kind: 'bot', id: 'cli_ci', name: 'CI' } })
 it('wakes an idle worker for a bot\'s Input only when a worker slot is free, and creates a worker Session someone deleted again', async () => {
   const settings = h.runtime.store.settings()
   h.runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, maxWorkers: 1 } })

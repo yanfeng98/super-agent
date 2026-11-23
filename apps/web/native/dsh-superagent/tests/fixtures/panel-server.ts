@@ -12,11 +12,9 @@ import type { DroppedReply, HistoryView, Problem, PromptsView, SetupView, Source
   ThreadRow, TicketPageView,
   TicketRow, TicketStage,
   TriggerRow } from '../../src/client/api.ts'
-import { SETUP_FIELDS } from '../../src/deployment.ts'
 import { EvalConfigSchema, ExecutorConfigSchema, PolicyConfigSchema, SettingsSchema } from '../../src/policy.ts'
 import { SetupError, type SetupCode } from '../../src/setup.ts'
-import { feishuChannel } from '../../src/sources/feishu-trigger.ts'
-import { feishuKind } from '../../src/sources/feishu.ts'
+import { feishuImKind } from '../../src/sources/feishu-im.ts'
 import { localKind, OPERATOR } from '../../src/sources/local.ts'
 import type { Health } from '../../src/sources/host.ts'
 import type { SourceKind } from '../../src/sources/kind.ts'
@@ -29,7 +27,7 @@ type Actor = TriggerRow['actor']
 export function actor(source: string, id: string, human = true): Actor {
   if (!id) return { source, id }
   const entry = ALLOWED[source]?.find(item => item.id.toLowerCase() === id.toLowerCase())
-  const unnamed = source === 'feishu' ? feishuKind.policy?.unnamed : undefined
+  const unnamed = source === 'feishu' ? feishuImKind.policy?.unnamed : undefined
   const name = entry ? entry.name || entry.id : unnamed ? undefined : id
   return { source, id, name: name ? { zh: name, en: name } : human ? unnamed!.person : unnamed!.bot }
 }
@@ -70,14 +68,15 @@ export const promptVersion = (revision: number, config: PromptsView['current']['
 /** Build a dropped outbound reply fixture (`feishu` replies to `oc_1`/`om_root`). */
 export const droppedReply = (id: string, hoursAgo: number, reason: DroppedReply['dropped']['reason'],
   { ticket, thread }: { ticket?: DroppedReply['ticket']; thread?: false } = {}): DroppedReply => ({
-  id, preview: `Reply ${id}`, kind: 'reply', channel: feishuChannel('oc_1', 'om_root'),
+  id, preview: `Reply ${id}`, kind: 'reply', channel: { source: 'feishu', thread: 'feishu:oc_1',
+    address: { chatId: 'oc_1', messageId: 'om_root', actorId: MEMBER, botId: 'bot_1' } },
   dropped: { at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(), reason }, ...ticket ? { ticket } : {},
   ...thread === false ? {} : { thread: 'feishu:oc_1:om_root' },
 })
 const dayAgo = () => new Date(Date.now() - 86_400_000).toISOString()
 export const problemOf = (code: SetupCode, values: Record<string, string> = {}) => new SetupError(code, values).problem
 // The kinds' configurations differ, and the fake reads them only as the records the views carry.
-const KINDS = [feishuKind, localKind] as unknown as SourceKind[]
+const KINDS = [feishuImKind, localKind] as unknown as SourceKind[]
 export const MACHINE = { stateDir: '/srv/dsh-superagent', promptMaxChars: 100000, admissionContextMaxPages: 10,
   admissionContextTimeoutMs: 15000 }
 
@@ -112,21 +111,17 @@ export interface PanelServer {
 export let server: PanelServer
 
 function resolved() {
-  const accounts = server.setup.accounts
-  const feishu = accounts?.feishu
-  // A dsh-im bot carries no app id or brand of its own; the fixture only needs a valid Deployment.
-  return accounts ? testDeployment(feishu ? { feishu: { cli: '/bin/false', appId: feishu.appId ?? 'cli_fixture',
-    brand: feishu.brand ?? 'feishu', botId: feishu.botId, name: feishu.name } } : { feishu: undefined }) : undefined
+  // The deployment is the machine alone: the Feishu bot lives in dsh-im, and only the Source configuration names it.
+  return server.setup.accounts ? testDeployment() : undefined
 }
 /** Default source health: paused during setup; Feishu defaults to `socket closed` unless overridden or paused by setup. */
 function healthOf(name: string): Health {
   if (server.setup.problem) return { state: 'paused', detail: 'Waiting for setup', code: 'setupPending' }
   if (server.health[name]) return server.health[name]
   if (name !== 'feishu') return { state: 'ready', detail: '' }
-  return server.setup.feishuProblem ? { state: 'paused', detail: server.setup.feishuProblem.detail } : { state: 'error',
-    detail: 'socket closed' }
+  return { state: 'error', detail: 'socket closed' }
 }
-const problemOf_ = (id: string) => [server.setup.problem, server.setup.feishuProblem].find(item => item?.place === id) ?? undefined
+const problemOf_ = (id: string) => server.setup.problem?.place === id ? server.setup.problem : undefined
 function sourceSettings(): SourceView[] {
   return KINDS.map(kind => {
     const config = kind.schema.parse(server.settings.sources[kind.kind]?.config ?? {})
@@ -140,7 +135,7 @@ function sourceSettings(): SourceView[] {
     return { id: kind.kind, kind: kind.kind, title: kind.title, description: kind.description, installed: true,
       value: { enabled: server.settings.sources[kind.kind]?.enabled ?? true, config },
         revision: server.revisions[`source:${kind.kind}`] ?? 0,
-      restarts: SETUP_FIELDS[kind.kind] ?? [], fields: kind.fields,
+      restarts: [], fields: kind.fields,
       facts: kind.facts?.({ deployment: resolved(), config, labels }) ?? {},
       labels, ...problem ? { problem } : {}, ...policy ? { policy } : {} }
   })
@@ -181,12 +176,11 @@ const settingsView = (): ApiResponse<'GET settings'> => ({
       en: 'The Feishu chat that started the ticket' } }] }] },
 })
 const overviewView = (): ApiResponse<'GET overview'> => {
-  const { problem, feishuProblem } = server.setup
-  const setup = problem ?? feishuProblem
+  const setup = server.setup.problem
   return {
     problems: [...setup ? [{ kind: 'setup' as const, ...setup }] : [],
       ...KINDS.some(kind => server.settings.sources[kind.kind]?.enabled !== false) ? [] : [{ kind: 'no-source' as const }],
-      ...feishuProblem || server.settings.sources.feishu?.enabled === false ? [] : [{ kind: 'source-error' as const, source: { id: 'feishu',
+      ...server.settings.sources.feishu?.enabled === false ? [] : [{ kind: 'source-error' as const, source: { id: 'feishu',
         title: { zh: '飞书', en: 'Feishu' },
         health: { name: 'feishu', state: 'error' as const, detail: 'socket closed' } } }],
       ...server.threads.filter(thread => thread.evaluating && thread.evaluating.deadline < new Date().toISOString())
@@ -244,7 +238,7 @@ function initial(): PanelServer {
     policy: { sources: { feishu: { allowed: [{ id: 'ou_alice', name: 'Alice' }], syncChat: 'oc_team' },
       local: { allowed: [{ id: OPERATOR, name: 'Operator' }] } },
       rules: [{ id: 'copy', name: '文案修改', enabled: true, instruction: '修正明确的文案错误' }] },
-    sources: { feishu: { enabled: true, config: { cli: 'lark-bot', chats: [{ chatId: 'oc_team', listen: 'mentions' }],
+    sources: { feishu: { enabled: true, config: { botId: 'bot_1', chats: [{ chatId: 'oc_team', listen: 'mentions' }],
       directMessages: true } }, local: { enabled: true, config: {} } },
     executor: { blockedCommands: ['gh-personal'] },
   })
@@ -257,8 +251,8 @@ function initial(): PanelServer {
     health: {}, down: false, pending: 0, opened: [], requests: [], misuse: [], queued: new Set(), dropped: [], failing: [],
     notifications: { items: [], unread: 0 },
     mergeQueue: { paused: false, items: [] },
-    setup: { machine: MACHINE, problem: null, feishuProblem: null,
-      accounts: { feishu: { appId: 'cli_bot', brand: 'feishu', botId: 'ou_bot', name: 'Widgets Bot' } } },
+    setup: { machine: MACHINE, problem: null,
+      accounts: { feishu: { botId: 'ou_bot', name: 'Widgets Bot' } } },
     settings, revisions: { policy: 3, eval: 1, executor: 0 },
     prompts: { masterId: 'master', sections: TEAM_SECTIONS, skillName: SKILL_NAME.source, builtin: ['feishu'],
       skillPrefix: SKILL_PREFIX, revision: 0, current: { ...defaults, config: defaultPrompts() },
@@ -512,19 +506,14 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     if (!['policy', 'eval', 'executor'].includes(block) && !source) return block.startsWith('source:') ? refuse(404, 'Source not found')
       : refuse(400, 'Invalid settings: block')
     if (body.revision !== (server.revisions[block] ?? 0)) return refuse(409, 'Settings changed. Reload before saving.')
-    let restarting = false
+    // No Source field is read by setup, so a Source save takes effect without a restart.
+    const restarting = false
     if (block === 'policy') server.settings = { ...server.settings, policy: PolicyConfigSchema.parse(body.value) }
     else if (block === 'executor') server.settings = { ...server.settings, executor: ExecutorConfigSchema.parse(body.value) }
     else if (block === 'eval') server.settings = { ...server.settings, eval: EvalConfigSchema.parse(body.value) }
     else if (source) {
       const { enabled, config: value } = SourceSave.parse(body.value)
       const config = source.schema.parse(value)
-      // As on the server, a changed CLI that fails its check refuses the save with the setup problem.
-      if (config.cli === 'lark-broken') {
-        const refused = new SetupError('feishuCliFailed', { output: 'lark-cli: app secret missing' })
-        return refuse(400, refused.message, { setup: refused.problem })
-      }
-      restarting = (config.cli ?? '') !== (server.settings.sources[source.kind]?.config.cli ?? '')
       server.settings = { ...server.settings, sources: { ...server.settings.sources, [source.kind]: { enabled, config } } }
     }
     server.revisions[block] = (server.revisions[block] ?? 0) + 1

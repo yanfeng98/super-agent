@@ -3,7 +3,7 @@ import { SettingsSchema, assessmentOutcome, policyEffects, settingsPolicy, polic
 import type { MandateBasis } from '../src/core/index.ts'
 import { migrateSettings } from '../src/app/migration.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
-import { feishuKind } from '../src/sources/feishu.ts'
+import { feishuImKind } from '../src/sources/feishu-im.ts'
 import type { Thread, Ticket, Trigger } from '../src/core/index.ts'
 
 const MEMBER = 'ou_alice'
@@ -17,7 +17,7 @@ const base = SettingsSchema.parse({
 })
 function setup(settings: Settings = base) {
   const sources = new SourceRegistry(() => settings)
-  sources.register(feishuKind)
+  sources.register(feishuImKind)
   return { sources, policy: settingsPolicy(settings, sources), version: policyVersion(settings) }
 }
 const { sources, policy } = setup()
@@ -40,7 +40,7 @@ describe('source scope', () => {
     // A Source with no stored configuration and no plugin listens to what it produces, as a kind without `scope` does.
     expect(bare.scope({ source: 'probe', meta: {} })).toEqual({ listened: true, observed: false })
     const broken = new SourceRegistry(() => SettingsSchema.parse({ sources: { feishu: { enabled: true, config: { chats: 'oops' } } } }))
-    broken.register(feishuKind)
+    broken.register(feishuImKind)
     expect(broken.instance('feishu')).toMatchObject({ enabled: false })
     expect(broken.scope(feishu())).toEqual({ listened: false, reason: 'source_disabled' })
   })

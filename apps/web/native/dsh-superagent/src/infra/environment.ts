@@ -1,5 +1,5 @@
 /**
- * Process environment and CLI shims that bind git and lark-cli to the deployment's accounts, keep `gh` unavailable, and block disallowed commands.
+ * Process environment and CLI shims that isolate the agent's git, keep `gh` and `lark-cli` unavailable, and block disallowed commands.
  * Variables read by workers avoid `KEY|PASSWORD|SECRET|TOKEN` in their names because DSH strips credential-shaped variables from child environments.
  * Provides default-path guardrails rather than an OS-level security boundary, as workers run under the operator's OS user.
  */
@@ -73,10 +73,10 @@ async function own(file: string, text: string, mode = 0o644): Promise<void> {
 
 /**
  * Atomically writes worker CLI shims and the isolated git configuration file into the state directory, refusing to overwrite foreign files.
- * Each shim strips the shim directory from PATH before exec so a wrapper script resolving `lark-cli` by name reaches the real binary.
+ * Every shim exits non-zero with the reason, so a worker never reaches a CLI that is unavailable or blocked.
  */
-export async function writeEnvironment(deployment: Pick<Deployment, 'stateDir' | 'feishu'>, blockedCommands: readonly string[]): Promise<void> {
-  const { stateDir, feishu } = deployment
+export async function writeEnvironment(deployment: Pick<Deployment, 'stateDir'>, blockedCommands: readonly string[]): Promise<void> {
+  const { stateDir } = deployment
   const dir = workerBin(stateDir)
   await mkdir(dir, { recursive: true })
   const before = await readdir(dir)
@@ -89,16 +89,11 @@ export async function writeEnvironment(deployment: Pick<Deployment, 'stateDir' |
     await rename(temporary, join(dir, name))
     kept.add(name)
   }
-  const withoutShims = [
-    `self=${shellQuote(dir)}`, 'rest=', 'IFS=:', 'set -f',
-    'for entry in $PATH; do [ "$entry" = "$self" ] || rest="${rest:+$rest:}$entry"; done',
-    'set +f', 'unset IFS', 'PATH=$rest', 'export PATH',
-  ].join('\n')
-  const run = (program: string): string => `${withoutShims}\nexec ${shellQuote(program)} "$@"`
   const fail = (message: string): string => `echo ${shellQuote(message)} >&2\nexit 1`
   // `gh` fails rather than reaching a real CLI with the operator's credentials.
   await shim('gh', fail('gh is unavailable in this installation.'))
-  await shim('lark-cli', feishu ? run(feishu.cli) : fail('lark-cli is unavailable: this installation has no Feishu bot.'))
+  // dsh-im owns the Feishu bot, so a worker reaches Feishu through the orchestrator tools rather than a second CLI identity.
+  await shim('lark-cli', fail('lark-cli is unavailable: dsh-im owns the Feishu bot; read Feishu through the orchestrator tools.'))
   for (const name of new Set(blockedCommands.filter(name => !WORKER_COMMANDS.includes(name)))) {
     await shim(name, fail(`${name} is blocked in this installation.`))
   }

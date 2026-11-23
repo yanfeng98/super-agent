@@ -1,9 +1,9 @@
-/** Probes the optional Feishu bot, configures the worker execution environment and command shims, and tracks setup readiness. */
+/** Configures the worker execution environment and command shims, and tracks setup readiness. */
 import type { Context } from '@deepseek-ai/cordis'
 import { UserError } from '../core/index.ts'
-import { SETUP_FIELDS, resolveFeishuBot, workerProbe, type Deployment, type Machine } from '../deployment.ts'
+import type { Deployment, Machine } from '../deployment.ts'
 import { agentVariables, applyEnvironment, withoutDirectory, workerBin, writeEnvironment } from '../infra/environment.ts'
-import type { Settings, SettingsBlock } from '../policy.ts'
+import type { Settings } from '../policy.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
 
 export interface SetupHost {
@@ -13,18 +13,13 @@ export interface SetupHost {
   restart(): void
 }
 
-const setupFields = (settings: Settings) =>
-  JSON.stringify(Object.entries(SETUP_FIELDS).map(([id, keys]) => keys.map(key => settings.sources[id]?.config[key] ?? '')))
-export const setupChanged = (before: Settings, after: Settings): boolean => setupFields(before) !== setupFields(after)
-
 /**
- * Resolves the optional Feishu bot by probing its CLI, then writes and applies the isolated git and shim environment used by worker processes.
- * `Runtime` runs it at startup to gate orchestration readiness, while `Settings` uses it to validate account changes, update blocked command shims, and schedule restarts.
+ * Writes and applies the isolated git and shim environment used by worker processes.
+ * `Runtime` runs it at startup to gate orchestration readiness, while `Settings` applies blocked-command changes and schedules restarts.
  */
 export class Setup {
   private resolved?: Deployment
   problem?: SetupProblem
-  feishuProblem?: SetupProblem
   /** PATH with the worker shim directory removed so the host's own CLI calls invoke the real binaries. */
   private readonly path: string
   /** Environment variables pointing agent subprocesses at the isolated git config and command shims. */
@@ -41,7 +36,7 @@ export class Setup {
     return this.resolved
   }
   configured(): boolean { return this.resolved !== undefined }
-  /** Resolve the optional Feishu account and apply the worker environment, recording `SetupError` failures in `problem`/`feishuProblem` and rethrowing unexpected errors. */
+  /** Prepare the worker environment, recording `SetupError` failures in `problem` and rethrowing unexpected errors. */
   async run(settings: Settings): Promise<boolean> {
     try { this.resolved = await this.resolve(settings); return true }
     catch (error) {
@@ -50,51 +45,25 @@ export class Setup {
       return false
     }
   }
-  /** Trigger a restart to re-run setup, refusing if setup and Feishu are already healthy so running assignments are not interrupted. */
+  /** Trigger a restart to re-run setup, refusing if it already succeeded so running assignments are not interrupted. */
   check(): void {
-    if (this.configured() && !this.feishuProblem) throw new UserError('setupComplete')
+    if (this.configured()) throw new UserError('setupComplete')
     this.restart()
   }
   /** Defer the restart to the next macrotask so the current HTTP or tool caller receives its response first. */
   restart(): void { setTimeout(this.host.restart, 0) }
-  /** Verify the Feishu account CLI for a modified source block before saving, ignoring setup errors belonging to other blocks. */
-  async checkAccounts(block: SettingsBlock, settings: Settings): Promise<void> {
-    if (block !== 'source:feishu') return
-    const config = settings.sources.feishu?.config
-    // A dsh-im-backed Source has a botId and owns no CLI; only the legacy lark-cli config is checked here.
-    if (typeof config?.botId === 'string' && config.botId) return
-    const { machine } = this.host
-    await resolveFeishuBot(machine, config, this.probe())
-      .catch((error: unknown) => { if (!(error instanceof SetupError) || error.place === 'feishu') throw error })
-  }
   async blockCommands(blocked: readonly string[]): Promise<void> {
     if (this.resolved) await writeEnvironment(this.resolved, blocked)
   }
   restore(): void { this.restoreEnvironment?.(); this.restoreEnvironment = undefined }
-  /** Probes CLIs the way worker shells run them, using `stateDir` as `cwd` since it exists even before the repository clone is valid. */
-  private probe() {
-    const { context, machine, lifetime } = this.host
-    return workerProbe(context.subprocess, machine.stateDir, machine.stateDir, lifetime)
-  }
   private async resolve(settings: Settings): Promise<Deployment> {
-    const { context, machine } = this.host
-    const probe = this.probe()
-    this.feishuProblem = undefined
-    const feishuConfig = settings.sources.feishu?.config
-    const feishu = typeof feishuConfig?.botId === 'string' && feishuConfig.botId ? undefined
-      : await resolveFeishuBot(machine, feishuConfig, probe).catch((error: unknown) => {
-        if (!(error instanceof SetupError)) throw error
-        this.feishuProblem = error.problem
-        context.logger.warn('dsh-superagent leaves Feishu out: %s', error.message)
-        return undefined
-      })
-    const resolved: Deployment = { ...machine, ...(feishu ? { feishu } : {}) }
+    const { machine } = this.host
     const machineProblem = (error: unknown): never => {
       if (error instanceof SetupError) throw error
       throw new SetupError('environmentFailed', { output: error instanceof Error ? error.message : String(error) })
     }
-    await writeEnvironment(resolved, settings.executor.blockedCommands).catch(machineProblem)
+    await writeEnvironment(machine, settings.executor.blockedCommands).catch(machineProblem)
     this.restoreEnvironment = applyEnvironment(this.variables, machine.stateDir, this.path)
-    return resolved
+    return machine
   }
 }

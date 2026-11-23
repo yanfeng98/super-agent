@@ -23,36 +23,28 @@ beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'environment-')); mkdirSync(
 afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
 
 describe('worker shims', () => {
-  it('run a wrapper that calls `lark-cli` by name without reaching the shim again, and keep the caller\'s other PATH entries', async () => {
-    program(join(dir, 'real', 'lark-cli'), 'printf \'{"args":"%s","path":"%s"}\\n\' "$*" "$PATH"')
-    const wrapper = program(join(dir, 'lark-bot'), 'exec lark-cli "$@"')
-    await writeEnvironment(testDeployment({ stateDir: dir, feishu: { ...testDeployment().feishu!, cli: wrapper } }), [])
-    const bin = workerBin(dir)
-    const path = [bin, join(dir, 'venv'), join(dir, 'real'), '/usr/bin', '/bin'].join(':')
-    const { stdout } = await exec('lark-cli', ['im', '+chat-list'], { env: { PATH: path }, timeout: 10_000 })
-    expect(JSON.parse(stdout)).toEqual({ args: 'im +chat-list', path: [join(dir, 'venv'), join(dir, 'real'), '/usr/bin', '/bin'].join(':') })
-  })
-  it('works without a Feishu bot: `lark-cli` reports why and git gets no credential helper', async () => {
-    await writeEnvironment(testDeployment({ stateDir: dir, feishu: undefined }), [])
+  it('make `lark-cli` report that dsh-im owns the bot, and write an agent git configuration with no credential helper', async () => {
+    await writeEnvironment(testDeployment({ stateDir: dir }), [])
     await expect(exec(join(workerBin(dir), 'lark-cli'), ['im', '+chat-list'])).rejects.toMatchObject({ code: 1,
-      stderr: 'lark-cli is unavailable: this installation has no Feishu bot.\n' })
+      stderr: 'lark-cli is unavailable: dsh-im owns the Feishu bot; read Feishu through the orchestrator tools.\n' })
     const config = readFileSync(workerGitConfig(dir), 'utf8')
     expect(config).toContain('[user]')
     expect(config).toContain('name = dsh-superagent')
     expect(config).toContain('[credential]\n\thelper =')
     expect(config).not.toContain('insteadOf')
   })
-  it('make `lark-cli` fail without a Feishu bot and each blocked command fail in this installation', async () => {
-    await writeEnvironment(testDeployment({ stateDir: dir, feishu: undefined }), ['personal-gh'])
+  it('make `lark-cli` fail and each blocked command fail in this installation', async () => {
+    await writeEnvironment(testDeployment({ stateDir: dir }), ['personal-gh'])
     const bin = workerBin(dir)
-    await expect(exec(join(bin, 'lark-cli'), ['im', '+chat-list'])).rejects.toMatchObject({ code: 1, stderr: 'lark-cli is unavailable: this installation has no Feishu bot.\n' })
+    await expect(exec(join(bin, 'lark-cli'), ['im', '+chat-list'])).rejects.toMatchObject({ code: 1,
+      stderr: 'lark-cli is unavailable: dsh-im owns the Feishu bot; read Feishu through the orchestrator tools.\n' })
     await expect(exec(join(bin, 'personal-gh'), [])).rejects.toMatchObject({ code: 1, stderr: 'personal-gh is blocked in this installation.\n' })
   })
-  it('keep `lark-cli` working, make `gh` report its absence, and shim no `git`, when the blocked commands name the commands workers need', async () => {
-    const bot = program(join(dir, 'lark-bot'), 'echo lark "$@"')
-    await writeEnvironment(testDeployment({ stateDir: dir, feishu: { ...testDeployment().feishu!, cli: bot } }), ['gh', 'git', 'lark-cli'])
+  it('make `gh` report its absence, keep `lark-cli` unavailable, and shim no `git`, when the blocked commands name the commands workers need', async () => {
+    await writeEnvironment(testDeployment({ stateDir: dir }), ['gh', 'git', 'lark-cli'])
     const bin = workerBin(dir)
-    expect((await exec(join(bin, 'lark-cli'), ['im'])).stdout).toBe('lark im\n')
+    await expect(exec(join(bin, 'lark-cli'), ['im'])).rejects.toMatchObject({ code: 1,
+      stderr: 'lark-cli is unavailable: dsh-im owns the Feishu bot; read Feishu through the orchestrator tools.\n' })
     await expect(exec(join(bin, 'gh'), ['api', 'user'])).rejects.toMatchObject({ code: 1, stderr: 'gh is unavailable in this installation.\n' })
     expect(readdirSync(bin)).not.toContain('git')
   })
@@ -114,8 +106,7 @@ describe('agent git configuration', () => {
 it('fails instead of asking the operator\'s askpass helpers when the agent\'s credential helper has no answer', async () => {
   const log = join(dir, 'asked')
   const askpass = program(join(dir, 'askpass'), `echo asked >> ${log}; echo operator-secret`)
-  const agent = program(join(dir, 'real', 'lark-cli'), 'exit 0')
-  const deployment = testDeployment({ stateDir: dir, feishu: { ...testDeployment().feishu!, cli: agent } })
+  const deployment = testDeployment({ stateDir: dir })
   await writeEnvironment(deployment, [])
   const env = workerEnv({ PATH: process.env.PATH, HOME: dir, GIT_ASKPASS: askpass, SSH_ASKPASS: askpass, ...agentVariables(dir) })
   await exec('git', ['init', '-q', 'repo'], { cwd: dir, env })

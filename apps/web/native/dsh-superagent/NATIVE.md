@@ -323,7 +323,9 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `superagent`/`superagentActive` status; turning it off releases the consumer and restores normal IM chat. Each
     Trigger records its source `botId` so a later Source bot change cannot route an old ticket through the new bot, and
     `describeBot` carries the Feishu/Lark domain for chat links. The watcher polls the cheap `inboundStatus`; `describeBot`
-    runs only when registering. A dsh-im `botId` also skips the legacy lark-cli setup probe.
+    runs only when registering. The legacy lark-cli Source, its setup probe, `Commands.lark` and the worker's
+    `lark-cli` identity are removed (item 31); the worker shim stays and fails, so no worker reaches Feishu outside the
+    orchestrator tools.
     `tests/feishu-im.spec.ts` covers the mapping, scope, policy, replies, history, the `feishu-im/` resource and consumer registration; dsh-im's
     `tests/bot-general-settings.test.mjs` and `tests/channels/feishu/multi-bot-controller.test.mjs` cover the switch.
 
@@ -344,9 +346,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `syncChat` (`chatMembersChecked`), `sourceLink` resolves the message's own AppLink through `messageChecked` with the
     `feishu-im/` resource as fallback, and `sendFeishuIm` passes the receipt id as Feishu's `uuid`, so the outbox can retry
     an ambiguous (`reply-result-unknown`) send and Feishu deduplicates it instead of producing a second reply. Replies
-    render as rich-text cards in the source message's topic (`format: 'markdown'`, `replyInThread: true`), so a Ticket
-    answer looks like the removed lark-cli Source's `--markdown --reply-in-thread` reply, and a bot-authored source can be
-    answered because dsh-im accepts bot senders on the retained route. A `/stop` a person writes, speaks or sends as rich text is a control
+    render as rich-text cards in the source message's topic (`format: 'markdown'`, `replyInThread: true`), and a
+    bot-authored source can be answered because dsh-im accepts bot senders on the retained route. A `/stop` a person writes, speaks or sends as rich text is a control
     message, matched on the whole message (a voice message on its transcript): the Source ends the live Ticket following that Thread, under the same Policy gate that admits a message
     there, and answers with the Ticket it stopped or says that nothing was running; a sender the Policy does not admit
     falls through as an ordinary message. `root`, `parent` and `message` context reads the
@@ -389,6 +390,21 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     measured from the attempt itself so a long wait does not reset it, and the known states report health codes the panel
     localizes instead of raw English details. The Source declares the `history` health entry. `tests/feishu-im.spec.ts`
     covers mention rendering, idempotent replies, attachment reads, a failed message kept in health, backfill and policy sync.
+
+31. **Removal of the legacy lark-cli Feishu Source.** The vendored copy no longer contains `src/sources/feishu.ts`,
+    `feishu-loops.ts`, `feishu-read.ts`, `feishu-trigger.ts`, `feishu-channel.ts` or `feishu-image.ts`: the dsh-im-backed
+    Source is the only Feishu intake, in `feishu-im.ts` and `feishu-im-loops.ts`, with `feishu-shared.ts` holding what the
+    app shares (`SOURCE`, `feishuTriggerId`, `withMentionNames`, `feishuChatLink`, `admissionImageKeys`,
+    `admissionFileKeys`). The lark-cli credential path is gone with the Source: `deployment.feishu`, `resolveFeishuBot`,
+    `SETUP_FIELDS`, `setupChanged`, `Setup.checkAccounts`, `Runtime.feishuProblem`, `Commands.lark`, `readAdmissionImage`,
+    `validItems`/`Tally`, the `panelOnlyAccounts` refusal and the `feishu/<trigger id>/…` context resource. `Deployment`
+    is the machine settings alone; `GET state` and `scripts/dsh-superagent status` carry `setup.problem` only;
+    `accounts.feishu` names the dsh-im bot the Source is bound to; a settings save restarts dsh-superagent only while
+    setup waits. A Trigger recorded before the removal keeps its text but resolves to no link, and its original message is
+    not readable, because no reply route for it was retained. The worker's `lark-cli` shim stays and fails with that
+    reason, so a worker reaches Feishu only through the orchestrator tools. `tests/feishu-read.spec.ts` is gone,
+    `tests/sources.spec.ts` keeps only the Source-context coverage, and the fixtures build Triggers through `imTrigger`
+    over a fake dsh-im service.
 
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the

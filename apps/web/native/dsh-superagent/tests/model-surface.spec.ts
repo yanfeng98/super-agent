@@ -3,7 +3,7 @@
  * orchestrator and worker roles against tool schemas, environment variables, glossary rules (`docs/001`), and size budgets.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
@@ -19,8 +19,10 @@ import { Commands } from '../src/infra/commands.ts'
 import { inputMessage } from '../src/executor/dsh.ts'
 import { IM_WORDS, NOTE_WORDS, checkedImText } from '../src/infra/text.ts'
 import { SettingsSchema } from '../src/policy.ts'
-import { feishuKind, feishuTrigger } from '../src/sources/feishu.ts'
+import { feishuImKind } from '../src/sources/feishu-im.ts'
+import { setDshIm, type DshImService } from '../src/sources/dsh-im.ts'
 import { testMachine } from './fixtures/deployment.ts'
+import { BOT_ID, CHAT, FINGERPRINT, MEMBER, feishu } from './fixtures/host.ts'
 
 type Role = 'orchestrator' | 'worker'
 interface Surface { where: string; owner: string; role: Role | 'both'; text: string }
@@ -57,26 +59,35 @@ const BANNED: [rule: string, where: RegExp, phrase: RegExp][] = [
 /** Known failures tolerated for now, by the file that owns the text; keep empty. */
 const KNOWN_FAILURES: [owner: string, failure: string][] = []
 
-const MEMBER = 'ou_alice', CHAT = 'oc_team'
-const feishu = (id: string, text: string, overrides: Record<string, unknown> = {}) => feishuTrigger({ message_id: `om_${id}`, chat_id: CHAT,
-  chat_type: 'group', sender_id: MEMBER, sender_type: 'user', content: text, mentions: [{ id: 'ou_bot' }],
-  create_time: String(Date.parse('2026-09-09T00:00:00Z') + Number(id) * 1000), ...overrides }, 'ou_bot', 'cli_bot')!
 const sentences = (text: string) => text.split(/(?<=[.!?])\s+|\n+/)
 const words = (count: number) => Array.from({ length: count }, () => 'word').join(' ')
+/** A dsh-im service whose account read describes the fixture's Feishu bot. */
+const dshImService = (overrides: Partial<DshImService> = {}): DshImService => ({
+  contractVersion: 1, inboundVersion: 1,
+  listBots: async () => [{ botId: BOT_ID, channel: 'feishu' }],
+  listTargets: async () => [],
+  describeBot: async () => ({ version: 1, botId: BOT_ID, channel: 'feishu', domain: 'feishu',
+    account: { fingerprint: FINGERPRINT, name: 'Widgets Bot' }, connected: true, superagent: true, superagentActive: true,
+    capabilities: ['exclusive-text-consumer'] }),
+  consumeInbound: async () => () => {},
+  historyChecked: async () => ({ version: 1, scope: 'thread', events: [], omitted: 0, hasMore: false,
+    coverage: 'provider-visible-human-text' }),
+  messageChecked: async (_botId, route) => ({ version: 1, messageId: route.messageId, chatId: route.conversationId,
+    at: '2026-09-09T00:00:00.000Z', text: '', messageType: 'text', sender: { kind: 'user', id: MEMBER, name: 'Alice' },
+    appLink: 'https://applink.feishu.cn/client/message/open?message_id=' + route.messageId, deleted: false }),
+  chatMembersChecked: async () => ({ version: 1, chatId: CHAT, users: [{ id: MEMBER, name: 'Alice' }] }),
+  replyChecked: async () => ({ sent: true, messageId: 'om_reply' }),
+  ...overrides,
+})
 
 /** Start a configured Runtime on a fake DSH host (as in tests/runtime.spec.ts) that records registered tools, prompts, skills, and delivered messages per session. */
 async function start() {
   const directory = mkdtempSync(join(tmpdir(), 'model-surface-'))
-  const BOT = join(directory, 'lark-bot')
-  writeFileSync(BOT, '#!/bin/sh\n', { mode: 0o755 })
-  vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ users: [{ member_id: MEMBER, name: 'Alice' }], has_more: false })
+  setDshIm(dshImService())
   vi.spyOn(Commands.prototype, 'git').mockResolvedValue('')
   vi.spyOn(Commands.prototype, 'run').mockResolvedValue('{"ok":true,"data":{}}')
   const answers: Record<string, string> = {
     [`git -C ${directory} rev-parse --show-toplevel`]: `${directory}\n`,
-    [`${BOT} auth status`]: JSON.stringify({ appId: 'cli_bot', brand: 'feishu', identities: { bot: { status: 'ready' } } }),
-    [`${BOT} config strict-mode`]: 'strict-mode: bot (source: profile)',
-    [`${BOT} api GET /open-apis/bot/v3/info --as bot --format ndjson`]: '{"bot":{"open_id":"ou_bot"},"code":0,"msg":"ok"}',
   }
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
   const subprocess = { spawn: (spec: { argv: readonly string[] }) => {
@@ -127,19 +138,20 @@ async function start() {
     webServer: { host: '127.0.0.1', port: 3082, register: () => () => {} } }
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   const seed = new Store(join(directory, 'orchestrator.sqlite'))
-  seed.saveSettings(SettingsSchema.parse({ ...seed.settings(), sources: { feishu: { enabled: true, config: { cli: BOT } } } }))
+  seed.saveSettings(SettingsSchema.parse({ ...seed.settings(), sources: { feishu: { enabled: true, config: { botId: BOT_ID } } } }))
   seed.close()
   const runtime = new Runtime(ctx, testMachine({ stateDir: directory }), () => {})
+  // A Source plugin registers its kind before the Runtime creates its Sessions, so the Feishu skill is bound with the master Session.
+  runtime.sources.register(feishuImKind)
   await runtime.ready
-  runtime.sources.register(feishuKind)
   const settings = runtime.store.settings()
   const allowed = { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } }
-  const feishuSource = { enabled: true, config: { cli: BOT, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } }
+  const feishuSource = { enabled: true, config: { botId: BOT_ID, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } }
   runtime.store.saveSettings({ ...settings, policy: { ...settings.policy, sources: allowed }, eval: { ...settings.eval, mode: 'auto' },
     sources: { ...settings.sources, feishu: feishuSource } })
   const run = async (sessionId: string, name: string, args: unknown) =>
     await tools.get(sessionId)!.get(name)!.execute(args, { signal: new AbortController().signal }) as Record<string, unknown>
-  const stop = async () => { await runtime.stop(); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) }
+  const stop = async () => { await runtime.stop(); setDshIm(undefined); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) }
   return { ctx, runtime, agents, tools, sections, skills, inputs, run, stop }
 }
 type Host = Awaited<ReturnType<typeof start>>
@@ -163,7 +175,6 @@ async function drive(host: Host) {
   const refusal = await run(master, 'orchestrator_reply', answer).then(() => '', (error: Error) => error.message)
   const proposal = feishu('5', '把副标题改成“浏览网页”', { mentions: [] })
   await runtime.receive(proposal)
-  vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ items: [{ message_id: 'om_5', chat_id: CHAT }] })
   await run(master, 'orchestrator_eval', { trigger_id: proposal.id })
   const proactive = (await run(master, 'orchestrator_eval_decide', { trigger_id: proposal.id, decision: 'accept', title: '文案修订', worktree_name: 'copy-fix',
     scope: '改副标题', reason: 'explicit copy change', intent_evidence: 'quoted', acknowledgement: '收到，把副标题改成“浏览网页”。',

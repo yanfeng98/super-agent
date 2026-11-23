@@ -18,8 +18,8 @@ export type Route = { page: 'overview' | 'source'; id?: undefined; query?: undef
 export const HOME: Route = { page: 'overview' }
 export const settingsRoute = (group: SettingsGroup, query: { source?: string; version?: string } = {}): Route =>
   ({ page: 'settings', query: { group, ...query } })
-export const setupPage = (place: SetupPlace): Route =>
-  place === 'deployment' ? settingsRoute('deployment') : settingsRoute('source', { source: place })
+/** The settings that fix a setup problem: the Deployment group, the only place a problem names. */
+export const setupPage = (): Route => settingsRoute('deployment')
 export const routeLabel = (t: T, route: Route): string =>
   route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
 

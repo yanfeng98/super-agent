@@ -9,7 +9,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { Runtime } from '../src/app/runtime.ts'
-import { jobRegistry } from './fixtures/host.ts'
+import { BOT_ID, CHAT, FINGERPRINT, MEMBER, feishuEvent, jobRegistry } from './fixtures/host.ts'
 import { evalsHealth } from '../src/app/views/overview.ts'
 import { mandateInstructions } from '../src/executor/dsh.ts'
 import { masterPrompt } from '../src/app/context.ts'
@@ -20,13 +20,11 @@ import { TextCache } from '../src/app/cache.ts'
 import { KV } from '../src/kv.ts'
 import { SettingsSchema, policyVersion, type SettingsOrigin } from '../src/policy.ts'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { feishuKind } from '../src/sources/feishu.ts'
-import { feishuImKind } from '../src/sources/feishu-im.ts'
+import { feishuBotFor, feishuImKind, imTrigger } from '../src/sources/feishu-im.ts'
+import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { localKind } from '../src/sources/local.ts'
-import { CliError, Commands } from '../src/infra/commands.ts'
-import { UserError, key, runningAssignment, said, threadKey, waitsForPerson, type Trigger } from '../src/core/index.ts'
-import { feishuTrigger } from '../src/sources/feishu.ts'
-import { feishuChannel } from '../src/sources/feishu-trigger.ts'
+import { Commands } from '../src/infra/commands.ts'
+import { UserError, key, runningAssignment, said, threadKey, waitsForPerson, type ChannelRef, type Trigger } from '../src/core/index.ts'
 import { IM_WORDS } from '../src/infra/text.ts'
 import { workerGitConfig } from '../src/infra/environment.ts'
 import { policyHistory } from '../src/app/settings-history.ts'
@@ -39,7 +37,7 @@ let runtime: Runtime
 /** The environment the test process inherited, which every Runtime's stop must restore. */
 const inheritedGitConfig = process.env.GIT_CONFIG_GLOBAL
 const viewsOf = (value: Runtime) => ({ store: value.store, sources: value.sources, links: value.links() })
-const overviewOf = (value: Runtime) => overview(viewsOf(value), value.health, policyVersion(value.store.settings()), executorLoad(value.store, value.executor.activeCount()), value.setupProblem ?? value.feishuProblem)
+const overviewOf = (value: Runtime) => overview(viewsOf(value), value.health, policyVersion(value.store.settings()), executorLoad(value.store, value.executor.activeCount()), value.setupProblem)
 let directory: string
 let controller: { create: ReturnType<typeof vi.fn>; selectModel: ReturnType<typeof vi.fn>; resolveAgent: ReturnType<typeof vi.fn>; rename: ReturnType<typeof vi.fn>; prompt: ReturnType<typeof vi.fn>; inspect: ReturnType<typeof vi.fn> }
 type RegisteredTool = { name: string; output: { render: (args: unknown, result: unknown) => unknown }; execute: (args: unknown, execution: { signal: AbortSignal }) => Promise<unknown> }
@@ -79,10 +77,8 @@ async function receive(trigger: Trigger, target = runtime) {
 let services: Record<string, unknown>
 /** DSH's job registry the Runtime's Executor reads its workers' shell jobs from. */
 let jobs: ReturnType<typeof jobRegistry>
-/** What worker commands of the startup checks print, by argv; an Error makes the command fail with its message. */
+/** What worker commands print, by argv; an Error makes the command fail with its message. */
 let answers: Record<string, string | Error>
-/** Stand-in Feishu CLI on disk, since setup finds executables before it runs them. */
-const BOT = () => join(directory, 'lark-bot')
 const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
   // Strip leading `env` and `KEY=VALUE` arguments before looking up the command response.
   const argv = [...spec.argv]
@@ -91,11 +87,43 @@ const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
   return { done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
 }) }
+/** One reply the Source sent through dsh-im. */
+type Sent = { botId: string; route: DshImEvent['reply']; text: string; options: { uuid?: string; format?: 'text' | 'markdown'; replyInThread?: boolean; expectedFingerprint: string } }
+/** What the Source sent through dsh-im, in order. */
+let replies: Sent[]
+/** How one reply through dsh-im ends; a test replaces it to make a send fail. */
+let sendReply: (route: DshImEvent['reply']) => Promise<{ sent: true; messageId: string }>
+/** The members a Policy sync reads from a chat, as dsh-im reports them; a test replaces it to change or fail the read. */
+let chatMembers: (chatId: string) => Promise<{ id: string; name?: string }[]>
+/** The chats dsh-im lists for the bot; a test replaces it to change or fail the read. */
+let chatList: () => Promise<{ chatId: string; name?: string }[]>
+/** The dsh-im service this Host offered when it started, which the Source keeps reading. */
+let im: DshImService
+/** The dsh-im service this Host offers: it records the replies, and reads answer as the handoff does. */
+function dshImService(): DshImService {
+  return { contractVersion: 1, inboundVersion: 1,
+    listBots: async () => [{ botId: BOT_ID, channel: 'feishu' }],
+    listTargets: async () => [{ targetId: CHAT, kind: 'group', name: 'Team', route: { chatId: CHAT } }],
+    describeBot: async () => ({ version: 1, botId: BOT_ID, channel: 'feishu', domain: 'feishu',
+      account: { fingerprint: FINGERPRINT, name: 'Widgets Bot' }, connected: true, superagent: true, superagentActive: true,
+      capabilities: ['exclusive-text-consumer'] }),
+    inboundStatus: async () => ({ version: 1, botId: BOT_ID, superagent: true, superagentActive: true }),
+    consumeInbound: async () => () => {},
+    historyChecked: async () => ({ version: 1, scope: 'thread', events: [], omitted: 0, hasMore: false, coverage: 'provider-visible-human-text' }),
+    replyChecked: async (botId, route, text, options) => { replies.push({ botId, route, text, options }); return sendReply(route) },
+    messageChecked: async (_botId, route) => ({ version: 1, messageId: route.messageId, chatId: route.conversationId,
+      at: '2026-09-09T00:00:00.000Z', text: '', messageType: 'text', sender: { kind: 'user', id: route.actorId, name: 'Alice' },
+      appLink: `https://applink.feishu.cn/client/message/open?message_id=${route.messageId}`, deleted: false }),
+    chatMembersChecked: async (_botId, query) => ({ version: 1, chatId: query.chatId, users: await chatMembers(query.chatId) }),
+    chatListChecked: async () => ({ version: 1, chats: await chatList() }),
+  }
+}
 /** Source account overrides for test setup; `feishu: null` disables the Feishu source. */
 interface Accounts { feishu?: Record<string, unknown> | null }
 function seed(store: Store, accounts: Accounts = {}): void {
   const settings = store.settings()
-  const feishu = accounts.feishu === null ? undefined : { ...settings.sources.feishu?.config, cli: BOT(), ...accounts.feishu }
+  const feishu = accounts.feishu === null ? undefined
+    : { ...settings.sources.feishu?.config, botId: BOT_ID, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true, ...accounts.feishu }
   store.saveSettings(SettingsSchema.parse({ ...settings, sources: { ...feishu ? { feishu: { enabled: true, config: feishu } } : {} } }))
 }
 let restarts: ReturnType<typeof vi.fn<() => void>>
@@ -111,11 +139,13 @@ let deliveries: ReturnType<typeof vi.fn<(request: { sessionId: string; mode: 'qu
 const relays = (sessionId: string) => deliveries.mock.calls.map(([call]) => call).filter(call => call.sessionId === sessionId).map(call => {
   try { return JSON.parse(call.text) as Record<string, unknown> } catch { return { text: call.text } as Record<string, unknown> }
 })
-const MEMBER = 'ou_alice'
-const CHAT = 'oc_team'
+/** A Feishu Trigger from the fixture's dsh-im event. */
 function feishu(id: string, text: string, overrides: Record<string, unknown> = {}): Trigger {
-  return feishuTrigger({ message_id: `om_${id}`, chat_id: CHAT, chat_type: 'group', sender_id: MEMBER, sender_type: 'user', content: text, create_time: String(Date.parse('2026-09-09T00:00:00Z') + Number(id.replace(/\D/g, '') || 0) * 1000), mentions: [{ id: 'ou_bot' }], ...overrides }, 'ou_bot', 'cli_bot')!
+  return imTrigger(feishuEvent(id, text, overrides))
 }
+/** The reply route of one Feishu message in a chat, as an outbound Channel. */
+const feishuChannel = (chatId: string, messageId: string): ChannelRef => ({ source: 'feishu', thread: `feishu:${chatId}`,
+  address: { chatId, messageId, actorId: MEMBER, botId: BOT_ID } })
 const worktreeName = 'fix-regression'
 /** Route one decision with the main Session's orchestrator_route, answering its result; a refused one throws its reason. */
 async function route(item: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -133,15 +163,18 @@ async function acceptedTicket(trigger = feishu('1', '@bot 修一下回归')) {
 }
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'orchestrator-runtime-'))
-  vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ users: [{ member_id: MEMBER, name: 'Alice' }], has_more: false })
   vi.spyOn(Commands.prototype, 'git').mockResolvedValue('')
   vi.spyOn(Commands.prototype, 'run').mockResolvedValue('{"ok":true,"data":{}}')
   restarts = vi.fn()
-  answers = {
-    [`${BOT()} auth status`]: JSON.stringify({ appId: 'cli_bot', brand: 'feishu', identities: { bot: { status: 'ready' } } }),
-    [`${BOT()} config strict-mode`]: 'strict-mode: bot (source: profile)',
-    [`${BOT()} api GET /open-apis/bot/v3/info --as bot --format ndjson`]: '{"bot":{"open_id":"ou_bot"},"code":0,"msg":"ok"}',
-  }
+  answers = {}
+  replies = []
+  sendReply = async route => ({ sent: true, messageId: `om_reply_${route.messageId}` })
+  chatMembers = async () => [{ id: MEMBER, name: 'Alice' }]
+  chatList = async () => [{ chatId: CHAT, name: 'Team' }]
+  im = dshImService()
+  setDshIm(im)
+  // The Source reads the bot's account when it starts listening, which names it in the execution environment.
+  await feishuBotFor(im, BOT_ID)
   const ctx = new Context()
   agents = new Map()
   tools = new Map()
@@ -195,16 +228,15 @@ beforeEach(async () => {
   jobs = jobRegistry()
   services = { agents, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
-  writeFileSync(BOT(), '#!/bin/sh\n', { mode: 0o755 })
   const store = new Store(join(directory, 'orchestrator.sqlite')); seed(store); store.close()
   runtime = new Runtime(ctx, testMachine({ stateDir: directory }), restarts)
   await runtime.ready
   // Source kinds are normally registered by plugins that are not loaded in unit tests.
-  runtime.sources.register(feishuKind)
-  runtime.store.saveSettings({ ...runtime.store.settings(), policy: { ...runtime.store.settings().policy, sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } } }, eval: { ...runtime.store.settings().eval, mode: 'auto' }, sources: { feishu: { enabled: true, config: { cli: BOT(), chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } } } })
+  runtime.sources.register(feishuImKind)
+  runtime.store.saveSettings({ ...runtime.store.settings(), policy: { ...runtime.store.settings().policy, sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT } } }, eval: { ...runtime.store.settings().eval, mode: 'auto' }, sources: { feishu: { enabled: true, config: { botId: BOT_ID, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } } } })
   deliveries.mockClear()
 })
-afterEach(async () => { expect(controller.prompt).not.toHaveBeenCalled(); await runtime?.stop(); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) })
+afterEach(async () => { expect(controller.prompt).not.toHaveBeenCalled(); await runtime?.stop(); setDshIm(undefined); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) })
 
 it('relays an explicit member mention as a candidate and creates the ticket, acknowledgement, subscription and worker on accept', async () => {
   const { trigger, ticket, sessionId } = await acceptedTicket()
@@ -215,13 +247,15 @@ it('relays an explicit member mention as a candidate and creates the ticket, ack
   expect(ticket).not.toHaveProperty('ended')
   // The ticket's execution environment is fixed at accept time: its directory under the execution root, and the Sources' values from its Trigger.
   expect(ticket.execution!.directory).toBe(join(directory, 'work', ticket.execution!.name))
-  expect(Object.fromEntries(runtime.ticketEnvironment(ticket).map(variable => [variable.key, variable.value]))).toMatchObject({ DSH_SUPERAGENT_DIR: ticket.execution!.directory, DSH_SUPERAGENT_NAME: ticket.execution!.name, DSH_SUPERAGENT_TICKET: ticket.id, DSH_SUPERAGENT_FEISHU_CHAT: CHAT, DSH_SUPERAGENT_FEISHU_BOT: 'ou_bot' })
+  expect(Object.fromEntries(runtime.ticketEnvironment(ticket).map(variable => [variable.key, variable.value]))).toMatchObject({ DSH_SUPERAGENT_DIR: ticket.execution!.directory, DSH_SUPERAGENT_NAME: ticket.execution!.name, DSH_SUPERAGENT_TICKET: ticket.id, DSH_SUPERAGENT_FEISHU_CHAT: CHAT, DSH_SUPERAGENT_FEISHU_BOT: 'Widgets Bot' })
   expect(ticket.assignments).toEqual([expect.objectContaining({ state: 'running', startedAt: expect.any(String) })])
   expect(sessionId).toBe(`worker-${ticket.id}`)
   expect(runtime.store.threads.get(`feishu:${CHAT}:om_1`)?.subscriptions).toEqual([ticket.id])
   expect(runtime.store.replyStatus(key('ack', trigger.id))).toBe('sent')
-  const larkCalls = vi.mocked(Commands.prototype.lark).mock.calls.map(([args]) => args)
-  expect(larkCalls.find(args => args[1] === '+messages-reply')).toEqual(expect.arrayContaining(['--message-id', 'om_1', '--markdown', '收到，修复回归。']))
+  const acknowledged = replies.filter(reply => reply.text === '收到，修复回归。')
+  expect(acknowledged).toHaveLength(1)
+  expect(acknowledged[0]).toMatchObject({ botId: BOT_ID, route: { messageId: 'om_1', conversationId: CHAT, actorId: MEMBER },
+    options: { uuid: key('ack', trigger.id), format: 'markdown', replyInThread: true, expectedFingerprint: FINGERPRINT } })
   // The first message holds the request itself: an explicit ticket has no assignment text beyond it, and nothing to read first.
   const first = relays(sessionId)[0]!
   expect(first).toEqual({ ticket_id: ticket.id, title: '修复回归', trigger: expect.objectContaining({ trigger_id: trigger.id, from: MEMBER,
@@ -273,7 +307,6 @@ it('assesses a proactive observation in the orchestrator Session and creates the
   await receive(trigger)
   const candidate = relays(runtime.masterId).at(-1)!
   expect(candidate).toMatchObject({ kind: 'candidate', strength: 'inferred', mode: 'observe', next_action: expect.stringContaining('orchestrator_eval') })
-  vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ items: [{ message_id: 'om_3', chat_id: CHAT }] })
   const details = await runTool(runtime.masterId, 'orchestrator_eval', { trigger_id: trigger.id })
   // The rules are in the main Session's Policy section; the context names the Policy version it was built from.
   expect(details).not.toHaveProperty('rules')
@@ -302,7 +335,6 @@ it('accepts silently under a rule that says so, gives the worker the rule proced
   await runtime.settings.save('eval', { ...runtime.store.settings().eval, mode: 'auto' }, runtime.store.blockRevision('eval'), 'panel')
   const trigger = feishu('20', '切换主题后刷新，图标颜色不对', { mentions: [] })
   await receive(trigger)
-  vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ items: [{ message_id: 'om_20', chat_id: CHAT }] })
   await runTool(runtime.masterId, 'orchestrator_eval', { trigger_id: trigger.id })
   const accepted = await runTool(runtime.masterId, 'orchestrator_eval_decide', { trigger_id: trigger.id, decision: 'accept', title: '主题图标颜色', worktree_name: 'theme-icon-color', scope: 'bug', reason: 'reported defect', intent_evidence: 'quoted',
     rule_assessments: [{ rule_id: 'copy', matched: false, reason: 'no' }, { rule_id: 'visual', matched: false, reason: 'no' }, { rule_id: 'silent-bugfix', matched: true, reason: 'bug report' }],
@@ -513,14 +545,14 @@ it('reports a Source that was switched on as starting until its next pass report
   const save = (enabled: boolean) => runtime.settings.save('source:feishu', { enabled, config: runtime.store.settings().sources.feishu!.config }, runtime.store.blockRevision('source:feishu'), 'panel')
   const feishu = async () => ((await api('GET', 'sources')).body as { id: string; health: { name: string }[] }[]).find(source => source.id === 'feishu')!.health
   await save(false)
-  runtime.context(feishuKind).report('feishu', { state: 'paused', detail: 'Off', code: 'sourceOff' })
+  runtime.context(feishuImKind).report('feishu', { state: 'paused', detail: 'Off', code: 'sourceOff' })
   await save(true)
   expect(await feishu()).toContainEqual({ name: 'feishu', state: 'starting', detail: '' })
-  // A part that reports something else, such as a missing CLI, keeps its report: no pass may come to replace it.
+  // A part that reports something else, such as a missing bot, keeps its report: no pass may come to replace it.
   await save(false)
-  runtime.context(feishuKind).report('feishu', { state: 'paused', detail: 'x', code: 'feishuCliUnset' })
+  runtime.context(feishuImKind).report('feishu', { state: 'paused', detail: 'x', code: 'imBotUnset' })
   await save(true)
-  expect(await feishu()).toContainEqual(expect.objectContaining({ code: 'feishuCliUnset' }))
+  expect(await feishu()).toContainEqual(expect.objectContaining({ code: 'imBotUnset' }))
 })
 
 it('records each settings save with its policy change and the open tickets told about it', async () => {
@@ -552,23 +584,22 @@ it('refuses an accept through orchestrator_route for inferred candidates so proa
 it('syncs a Source\'s list once its plugin loads after dsh-superagent started', async () => {
   const next = await restart()
   await next.ready
-  vi.mocked(Commands.prototype.lark).mockResolvedValue({ users: [{ member_id: MEMBER, name: 'Alice' }], has_more: false })
-  next.sources.register(feishuKind)
+  next.sources.register(feishuImKind)
   await vi.waitFor(() => expect(next.health['sync:feishu']).toMatchObject({ state: 'ready' }))
 })
 
 it('syncs the Feishu part of the Policy from its sync chat in place, and keeps the Policy version when only the order the chat lists changes', async () => {
   const policy = runtime.store.settings().policy
   await runtime.settings.save('policy', { ...policy, sources: { ...policy.sources, feishu: { allowed: [{ id: 'ou_bob', name: 'Bob' }, { id: MEMBER, name: 'Alice' }], syncChat: CHAT } } }, runtime.store.blockRevision('policy'), 'panel')
-  vi.mocked(Commands.prototype.lark).mockResolvedValue({ users: [{ member_id: 'ou_erin', name: 'Erin' }, { member_id: MEMBER, name: 'Alice Liddell' }], has_more: false })
+  chatMembers = async () => [{ id: 'ou_erin', name: 'Erin' }, { id: MEMBER, name: 'Alice Liddell' }]
   expect(await runtime.settings.sync('feishu')).toEqual({ allowed: [{ id: MEMBER, name: 'Alice Liddell' }, { id: 'ou_erin', name: 'Erin' }], syncChat: CHAT, admission: {} })
   expect(runtime.store.settings().policy.sources.feishu!.allowed.map(entry => entry.id)).toEqual([MEMBER, 'ou_erin'])
   expect(runtime.health['sync:feishu']).toMatchObject({ state: 'ready', detail: '2 allowed' })
   const version = policyVersion(runtime.store.settings())
-  vi.mocked(Commands.prototype.lark).mockResolvedValue({ users: [{ member_id: MEMBER, name: 'Alice Liddell' }, { member_id: 'ou_erin', name: 'Erin' }], has_more: false })
+  chatMembers = async () => [{ id: MEMBER, name: 'Alice Liddell' }, { id: 'ou_erin', name: 'Erin' }]
   await runtime.settings.sync('feishu')
   expect(policyVersion(runtime.store.settings())).toBe(version)
-  vi.mocked(Commands.prototype.lark).mockRejectedValue(new Error('rate limited'))
+  chatMembers = async () => { throw new Error('rate limited') }
   await expect(runtime.settings.sync('feishu')).rejects.toThrow('rate limited')
   expect(runtime.health['sync:feishu']).toMatchObject({ state: 'error', detail: expect.stringContaining('rate limited') })
 })
@@ -674,7 +705,7 @@ it('re-keys a Feishu Topic Thread recorded under its Topic id when the database 
 
 it('stops the ticket that follows a Thread when a person says /stop there, and refuses a machine sender', async () => {
   const { ticket } = await acceptedTicket(feishu('1', '@_user_1 修一下回归', { mentions: [{ id: 'ou_bot', key: '@_user_1', name: 'dsh-superagent' }] }))
-  const context = runtime.context(feishuKind)
+  const context = runtime.context(feishuImKind)
   // The follow-up is admitted on the Thread the ticket follows, so the person's stop ends it.
   const onThread = (id: string, overrides: Record<string, unknown> = {}) => feishu(id, '/stop', { root_id: 'om_1', ...overrides })
   expect((await context.tickets.stopOnThread(onThread('2')) ?? []).map(item => item.id)).toEqual([ticket.id])
@@ -731,8 +762,8 @@ it('finds triggers by Feishu message id and its links', async () => {
 it('keeps pages of Source reads, prompt previews and Feishu message links in memory, outside the kv area', async () => {
   const message = feishu('30', '随便说说', { mentions: [] })
   await receive(message)
-  const link = 'https://applink.feishu.cn/client/message/link/open?token=t30'
-  vi.mocked(Commands.prototype.lark).mockResolvedValue({ messages: [{ message_id: 'om_30', chat_id: CHAT, message_app_link: link }] })
+  // dsh-im reads the AppLink of the message itself, with the route the Source retained for it.
+  const link = 'https://applink.feishu.cn/client/message/open?message_id=om_30'
   expect(await runTool(runtime.masterId, 'orchestrator_read', { resource: `trigger/${message.id}` })).toMatchObject({ source_url: link })
   // An AppLink is found by the links read since dsh-superagent started.
   expect((await api('GET', `search?q=${encodeURIComponent(link)}`)).body).toMatchObject({ items: [expect.objectContaining({ id: message.id })] })
@@ -760,25 +791,10 @@ it('leaves waiting and blocked assignments alone after a restart and keeps block
   expect(runtime.store.tickets.get(other.ticket.id)!.assignments.map(item => item.state)).toEqual(['ended', 'pending'])
 })
 
-it('reports a broken Feishu bot as its problem and leaves Feishu out, checking the bot CLI the way worker shells run it', async () => {
-  answers[`${BOT()} config strict-mode`] = 'strict-mode: off (source: profile)'
-  const next = await restart()
-  await next.ready
-  expect(next.configured()).toBe(true)
-  expect(next.deployment.feishu).toBeUndefined()
-  expect(next.feishuProblem).toMatchObject({ place: 'feishu', code: 'feishuUserIdentity', values: { mode: 'off' } })
-  // The bot CLI runs in the workers' environment: without the shims on PATH.
-  const check = subprocess.spawn.mock.calls.map(([spec]) => spec.argv).find(argv => argv.includes(BOT()))!
-  expect(check[0]).toBe('env')
-  expect(check[1]!.startsWith('PATH=')).toBe(true)
-  expect(check[1]!.slice('PATH='.length).split(':')).not.toContain(join(directory, 'worker-bin'))
-})
-
-it('names the dsh-im bot the Feishu Source is bound to, without a bot CLI of its own', async () => {
-  // A dsh-im-backed Source owns no CLI, so setup leaves Feishu out; the bot comes from the Source's config and its labels.
+it('names the dsh-im bot the Feishu Source is bound to, from its config and its labels', async () => {
+  // The bot comes from the Source's config and its labels; setup checks no Feishu account of its own.
   const next = await restart({}, { feishu: null })
   await next.ready
-  expect(next.deployment.feishu).toBeUndefined()
   next.sources.register(feishuImKind)
   next.store.saveSettings({ ...next.store.settings(), sources: { feishu: { enabled: true, config: { botId: 'bot_1' } } } })
   next.store.set(KV.sources.labels('feishu'), { bot_1: '机器人一' })
@@ -812,35 +828,6 @@ it('lets only the panel change the execution environment, since it decides what 
   expectTypeOf(runtime.settings.pause).parameter(1).toEqualTypeOf<SettingsOrigin>()
 })
 
-it('checks a changed account CLI before saving it, restarts after the save, and lets only the panel change it', async () => {
-  const other = join(directory, 'lark-bot-2')
-  writeFileSync(other, '#!/bin/sh\n', { mode: 0o755 })
-  answers[`${other} auth status`] = JSON.stringify({ appId: 'cli_other', brand: 'feishu', identities: { bot: { status: 'ready' } } })
-  answers[`${other} config strict-mode`] = 'strict-mode: bot (source: profile)'
-  answers[`${other} api GET /open-apis/bot/v3/info --as bot --format ndjson`] = '{"bot":{"open_id":"ou_other"},"code":0,"msg":"ok"}'
-  const save = (config: Record<string, unknown>, origin: SettingsOrigin = 'panel') => runtime.settings.save('source:feishu',
-    { enabled: true, config: { ...runtime.store.settings().sources.feishu!.config, ...config } }, runtime.store.blockRevision('source:feishu'), origin)
-  await expect(save({ cli: other }, 'tool')).rejects.toThrow('can only be changed in the management panel')
-  answers[`${other} config strict-mode`] = 'strict-mode: off (source: profile)'
-  await expect(save({ cli: other })).rejects.toMatchObject({ code: 'feishuUserIdentity', values: { mode: 'off' } })
-  expect(restarts).not.toHaveBeenCalled()
-  answers[`${other} config strict-mode`] = 'strict-mode: bot (source: profile)'
-  expect(await save({ cli: other })).toMatchObject({ saved: true, restarting: true })
-  await vi.waitFor(() => expect(restarts).toHaveBeenCalledTimes(1))
-  // Other fields of the Source take effect without a restart.
-  expect(await save({ readPageSize: 30 })).toMatchObject({ saved: true, restarting: false })
-  expect(restarts).toHaveBeenCalledTimes(1)
-  expect((await runtime.settings.save('executor', { ...runtime.store.settings().executor, prepare: 'true' }, runtime.store.blockRevision('executor'), 'panel')).restarting).toBe(false)
-  // A save of another block during the account check is kept: the check runs first, then the save merges.
-  const pending = save({ cli: other })
-  await runtime.settings.save('policy', { ...runtime.store.settings().policy, rules: [] }, runtime.store.blockRevision('policy'), 'panel')
-  await pending
-  expect(runtime.store.settings().policy.rules).toEqual([])
-  expect(runtime.store.settings().sources.feishu!.config).toMatchObject({ cli: other })
-  answers[`${BOT()} config strict-mode`] = 'strict-mode: off (source: profile)'
-  await expect(save({ cli: BOT() })).rejects.toMatchObject({ code: 'feishuUserIdentity', values: { mode: 'off' } })
-})
-
 it('lists Tickets that wait on a person with where to answer them, as the overview does', async () => {
   const { ticket, sessionId } = await acceptedTicket()
   await runTool(sessionId, 'orchestrator_report', { state: 'progress', summary: 'need a decision', human_action: '按钮用哪种颜色？' })
@@ -862,26 +849,17 @@ it('pauses and resumes processing as its own action, a setting outside every blo
   expect(runtime.store.settings().paused).toBe(false)
 })
 
-it('runs setup again while the Feishu bot check failed', async () => {
-  answers[`${BOT()} config strict-mode`] = 'strict-mode: off (source: profile)'
-  const next = await restart()
-  await next.ready
-  expect(next.configured()).toBe(true)
-  expect(next.feishuProblem?.code).toBe('feishuUserIdentity')
-  next.checkSetup()
-  await vi.waitFor(() => expect(restarts).toHaveBeenCalledTimes(1))
-})
-
 it('writes worker shims and the agent environment from the configuration only, and restores the environment on stop', async () => {
   const bin = join(directory, 'worker-bin')
   expect(readdirSync(bin).sort()).toEqual(['gh', 'lark-cli'])
-  expect(readFileSync(join(bin, 'lark-cli'), 'utf8')).toContain(`exec '${BOT()}'`)
+  expect(readFileSync(join(bin, 'lark-cli'), 'utf8')).toContain('lark-cli is unavailable: dsh-im owns the Feishu bot; read Feishu through the orchestrator tools.')
   runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, blockedCommands: ['personal-gh'] } })
   const next = await restart({}, { feishu: null })
   await next.ready
   expect(readdirSync(bin).sort()).toEqual(['gh', 'lark-cli', 'personal-gh'])
   expect(readFileSync(join(bin, 'personal-gh'), 'utf8')).toContain('personal-gh is blocked in this installation.')
-  expect(readFileSync(join(bin, 'lark-cli'), 'utf8')).toContain('lark-cli is unavailable: this installation has no Feishu bot.')
+  // The shim says the same with the Source off: dsh-im owns the bot, not this installation's configuration.
+  expect(readFileSync(join(bin, 'lark-cli'), 'utf8')).toContain('lark-cli is unavailable: dsh-im owns the Feishu bot; read Feishu through the orchestrator tools.')
   // The agent CLI is unavailable to workers of this local-only deployment.
   expect(readFileSync(join(bin, 'gh'), 'utf8')).toContain('gh is unavailable in this installation.')
   const gitconfig = readFileSync(workerGitConfig(directory), 'utf8')
@@ -921,7 +899,7 @@ it('tells both roles the execution environment through a generated prompt sectio
   const preview = runtime.prompts.preview(runtime.prompts.current().config)
   const section = preview.parts.worker.at(-1)!
   expect(section.name).toBe('runtime/environment')
-  for (const line of ['- DSH_SUPERAGENT_FEISHU_BOT = "ou_bot"', '- DSH_SUPERAGENT_FEISHU_CHAT = ""']) expect(section.text).toContain(line)
+  for (const line of ['- DSH_SUPERAGENT_FEISHU_BOT = "Widgets Bot"', '- DSH_SUPERAGENT_FEISHU_CHAT = ""']) expect(section.text).toContain(line)
   expect(section.text).not.toMatch(/MERGE_ACCOUNT/)
   // Outside a ticket there is no ticket directory.
   expect(section.text).not.toContain('DSH_SUPERAGENT_DIR')
@@ -1008,7 +986,7 @@ it('counts a ticket whose directory the host prepared before prepare commands ex
 
 it('shows a failed reply as a problem with its attempts, an error of the reply effects after three, until it is withdrawn', async () => {
   const { trigger } = await acceptedTicket()
-  vi.spyOn(Commands.prototype, 'lark').mockRejectedValue(new Error('internal error (2200)'))
+  sendReply = async () => { throw new Error('internal error (2200)') }
   runtime.outbox.send({ id: 'stuck', channel: trigger.channel!, text: '已合并。', kind: 'notice' })
   const outgoing = () => overviewOf(runtime).problems.filter(problem => problem.kind === 'outgoing')
   const at = async (ms: number) => {
@@ -1114,13 +1092,13 @@ it('attaches a message to an ended ticket and so resumes it', async () => {
 
 it('rereads a Source\'s display names on request, reports the new ones and keeps the list when the read fails', async () => {
   runtime.store.set('source-labels:feishu', { oc_team: 'Team' })
-  const lark = vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ chats: [{ chat_id: 'oc_team', name: 'Team' }, { chat_id: 'oc_new', name: 'New chat' }] })
-  expect(await runtime.settings.refreshLabels('feishu')).toEqual({ added: ['New chat'] })
-  expect(lark).toHaveBeenCalledWith(['im', '+chat-list', '--page-all', '--page-size', '100'])
-  expect(runtime.store.get('source-labels:feishu')).toEqual({ oc_team: 'Team', oc_new: 'New chat' })
-  lark.mockRejectedValue(new Error('token expired'))
-  await expect(runtime.settings.refreshLabels('feishu')).rejects.toThrow('token expired')
-  expect(runtime.store.get('source-labels:feishu')).toEqual({ oc_team: 'Team', oc_new: 'New chat' })
+  chatList = async () => [{ chatId: CHAT, name: 'Team' }, { chatId: 'oc_new', name: 'New chat' }]
+  expect(await runtime.settings.refreshLabels('feishu')).toEqual({ added: ['New chat', 'Widgets Bot'] })
+  expect(runtime.store.get('source-labels:feishu')).toEqual({ oc_team: 'Team', oc_new: 'New chat', bot_1: 'Widgets Bot' })
+  // A failed chat list is a display aid only: the names already stored stay as they are.
+  chatList = async () => { throw new Error('token expired') }
+  expect(await runtime.settings.refreshLabels('feishu')).toEqual({ added: [] })
+  expect(runtime.store.get('source-labels:feishu')).toEqual({ oc_team: 'Team', oc_new: 'New chat', bot_1: 'Widgets Bot' })
 })
 
 it('drops a message only when its conversation is gone or not listened to, newest drop first, and keeps it while its Source is off', async () => {
@@ -1129,13 +1107,13 @@ it('drops a message only when its conversation is gone or not listened to, newes
   const queue = (id: string, address: Record<string, string>) => { runtime.outbox.send({ id, channel: { ...channel, address }, text: '已合并。', kind: 'notice' }) }
   queue('gone-reply', channel.address)
   queue('failing-reply', { ...channel.address, messageId: 'om_8' })
-  vi.mocked(Commands.prototype.lark).mockImplementation(async args => {
-    const replying = args.join(' ')
-    if (replying.includes('om_7')) throw new CliError('the message was withdrawn', 230011)
-    if (replying.includes('om_9')) return {}
-    // Text that names a withdrawal is no answer from Feishu that the conversation is gone.
-    throw new Error('Request failed: withdrawn tokens are not recalled messages')
-  })
+  sendReply = async route => {
+    // Only dsh-im's `stale-route` says the retained route no longer resolves.
+    if (route.messageId === 'om_7') throw Object.assign(new Error('the message was withdrawn'), { code: 'stale-route' })
+    // Any other failure keeps the reply for a retry, whatever its text says.
+    if (route.messageId === 'om_8') throw new Error('Request failed: withdrawn tokens are not recalled messages')
+    return { sent: true, messageId: `om_reply_${route.messageId}` }
+  }
   await runtime.sendReplies()
   // The Feishu Channel reads the recall code as gone; any other failure keeps the reply for a retry.
   expect(runtime.store.replyStatus('gone-reply')).toBe('dropped')
@@ -1159,7 +1137,7 @@ it('reports a dropped acknowledgement as dropped, with its Ticket on the Source 
   const { sessionId, ticket } = await acceptedTicket()
   const followup = feishu('10', '还有这个', { mentions: [], root_id: 'om_1' })
   await receive(followup)
-  vi.mocked(Commands.prototype.lark).mockRejectedValue(new CliError('the message was withdrawn', 230011))
+  sendReply = async () => { throw Object.assign(new Error('the message was withdrawn'), { code: 'stale-route' }) }
   expect(await runTool(sessionId, 'orchestrator_ack', { trigger_id: followup.id, text: '收到，也处理这个。' })).toMatchObject({ acknowledgement: 'dropped' })
   expect(await runTool(runtime.masterId, 'orchestrator_read', { resource: `trigger/${followup.id}` })).toMatchObject({ acknowledgement: 'dropped' })
   const dropped = ((await api('GET', 'sources')).body as unknown as { dropped: unknown[] }[]).flatMap(source => source.dropped)
@@ -1812,7 +1790,7 @@ it('finds the running Ticket of a direct chat, whose messages each open their ow
   await runtime.settings.save('policy', { ...settings.policy, sources: { ...settings.policy.sources,
     feishu: { allowed: [{ id: MEMBER }] } } }, runtime.store.blockRevision('policy'), 'panel')
   const { ticket } = await acceptedTicket(feishu('1', '修一下回归', { chat_type: 'p2p' }))
-  const context = runtime.context(feishuKind)
+  const context = runtime.context(feishuImKind)
   // The /stop message is its own Thread in a direct chat, so the conversation is what names the Ticket.
   const stopped = await context.tickets.stopOnThread(feishu('9', '/stop', { chat_type: 'p2p' }))
   expect((stopped ?? []).map(item => item.id)).toEqual([ticket.id])

@@ -4,10 +4,8 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { UserError, key, latestReport, noteOutdated, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
 import { batchOf, inputMessage, triggerMessage, workerSessionId } from '../executor/dsh.ts'
-import { feishuRead } from '../sources/feishu-read.ts'
 import { feishuImConfig, feishuImThreadContext } from '../sources/feishu-im.ts'
-import { feishuRef } from '../sources/feishu.ts'
-import { feishuTriggerId } from '../sources/feishu-trigger.ts'
+import { feishuTriggerId } from '../sources/feishu-shared.ts'
 import { ASSIGNMENTS, INPUTS, assignmentLine, decisionCard, decisionDetails, inputLine, newestPage, preview, textPage, threadCard, ticketCard,
   ticketDetails, triggerCard, type TicketThread } from './cards.ts'
 import { threadTitle } from './views/records.ts'
@@ -54,7 +52,6 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'prompt-preview/<id>', holds: 'a composed prompt that orchestrator_prompts_save previewed' },
   { name: 'models', holds: 'model providers, the DSH default and each role\'s model' },
   { name: 'models/<provider>', holds: 'one provider\'s models' },
-  { name: 'feishu/<trigger-id>/…', holds: 'a legacy lark-cli Feishu original' },
   { name: 'feishu-im/<trigger-id>/…', holds: 'a Feishu trigger\'s own message, its Thread\'s root, the message it answers, the Thread or the chat around it, as the dsh-superagent-feishu skill describes', executor: true },
 ]
 export const resourceGrammar = (executor: boolean): string => RESOURCES.filter(resource => !executor || resource.executor)
@@ -70,7 +67,6 @@ export interface ResourceHost {
   promptVersion(sessionId: string): PromptVersion
   /** Whether a Session may read `revision` (the revision it currently runs under or any revision it ran under previously). */
   mayRead(sessionId: string, revision: number): boolean
-  feishuPageSize(): number
   sourceLink(trigger: Trigger, signal?: AbortSignal): Promise<{ source_url?: string; source_url_read?: string }>
   /** The committed diff of one Ticket's changes, or why it cannot be read. */
   ticketDiff(id: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; error?: string }>
@@ -235,16 +231,6 @@ const ROUTES: readonly Route[] = [
       return { messages: page.messages, ...page.body,
         ...page.next ? { next_resource: `feishu-im/${triggerId}/${part}/${encodeURIComponent(page.next)}` } : {} }
     })
-  }],
-  ['feishu/', async read => {
-    const source = trigger(read.host, read.rest.split('/')[0]!, read.ticketId)
-    if (source.channel?.address.actorId) {
-      throw new Error('Use feishu-im/<trigger-id>/thread, /root, /parent, /message or /around for dsh-im Feishu messages')
-    }
-    const ref = feishuRef(source)
-    if (!ref) throw new Error('A Feishu source trigger is required')
-    const commands = read.host.commands.withSignal(read.signal)
-    return sourcePage(read, 'feishu', () => feishuRead(commands, ref, read.resource, read.host.feishuPageSize()))
   }],
   ['trigger/', async read => {
     const { host, rest, ticketId, offset, signal } = read

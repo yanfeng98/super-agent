@@ -56,7 +56,6 @@ export interface HttpHost {
   /** Resolved deployment; throws if read while waiting for setup (`!configured()`). */
   readonly deployment: Deployment
   readonly setupProblem?: SetupProblem | undefined
-  readonly feishuProblem?: SetupProblem | undefined
   configured(): boolean
   /** Reads a ticket workspace's committed diff since its base, for the panel's Changes section. */
   ticketDiff(id: string, since?: string): Promise<{ diff: string; truncated: boolean; files: DiffFile[]; base?: string; error?: string }>
@@ -173,14 +172,10 @@ function machineView({ stateDir, promptMaxChars, admissionContextMaxPages, admis
     admissionContextTimeoutMs: admissionContextTimeoutMs.get() }
 }
 /**
- * The Feishu account the panel names: the resolved lark-cli bot, or the dsh-im bot the Feishu Source is bound to. The
- * dsh-im bot has no app id or brand of its own here, because dsh-im owns those credentials.
+ * The Feishu account the panel names: the dsh-im bot the Feishu Source is bound to. It has no app id or brand here,
+ * because dsh-im owns those credentials.
  */
 function feishuAccount(runtime: HttpHost) {
-  if (runtime.configured() && runtime.deployment.feishu) {
-    const { appId, brand, botId, name } = runtime.deployment.feishu
-    return { appId, brand, botId, name }
-  }
   const config = runtime.sources.instance<{ botId?: string }>('feishu')?.config
   const botId = typeof config?.botId === 'string' ? config.botId : ''
   if (!botId) return null
@@ -189,7 +184,7 @@ function feishuAccount(runtime: HttpHost) {
 function setupView(runtime: HttpHost) {
   const resolved = runtime.configured() ? runtime.deployment : undefined
   return {
-    machine: machineView(runtime.machine), problem: runtime.setupProblem ?? null, feishuProblem: runtime.feishuProblem ?? null,
+    machine: machineView(runtime.machine), problem: runtime.setupProblem ?? null,
     accounts: resolved ? { feishu: feishuAccount(runtime) } : null,
   }
 }
@@ -202,7 +197,7 @@ export function stateView(runtime: HttpHost) {
 }
 const views = (runtime: HttpHost): ViewHost => ({ store: runtime.store, sources: runtime.sources, links: runtime.links() })
 const setupState = (runtime: HttpHost): SetupState => ({ deployment: runtime.configured() ? runtime.deployment : undefined,
-  problem: runtime.setupProblem, feishuProblem: runtime.feishuProblem })
+  problem: runtime.setupProblem })
 export type StateView = ReturnType<typeof stateView>
 /** Builds a ticket's detail view; `environment` is empty while waiting for setup because it requires the resolved deployment. */
 function ticketPage(runtime: HttpHost, id: string) {
@@ -277,7 +272,7 @@ function routes(runtime: HttpHost): Routes {
   return {
     'GET state': () => stateView(runtime),
     'GET overview': () => overview(views(runtime), runtime.health, policyVersion(store.settings()),
-      executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem),
+      executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem),
     'GET notifications': () => runtime.notifications(),
     'POST notifications/:id/read': ({ params }) => {
       if (!runtime.readNotification(params.id)) throw new RouteError(404, 'Notification not found')

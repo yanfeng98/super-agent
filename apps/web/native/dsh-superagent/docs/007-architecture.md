@@ -36,7 +36,7 @@ Shutdown cancels turns, waits for passes, effects and agents, restores the proce
 
 | Part | Module | Does |
 | --- | --- | --- |
-| Setup | `src/app/setup.ts` | Resolves the legacy lark-cli Feishu account only when no dsh-im `botId` is configured, writes and applies the workers' environment and command shims, and keeps the setup problem; the dsh-im-backed Feishu Source checks its own handoff and needs no account CLI here |
+| Setup | `src/app/setup.ts` | Writes and applies the workers' environment and command shims and keeps the setup problem; the Feishu Source checks its own dsh-im handoff and needs no account CLI here |
 | Passes | `src/app/passes.ts` | One pass at a time, every two seconds and whenever a command asks: the due effects, then `Engine.evaluateDue`, the standing merge request and the merge queue; a Source's Trigger reaches the Engine through it |
 | Outbox | `src/app/outbox.ts` | The Engine's `Outbox` port, and the only writer of the receipts: `send` keeps a message's receipt and queues its `reply` effect in one transaction, and the effect's handler sends it through `SourceRegistry.send`; a message waits while its Source is off, and is dropped when the conversation is gone or not listened to |
 | Notices | `src/app/notices.ts` | Converts domain events and worker activity into main-Session messages. `eventNotice` handles domain notices; `reportRelay` forwards questions immediately, keeps ordinary progress on its Ticket, and relays other reports; `followupRelay` names the Tickets that own a human follow-up. Relays arriving during a turn are delivered together at its next step through the DeepSeek Harness inbox |
@@ -218,7 +218,7 @@ Its `context`, `read` and `decide` methods serve `orchestrator_eval`, `orchestra
 
 `Settings` (`src/app/settings.ts`) reads and writes revisioned settings blocks. `current` and `view` read them; `save(block, value, revision, origin)` validates a save; `pause(paused, origin)` changes the separate `paused` setting.
 
-Every save declares its origin: `panel`, `tool` or `sync`. Only `panel` can change the execution environment or fields listed in `SETUP_FIELDS` (`src/deployment.ts`).
+Every save declares its origin: `panel`, `tool` or `sync`. Only `panel` can change the execution environment, which worker shells and the agent's git configuration come from.
 
 A Policy-version change calculates `policyEffects`, records which Tickets were notified, and calls `Engine.policyChanged`. `syncable` and `sync(id)` refresh a Source's Policy part. `refreshLabels(id)` refreshes display names.
 
@@ -250,8 +250,8 @@ Each model request binds the Session to the current prompt revision. The revisio
 | `src/app/tools/main.ts`, `src/app/tools/executor.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards |
 | `src/app/http.ts`, `src/app/views/`, `src/app/api.ts` | HTTP requests into calls, and Store reads into the panel's views; `api.ts` types every route for the panel |
 | `src/app/resources.ts`, `src/app/links.ts`, `src/app/cards.ts` | Resource names into reads, source messages into links, records into compact cards for models |
-| `src/sources/feishu*.ts`, `src/sources/local.ts`, `src/sources/poll.ts` | Feishu payloads and local requests into Triggers and Thread facts, and messages into dsh-im calls |
-| `src/deployment.ts`, `src/setup.ts`, `src/infra/` | Setup probes and problems, CLI transport, the agent's process environment |
+| `src/sources/feishu-im*.ts`, `src/sources/local.ts`, `src/sources/poll.ts` | dsh-im Feishu events and local requests into Triggers and Thread facts, and messages into dsh-im calls |
+| `src/deployment.ts`, `src/setup.ts`, `src/infra/` | Machine configuration and setup problems, CLI transport, the agent's process environment |
 
 ## Dependency rules
 
@@ -278,10 +278,9 @@ Each model request binds the Session to the current prompt revision. The revisio
 Some generic modules still refer directly to Feishu:
 
 - Outbox applies the Feishu chat word limit.
-- `src/app/links.ts` resolves Feishu message links and `repliedTo`. It and Runtime read settings with `feishuSettings`.
-- `src/app/resources.ts` reads the `feishu/` originals.
+- `src/app/links.ts` resolves Feishu message links through dsh-im and `repliedTo`.
+- `src/app/resources.ts` serves the `feishu-im/` originals.
 - Sessions and Prompts register the built-in Feishu skill. Migration converts the schema-10 records.
-- Setup probes only the Feishu account fields (`SETUP_FIELDS`). Only that Source receives account setup problems through `SourceContext.problem`.
 
 
 ## Modules
@@ -289,7 +288,7 @@ Some generic modules still refer directly to Feishu:
 | Path | Responsibility |
 | --- | --- |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
-| `src/deployment.ts` | The plugin `Config` and `Machine`; `resolveFeishuBot` reads the optional bot from the Source settings, its CLI run as Executor shells run it; `SETUP_FIELDS` lists the Source fields setup reads. The code names no person, account or organization |
+| `src/deployment.ts` | The plugin `Config` and `Machine`; `machineOf` reads them and names where a key an older version used has moved. The code names no person, account or organization |
 | `src/setup.ts` | Setup problems: `SetupError`, with a code, the place that fixes it and the English text the log, the main Session and the panel share |
 | `src/policy.ts` | The Policy: the settings schemas by block, the Policy version, the gate and Mandate revalidation |
 | `src/admission.ts` | The admission table's values, each cell's options and defaults, shared with the panel |
@@ -357,7 +356,7 @@ Some generic modules still refer directly to Feishu:
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
-| `src/infra/commands.ts` | `Commands`, the CLI transport: `run`; `lark` as the bot; `git`. `CliError` carries the code a command's output reports, and a command that prints nothing fails with how it ended, never with its arguments; `validItems` skips and counts the malformed items of a list |
+| `src/infra/commands.ts` | `Commands`, the CLI transport: `run` and `git`, with the time limit and abort signal of the deployment; `CliError` carries the code a command's output reports, and a command that prints nothing fails with how it ended, never with its arguments |
 | `src/infra/environment.ts` | The agent's process environment: command shims, the isolated git configuration and its empty credential helper, `runAsWorker`, and the checks of the environment and of a Ticket's directory |
 | `src/infra/paths.ts` | The package's root, where packaged files are |
 | `src/infra/text.ts` | Word counts and the chat message limit, `fill` and `sameName` |
@@ -366,16 +365,11 @@ Some generic modules still refer directly to Feishu:
 | `src/sources/registry.ts` | `SourceRegistry` |
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
 | `src/sources/poll.ts` | What a polling Source shares with Feishu: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
-| `src/sources/feishu.ts` | The legacy lark-cli Feishu kind and plugin entry; the bundle loads `./feishu-watch` instead, so only its stored triggers and its tests reach it |
 | `src/sources/feishu-im.ts` | The dsh-im-backed Feishu kind and plugin entry, exported as `./feishu-watch`: its Trigger mapping, checked replies, bounded Thread context with its statuses and mapped page body, reads of one related or neighbouring message, image and file reads, labels, the `/stop` control message that ends the Thread's Ticket instead of becoming work, and the handoff consumer that reports a failed message in the Source's health; its context windows keep the Source's own answers and a recalled message's place as a bodiless `deleted` entry |
 | `src/sources/feishu-im-loops.ts` | The dsh-im-backed Feishu loops: chat history backfill, Topic recovery and subscribed-thread polling |
 | `src/sources/dsh-im.ts` | The typed same-Host dsh-im intake service used by the Feishu Source, including the refusal codes its reads report (`stale-route`, `message-deleted`, `message-unavailable`) and the history options that keep a window's own answers (`includeSelf`) and recalled placeholders (`includeDeleted`) |
-| `src/sources/feishu-trigger.ts` | Feishu messages as Triggers, by one rule for live events, history pages and topic pages |
-| `src/sources/feishu-loops.ts` | The legacy lark-cli loops: the event consumer, history recovery, chat names and polling of subscribed topics |
-| `src/sources/feishu-channel.ts` | The Feishu Channel: topic replies, `sent` or `gone` |
-| `src/sources/feishu-read.ts` | The `feishu/` reads of a Trigger's message, its root, parent and topic, and `feishuThreadContext`, which gives them to assessments with their images |
+| `src/sources/feishu-shared.ts` | What the dsh-im-backed Feishu Source and the app share: `SOURCE`, `feishuTriggerId`, `withMentionNames`, `feishuChatLink`, and the image and file key extractors |
 | `src/sources/admission-context.ts` | The bounded window an assessment starts from: the first pages of a Trigger's Thread, read through its kind, and the messages around the Trigger |
-| `src/sources/feishu-image.ts` | Admits the attachment keys a message text names, and reads a Feishu image as an attachment for the assessing Session |
 | `src/sources/local.ts` | The local ticket kind and plugin entry, exported as `./local`: a request from the panel, or a follow-up on its Thread, becomes a Trigger, and the archive Markdown file receives both the person's messages and the Channel's replies; `seedPolicy` saves the operator the kind's default Policy part names |
 | `src/client/index.tsx` | The client plugin entry: the sidebar entry, the main panel, the desktop-notification watcher and the page in DeepSeek Harness's Plugin Manager |
 | `src/client/notify.ts` | The desktop notifications for a Ticket that starts waiting on a person or ends, and the choice to turn them on |
@@ -412,7 +406,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
-| `tests/sources.spec.ts` | The Feishu Source on a `SourceContext`: translation, polls and read positions, health |
+| `tests/sources.spec.ts` | The Source context: a kind's own health entries, Thread meta patched as it is now, and an instance's configuration |
 | `tests/local.spec.ts` | The local ticket Source: archiving a panel request, its Trigger and Thread, the replies appended to the same file, idempotent creation, the command-line inbox, the ending and reopening recorded in the archive, the Policy part it seeds, and the archive defaults |
 | `tests/review.spec.ts` | A ticket workspace's review and delivery: the committed diff split into files with their statuses and counts, branch, commits since the launch base, changed and uncommitted files, a non-git directory, the notes' anchors moved through later commits or marked when their own lines changed, fast-forward, squash and merge-commit strategies, a revert of each and the conflicts and refusals it reports, rebase after the repository moved, a conflicted rebase that aborts, the fork point a rebased or merged branch is reviewed from, a push to the named upstream or its refusal, a push of a reverting commit, and removal of a linked worktree |
 | `tests/merge.spec.ts` | Merging from the main Session: a merge queue drained in order, one entry that cannot land and waits with its reason, one retried by the host once its dependency merged, one re-queued to clear it, one whose Ticket moved on and is dropped, one whose Ticket was resumed and keeps waiting, a cancelled and a skipped entry, a queue paused by a check that failed on the merged target, the check run on the merged target, a revert of a recorded merge and its conflict, a revert that pushes its commit, a push after a revert, the panel notifications a merge, a revert and a given-up standing merge leave; the automatic rebase when the repository moved, the check run before merging, a failed check that stops the merge, a conflicting rebase handed to the worker or kept as a report for a stopped Ticket or a paused Policy, a branch that needs neither, a branch that changed after its review, the optional cleanup and push, the message a squash or merge commit carries, a waiting start dependency started by the merge, the interface and commit the record keeps, and a standing merge request that runs, waits with a growing wait without using up its attempts on a gate another Ticket or the person opens, gives up, and is cancelled or withdrawn by a stop; a stopped Ticket refused by the queue, a standing request and an automatic merge, while an explicit merge still runs |
@@ -420,10 +414,9 @@ Some generic modules still refer directly to Feishu:
 | `tests/webhook.spec.ts` | The webhook POST and a non-2xx answer |
 | `tests/notify.spec.ts` | Which Ticket changes deserve a desktop notification, which inbox events it announces, and which stay quiet |
 | `tests/notifications.spec.ts` | The panel inbox: newest first, unread count, one or all read |
-| `tests/commands.spec.ts` | CLI calls as the deployment's account, the Channels' answers, and the errors they report |
+| `tests/commands.spec.ts` | CLI calls with the deployment's environment, and the errors they report |
 | `tests/feishu-im.spec.ts` | The dsh-im-backed Feishu Source: event-to-Trigger mapping, scope and policy, checked replies, bounded Thread context with its statuses, own answers and recalled placeholders in the window, the chat around a message (including one whose source no longer resolves), image and file reads from any message, a failed message kept in health, the `/stop` control message and what it answers, Topic recovery its subscribed Threads do not cover, bot/chat labels, the `feishu-im/` resource page, and handoff consumer registration and release |
-| `tests/feishu-read.spec.ts` | Feishu reads |
-| `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and Feishu attachment keys and image reads |
+| `tests/admission-context.spec.ts`, `tests/feishu-image.spec.ts` | The Thread window of assessments, and the Feishu attachment keys a message text names |
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
 | `tests/background.spec.ts` | Waiting for a worker's shell jobs and subagents: an end that woke it, and a host that stops |
 | `tests/bundle-patch.spec.ts` | The bundle's patch, read as DeepSeek Harness reads it, and the agent preset of Executor Sessions it defines |
@@ -450,7 +443,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/prompts.spec.ts` | Prompt validation, assembly and versions |
 | `tests/cards.spec.ts` | The rules the built-in text must state, file by file |
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
-| `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration and setup, the agent's process environment, the plugin entry |
+| `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration, the agent's process environment, the plugin entry |
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
 | `tests/client.spec.tsx`, `tests/navigation.spec.ts`, `tests/controls.spec.tsx` | The client plugin's registration and polling, Session navigation and route memory, the local controls, and the panel's imports, which have no cycle |
 | `tests/panel-overview.spec.tsx`, `panel-source.spec.tsx`, `panel-trigger.spec.tsx`, `panel-eval.spec.tsx`, `panel-execution.spec.tsx` | Each page of the panel, against a fake management API answered by route; the Execution page also covers the file-by-file review diff with its viewed marks and line comments, the changed-since-review view, the merge queue's pause and retry, the push a merge or a revert offers, the merge's own push option, the per-check results, and a refusal worded by its code |
@@ -578,7 +571,6 @@ Ticket cards use the closed `TICKET_STATES` set from `src/app/cards.ts`: an open
 | `settings`, `settings/<block>` | Revisions and summaries, or a complete block ready to save |
 | `prompts`, `prompts/<revision>`, `prompts/current`, `prompts/defaults`, `prompt-preview/<id>` | Prompt configurations and composed text |
 | `models`, `models/<provider>` | Available models |
-| `feishu/<trigger id>/…` | Original records of the legacy lark-cli Feishu channel |
 | `feishu-im/<trigger id>/…` | The dsh-im Feishu Trigger's own message, its Thread's root, the message it answers, the Thread and the chat around it, described in the Feishu skill |
 
 `/diff` is the main Session's read of the committed change the panel shows as View diff; a Ticket's details also list `blocked_by`, the Tickets whose merge comes first. Ticket Threads are marked `context` for context-only follows and `bound` for Source bindings. Assignment pages are newest first and include report previews. Continue lists with `next_offset`. `/input/<id>` accepts an Input's name or id. `settings` includes small blocks in full and summarizes Policy and Source blocks.
@@ -622,7 +614,7 @@ Most built-in instructions live in `prompts/*.md`, with one sentence per line jo
 
 Every plugin configuration key except `stateDir` is volatile. The panel's Deployment settings and DeepSeek Harness's Plugin Manager edit them through DeepSeek Harness's configuration form; the host writes `cordis.patch.yml` and updates the values in place, and dsh-superagent reads each limit when it uses it, so a change applies without a restart.
 
-A settings save that changes a Source field setup reads, such as the Feishu CLI, and any save while setup waits, restarts dsh-superagent. DeepSeek Harness's settings service does not serve the entry during that restart, so after its own restart dsh-superagent asks it to read the entry again, and an open form becomes editable again.
+A settings save while setup waits restarts dsh-superagent; a Source's own settings apply without a restart, because its kind reads them each time it uses them. DeepSeek Harness's settings service does not serve the entry during that restart, so after its own restart dsh-superagent asks it to read the entry again, and an open form becomes editable again.
 
 ## Reviewing a change against real data
 

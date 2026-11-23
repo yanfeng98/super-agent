@@ -102,10 +102,10 @@ it('shows save and discard only while a settings block has edits, at the end of 
   await click(find(zh['term.source'], '.dt-settings-link'))
   expect(all('.dt-savebar')).toHaveLength(0)
   const feishu = all('.dt-card').find(card => card.querySelector('.dt-card-title')?.textContent === '飞书')!
-  await type(field<HTMLInputElement>('机器人的 lark-cli'), 'lark-other')
+  await type(field<HTMLInputElement>('IM 飞书机器人'), 'bot_other')
   expect(feishu.lastElementChild!.classList.contains('dt-savebar')).toBe(true)
-  // The bot CLI is read by setup, so the bar warns that saving restarts dsh-superagent and interrupts running work.
-  expect(feishu.lastElementChild!.textContent).toContain('2 个进行中的派工会中断')
+  // No Source field is read by setup, so saving one restarts nothing and interrupts no running work.
+  expect(feishu.lastElementChild!.textContent).not.toContain('个进行中的派工会中断')
 })
 
 it('gives the focus back to the field that had it once a block\'s save ends', async () => {

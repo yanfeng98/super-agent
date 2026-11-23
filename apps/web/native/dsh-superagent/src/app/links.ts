@@ -1,10 +1,7 @@
 /** Source message link resolution and candidate card assembly for the main Session. */
 import type { Candidate, Ticket, Trigger } from '../core/index.ts'
-import type { Commands } from '../infra/commands.ts'
 import { dshIm } from '../sources/dsh-im.ts'
 import { feishuBotFor, feishuSettings as feishuImSettings } from '../sources/feishu-im.ts'
-import { readFeishuLink } from '../sources/feishu-read.ts'
-import { feishuRef, feishuSettings } from '../sources/feishu.ts'
 import type { SourceRegistry } from '../sources/registry.ts'
 import { triggerMessage } from '../executor/dsh.ts'
 import { relatedTickets, ticketCard, triggerCard } from './cards.ts'
@@ -14,63 +11,48 @@ import type { TextCache } from './cache.ts'
 export interface LinkHost {
   readonly store: Pick<Store, 'settings' | 'triggers' | 'threads' | 'tickets'>
   readonly links: TextCache
-  readonly commands: Commands
   readonly sources: SourceRegistry
   readonly lifetime: AbortSignal
 }
 
-/** Resolves and caches a trigger's external message URL, falling back to a readable resource path when lookup fails. */
+/**
+ * Resolves and caches a trigger's external message URL through the dsh-im-backed Feishu Source.
+ *
+ * A Trigger recorded before the handoff keeps its text but has no retained reply route, so it resolves to no link
+ * rather than to a resource that cannot be read.
+ */
 export async function sourceLink(host: LinkHost, trigger: Trigger, signal?: AbortSignal): Promise<{ source_url?: string; source_url_read?: string }> {
   if (trigger.url) return { source_url: trigger.url }
-  // The dsh-im-backed Feishu Source resolves the message's own AppLink through dsh-im; the Thread resource is the fallback.
-  if (trigger.source === 'feishu' && trigger.channel?.address.actorId) {
-    const address = trigger.channel.address
-    const im = dshIm()
-    const botId = typeof address.botId === 'string' ? address.botId : ''
-    if (im?.messageChecked && botId) {
-      const cacheKey = `${address.chatId ?? ''}:${address.messageId ?? ''}`
-      const cached = host.links.get(cacheKey)
-      if (cached) return { source_url: cached }
-      try {
-        const bot = await feishuBotFor(im, botId)
-        const message = await im.messageChecked(botId, {
-          messageId: String(address.messageId ?? ''), conversationId: String(address.chatId ?? ''),
-          actorId: String(address.actorId ?? ''),
-          ...address.threadId ? { threadId: address.threadId } : {},
-          ...address.rootId ? { rootId: address.rootId } : {},
-          ...address.parentId ? { parentId: address.parentId } : {},
-        }, { expectedFingerprint: bot.fingerprint,
-          signal: AbortSignal.any([signal ?? host.lifetime,
-            AbortSignal.timeout(feishuImSettings(host.sources).linkTimeoutMs)]) })
-        if (message.appLink) {
-          host.links.set(cacheKey, message.appLink)
-          return { source_url: message.appLink }
-        }
-      } catch {
-        host.lifetime.throwIfAborted()
-        signal?.throwIfAborted()
-        // Optional link enrichment may fail independently of the retained source message.
+  const address = trigger.source === 'feishu' ? trigger.channel?.address : undefined
+  if (!address?.actorId) return {}
+  const im = dshIm()
+  const botId = typeof address.botId === 'string' ? address.botId : ''
+  if (im?.messageChecked && botId) {
+    const cacheKey = `${address.chatId ?? ''}:${address.messageId ?? ''}`
+    const cached = host.links.get(cacheKey)
+    if (cached) return { source_url: cached }
+    try {
+      const bot = await feishuBotFor(im, botId)
+      const message = await im.messageChecked(botId, {
+        messageId: String(address.messageId ?? ''), conversationId: String(address.chatId ?? ''),
+        actorId: String(address.actorId ?? ''),
+        ...address.threadId ? { threadId: address.threadId } : {},
+        ...address.rootId ? { rootId: address.rootId } : {},
+        ...address.parentId ? { parentId: address.parentId } : {},
+      }, { expectedFingerprint: bot.fingerprint,
+        signal: AbortSignal.any([signal ?? host.lifetime,
+          AbortSignal.timeout(feishuImSettings(host.sources).linkTimeoutMs)]) })
+      if (message.appLink) {
+        host.links.set(cacheKey, message.appLink)
+        return { source_url: message.appLink }
       }
+    } catch {
+      host.lifetime.throwIfAborted()
+      signal?.throwIfAborted()
+      // Optional link enrichment may fail independently of the retained source message.
     }
-    return { source_url_read: `feishu-im/${trigger.id}/thread` }
   }
-  const ref = feishuRef(trigger)
-  if (!ref) return {}
-  const cacheKey = `${ref.chatId}:${ref.messageId}`
-  const cached = host.links.get(cacheKey)
-  if (cached) return { source_url: cached }
-  let url: string
-  try {
-    const timeout = AbortSignal.timeout(feishuSettings(host.sources).linkTimeoutMs)
-    url = await readFeishuLink(host.commands.withSignal(AbortSignal.any([signal ?? host.lifetime, timeout])), ref)
-  } catch {
-    host.lifetime.throwIfAborted()
-    signal?.throwIfAborted()
-    // Optional link enrichment may fail independently of the retained source message.
-    return { source_url_read: `feishu/${trigger.id}/message` }
-  }
-  host.links.set(cacheKey, url)
-  return { source_url: url }
+  return { source_url_read: `feishu-im/${trigger.id}/thread` }
 }
 
 export function repliedTo({ store, sources }: { store: Pick<Store, 'triggers'>; sources: Pick<SourceRegistry, 'repliesTo'> },

@@ -188,7 +188,7 @@ Agents may rely on these routes and fields. The other routes in `src/app/api.ts`
 
 | Request | Answer |
 | --- | --- |
-| `GET state` | What every page reads: `setup`, with `problem` and `feishuProblem`, each `null` or a setup problem with `place`, `code`, `values` and `detail`, and, once setup resolved them, `accounts` with only `feishu`, the resolved lark-cli bot, the dsh-im bot the Feishu Source is bound to (`botId` and its stored name), or `null`; `health`, an entry per part, below, with `state` (`starting`, `ready`, `paused` or `error`), `detail` and `at`; `load`, the Executor Sessions `running`, the Tickets `queued` and `maxWorkers`; `paused`; and `masterId` |
+| `GET state` | What every page reads: `setup`, with `problem`, `null` or a setup problem with `place`, `code`, `values` and `detail`, and, once setup resolved them, `accounts` with only `feishu`, the dsh-im bot the Feishu Source is bound to (`botId` and its stored name), or `null`; `health`, an entry per part, below, with `state` (`starting`, `ready`, `paused` or `error`), `detail` and `at`; `load`, the Executor Sessions `running`, the Tickets `queued` and `maxWorkers`; `paused`; and `masterId` |
 | `GET settings` | `blocks`: `policy`, `eval` and `executor`, each with its `value` and its `revision`; `sources`: the Source instances, each with `id`, `kind`, `installed`, its block's `value`, `{"enabled": …, "config": {…}}`, and `revision`, its kind's form, and its setup `problem` when it has one; `policyVersion`; and `environment`, the execution environment's `root` and `variables` |
 | `GET sources` | Each Source's status: `state` (`missing`, `off`, `error`, `setup`, `starting`, `paused` or `ready`), the `health` of its parts, its setup `problem`, the last day's `stats`, the Triggers it `filtered` in that day, and the messages it `dropped` in that day, newest drop first, each with its `channel`, `preview`, `ticket` (`id` and `title`) when it was for one, its `thread` when the store has it, and `dropped.at` and `dropped.reason`, `channelGone` or `channelIgnored` |
 | `PUT settings/<block>` with `{"value": …, "revision": n}` | Saves one block: `saved`, the block's new `revision`, `policy_changed` and `restarting`. `value` is the whole block, as `GET settings` holds it; a missing key takes its default |
@@ -262,11 +262,11 @@ curl -s -X PUT -H 'x-orchestrator-request: 1' -H 'content-type: application/json
 
 Setup uses the DeepSeek Harness subprocess service, as worker shells do. It removes environment variables whose names contain KEY, PASSWORD, SECRET or TOKEN.
 
-Setup writes the worker environment. Feishu credentials and the bot connection belong to dsh-im; superagent reports only whether the handoff is on and the consumer is registered.
+Setup writes the worker environment only. Feishu credentials and the bot connection belong to dsh-im; superagent reports only whether the handoff is on and the consumer is registered, and its workers have no Feishu CLI of their own.
 
 The process environment that setup writes:
 
-- **Command shims** in `<stateDir>/worker-bin`, first on `PATH`: blocked commands fail. A shim removes its own directory from `PATH` before it runs its target.
+- **Command shims** in `<stateDir>/worker-bin`, first on `PATH`: blocked commands fail, as do `gh` and `lark-cli` — dsh-im owns the Feishu bot, so a worker reaches Feishu through the orchestrator tools.
 - **git configuration** in `<stateDir>/worker-gitconfig`: replaces the operator's global and system git configuration with Git LFS filters, a neutral author and an empty credential helper, so a worker commits under the identity it sets and git never prompts for credentials. Personal git settings such as an HTTP proxy do not apply.
 
 A file in `worker-bin` or `worker-gitconfig` that dsh-superagent did not write stops setup. A Ticket directory inside a git repository whose own configuration adds credentials fails the Ticket.

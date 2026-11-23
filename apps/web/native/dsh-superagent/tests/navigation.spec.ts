@@ -60,7 +60,6 @@ it('reads each page a tab remembered with the parameters it takes, and leaves ou
     .toEqual({ page: 'settings', query: { group: 'source', source: 'feishu' } })
   expect([parseRoute('overview'), parseRoute(null)]).toEqual([undefined, undefined])
 })
-it('opens the settings that fix each setup problem: the Deployment group, or the card of the Source it names', () => {
-  expect(setupPage('deployment')).toEqual({ page: 'settings', query: { group: 'deployment' } })
-  expect(setupPage('feishu')).toEqual({ page: 'settings', query: { group: 'source', source: 'feishu' } })
+it('opens the settings that fix a setup problem: the Deployment group', () => {
+  expect(setupPage()).toEqual({ page: 'settings', query: { group: 'deployment' } })
 })

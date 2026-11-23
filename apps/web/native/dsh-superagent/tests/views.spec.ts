@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
-import { feishuKind } from '../src/sources/feishu.ts'
+import { feishuImKind } from '../src/sources/feishu-im.ts'
 import { localKind } from '../src/sources/local.ts'
 import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail, ticketList, ticketTags } from '../src/app/views/tickets.ts'
@@ -15,8 +15,7 @@ import { overview } from '../src/app/views/overview.ts'
 import { markdown, plain } from '../src/app/views/text.ts'
 import { policyHistory } from '../src/app/settings-history.ts'
 import { KV } from '../src/kv.ts'
-import { feishuLink } from '../src/sources/feishu-channel.ts'
-import { feishuChannel, feishuTriggerId } from '../src/sources/feishu-trigger.ts'
+import { feishuTriggerId } from '../src/sources/feishu-shared.ts'
 import { followupOwners, type ChannelRef } from '../src/core/index.ts'
 
 let directory: string
@@ -27,8 +26,11 @@ beforeEach(() => {
 })
 afterEach(() => { store.close(); rmSync(directory, { recursive: true, force: true }) })
 const links = (channel: ChannelRef) => channel.source === 'feishu'
-  ? feishuLink(channel.address, {})
+  ? feishuImKind.channel!.link(channel.address, {})
   : localKind.channel!.link(channel.address, {})
+/** The Channel a Feishu reply answers: the retained route names the message whose Thread receives it. */
+const feishuChannel = (chatId: string, messageId: string): ChannelRef => ({ source: 'feishu', thread: `feishu:${chatId}`,
+  address: { chatId, messageId, actorId: 'ou_a' } })
 const drop = (id: string, channel: ChannelRef, ticketId?: string) => {
   const message = { id, channel, text: id, kind: 'reply' as const, ...ticketId ? { ticketId } : {} }
   store.receipts.add(message)
@@ -53,7 +55,7 @@ function views() {
   store.saveSettings(SettingsSchema.parse({ policy: { sources: { feishu: { allowed: [{ id: 'ou_alice', name: 'Alice' }] } },
     rules: [{ id: 'copy', name: 'Copy fixes', enabled: true, instruction: 'Fix copy' }] } }))
   const sources = new SourceRegistry(() => store.settings())
-  sources.register(feishuKind)
+  sources.register(feishuImKind)
   return { store, sources, links }
 }
 const at = new Date().toISOString()
@@ -70,8 +72,8 @@ it('names each sender as the Policy lists it, by its id where the id is readable
   expect([view.actor({ source: 'feishu', id: 'OU_ALICE' }), view.actor({ source: 'feishu', id: 'ou_bob' }),
     view.actor({ source: 'feishu', id: 'ou_bot' }, false), view.actor({ source: 'feishu', id: '' })])
     .toEqual([{ source: 'feishu', id: 'OU_ALICE', name: { zh: 'Alice', en: 'Alice' } }, { source: 'feishu', id: 'ou_bob',
-        name: feishuKind.policy!.unnamed!.person },
-      { source: 'feishu', id: 'ou_bot', name: feishuKind.policy!.unnamed!.bot }, { source: 'feishu', id: '' }])
+        name: feishuImKind.policy!.unnamed!.person },
+      { source: 'feishu', id: 'ou_bot', name: feishuImKind.policy!.unnamed!.bot }, { source: 'feishu', id: '' }])
   expect(view.rule('copy')).toEqual({ id: 'copy', name: 'Copy fixes' })
   expect(view.rule('gone')).toEqual({ id: 'gone', name: 'gone' })
 })
@@ -225,7 +227,7 @@ it('words each settings save by what it changed from the one before, and nothing
 it('names a listed bot as the Policy lists it, and gives a bot\'s Mandate a basis fact of its own', () => {
   store.saveSettings(SettingsSchema.parse({ policy: { sources: { feishu: { allowed: [], bots: [{ id: 'cli_review', name: '评审机器人' }] } } } }))
   const sources = new SourceRegistry(() => store.settings())
-  sources.register(feishuKind)
+  sources.register(feishuImKind)
   const view = snapshot({ store, sources, links })
   expect(view.actor({ source: 'feishu', id: 'cli_review' }, false).name).toEqual({ zh: '评审机器人', en: '评审机器人' })
   expect(basisFacts({ via: 'bot', sender: '评审机器人', addressed: 'mention', observation: { mode: 'auto' } }, view.rule).facts)
@@ -269,7 +271,7 @@ it('names a bot\'s Mandate as a bot once the Policy no longer lists it', () => {
     actor: { source: 'feishu', id: 'cli_removed' }, scope: '' }
   store.tickets.save({ id: 't1', title: 'Fix', decisionId: 'd', channels: [], undelivered: [], createdAt: at, updatedAt: at, mandate,
     origin: { triggerId: 'e1', triggerIds: ['e1'] }, assignments: [], inputs: [] })
-  expect(ticketDetail(host, 't1')!.mandate.actor).toEqual({ source: 'feishu', id: 'cli_removed', name: feishuKind.policy!.unnamed!.bot })
+  expect(ticketDetail(host, 't1')!.mandate.actor).toEqual({ source: 'feishu', id: 'cli_removed', name: feishuImKind.policy!.unnamed!.bot })
 })
 
 it('offers a person to send a follow-up to Eval while a ticket decides it, or once nothing did', () => {

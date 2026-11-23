@@ -53,7 +53,7 @@ function run(...args: string[]): Promise<{ code: number; stdout: string; stderr:
       timeout: 20_000 },
     (error, stdout, stderr) => resolve({ code: typeof error?.code === 'number' ? error.code : 0, stdout, stderr })))
 }
-const READY = { health: { runtime: { state: 'ready', detail: '' } }, setup: { problem: null, feishuProblem: null } }
+const READY = { health: { runtime: { state: 'ready', detail: '' } }, setup: { problem: null } }
 /** Start a mock HTTP server that returns 503 until tmux launches the service (unless always is true). */
 async function answering(state: unknown = READY, always = false): Promise<string> {
   server = createServer((_request, response) => {
@@ -132,11 +132,10 @@ it('keeps only the newest logs it wrote for the profile', async () => {
   expect(logs.filter(name => name.startsWith('dsh-superagent-other-'))).toHaveLength(25)
   expect(logs).toContain('dsh-superagent-20260901-000000-1.log')
 }, 20_000)
-it('reports a service whose Feishu bot setup could not check as running, and reads an answer with keys missing', async () => {
+it('reports a service whose Source still starts as running, and reads an answer with keys missing', async () => {
   processes(service(sleeper()))
-  const feishu = { health: { runtime: { state: 'ready', detail: '' }, feishu: { state: 'paused', detail: '' } },
-    setup: { problem: null, feishuProblem: { code: 'feishuNoBot', detail: 'No bot' } } }
-  expect(await run('status', '--url', await answering(feishu, true))).toMatchObject({ code: 0 })
+  const starting = { health: { runtime: { state: 'ready', detail: '' }, feishu: { state: 'paused', detail: '' } }, setup: { problem: null } }
+  expect(await run('status', '--url', await answering(starting, true))).toMatchObject({ code: 0 })
   server!.close()
   expect(await run('status', '--url', await answering({ health: { runtime: { state: 'ready' } } }, true))).toMatchObject({ code: 0 })
   server!.close()
@@ -155,11 +154,11 @@ it('exits 2 while a part such as a Source reports an error, which a restart does
 it('exits 3 while the service waits for setup, from status and from start, which a restart does not fix', async () => {
   processes(service(sleeper()))
   const waiting = { health: { runtime: { state: 'paused', detail: '' } },
-    setup: { problem: { code: 'feishuCliFailed', detail: 'The bot lark-cli does not work.' }, feishuProblem: null } }
+    setup: { problem: { code: 'environmentFailed', detail: 'Preparing the agent environment failed.' } } }
   const url = await answering(waiting, true)
   expect(await run('status', '--url', url)).toMatchObject({ code: 3 })
   expect(await run('start', '--url', url, '--timeout', '10'))
-    .toMatchObject({ code: 3, stdout: expect.stringContaining('waiting for setup: The bot lark-cli does not work.') })
+    .toMatchObject({ code: 3, stdout: expect.stringContaining('waiting for setup: Preparing the agent environment failed.') })
 }, 20_000)
 it('restarts the service, and a restart whose graceful stop timed out does not keep recovery off', async () => {
   const url = await answering()

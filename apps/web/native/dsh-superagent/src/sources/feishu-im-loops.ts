@@ -1,7 +1,7 @@
 /** dsh-im Feishu background loops: chat history backfill and subscribed-thread polling. */
 import type { Thread, Trigger } from '../core/index.ts'
 import { KV } from '../kv.ts'
-import { SOURCE } from './feishu-trigger.ts'
+import { SOURCE } from './feishu-shared.ts'
 import type { DshImEvent, DshImService } from './dsh-im.ts'
 import type { FeishuConfig } from './feishu-im.ts'
 import { POLL_HORIZON_MS, cursorAt, pause, pollThreads, polled } from './poll.ts'

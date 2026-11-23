@@ -55,8 +55,7 @@ export function DeploymentPage({ setup, form, accounts: showAccounts }: { setup:
     <Input type="number" min={LIMITS[key].min} max={LIMITS[key].max} step={1} value={draft.value[key]} disabled={!editable}
       onChange={event => draft.edit({ ...draft.value, [key]: event.target.value })} />
   </Field>
-  const feishu = accounts?.feishu ? accounts.feishu.name || accounts.feishu.botId
-    : setup.feishuProblem ? setupText(t, setup.feishuProblem) : t('deploymentFeishuNone')
+  const feishu = accounts?.feishu ? accounts.feishu.name || accounts.feishu.botId : t('deploymentFeishuNone')
   return <form className="dt-form" onSubmit={event => { void draft.submit(event) }}>
     <Fields disabled={draft.busy}>
       <Hint>{t('deploymentIntro')}</Hint>
