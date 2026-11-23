@@ -8,8 +8,9 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 
 | 阶段 | 工具 |
 |---|---|
-| 规划 | `analyze`、`map`、`profile`、`go` |
+| 规划 | `analyze`、`map`、`profile` |
 | 迁移单个单元 | `bridge`、`refresh`、`record`、`build`、`diff`、`bench`、`fuzz`、`shadow`、`gate`、`report` |
+| 只搬一个热点 | `go` |
 | 就地启用单元 | `enable`、`disable` |
 | 迁移整个应用 | `app_record`、`app_replay`、`app_front_door`、`app_wire`、`app_lift` |
 
@@ -26,7 +27,7 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 - 「这个循环是瓶颈：先 profile，只把热点部分搬过去。」
 - 「把这个 CLI 重写成 Rust，并证明它与录制行为一致。」
 
-流程是 `analyze`、`bridge`、`record`、写 `src/port.rs`、`build`、`diff`、`bench`、`gate`；整应用走 `app_*`。想确认挂载是否生效，可以让 agent 列出以 `mcp__rust-anything__` 开头的工具。
+流程是 `analyze`、`bridge`、`record`、写 `src/port.rs`、`build`、`diff`、`bench`、`gate`；只搬一个热点函数时 `go` 会把这条流程的前几步一次跑完，整应用走 `app_*`。想确认挂载是否生效，可以让 agent 列出以 `mcp__rust-anything__` 开头的工具。
 
 ## 产物落在哪里
 
@@ -48,7 +49,7 @@ Web 的 `standard` agent preset 挂载了 [rust-anything](https://github.com/erk
 |---|---|---|
 | `toolLoading` | `eager` | 设为 `on-demand` 时用一段系统提示目录加一个 `mcp__rust-anything__load_tools` 工具替代 22 个 schema |
 | `command` | 仓库内构建产物 | 覆盖要启动的可执行文件；环境变量 `RUST_ANYTHING_BIN` 是次级回退 |
-| `toolCallTimeoutMs` | 15 分钟 | 单次调用预算；`gate`、`bench`、`app record` 会编译 crate 并回放语料 |
+| `toolCallTimeoutMs` | 15 分钟 | 单次调用预算；`go`、`gate`、`bench`、`app record` 会编译 crate 并回放语料 |
 | `env` | `{}` | 提供给 server 的额外环境变量，例如 `RUSTUP_TOOLCHAIN` |
 
 改 `packages/bundle/web-app/presets/standard.patch.yml` 里的 `mcp-rust-anything` 行即可。

@@ -69,8 +69,8 @@ under the platform cache directory (`~/.cache` on Linux). That folder is outside
 
 On a host without `javac` or libclang, three suites fail rather than skip: `tests/native.rs` (Java and Ruby runtime expectations) and
 `tests/loop.rs`'s `ruby_modules_bridge_record_and_diff` (rb-sys builds through bindgen). `tests/http.rs`'s `c_server` needs a `cc` whose
-`<string.h>` declares `strcasestr` without `_GNU_SOURCE`; on glibc 2.35 the fixture records an empty POST body instead. Neither is a
-property of this vendored copy.
+`<string.h>` declares `strcasestr` without `_GNU_SOURCE`; on glibc 2.35 the fixture records an empty POST body and the run's later cases
+time out. Neither is a property of this vendored copy.
 
 ## Upstream sync
 

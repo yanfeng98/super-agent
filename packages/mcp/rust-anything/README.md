@@ -31,7 +31,7 @@ Mounted by the Web `standard` agent preset as row `mcp-rust-anything`; the tools
 |---|---|---|
 | `command` | staged vendored build | Executable to run instead of `native/rust-anything/bin/rust-anything`, the path `pnpm run build` stages from the vendored crate; `RUST_ANYTHING_BIN` is the environment fallback. |
 | `toolLoading` | `eager` | `on-demand` lists the 22 tools in the system prompt and loads the ones an agent asks for. |
-| `toolCallTimeoutMs` | 15 minutes | `gate`, `build`, `bench` and `app record` compile crates and replay corpora, so the MCP default of 60 s is short. |
+| `toolCallTimeoutMs` | 15 minutes | `go`, `gate`, `build`, `bench` and `app record` compile crates and replay corpora, so the MCP default of 60 s is short. |
 | `startupTimeoutMs` | 20 s | Budget for the stdio probe, connection and initial tool sync. |
 | `env` | `{}` | Extra environment for the server process, e.g. a `RUSTUP_TOOLCHAIN` for the crates it generates. |
 
@@ -87,7 +87,7 @@ Mounting happens before the first turn and does not change mid-session, so it do
 - Generated crates declare `rust-version = "1.97"`. An older default toolchain fails at build time; `rust-anything doctor` reports it.
 - The crates a port generates compile into one shared cargo target folder — `CARGO_TARGET_DIR` when set, else `rust-anything/target` under the platform cache directory — so a migrated repository's worktree gains only its `rust/` crates.
 - PHP and C# units need `php` with `ext-ffi`, or `dotnet`, on `PATH`; the other languages need their own runtime. `rust-anything doctor` reports each one.
-- The tool executes the code it records and writes crates into the repository. Treat a run as code execution with the agent's full environment.
+- The tool executes the code it records, writes crates into the repository, and `enable` rewrites the call sites of the ported functions in your sources. Treat a run as code execution with the agent's full environment, and review `enable`'s diff.
 
 ### Dev Note
 

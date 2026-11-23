@@ -31,7 +31,7 @@ kind: "package-reference"
 |---|---|---|
 | `command` | 仓库内编译产物 | 覆盖 `native/rust-anything/bin/rust-anything`（`pnpm run build` 从 vendored crate 编译并暂存的位置）；环境变量 `RUST_ANYTHING_BIN` 是次级回退。 |
 | `toolLoading` | `eager` | 设为 `on-demand` 时 22 个工具只进系统提示目录，由 Agent 按需加载。 |
-| `toolCallTimeoutMs` | 15 分钟 | `gate`、`build`、`bench`、`app record` 会编译 crate 并回放语料，MCP 默认的 60 秒不够。 |
+| `toolCallTimeoutMs` | 15 分钟 | `go`、`gate`、`build`、`bench`、`app record` 会编译 crate 并回放语料，MCP 默认的 60 秒不够。 |
 | `startupTimeoutMs` | 20 秒 | stdio 探测、连接与首次工具同步的预算。 |
 | `env` | `{}` | 提供给 server 进程的额外环境变量，例如给生成 crate 用的 `RUSTUP_TOOLCHAIN`。 |
 
@@ -87,7 +87,7 @@ CLI 作为普通子进程运行：它会往仓库写 `rust/<unit>-rs` crate，�
 - 生成的 crate 声明 `rust-version = "1.97"`，默认工具链更旧会在构建时失败；`rust-anything doctor` 会指出。
 - 迁移生成的 crate 统一编译到一个共享 cargo target 目录（设置了 `CARGO_TARGET_DIR` 用它，否则用平台缓存目录下的 `rust-anything/target`），所以被迁移的仓库工作树里只多出它自己的 `rust/` crate。
 - PHP 与 C# 单元需要 `PATH` 上有带 `ext-ffi` 的 `php` 或 `dotnet`，其他语言各自的运行时也一样；`rust-anything doctor` 会逐个报告。
-- 工具会执行被录制的代码并往仓库写 crate，等同于以 Agent 的完整环境执行代码，请谨慎。
+- 工具会执行被录制的代码、往仓库写 crate，`enable` 还会改写你源码里被迁移函数的调用点：等同于以 Agent 的完整环境执行代码，请谨慎，并检查 `enable` 的 diff。
 
 <a id="dev-note"></a>
 ### 开发备注

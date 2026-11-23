@@ -8,8 +8,9 @@ The Web `standard` agent preset mounts the [rust-anything](https://github.com/er
 
 | Phase | Tools |
 |---|---|
-| Plan | `analyze`, `map`, `profile`, `go` |
+| Plan | `analyze`, `map`, `profile` |
 | Port one unit | `bridge`, `refresh`, `record`, `build`, `diff`, `bench`, `fuzz`, `shadow`, `gate`, `report` |
+| Make one hot path faster | `go` |
 | Switch a unit on | `enable`, `disable` |
 | Port a whole app | `app_record`, `app_replay`, `app_front_door`, `app_wire`, `app_lift` |
 
@@ -26,7 +27,7 @@ Describe the work and the matching [skill](../../../packages/skill/skill-rust-an
 - "This loop is the bottleneck: profile it and move the hot part only."
 - "Rewrite this CLI in Rust and prove it matches the recorded behavior."
 
-The loop is `analyze`, `bridge`, `record`, write `src/port.rs`, `build`, `diff`, `bench`, `gate`; whole apps go through `app_*`. Ask the agent to list the tools starting with `mcp__rust-anything__` when you want to confirm the mount.
+The loop is `analyze`, `bridge`, `record`, write `src/port.rs`, `build`, `diff`, `bench`, `gate`; `go` runs the first steps of that loop for one hot function, and whole apps go through `app_*`. Ask the agent to list the tools starting with `mcp__rust-anything__` when you want to confirm the mount.
 
 ## What it leaves behind
 
@@ -48,7 +49,7 @@ A port's crate compiles into one shared cargo target folder — `CARGO_TARGET_DI
 |---|---|---|
 | `toolLoading` | `eager` | `on-demand` replaces the 22 schemas with a system-prompt catalog and one `mcp__rust-anything__load_tools` tool |
 | `command` | staged build | executable to spawn instead; `RUST_ANYTHING_BIN` is the environment fallback |
-| `toolCallTimeoutMs` | 15 minutes | per-call budget; `gate`, `bench`, and `app record` compile crates and replay corpora |
+| `toolCallTimeoutMs` | 15 minutes | per-call budget; `go`, `gate`, `bench`, and `app record` compile crates and replay corpora |
 | `env` | `{}` | extra environment for the server, such as `RUSTUP_TOOLCHAIN` |
 
 Edit the `mcp-rust-anything` row in `packages/bundle/web-app/presets/standard.patch.yml`.

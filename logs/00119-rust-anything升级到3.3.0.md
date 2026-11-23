@@ -51,3 +51,18 @@
 - **本机环境限制（非本次改动引入）**：`cargo test` 有 3 个用例要宿主先装东西——`tests/native.rs` 的 Java 与 Ruby 运行时期望需要 `javac`，Ruby 那条还要 libclang（rb-sys 经 bindgen），`tests/loop.rs` 的 `ruby_modules_bridge_record_and_diff` 同样卡在 libclang；`tests/http.rs` 的 `c_server` 依赖 `cc` 的 `<string.h>` 在不定义 `_GNU_SOURCE` 时声明 `strcasestr`，本机 gcc 11 + glibc 2.35 下 fixture 会记到空的 POST body。三者都已写进 NATIVE.md 的检查小节。
 - **下次同步**：照 NATIVE.md 的四步走，注意新复制清单多了 `.mcp.json` 与 `plugin/`，并且要保住 `rust-toolchain.toml`、`.gitignore` 与两处行尾空行裁剪；工具数变化时，`mount.spec.ts` 会先红，再同步 README、指南、preset 注释与 `gen-config-catalog`。
 - **未做**：`go --agent` 与 `package` 在 DSH 里没有专门的默认用法说明；技能沿用上游「不要把 `--agent` 传给别的 agent」的口径，`package` 只在工具表里出现。
+
+## 5. 复查修正
+
+本轮自查改掉四处不准确或不稳的表述：
+
+| 位置 | 修正 |
+|---|---|
+| `docs/user/guide/rust-anything{,.zh}.md` | 工具表按用途重排，`go` 从「规划」行独立成「只搬一个热点」；正文的循环那句补上 `go`；`toolCallTimeoutMs` 的说明补 `go`（它是最长的一次调用） |
+| `packages/mcp/rust-anything/README{,.zh}.md` | 超时字段补 `go`；执行注意事项补一句 `enable` 会改写源码里被迁移函数的调用点 |
+| `packages/mcp/rust-anything/tests/mount.spec.ts` | 工具集断言改成排序后比较：新增或改名会红，顺序变化不会 |
+| `native/rust-anything/NATIVE.md` | `c_server` 的宿主条件改成实际观察到的现象：记到空 POST body，随后用例超时 |
+
+自查同时确认了几条容易被当成「改坏了」的判断：`git archive <tag> .mcp.json` 可用（同步步骤写法成立）；`native/rust-anything/` 确实在 `translation-pairing.manifest.json` 的排除项里；仓库的 skill 提供方只扫 `<project>/.agents/skills`，新增的 `plugin/skills/` 不会冒充第二个技能。
+
+另外把这次踩到的坑写成标准指令：根 `AGENTS.md` 的「Run relevant checks locally」新增一条「共享主机压低并发」（`DSH_GATE_CONCURRENCY=2`、Vitest `--maxWorkers=2`、重活逐个跑），`verify-doc-budgets` 的根 `AGENTS.md` 上限从 2,080 提到 2,200，`docs/AGENTS.md` 的 target 同步更新。

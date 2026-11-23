@@ -36,7 +36,7 @@ describe('rust-anything MCP server mount', () => {
       'report', 'bench', 'fuzz', 'shadow', 'map', 'package', 'gate',
       'app_record', 'app_replay', 'app_front_door', 'app_wire', 'app_lift',
     ]
-    expect(names).toEqual(tools.map(tool => `mcp__rust-anything__${tool}`))
+    expect([...names].sort()).toEqual(tools.map(tool => `mcp__rust-anything__${tool}`).sort())
     await ctx.fiber.dispose()
   })
 
