@@ -54,7 +54,7 @@
 
 ## 5. 复查修正
 
-本轮自查改掉六处不准确或不稳的表述：
+本轮自查改掉七处不准确或不稳的表述：
 
 | 位置 | 修正 |
 |---|---|
@@ -62,9 +62,10 @@
 | `packages/mcp/rust-anything/README{,.zh}.md` | 超时字段补 `go`；执行注意事项补一句 `enable` 会改写源码里被迁移函数的调用点 |
 | `packages/mcp/rust-anything/tests/mount.spec.ts` | 工具集断言改成排序后比较：新增或改名会红，顺序变化不会 |
 | `native/rust-anything/NATIVE.md` | `c_server` 的宿主条件改成实际观察到的现象：POST 拿到空 body，随后其余用例超时（手工 `curl` 复现了空 body，套件里从 POST 起全部 `timed_out`） |
+| `native/rust-anything/NATIVE.md`（同步步骤） | 「三处本地文件」改成「本地新增与裁剪」：三条本地改动里只有两条是文件（`rust-toolchain.toml`、`.gitignore`），第三条是对两个上游文件的裁剪 |
 | `native/rust-anything/.gitignore` | 反选原来写成 `!tests/fixtures/**`，会连带取消 `tests/fixtures/**/node_modules` 的忽略（上游测试会在 fixture 里装依赖）；收窄成 `**/lib/` 与 `**/lib/**`，只放行 `lib` 目录，`analyze`、`app`、`loop` 三个受影响的用例复跑仍通过 |
 | 包 README 与用户指南（中英） | 共享 target 目录那句原来写成「工作树里只多出 `rust/` crate」，夸大了：`enable` 会改原始源码，录制、`map --write` 与 shadow 模块也落在 crate 旁。改成「编译一个端口只在被迁移仓库里留下它自己的 `rust/` crate」 |
 
 自查同时确认了几条容易被当成「改坏了」的判断：`git archive <tag> .mcp.json` 可用（同步步骤写法成立）；`native/rust-anything/` 确实在 `translation-pairing.manifest.json` 的排除项里；仓库的 skill 提供方只扫 `<project>/.agents/skills`，新增的 `plugin/skills/` 不会冒充第二个技能。
 
-另外把这次踩到的坑写成标准指令：根 `AGENTS.md` 的「Run relevant checks locally」新增一条「共享主机压低并发」（`DSH_GATE_CONCURRENCY=2`、Vitest `--maxWorkers=2`、重活逐个跑），`verify-doc-budgets` 的根 `AGENTS.md` 上限从 2,080 提到 2,220（2,101 词，留出 5% 余量），`docs/AGENTS.md` 的 target 同步更新。
+另外把这次踩到的坑写成标准指令：根 `AGENTS.md` 的「Run relevant checks locally」新增一条「共享主机压低并发」（`DSH_GATE_CONCURRENCY=2`、`pnpm run test -- --maxWorkers=2`、重活逐个跑），`verify-doc-budgets` 的根 `AGENTS.md` 上限从 2,080 提到 2,220（2,101 词，留出 5% 余量），`docs/AGENTS.md` 的 target 同步更新。
