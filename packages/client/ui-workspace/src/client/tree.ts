@@ -1,6 +1,6 @@
 /**
  * Derives the workspace browser tree from caller-projected Workspace and
- * Session order. Unassigned Sessions trail under Ungrouped; only the selected
+ * Session order. Unassigned Sessions trail under Other sessions; only the selected
  * blank Session remains visible.
  */
 import {
@@ -23,14 +23,31 @@ export const UNGROUPED_KEY = ''
  * Resolve the Workspace browser group that owns one Session.
  * @param workspaces - authoritative Workspace membership.
  * @param sessionId - Session whose browser group is required.
- * @returns owning Workspace id, or {@link UNGROUPED_KEY} when no Workspace accounts for it.
+ * @param summaries - current Session list entries, which carry any durable grouping hint.
+ * @returns owning Workspace id (membership or a durable group hint), or {@link UNGROUPED_KEY} when no Workspace accounts for it.
  */
 export function owningGroupKey(
   workspaces: readonly WorkspaceView[],
   sessionId: SessionId,
+  summaries?: SessionListState['byId'],
 ): string {
-  return (workspaces.find(workspace => workspace.sessionIds.includes(sessionId))
-    ?.workspaceId as string | undefined) ?? UNGROUPED_KEY
+  const member = workspaces.find(workspace => workspace.sessionIds.includes(sessionId))
+  if (member !== undefined) return member.workspaceId
+  const hinted = workspaceGroupPath(summaries?.[sessionId])
+  const owner = hinted === undefined ? undefined : workspaces.find(workspace => workspace.path === hinted)
+  return owner?.workspaceId ?? UNGROUPED_KEY
+}
+
+/**
+ * Durable sidebar group hint carried by one Session summary: the Workspace
+ * directory it should be browsed under when its header cwd names another
+ * project. `undefined` means the Session has no hint.
+ * @param summary - Session list entry to read.
+ * @returns the hinted Workspace directory, or undefined.
+ */
+export function workspaceGroupPath(summary: SessionSummary | undefined): string | undefined {
+  const hint = summary?.projectionValues?.workspaceGroup
+  return hint === null || hint === undefined ? undefined : hint.path
 }
 
 /** Pending interaction kinds with dedicated Workspace-row presentation. */
@@ -65,6 +82,10 @@ export interface SessionNode {
   updatedAt: number
   /** Workspace root the Session works in; absent when the Host reports none or an empty path. */
   cwd?: string
+  /** Listed under a Workspace by a durable hint rather than workspace membership; not reorderable there. */
+  groupedByHint?: boolean
+  /** Durable role marker shown beside the row (the IM bot's orchestrator). */
+  orchestrator?: boolean
 }
 
 /** Session order selected by the Workspace browser. */
@@ -357,13 +378,19 @@ export function displayedWorkspaceId(
 
 /**
  * Resolve the Workspace browser group that displays one Session: its owning
- * Workspace, or the parent group a finished worktree folds into.
+ * Workspace or durable group hint, or the parent group a finished worktree
+ * folds into.
  * @param workspaces - authoritative Workspace registration and membership.
  * @param sessionId - Session whose displayed group is required.
+ * @param summaries - current Session list entries, which carry any durable grouping hint.
  * @returns the displayed group key, or {@link UNGROUPED_KEY} when no Workspace accounts for it.
  */
-export function displayGroupKey(workspaces: readonly WorkspaceView[], sessionId: SessionId): string {
-  const owning = owningGroupKey(workspaces, sessionId)
+export function displayGroupKey(
+  workspaces: readonly WorkspaceView[],
+  sessionId: SessionId,
+  summaries?: SessionListState['byId'],
+): string {
+  const owning = owningGroupKey(workspaces, sessionId, summaries)
   if (owning === UNGROUPED_KEY) return owning
   return displayedWorkspaceId(foldedWorkspaces(workspaces), owning as WorkspaceId)
 }
@@ -387,9 +414,11 @@ function orderedUngrouped(
 
 /**
  * Group Sessions by Workspace: one group per caller-ordered entity, with
- * members resolved from caller-ordered sessionIds. Sessions outside every
- * Workspace trail in the browser-local Ungrouped order, which falls back to
- * recency before that order is initialized.
+ * members resolved from caller-ordered sessionIds (including finished
+ * worktrees folded into it), then members whose durable group hint names this
+ * Workspace or one of those worktrees. Sessions outside every Workspace trail in
+ * the browser-local Other sessions order, which falls back to recency before
+ * that order is initialized.
  */
 function groupByWorkspace(
   list: SessionListState,
@@ -416,6 +445,25 @@ function groupByWorkspace(
   }
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
+  // A grouped Session's own cwd keeps its Workspace membership; the hint only
+  // decides which Workspace section lists it. A hint naming a Workspace that
+  // is not registered falls back to the same bucket as any other stray.
+  const memberIds = new Set<SessionId>(workspaces.flatMap(workspace => workspace.sessionIds))
+  const workspaceByPath = new Map(workspaces.map(workspace => [workspace.path, workspace.workspaceId]))
+  const hinted = new Map<WorkspaceId, SessionSummary[]>()
+  for (const id of list.ids) {
+    const summary = list.byId[id]
+    if (summary === undefined || memberIds.has(id)) continue
+    const path = workspaceGroupPath(summary)
+    const owner = path === undefined ? undefined : workspaceByPath.get(path)
+    if (owner === undefined) continue
+    accounted.add(id)
+    if (!sessionVisible(summary, current, archived, archivedFilter)) continue
+    const display = displayedWorkspaceId(folded, owner)
+    const members = hinted.get(display)
+    if (members === undefined) hinted.set(display, [summary])
+    else members.push(summary)
+  }
   for (const workspace of workspaces) {
     if (displayedWorkspaceId(folded, workspace.workspaceId) !== workspace.workspaceId) {
       for (const id of workspace.sessionIds) accounted.add(id)
@@ -430,6 +478,9 @@ function groupByWorkspace(
       members.push(summary)
     }
     members.push(...foldedMembers.get(workspace.workspaceId) ?? [])
+    // Hinted members trail the Workspace's own manual order in list recency order.
+    const extra = hinted.get(workspace.workspaceId)
+    if (extra !== undefined) members.push(...extra)
     // The archived-only view lists archives, not the Workspace inventory, so
     // a Workspace without archived Sessions contributes no group.
     if (archivedFilter === 'only' && members.length === 0) continue
@@ -496,6 +547,8 @@ function sessionNode(
     pinned: !archived.has(s.id) && pinned.has(s.id),
     archived: archived.has(s.id),
     updatedAt: s.updatedAt,
+    ...(workspaceGroupPath(s) === undefined ? {} : { groupedByHint: true }),
+    ...(s.projectionValues?.workspaceGroup?.role === 'orchestrator' ? { orchestrator: true } : {}),
     ...(root === undefined || root === '' ? {} : { cwd: root }),
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }
@@ -530,7 +583,7 @@ export function deriveGroups(
   const current = mainSessionId(list)
   const currentGroup = current === undefined
     ? undefined
-    : displayGroupKey(workspaces, current)
+    : displayGroupKey(workspaces, current, list.byId)
   const groups: GroupNode[] = []
   for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder)) {
     const expanded = expandedGroups.has(g.key)
@@ -614,12 +667,19 @@ export function deriveFlat(
 /** Display label of each Session's Workspace: its first Workspace's title, else its cwd label. */
 function workspaceLabels(workspaces: readonly WorkspaceView[]): (summary: SessionSummary) => string {
   const workspaceBySession = new Map<SessionId, string>()
+  const workspaceByPath = new Map(workspaces.map(workspace => [workspace.path, workspace.title]))
   for (const workspace of workspaces) {
     for (const sessionId of workspace.sessionIds) {
       if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title)
     }
   }
-  return summary => workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd)
+  return (summary) => {
+    const member = workspaceBySession.get(summary.id)
+    if (member !== undefined) return member
+    const path = workspaceGroupPath(summary)
+    const hinted = path === undefined ? undefined : workspaceByPath.get(path)
+    return hinted ?? workspaceLabel(summary.cwd)
+  }
 }
 
 /**

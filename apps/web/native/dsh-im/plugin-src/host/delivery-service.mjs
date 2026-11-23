@@ -253,6 +253,20 @@ export class DeliveryService {
     }
   }
 
+  /**
+   * The Workspace directory one bot works in, for durable Session grouping.
+   * A channel without a workspace store answers null.
+   */
+  async botWorkspace(botId) {
+    const id = botIdOf(botId);
+    const adapter = await this.#adapterFor(id);
+    if (typeof adapter.botWorkspace !== 'function') return null;
+    try {
+      const workspace = await adapter.botWorkspace(id);
+      return typeof workspace === 'string' && workspace !== '' ? workspace : null;
+    } catch (error) { throw publicOperationError(error); }
+  }
+
   async listBots() {
     const bots = [];
     for (const { adapter } of this.#adapters.values()) {

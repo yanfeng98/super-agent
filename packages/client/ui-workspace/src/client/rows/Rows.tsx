@@ -16,7 +16,7 @@ import {
   HoverCard, IconArchiveOutlineRegular, MarqueeText,
   IconFolderCloseRegular, IconFolderOpenRegular,
   IconNewChatOutlineRegular, IconPinFillRegular,
-  IconTriangleRightFillRegular, IconUnarchiveOutlineRegular, relativeTime, StateDot, Tooltip, useHoverMarquee, useRowDragPreview,
+  IconTriangleRightFillRegular, IconUnarchiveOutlineRegular, relativeTime, StateDot, Tag, Tooltip, useHoverMarquee, useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -393,6 +393,7 @@ function SessionHoverContent({ node, cwd, now, renderSlot, t }: {
   return (
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{displayTitle(node, t)}</div>
+      {node.orchestrator && <div className={css.hoverPath}>{t('session.orchestrator')}</div>}
       {cwd !== undefined && <div className={css.hoverPath}>{cwd}</div>}
       {/* Same placeholder rule as the row's trailing cell: no timestamp
           before the first prompt. */}
@@ -549,7 +550,9 @@ export function SessionNodeItem({
   // their drop targets to fellow pinned rows.
   const renamable = useSessionAccess(node.id, 'session/rename')
   const reorderable = useSessionAccess(node.id, 'workspace/insertSessionBefore')
-  const draggable = !row.blank && !row.archived
+  // A hinted row is not a Workspace member: reordering would move another
+  // Workspace's manual order, so its position inside this section is fixed.
+  const draggable = !row.blank && !row.archived && !row.groupedByHint
   const reorderDraggable = draggable && drag !== undefined && reorderable
   const menuOpen = useContextMenuTarget(target => target?.kind === 'session' && target.value.sessionId === node.id)
   const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
@@ -652,6 +655,9 @@ export function SessionNodeItem({
           actions for existing content are available. */}
       {!row.blank && (
         <span className={css.rowResting}>
+          {row.orchestrator && (
+            <Tag tone="neutral" className={css.orchestratorMark}>{t('session.orchestrator')}</Tag>
+          )}
           <span
             className={clsx(css.time, primaryStatus.trailingLabel === undefined && css.timestamp)}
             aria-hidden={primaryStatus.trailingLabel === undefined ? undefined : true}

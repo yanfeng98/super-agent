@@ -62,6 +62,7 @@
 | `event:session/end-seed` | event | `5e6db6e24948d4a853c71cb9fabd252ad051ce93d4672c1266cf837c1c17b84e` | [`{ type: "session/end-seed" }`](#persistence-type-sha256-5e6db6e24948d4a853c71cb9fabd252ad051ce93d4672c1266cf837c1c17b84e) |
 | `event:session/title` | event | `1b912703e2d64f91c99c675b8f805b01076c8325b905c1218ad81ef0b24909d5` | [`{ type: "session/title" }`](#persistence-type-sha256-1b912703e2d64f91c99c675b8f805b01076c8325b905c1218ad81ef0b24909d5) |
 | `event:session/title-llm-request` | event | `64b6ec45d21f5aed32624819c44ba5c918bbe11ca9c464496d9dbe0606dcb829` | [`{ type: "session/title-llm-request" }`](#persistence-type-sha256-64b6ec45d21f5aed32624819c44ba5c918bbe11ca9c464496d9dbe0606dcb829) |
+| `event:session/workspace-group` | event | `89f240c94d5d5d3a56241550814cf26f51b98d61d93c1977ba983b3ba7185311` | [`{ type: "session/workspace-group" }`](#persistence-type-sha256-89f240c94d5d5d3a56241550814cf26f51b98d61d93c1977ba983b3ba7185311) |
 | `event:step/end` | event | `e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05` | [`{ type: "step/end" }`](#persistence-type-sha256-e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05) |
 | `event:step/start` | event | `4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986` | [`{ type: "step/start" }`](#persistence-type-sha256-4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986) |
 | `event:subagent/catalog` | event | `d49164d37eab0f0f70fa787c65d887abbea869c010ccb103d717fab3519c3a41` | [`{ type: "subagent/catalog" }`](#persistence-type-sha256-d49164d37eab0f0f70fa787c65d887abbea869c010ccb103d717fab3519c3a41) |
@@ -896,6 +897,23 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 类型：[SessionTitleLlmRequestEventData](subsystems/session-title.zh.md)
 
 来源：[`packages/session/session-title-llm/src/index.ts:63`](../packages/session/session-title-llm/src/index.ts)
+
+<a id="sessionworkspace-group--log-only"></a>
+
+#### `session/workspace-group` — log-only
+
+```ts persistence-catalog
+/**
+ * Latest-wins sidebar group of a Session whose stored header cwd names
+ * another directory. Log-only: it never changes the header, Workspace
+ * membership, the execution directory, or the model surface. The IM bot
+ * orchestrator uses it to join the bot's Workspace while it keeps working
+ * in its own state directory.
+ */
+'session/workspace-group': SessionWorkspaceGroup
+```
+
+来源：[`packages/api/session-controller/src/types.ts:41`](../packages/api/session-controller/src/types.ts)
 
 ### `session-log-deepseek/*`
 
@@ -2273,6 +2291,14 @@ SHA-256: `d28765f87d6b6ab408e0b2f3e7e297791b004b806d8e302c49903ebae815feb2`
 
 `"one-shot"`
 
+<a id="persistence-type-sha256-3a575eb6a5302989d9f10d220c74655e65de23a4dab157917780c0ee2343dd3c"></a>
+
+### `"orchestrator"`
+
+SHA-256: `3a575eb6a5302989d9f10d220c74655e65de23a4dab157917780c0ee2343dd3c`
+
+`"orchestrator"`
+
 <a id="persistence-type-sha256-9d80129e13edfb6feb03ed327e6085c6ef60b97ad074244b2f5fd4667424a6a4"></a>
 
 ### `"other"`
@@ -2632,6 +2658,14 @@ SHA-256: `7a651f3b672c52fb615f22c0ce9cb3cc5b22aad92e6bbeefb0808fd7b9233a50`
 SHA-256: `587bb11da730e06aa52b62c087d217d6f8f22459b25f31cb9e1e1baf17944e5e`
 
 `"session/title-llm-request"`
+
+<a id="persistence-type-sha256-afcd425cd0c357514c99971ec544b77d0b05ed1726b354ab24406d503c10c684"></a>
+
+### `"session/workspace-group"`
+
+SHA-256: `afcd425cd0c357514c99971ec544b77d0b05ed1726b354ab24406d503c10c684`
+
+`"session/workspace-group"`
 
 <a id="persistence-type-sha256-b765ee31033cea463863faf3fc6a0a1b85c47c6a2f13fe1ce833abe56105114b"></a>
 
@@ -4943,6 +4977,23 @@ SHA-256: `30d5a537b296685770b1241c4b4bbde19d5a31ff81aa23df73fab5e90b8fc65f`
 | `provider` | 未声明 | `provider`: `string` | [`{ kind: "provider" }`](#persistence-type-sha256-b81e9de81a481b24e1e1f9adf038bfc59e57b4f35ce62f8f1e45284186f4f812) |
 | `user` | 未声明 | 无 | [`CommandSource`](#persistence-type-sha256-ada310bf0bdb8fed51f3b56ea63f6ea6b18bbd587f04fccb63a14ab0b2a24e05) |
 
+<a id="persistence-type-sha256-93bad647d45038d93612ec7ed3c22169187dda863f0ef4d9f84d20c1f2ab65a2"></a>
+
+<a id="persistence-type-packagesapisession-controllersrctypestssessionworkspacegroup"></a>
+
+<a id="persistence-type-sessionworkspacegroup"></a>
+
+### `SessionWorkspaceGroup`
+
+SHA-256: `93bad647d45038d93612ec7ed3c22169187dda863f0ef4d9f84d20c1f2ab65a2`
+
+来源：[`packages/api/session-controller/src/types.ts:25`](../packages/api/session-controller/src/types.ts)
+
+| 属性 | 存在性 | 类型 |
+|---|---|---|
+| `path` | 必需 | `string` |
+| `role` | 可选 | `"orchestrator"` |
+
 <a id="persistence-type-sha256-4d60dddaa65d3da8d4cd014d85ce3d2c2875664dd0433e331d8e9d395289686b"></a>
 
 <a id="persistence-type-packagesexperimentallivesharesrchostviewer-principaltsshareviewerprincipal"></a>
@@ -5820,7 +5871,7 @@ SHA-256: `5d03ba38734809bcbd2a55221bd938b3b3fc34b49bb686c6113e9e4931e3aa78`
 
 SHA-256: `4cd48f3e5108bd6ebedf7301c3638839b8b2b9db8dbd493974177fbdeb91a01b`
 
-来源：[`packages/api/session-controller/src/types.ts:427`](../packages/api/session-controller/src/types.ts) · [`packages/attachment/attachment/src/brand.ts:6`](../packages/attachment/attachment/src/brand.ts) · [`packages/compaction/compaction/src/brand.ts:4`](../packages/compaction/compaction/src/brand.ts) · [`packages/core/session/src/types.ts:21`](../packages/core/session/src/types.ts) · [`packages/experimental/webhook/src/brand.ts:12`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:6`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:9`](../packages/experimental/webhook/src/brand.ts) · [`packages/feedback/message-feedback/src/types.ts:14`](../packages/feedback/message-feedback/src/types.ts) · [`packages/goal/goal/src/types.ts:17`](../packages/goal/goal/src/types.ts) · [`packages/interaction/action-cards/src/types.ts:12`](../packages/interaction/action-cards/src/types.ts) · [`packages/interaction/commands/src/brand.ts:22`](../packages/interaction/commands/src/brand.ts) · [`packages/interaction/user-approval/src/types.ts:17`](../packages/interaction/user-approval/src/types.ts) · [`packages/jobs/jobs/src/brand.ts:9`](../packages/jobs/jobs/src/brand.ts) · [`packages/llm/llm-retry/src/brand.ts:4`](../packages/llm/llm-retry/src/brand.ts) · [`packages/llm/llm/src/brand.ts:16`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:31`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:43`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:67`](../packages/llm/llm/src/brand.ts) · [`packages/schedule/schedule/src/types.ts:14`](../packages/schedule/schedule/src/types.ts) · [`packages/session/session-title/src/types.ts:17`](../packages/session/session-title/src/types.ts) · [`packages/team/agent-team/src/types.ts:20`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:32`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:8`](../packages/team/agent-team/src/types.ts) · [`packages/workflow/workflow/src/types.ts:14`](../packages/workflow/workflow/src/types.ts)
+来源：[`packages/api/session-controller/src/types.ts:457`](../packages/api/session-controller/src/types.ts) · [`packages/attachment/attachment/src/brand.ts:6`](../packages/attachment/attachment/src/brand.ts) · [`packages/compaction/compaction/src/brand.ts:4`](../packages/compaction/compaction/src/brand.ts) · [`packages/core/session/src/types.ts:21`](../packages/core/session/src/types.ts) · [`packages/experimental/webhook/src/brand.ts:12`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:6`](../packages/experimental/webhook/src/brand.ts) · [`packages/experimental/webhook/src/brand.ts:9`](../packages/experimental/webhook/src/brand.ts) · [`packages/feedback/message-feedback/src/types.ts:14`](../packages/feedback/message-feedback/src/types.ts) · [`packages/goal/goal/src/types.ts:17`](../packages/goal/goal/src/types.ts) · [`packages/interaction/action-cards/src/types.ts:12`](../packages/interaction/action-cards/src/types.ts) · [`packages/interaction/commands/src/brand.ts:22`](../packages/interaction/commands/src/brand.ts) · [`packages/interaction/user-approval/src/types.ts:17`](../packages/interaction/user-approval/src/types.ts) · [`packages/jobs/jobs/src/brand.ts:9`](../packages/jobs/jobs/src/brand.ts) · [`packages/llm/llm-retry/src/brand.ts:4`](../packages/llm/llm-retry/src/brand.ts) · [`packages/llm/llm/src/brand.ts:16`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:31`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:43`](../packages/llm/llm/src/brand.ts) · [`packages/llm/llm/src/brand.ts:67`](../packages/llm/llm/src/brand.ts) · [`packages/schedule/schedule/src/types.ts:14`](../packages/schedule/schedule/src/types.ts) · [`packages/session/session-title/src/types.ts:17`](../packages/session/session-title/src/types.ts) · [`packages/team/agent-team/src/types.ts:20`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:32`](../packages/team/agent-team/src/types.ts) · [`packages/team/agent-team/src/types.ts:8`](../packages/team/agent-team/src/types.ts) · [`packages/workflow/workflow/src/types.ts:14`](../packages/workflow/workflow/src/types.ts)
 
 `string`
 
@@ -6284,7 +6335,7 @@ SHA-256: `b8ed92a5ca59733f046ea3506d64c35c64044b6a084fd51daee4c6c72727d39f`
 
 SHA-256: `a4afec59b75aad5d13ef82d6931f35cc2d98918503916cf069355b77c5e42302`
 
-来源：[`packages/api/session-controller/src/types.ts:436`](../packages/api/session-controller/src/types.ts)
+来源：[`packages/api/session-controller/src/types.ts:466`](../packages/api/session-controller/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7546,7 +7597,7 @@ SHA-256: `db06ef35b27a38425046b2228fa6bce9582abe140d781d363137eb2f4d233a1c`
 
 SHA-256: `8f1062573ea9184129dfdec43df1e8136eb5808746fd809bf6b539f3fd11362e`
 
-来源：[`packages/api/session-controller/src/types.ts:438`](../packages/api/session-controller/src/types.ts)
+来源：[`packages/api/session-controller/src/types.ts:468`](../packages/api/session-controller/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -9157,6 +9208,22 @@ SHA-256: `64b6ec45d21f5aed32624819c44ba5c918bbe11ca9c464496d9dbe0606dcb829`
 | `seq` | 必需 | `number` |
 | `time` | 必需 | `number` |
 | `type` | 必需 | `"session/title-llm-request"` |
+
+<a id="persistence-type-sha256-89f240c94d5d5d3a56241550814cf26f51b98d61d93c1977ba983b3ba7185311"></a>
+
+<a id="persistence-type-eventsessionworkspace-group"></a>
+
+### `{ type: "session/workspace-group" }`
+
+SHA-256: `89f240c94d5d5d3a56241550814cf26f51b98d61d93c1977ba983b3ba7185311`
+
+| 属性 | 存在性 | 类型 |
+|---|---|---|
+| `data` | 必需 | [`SessionWorkspaceGroup`](#persistence-type-sha256-93bad647d45038d93612ec7ed3c22169187dda863f0ef4d9f84d20c1f2ab65a2) |
+| `ignorable` | 可选 | `true` |
+| `seq` | 必需 | `number` |
+| `time` | 必需 | `number` |
+| `type` | 必需 | `"session/workspace-group"` |
 
 <a id="persistence-type-sha256-e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05"></a>
 

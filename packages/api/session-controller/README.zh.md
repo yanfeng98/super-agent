@@ -45,6 +45,8 @@ Client journal 在发布 follow 快照、live entry 或历史页之前验证当�
 
 列表行在状态可用时携带 `formatStatus`，Client 无需请求其投影即可识别需要迁移的 Session。
 
+仅记录在日志中、后写覆盖的 `session/workspace-group` 事件携带 `{ path, role? }`，并折叠为 `workspaceGroup` 摘要投影。它是按 Workspace 分组的 Client 的展示提示：该 Session 会列在对应目录的 Workspace 下，但不改变其 header cwd、Workspace 成员关系、执行目录或模型可见面。`workspaceGroupOf` 读取 Session 日志中的当前提示，`appendWorkspaceGroup` 记录新的提示。
+
 Host 仅在配置的工作时间片耗尽时，于完整条目之间让出事件循环；剩余工作较少时直接返回，不强制让出。每行及每次让出之后检查请求取消，取消时拒绝返回部分结果。每行同步计算；列表不承诺跨 Session 的统一快照。已经进入冷态队列的 Session 若在让出期间接入，仍返回缓存行：Client 对进行中请求的变更重放会纠正其可用性，带序号的投影会覆盖缓存提示。已接入 Session 的摘要通过[`sessionQuery.getListMetadata`](../../session-query/session-query/README.zh.md#session-list-metadata)读取是否为空和最后一次提示词的最近活动时间，其投影提示携带通过 `snapshot` 计算的每个摘要 key。已接入 Session 的首次摘要在其完整内存日志上计算这些投影，之后的摘要增量推进；这次计算在单行的同步工作内进行，`listWorkSliceMs` 无法切分它。
 
 Client 列表行和驻留 Session 使用当前 `sessionListMetadata` 投影纠正过期的空白会话提示；最近活动时间取摘要时间戳与投影中最后一次用户提示词时间的较晚值。当 SessionManager 在列表行到达前创建实例时，会使用已保留的该 Session 元数据对账空白状态。因此，即使旧列表响应仍将已有对话标为空白，新会话操作也不会复用已经打开过的对话。

@@ -1382,8 +1382,8 @@ describe('WorkspaceBrowser', () => {
     })
     // The loose session's group is UNGROUPED_KEY: expanded by the effect.
     expect(screen.getByText('loose')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '工作区“未分组”的操作' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '在“未分组”中新建会话' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '工作区“其他会话”的操作' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '在“其他会话”中新建会话' })).toBeNull()
   })
 
   it('keeps an already-expanded group when the selection moves within it', () => {
@@ -2355,7 +2355,7 @@ describe('WorkspaceBrowser', () => {
       useSessions: hook(sessions),
       useWorkspaces: hook(workspaceState([])),
     })
-    fireEvent.click(screen.getByText('未分组'))
+    fireEvent.click(screen.getByText('其他会话'))
 
     const dragAfter = (sourceTitle: string, targetTitle: string): void => {
       const source = screen.getByText(sourceTitle).closest('[role="treeitem"]') as HTMLElement
@@ -2594,7 +2594,7 @@ describe('WorkspaceBrowser', () => {
     const dialog = screen.getByRole('dialog', { name: '删除工作区' })
     expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
     expect(dialog.textContent).toContain('文件夹与会话记录会保留')
-    expect(dialog.textContent).toContain('其会话将显示在“未分组”下')
+    expect(dialog.textContent).toContain('其会话将显示在“其他会话”下')
 
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '删除工作区' })
     fireEvent.click(confirm)

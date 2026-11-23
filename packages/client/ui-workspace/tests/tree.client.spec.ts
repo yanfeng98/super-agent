@@ -12,7 +12,7 @@ import {
   type ArchivedFilter,
   deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningGroupKey, owningParentFolder,
   pinCurrentBlank, reconcileManualOrder, sessionMemberIds, visibleSessionIds, workspaceLabel, UNGROUPED_KEY,
-  displayGroupKey, foldedWorkspaces,
+  displayGroupKey, displayedWorkspaceId, foldedWorkspaces,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
@@ -164,6 +164,23 @@ describe('worktree presentation', () => {
       rowState({ archived: ['worker'], archivedFilter: 'only' }), noAttention, view(['repo']))
     expect(only.map(group => group.key)).toEqual(['repo'])
     expect(only[0]!.sessions.map(row => row.id)).toEqual([sid('worker')])
+  })
+
+  it('breaks a parent cycle between finished worktrees deterministically', () => {
+    const a = worktree('a', [], 'A', 'b', false)
+    const b = worktree('b', [], 'B', 'a', false)
+    const folded = foldedWorkspaces([a, b])
+    expect(folded.size).toBe(2)
+    // Following a already moved to b, so the repeated parent stops the walk at b.
+    expect(displayedWorkspaceId(folded, wid('a'))).toBe('b')
+  })
+
+  it('ignores a folded worktree member whose summary has not arrived', () => {
+    const parent = workspace('repo', [], 'Repository')
+    const child = worktree('ticket', ['missing'], 'Ticket title', 'repo', false)
+    const groups = deriveGroups(list(), [parent, child], noRows, noAttention, view(['repo']))
+    expect(groups.map(group => group.key)).toEqual(['repo'])
+    expect(groups[0]!.sessions).toEqual([])
   })
 
   it('shows a finished worktree at the top level when its parent is not registered', () => {
@@ -362,6 +379,74 @@ describe('deriveGroups', () => {
     )
     expect(groups.map(group => group.key)).toEqual(['first', UNGROUPED_KEY])
     expect(groups[1]!.sessions.map(session => session.id)).toEqual([sid('loose')])
+  })
+
+  it('lists Sessions with a durable Workspace hint inside that Workspace', () => {
+    const hinted = {
+      ...summary('orchestrator', 9, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'orchestrator' } }),
+    }
+    const olderHint = {
+      ...summary('orchestrator-2', 8, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'orchestrator' } }),
+    }
+    const groups = deriveGroups(
+      list(summary('owned', 1, '/projects/first'), hinted, olderHint),
+      [workspace('first', ['owned'])], noRows, noAttention, view(['first']),
+    )
+    expect(groups.map(group => group.key)).toEqual(['first'])
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([sid('owned'), sid('orchestrator'), sid('orchestrator-2')])
+    expect(groups[0]!.sessions[1]).toMatchObject({ groupedByHint: true, orchestrator: true })
+    expect(groups[0]!.sessions[2]).toMatchObject({ groupedByHint: true, orchestrator: true })
+    expect(groups[0]!.sessionCount).toBe(3)
+    expect(owningGroupKey([workspace('first', ['owned'])], sid('orchestrator'), list(hinted).byId)).toBe('first')
+  })
+
+  it('hides an archived hinted Session from its group and from the trailing bucket', () => {
+    const hinted = {
+      ...summary('orchestrator', 9, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'orchestrator' } }),
+    }
+    const groups = deriveGroups(
+      list(hinted), [workspace('first', [])], rowState({ archived: ['orchestrator'] }), noAttention, view(['first']),
+    )
+    expect(groups.map(group => group.key)).toEqual(['first'])
+    expect(groups[0]!.sessions).toEqual([])
+  })
+
+  it('keeps a hinted Session in the trailing bucket when no Workspace carries its path', () => {
+    const hinted = {
+      ...summary('orchestrator', 9, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/missing', role: 'orchestrator' } }),
+    }
+    const groups = deriveGroups(list(hinted), [], noRows, noAttention, view([UNGROUPED_KEY]))
+    expect(groups.map(group => group.key)).toEqual([UNGROUPED_KEY])
+    expect(groups[0]!.sessions[0]).toMatchObject({ id: sid('orchestrator'), groupedByHint: true, orchestrator: true })
+  })
+
+  it('lists a hinted Session in the parent group when its hint names a finished worktree', () => {
+    const parent = workspace('repo', [], 'Repository')
+    const child = worktree('ticket', [], 'Ticket title', 'repo', false)
+    const hinted = {
+      ...summary('orchestrator', 9, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/ticket' } }),
+    }
+    const groups = deriveGroups(list(hinted), [parent, child], noRows, noAttention, view(['repo']))
+    expect(groups.map(group => group.key)).toEqual(['repo'])
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([sid('orchestrator')])
+    expect(displayGroupKey([parent, child], sid('orchestrator'), list(hinted).byId)).toBe('repo')
+  })
+
+  it('marks the hinted Workspace current when the Session has the main view', () => {
+    const hinted = {
+      ...summary('orchestrator', 9, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first' } }),
+    }
+    const groups = deriveGroups(
+      withMain(list(summary('owned', 1, '/projects/first'), hinted), sid('orchestrator')),
+      [workspace('first', ['owned'])], noRows, noAttention, view(['first']),
+    )
+    expect(groups[0]!.containsCurrent).toBe(true)
   })
 
   it('applies stored Ungrouped order and appends new loose Sessions by recency', () => {
@@ -783,6 +868,24 @@ describe('deriveSearchResults branch marks', () => {
 })
 
 describe('deriveSearchResults', () => {
+  it('labels a hinted Session by the Workspace its group hint names', () => {
+    const hinted = {
+      ...summary('orchestrator', 9, '/state/superagent'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first' } }),
+    }
+    const results = searchResults(
+      list(hinted),
+      [workspace('first', [], 'First')],
+      'orchestrator',
+      noArchive,
+      'default',
+      noAttention,
+      { items: [], hasMore: false },
+      20,
+    )
+    expect(results.items[0]?.workspace).toBe('First')
+  })
+
   it('updates the previous index to the same results as a fresh one', () => {
     const first = { ...summary('first', 1), title: 'Weekly sync notes' }
     const second = { ...summary('second', 2), title: 'Sync dashboard' }

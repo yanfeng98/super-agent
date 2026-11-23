@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-24-orchestrator-workspace-group.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-11-24-orchestrator-workspace-group.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-11-24-orchestrator-workspace-group:
+  en: 6a7678f46f647ca5
+  zh: ae44304ecd527c88
+/2026-11-24-orchestrator-workspace-group/summary:
+  en: 75cedee0a1be69f7
+  zh: 6a480912a0278d38
+/2026-11-24-orchestrator-workspace-group/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-11-24-orchestrator-workspace-group/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-11-24-orchestrator-workspace-group/compatibility:
+  en: e1beab58a1454709
+  zh: d5419b32f56f7149
+/2026-11-24-orchestrator-workspace-group/verification:
+  en: 942726e6840f06db
+  zh: cf307b9a8d1948ee
+/2026-11-24-orchestrator-workspace-group/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

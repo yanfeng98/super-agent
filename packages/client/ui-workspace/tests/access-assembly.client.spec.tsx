@@ -140,12 +140,12 @@ describe('Workspace header actions under the page access snapshot', () => {
     const runtime = await bench(access, { ungroupedSession: 'loose' as SessionId })
     try {
       runtime.renderRoot()
-      await screen.findByText('未分组')
-      expect(screen.queryByRole('button', { name: '在“未分组”中新建会话' })).toBeNull()
+      await screen.findByText('其他会话')
+      expect(screen.queryByRole('button', { name: '在“其他会话”中新建会话' })).toBeNull()
       act(() => {
         access.update({ type: 'upsert', grant: { resource: { kind: 'global' }, actions: ['session/create'] } })
       })
-      expect(screen.queryByRole('button', { name: '在“未分组”中新建会话' })).toBeNull()
+      expect(screen.queryByRole('button', { name: '在“其他会话”中新建会话' })).toBeNull()
     } finally {
       await runtime.dispose()
     }

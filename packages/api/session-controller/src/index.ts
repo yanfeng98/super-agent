@@ -72,6 +72,7 @@ import type {
 
 export type * from './types.ts'
 export { ApiSessionNotFound } from './agent.ts'
+export { appendWorkspaceGroup, workspaceGroupOf } from './workspace-group.ts'
 export { SessionFileReferences } from './file-references.ts'
 export { SessionSkillCatalog } from './skill-catalog.ts'
 

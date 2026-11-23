@@ -64,6 +64,8 @@ export interface DshImService {
   contractVersion: 1
   inboundVersion: 1
   listBots(): Promise<DshImBot[]>
+  /** The Workspace directory dsh-im binds this bot to; absent on an older dsh-im, and null when it has no store. */
+  botWorkspace?(botId: string): Promise<string | null>
   listTargets(botId: string): Promise<DshImTarget[]>
   describeBot(botId: string): Promise<DshImBotDescription>
   /** Cheap handoff state; absent on an older dsh-im, where the watcher falls back to `describeBot`. */

@@ -301,6 +301,13 @@
   margin-left: 0;
 }
 
+/* The role tag keeps the trailing time visible in a narrow sidebar. */
+.orchestratorMark {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* The unclipped hover state drops the ellipsis, which would otherwise cover
    the characters the marquee reached. Guarded because a touch tap
    latches `:hover` on the row after the title has already returned: an

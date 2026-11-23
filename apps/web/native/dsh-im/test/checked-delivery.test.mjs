@@ -61,6 +61,7 @@ async function fixture({ verifyApp, sendText } = {}) {
       has: (botId) => botId === config.id,
       listBotIds: () => [config.id],
       listDeliveryTargets: () => [structuredClone(target)],
+      workspaceFor: () => '/projects/super-agent',
     },
   });
   const service = createDeliveryService();
@@ -77,6 +78,12 @@ async function fixture({ verifyApp, sendText } = {}) {
     },
   };
 }
+
+test('reports the Workspace directory the bot works in', async (t) => {
+  const fx = await fixture();
+  t.after(() => fx.controller.close());
+  assert.equal(await fx.service.botWorkspace('bot_checked'), '/projects/super-agent');
+});
 
 test('legacy Feishu delivery does not require the new authenticated account capability', async (t) => {
   const fx = await fixture({ verifyApp: async () => { throw new Error('Verification unavailable'); } });

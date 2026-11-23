@@ -18,8 +18,38 @@ export type { SessionActivity } from '@deepseek-ai/dsh-workspace/types'
 
 export type { SessionListMetadata } from '@deepseek-ai/dsh-session-query/types'
 
+/**
+ * One durable sidebar grouping override: the Workspace directory a Session is
+ * browsed under, and the role marker its row shows there.
+ */
+export interface SessionWorkspaceGroup {
+  /** Absolute Workspace directory; the sidebar matches it against registered Workspace paths. */
+  readonly path: string
+  /** Role marker rendered beside the row inside the group. */
+  readonly role?: 'orchestrator' | undefined
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /**
+     * Latest-wins sidebar group of a Session whose stored header cwd names
+     * another directory. Log-only: it never changes the header, Workspace
+     * membership, the execution directory, or the model surface. The IM bot
+     * orchestrator uses it to join the bot's Workspace while it keeps working
+     * in its own state directory.
+     */
+    'session/workspace-group': SessionWorkspaceGroup
+  }
+}
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
+    /**
+     * Absolute Workspace directory the Session is browsed under in the
+     * sidebar, or `null` when its header cwd decides the group. A display
+     * hint only: it never changes Workspace membership or execution.
+     */
+    workspaceGroup: SessionWorkspaceGroup | null
     /** Eligible latest failed turn/end for an empty prompt, or null. */
     conversationContinuation: SessionSeq | null
     /**

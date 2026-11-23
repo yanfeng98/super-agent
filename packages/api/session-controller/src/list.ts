@@ -15,6 +15,7 @@ import {
   SESSION_SEARCH_RESULT_LIMIT,
   SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
 } from './types.ts'
+import { workspaceGroupProjectionDefinition } from './workspace-group.ts'
 import type {
   SessionListMetadata, SessionProjectionHints, SessionSearchItem,
   SessionSearchValue, SessionSummary,
@@ -75,6 +76,7 @@ export class ApiSessionList {
       },
       stateVersion: 1,
     })
+    await this.ctx.sessionProjections.register(workspaceGroupProjectionDefinition)
   }
 
   /**

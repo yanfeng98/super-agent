@@ -55,7 +55,7 @@ async function api(method: string, path: string): Promise<{ status: number; body
   await http(req, { writeHead: (code: number) => { status = code }, end: (data: string) => { text = data } })
   return { status, body: JSON.parse(text) }
 }
-let agents: Map<string, { id: string; status: string; inbox: { nextTurn: UserMessage[]; nextStep: UserMessage[] }; cancel: ReturnType<typeof vi.fn>; inject: ReturnType<typeof vi.fn> }>
+let agents: Map<string, { id: string; status: string; inbox: { nextTurn: UserMessage[]; nextStep: UserMessage[] }; cancel: ReturnType<typeof vi.fn>; inject: ReturnType<typeof vi.fn>; session: { append: ReturnType<typeof vi.fn> } }>
 const runTool = async (sessionId: string, name: string, args: unknown) => {
   const tool = tools.get(sessionId)?.get(name)
   if (!tool) throw new Error(`Tool ${name} is not registered for ${sessionId}`)
@@ -100,12 +100,16 @@ type Sent = { botId: string; route: DshImEvent['reply']; text: string; options: 
 let replies: Sent[]
 /** How one reply through dsh-im ends; a test replaces it to make a send fail. */
 let sendReply: (route: DshImEvent['reply']) => Promise<{ sent: true; messageId: string }>
+/** The grouping value the projection registry reports for the master Session; tests move it with the log. */
+let projectedWorkspaceGroup: { path: string; role?: 'orchestrator' } | null
 /** The members a Policy sync reads from a chat, as dsh-im reports them; a test replaces it to change or fail the read. */
 let chatMembers: (chatId: string) => Promise<{ id: string; name?: string }[]>
 /** The chats dsh-im lists for the bot; a test replaces it to change or fail the read. */
 let chatList: () => Promise<{ chatId: string; name?: string }[]>
 /** The dsh-im service this Host offered when it started, which the Source keeps reading. */
 let im: DshImService
+/** The Workspace directory dsh-im reports for the bot; tests set it to exercise orchestrator grouping. */
+let botWorkspace: string | null
 /** The dsh-im service this Host offers: it records the replies, and reads answer as the handoff does. */
 function dshImService(): DshImService {
   return { contractVersion: 1, inboundVersion: 1,
@@ -116,6 +120,7 @@ function dshImService(): DshImService {
       capabilities: ['exclusive-text-consumer'] }),
     inboundStatus: async () => ({ version: 1, botId: BOT_ID, superagent: true, superagentActive: true }),
     consumeInbound: async () => () => {},
+    botWorkspace: async () => botWorkspace,
     historyChecked: async () => ({ version: 1, scope: 'thread', events: [], omitted: 0, hasMore: false, coverage: 'provider-visible-human-text' }),
     replyChecked: async (botId, route, text, options) => { replies.push({ botId, route, text, options }); return sendReply(route) },
     messageChecked: async (_botId, route) => ({ version: 1, messageId: route.messageId, chatId: route.conversationId,
@@ -179,6 +184,8 @@ beforeEach(async () => {
   sendReply = async route => ({ sent: true, messageId: `om_reply_${route.messageId}` })
   chatMembers = async () => [{ id: MEMBER, name: 'Alice' }]
   chatList = async () => [{ chatId: CHAT, name: 'Team' }]
+  botWorkspace = null
+  projectedWorkspaceGroup = null
   im = dshImService()
   setDshIm(im)
   // The Source reads the bot's account when it starts listening, which names it in the execution environment.
@@ -234,7 +241,7 @@ beforeEach(async () => {
     inspect: vi.fn(async () => ({ events: [] })),
   }
   jobs = jobRegistry()
-  services = { agents, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
+  services = { agents, dshIm: im, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, sessionProjections: { summaryKeys: () => new Set(), snapshot: () => ({ asOfSeq: -1, values: { workspaceGroup: projectedWorkspaceGroup } }) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd, path: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   const store = new Store(join(directory, 'orchestrator.sqlite')); seed(store); store.close()
   runtime = new Runtime(ctx, testMachine({ stateDir: directory }), restarts)
@@ -270,6 +277,23 @@ it('relays an explicit member mention as a candidate and creates the ticket, ack
     thread: `feishu:${CHAT}:om_1`, text: trigger.text }) })
   expect(first.trigger).not.toHaveProperty('read')
   expect(await route({ kind: 'accept', trigger_id: trigger.id, title: 'again', worktree_name: worktreeName, acknowledgement: 'x' })).toMatchObject({ ticket: { ticket_id: ticket.id } })
+})
+
+it('groups the orchestrator Session under the Workspace its IM bot works in, once per binding', async () => {
+  const append = agents.get(runtime.masterId)!.session.append
+  append.mockClear()
+  botWorkspace = '/projects/super-agent'
+  await receive(feishu('2', '@bot hi'))
+  expect(append).toHaveBeenCalledWith('session/workspace-group', { path: '/projects/super-agent', role: 'orchestrator' })
+  // The recorded group keeps later messages from appending it again.
+  append.mockClear()
+  projectedWorkspaceGroup = { path: '/projects/super-agent', role: 'orchestrator' }
+  await receive(feishu('3', '@bot again'))
+  expect(append).not.toHaveBeenCalled()
+  // A changed bot binding appends the new Workspace.
+  botWorkspace = '/projects/other'
+  await receive(feishu('4', '@bot moved'))
+  expect(append).toHaveBeenCalledWith('session/workspace-group', { path: '/projects/other', role: 'orchestrator' })
 })
 
 it('renders a tool result\'s file as a saved file block, and its image as an image block', async () => {

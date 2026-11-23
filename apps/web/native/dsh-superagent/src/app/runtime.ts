@@ -3,6 +3,7 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
+import { appendWorkspaceGroup, workspaceGroupOf } from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-permission-presets'
@@ -53,6 +54,8 @@ import { health, type Health, type SourceContext, type SourceHost } from '../sou
 import { Sessions } from './sessions.ts'
 import { Settings } from './settings.ts'
 import { sourceContextOf, type SourceContextDeps } from './source-context.ts'
+import { dshImOf } from '../sources/dsh-im.ts'
+import { feishuImConfig } from '../sources/feishu-im.ts'
 import type { ResourceHost } from './resources.ts'
 import { mainTools, type MainToolsHost } from './tools/main.ts'
 import { executorTools, type ExecutorToolsHost } from './tools/executor.ts'
@@ -106,6 +109,8 @@ export class Runtime extends Service implements SourceHost {
   private readonly merging = new Set<string>()
   /** Tickets whose revert is running, so a second request cannot revert the same merge twice. */
   private readonly reverting = new Set<string>()
+  /** Durable sidebar-group writes still running, which {@link idle} waits for. */
+  private readonly groupWrites = new Set<Promise<void>>()
   /** Ending captures still running, so a discard does not remove the worktree a capture reads. */
   private readonly finishing = new Map<string, Promise<void>>()
   /** Operations that move a repository run one at a time, so two merges never share the git index of one checkout. */
@@ -144,6 +149,8 @@ export class Runtime extends Service implements SourceHost {
         // Sync source member lists once startup completes when a source plugin loads dynamically.
         if (kind.policy?.sync) void this.ready?.then(() => this.settings.syncable().includes(kind.kind) ? this.settings.sync(kind.kind) : undefined)
           .catch(() => { /* sync() records its failure in health. */ })
+        // A Feishu Source that loads after startup still backfills the orchestrator's Workspace group.
+        if (kind.kind === 'feishu') void this.ready.then(() => { this.queueOrchestratorGroup() })
         return () => {}
       })
       const links: LinkHost = { store, links: this.sourceLinks, sources, lifetime: this.lifetime }
@@ -1673,13 +1680,55 @@ export class Runtime extends Service implements SourceHost {
     }
   }
   checkSetup(): void { this.setup.check() }
-  receive(trigger: Trigger): ReceiveResult { return this.passes.receive(trigger) }
-  idle(): Promise<void> { return this.passes.idle() }
+  receive(trigger: Trigger): ReceiveResult {
+    const result = this.passes.receive(trigger)
+    // A Feishu handoff proves dsh-im is active, which is also when its bot's Workspace is resolvable.
+    if (trigger.source === 'feishu') this.queueOrchestratorGroup()
+    return result
+  }
+  idle(): Promise<void> {
+    return (async () => {
+      await Promise.allSettled([...this.groupWrites])
+      await this.passes.idle()
+    })()
+  }
   pump(): Promise<void> { return this.passes.pump() }
   sendReplies(): Promise<void> { return this.outbox.sent() }
   private closing(): boolean { return this.closingFlag }
   /** Hold evaluation, dispatch, and outbound delivery while paused or awaiting setup; sources still record incoming triggers. */
   private paused(): boolean { return !this.setup.configured() || this.store.settings().paused }
+  /** Run one durable sidebar-group write and record it for {@link idle} to await. */
+  private queueOrchestratorGroup(): void {
+    const task = this.assignOrchestratorGroup().catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: recording the orchestrator workspace group failed: %s', String(error))
+    })
+    this.groupWrites.add(task)
+    void task.finally(() => { this.groupWrites.delete(task) })
+  }
+  /**
+   * Durably group the orchestrator Session under the Workspace its IM bot works
+   * in. The bot's Workspace is read from dsh-im; the group is recorded as a
+   * session event so it survives a reload and applies to an existing Session
+   * whose header cwd is the superagent state directory. A changed binding
+   * appends a newer value, and an unchanged one writes nothing.
+   */
+  private async assignOrchestratorGroup(): Promise<void> {
+    if (this.closing()) return
+    const instance = this.sources.instance<Record<string, unknown>>('feishu')
+    if (instance === undefined || !instance.enabled) return
+    const botId = feishuImConfig(instance.config).botId
+    if (!botId) return
+    const im = dshImOf(this.ctx)
+    if (typeof im?.botWorkspace !== 'function') return
+    const bound = await im.botWorkspace(botId)
+    if (bound === null || bound === '') return
+    const agent = this.ctx.agents.get(this.masterId as SessionId)
+    if (agent === undefined) return
+    const workspace = await this.ctx.workspaceRegistry.create(bound)
+    const current = workspaceGroupOf(this.ctx, agent.session)
+    if (current?.path === workspace.path && current.role === 'orchestrator') return
+    appendWorkspaceGroup(agent.session, { path: workspace.path, role: 'orchestrator' })
+  }
   private async initialize(): Promise<void> {
     // Register management HTTP routes before setup completes so operators can fix setup problems in the UI.
     this.disposers.push(registerHttp(this.ctx, this.httpHost()))
@@ -1690,6 +1739,9 @@ export class Runtime extends Service implements SourceHost {
     this.sessions.install()
     this.executor.install()
     await this.sessions.ensure(this.masterId, this.machine.stateDir, 'dsh-superagent orchestrator', 'orchestrator')
+    // Backfill an existing orchestrator Session's durable sidebar group.
+    this.queueOrchestratorGroup()
+    await Promise.allSettled([...this.groupWrites])
     for (const id of this.settings.syncable()) await this.settings.sync(id).catch(() => { /* sync() records its failure in health. */ })
     // If stop() was called while awaiting setup, session creation, or policy sync, do not start background loops.
     if (this.closing()) return

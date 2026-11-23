@@ -436,6 +436,8 @@ export function createDeliveryAdapter({
       return coreController.describeDeliveryAccount(botId);
     },
     ownsBot: (botId) => workspaces.has(botId),
+    /** The Workspace directory this channel's bot works in, read from its workspace store. */
+    botWorkspace: (botId) => workspaces.workspaceFor(botId),
     listBots: () => workspaces.listBotIds(),
     listDsBotBindings: () => workspaces.listDsBotBindings().filter(({ conversationKey }) => (
       privateDeliverySuggestionFromConversationKey(channel, conversationKey)

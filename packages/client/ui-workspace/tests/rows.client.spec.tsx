@@ -659,6 +659,23 @@ describe('workspace browser rows', () => {
     expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(true)
   })
 
+  it('marks an orchestrator row and refuses to drag a hinted membership', () => {
+    const node: SessionNode = {
+      id: sid('orchestrator'), title: 'dsh-superagent orchestrator', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
+      orchestrator: true, groupedByHint: true,
+    }
+    const drag: RowDragProps = {
+      active: false, marker: null, start: vi.fn(), end: vi.fn(), hover: vi.fn(), drop: vi.fn(),
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag}
+      useSessionAccess={() => true} t={t} />)
+    expect(screen.getByText('orchestrator')).toBeTruthy()
+    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('false')
+    fireEvent.dragStart(screen.getByRole('treeitem'))
+    expect(drag.start).not.toHaveBeenCalled()
+  })
+
   it('session row drags and renames from its title only while its access snapshot allows each', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,
@@ -896,6 +913,13 @@ describe('workspace browser rows', () => {
     it('shows the directory on a blank New Session card', () => {
       hoverCard({ ...located, blank: true })
       expect(screen.getAllByText('新会话')).toHaveLength(2)
+      expect(screen.getByText('~/project')).toBeTruthy()
+    })
+
+    it('shows the orchestrator role above the directory', () => {
+      hoverCard({ ...located, orchestrator: true })
+      // The resting row carries the role tag and the open session card repeats it above the directory.
+      expect(screen.getAllByText('orchestrator')).toHaveLength(2)
       expect(screen.getByText('~/project')).toBeTruthy()
     })
   })
