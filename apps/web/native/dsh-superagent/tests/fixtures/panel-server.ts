@@ -45,7 +45,7 @@ export const threadSummary = (fields: Partial<ThreadRow> = {}): ThreadRow => ({
   key: 'feishu:oc_1:om_root', source: 'feishu', title: '这个文案好奇怪', stage: 'subscribed', latest: undefined, lastAt: '2026-09-23T00:00:00Z',
   createdAt: '2026-09-22T00:00:00Z', subscriptions: 1,
   tickets: [{ id: 't1', number: 1, title: '修复回归', state: 'open', stage: 'working', ended: undefined }], evaluating: undefined,
-  pending: 0, pollError: undefined, url: undefined, facts: { chat: { value: '团队群' } }, unfinished: false, ...fields,
+  pending: 0, pollError: undefined, url: undefined, facts: { chat: { value: '团队群' } }, settlement: 'settled', unfinished: false, ...fields,
 })
 type TriggerFields = Partial<Omit<TriggerRow, 'disposition' | 'actions'>> & { disposition?: Partial<TriggerRow['disposition']> }
 /** Build a trigger row on the default thread and compute `actions.requeue` using the host's eligibility rules. */

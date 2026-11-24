@@ -7,7 +7,7 @@ import { SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuImKind } from '../src/sources/feishu-im.ts'
 import { localKind } from '../src/sources/local.ts'
-import { snapshot, threadSummary, ticketSummary, ticketWrappedUp, threadUnfinished, triggerView } from '../src/app/views/records.ts'
+import { snapshot, threadSummary, ticketSummary, ticketSettlement, threadSettlement, threadUnfinished, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail, ticketList, ticketTags } from '../src/app/views/tickets.ts'
 import { search, threadDetail } from '../src/app/views/threads.ts'
 import { droppedReplies, sourcesStatus } from '../src/app/views/sources.ts'
@@ -574,26 +574,46 @@ it('pages matching Tickets so more than the first fifty are reachable', () => {
   expect(next.next_offset).toBeNull()
 })
 
-it('wraps up a Ticket only when its merge landed and its push succeeded, or a person discarded it', () => {
+it('settles a Ticket that needs no merge, and leaves one that still has to land unfinished', () => {
   const merged = { at, branch: 'agent/t1', target: 'main', head: 'abc' }
-  expect(ticketWrappedUp({ merged })).toBe(true)
-  expect(ticketWrappedUp({ merged: { ...merged, push: { ok: true, at } } })).toBe(true)
-  expect(ticketWrappedUp({ merged: { ...merged, push: { ok: false, at } } })).toBe(false)
-  // A revert newer than the merge undoes it, so the Ticket needs wrapping up again.
+  expect(ticketSettlement({ merged })).toBe('settled')
+  expect(ticketSettlement({ merged: { ...merged, push: { ok: true, at } } })).toBe('settled')
+  expect(ticketSettlement({ merged: { ...merged, push: { ok: false, at } } })).toBe('unfinished')
+  // A revert newer than the merge undoes it, so the work needs to land again.
   const after = new Date(Date.now() + 60_000).toISOString()
-  expect(ticketWrappedUp({ merged, reverted: { at: after, commit: 'rev', target: 'main', merge: 'abc' } })).toBe(false)
-  expect(ticketWrappedUp({ discarded: { at } })).toBe(true)
-  // An ended Ticket with no merge still needs a person to land or discard its work.
-  expect(ticketWrappedUp({})).toBe(false)
+  expect(ticketSettlement({ merged, reverted: { at: after, commit: 'rev', target: 'main', merge: 'abc' } })).toBe('unfinished')
+  // The same holds when the reverted Ticket also ended as completed.
+  expect(ticketSettlement({ merged, reverted: { at: after, commit: 'rev', target: 'main', merge: 'abc' },
+    ended: { at, by: 'executor', outcome: 'completed' } })).toBe('unfinished')
+  expect(ticketSettlement({ discarded: { at } })).toBe('settled')
+  // Completed without a merge, abandoned, and nothing-to-do Tickets all ended without work left to land.
+  for (const outcome of ['completed', 'stopped', 'dropped'] as const) {
+    expect(ticketSettlement({ ended: { at, by: 'executor', outcome } })).toBe('settled')
+  }
+  // A closed unmerged Ticket and an open one still need a decision to land or discard them.
+  expect(ticketSettlement({ ended: { at, by: 'executor', outcome: 'closed' } })).toBe('unfinished')
+  expect(ticketSettlement({})).toBe('unfinished')
+  // A completed Ticket with a standing or queued merge request is waiting to land, so it stays unfinished.
+  expect(ticketSettlement({ ended: { at, by: 'executor', outcome: 'completed' }, autoMerge: { at, strategy: 'ff', attempts: 0 } })).toBe('unfinished')
+  expect(ticketSettlement({ ended: { at, by: 'executor', outcome: 'completed' } }, true)).toBe('unfinished')
 })
 
-it('marks a Thread unfinished by any subscribed Ticket that still needs wrapping up', () => {
+it('marks a Thread unfinished, settled, or neither by its subscribed Tickets', () => {
   const host = views()
   live('t1')
-  store.tickets.save({ ...store.tickets.get('t1')!, merged: { at, branch: 'agent/t1', target: 'main', head: 'abc', push: { ok: true, at } } })
-  const merged = { subscriptions: ['t1'] }
-  expect(threadUnfinished(host.store, merged)).toBe(false)
-  store.tickets.save({ ...store.tickets.get('t1')!, merged: { at, branch: 'agent/t1', target: 'main', head: 'abc', push: { ok: false, at } } })
-  expect(threadUnfinished(host.store, merged)).toBe(true)
+  const withMerge = (push?: { ok: boolean; at: string }) => ({ ...store.tickets.get('t1')!,
+    merged: { at, branch: 'agent/t1', target: 'main', head: 'abc', ...push ? { push } : {} } })
+  const subscribed = { subscriptions: ['t1'] }
+  store.tickets.save(withMerge({ ok: true, at }))
+  expect(threadSettlement(host.store, subscribed)).toBe('settled')
+  expect(threadUnfinished(host.store, subscribed)).toBe(false)
+  store.tickets.save(withMerge({ ok: false, at }))
+  expect(threadSettlement(host.store, subscribed)).toBe('unfinished')
+  expect(threadUnfinished(host.store, subscribed)).toBe(true)
+  // A completed Ticket nobody asked to merge is settled, not unfinished.
+  store.tickets.save({ ...store.tickets.get('t1')!, merged: undefined, ended: { at, by: 'executor', outcome: 'completed' } })
+  expect(threadSettlement(host.store, subscribed)).toBe('settled')
+  expect(threadUnfinished(host.store, subscribed)).toBe(false)
+  expect(threadSettlement(host.store, { subscriptions: [] })).toBeUndefined()
   expect(threadUnfinished(host.store, { subscriptions: [] })).toBe(false)
 })

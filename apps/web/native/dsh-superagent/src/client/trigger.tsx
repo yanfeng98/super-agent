@@ -14,10 +14,12 @@ export function TriggerStatus({ filter }: { filter: ThreadFilter }) {
   const go = (next: ThreadFilter) => { setLimit(20); navigate({ page: 'trigger', query: next !== 'subscribed' ? { filter: next } : {} },
     true) }
   const list = (threads: ThreadRow[]) => <ul className="dt-list">{threads.map(thread => <ThreadLine key={thread.key} thread={thread} />)}</ul>
-  // The host already orders unfinished Threads first; splitting on the same fact keeps that grouping visible when a page of
-  // the list is read on its own.
-  const unfinished = data?.items.filter(thread => thread.unfinished) ?? []
-  const others = data?.items.filter(thread => !thread.unfinished) ?? []
+  // The host already orders work that still needs landing first; splitting on the same fact keeps the grouping visible when
+  // a page of the list is read on its own. A Thread with no Ticket is neither unfinished nor settled.
+  const items = data?.items ?? []
+  const unfinished = items.filter(thread => thread.settlement === 'unfinished')
+  const settled = items.filter(thread => thread.settlement === 'settled')
+  const other = items.filter(thread => !thread.settlement)
   return <>
     <StatusHead hint={t('triggerIntro')} />
     <div className="dt-filters">
@@ -25,10 +27,11 @@ export function TriggerStatus({ filter }: { filter: ThreadFilter }) {
         onClick={() => go(value)}>{t(`threadFilter.${value}`)}</Pill>)}
     </div>
     <LoadState error={error} loading={!data} />
-    {data && (data.items.length ? (unfinished.length > 0 ? <>
-      <Section title={t('threadsUnfinished')} count={unfinished.length} hint={t('threadsUnfinishedHint')}>{list(unfinished)}</Section>
-      {others.length > 0 && <Section title={t('threadsOther')} count={others.length}>{list(others)}</Section>}
-    </> : list(others)) : <Hint>{t('threadsNone')}</Hint>)}
+    {data && (items.length ? <>
+      {unfinished.length > 0 && <Section title={t('threadsUnfinished')} count={unfinished.length} hint={t('threadsUnfinishedHint')}>{list(unfinished)}</Section>}
+      {settled.length > 0 && <Section title={t('threadsSettled')} count={settled.length} hint={t('threadsSettledHint')}>{list(settled)}</Section>}
+      {other.length > 0 && <Section title={t('threadsOther')} count={other.length}>{list(other)}</Section>}
+    </> : <Hint>{t('threadsNone')}</Hint>)}
     {data?.next_offset != null && <LoadMore onMore={() => setLimit(limit + 20)} />}
   </>
 }

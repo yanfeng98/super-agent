@@ -6,6 +6,7 @@ import { allowedSender, listedBot } from '../../policy.ts'
 import type { ChannelLink, Localized } from '../../sources/kind.ts'
 import type { SourceRegistry } from '../../sources/registry.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
+import { mergePosition } from '../merge-queue.ts'
 import type { Store } from '../store.ts'
 import { attribute, markdown, plain, preview, readable } from './text.ts'
 
@@ -185,26 +186,48 @@ export function threadTitle(store: Pick<Store, 'read'>, thread: Thread): string 
   const first = store.read.firstTrigger(thread.key, true) ?? store.read.firstTrigger(thread.key)
   return first ? preview(first.text, 80) : thread.key
 }
+/** Where a Ticket stands relative to landing its work, as the Trigger list groups it. */
+export type TicketSettlement = 'unfinished' | 'settled'
 /**
- * Whether a Ticket's work is wrapped up: its current merge landed with every push of it succeeded, or a person discarded
- * it. A Ticket that never merged still needs a person's decision to merge or discard it, and a merge a revert undid or a
- * merge whose push failed leaves the remote behind, so all of them stay unfinished.
+ * Whether a Ticket still needs a merge or a push, or is done without one:
+ * - `unfinished`: work still needs to land — an open Ticket, one whose merge a revert undid or whose push failed, one that
+ *   ended without merging (`closed`), or one with a standing or queued merge request still pending.
+ * - `settled`: no merge is outstanding — a merge landed with its push succeeding, a person discarded the work, a person
+ *   abandoned the Ticket, an Executor found nothing to do, or a Ticket ended as completed without a merge being asked for
+ *   (investigation or a local fix that never needed to land).
+ *
+ * @param ticket - Ticket to classify.
+ * @param mergePending - Whether a person asked for this Ticket to be merged and the host has not landed it yet.
  */
-export function ticketWrappedUp(ticket: Pick<Ticket, 'merged' | 'reverted' | 'discarded'>): boolean {
-  if (ticket.discarded) return true
-  const merge = ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at) ? ticket.merged : undefined
-  return !!merge && merge.push?.ok !== false
+export function ticketSettlement(ticket: Pick<Ticket, 'merged' | 'reverted' | 'discarded' | 'ended' | 'autoMerge'>,
+  mergePending = false): TicketSettlement {
+  if (ticket.discarded) return 'settled'
+  // A recorded merge that a revert undid, or whose push failed, still needs work even when the Ticket ended as completed.
+  if (ticket.merged) {
+    const merge = ticket.reverted && ticket.reverted.at > ticket.merged.at ? undefined : ticket.merged
+    return merge && merge.push?.ok !== false ? 'settled' : 'unfinished'
+  }
+  const outcome = ticket.ended?.outcome
+  if (outcome === 'stopped' || outcome === 'dropped' || outcome === 'completed' || outcome === 'merged') {
+    return ticket.autoMerge || mergePending ? 'unfinished' : 'settled'
+  }
+  return 'unfinished'
 }
 /**
- * Whether a Thread started work that is still to be wrapped up: any subscribed Ticket is unfinished. A Thread with no
- * Ticket is neither finished nor unfinished, since an ordinary conversation started no work to land.
+ * How a Thread started work: `unfinished` when any subscribed Ticket still needs a merge or a push, `settled` when its
+ * Tickets are done without one, and undefined when the Thread started no Ticket at all.
  */
-export function threadUnfinished(store: Pick<Store, 'tickets'>, thread: Pick<Thread, 'subscriptions'>): boolean {
-  return thread.subscriptions.some(id => {
-    const ticket = store.tickets.get(id)
-    return !!ticket && !ticketWrappedUp(ticket)
-  })
+export function threadSettlement(store: Pick<Store, 'tickets'>, thread: Pick<Thread, 'subscriptions'>,
+  mergePending: (ticketId: string) => boolean = () => false): TicketSettlement | undefined {
+  const tickets = thread.subscriptions.flatMap(id => { const ticket = store.tickets.get(id); return ticket ? [ticket] : [] })
+  if (!tickets.length) return undefined
+  return tickets.some(ticket => ticketSettlement(ticket, mergePending(ticket.id)) === 'unfinished') ? 'unfinished' : 'settled'
 }
+/**
+ * Whether a Thread started work that is still to be wrapped up; see `threadSettlement`.
+ */
+export const threadUnfinished = (store: Pick<Store, 'tickets'>, thread: Pick<Thread, 'subscriptions'>,
+  mergePending?: (ticketId: string) => boolean): boolean => threadSettlement(store, thread, mergePending) === 'unfinished'
 function latestOnThread(view: Snapshot, thread: Thread) {
   const trigger = view.store.read.threadTriggers(thread.key, 1)[0]
   if (!trigger) return undefined
@@ -223,9 +246,11 @@ export function threadSummary(view: Snapshot, thread: Thread) {
   const { store } = view
   const tickets = thread.subscriptions.flatMap(id => { const ticket = store.tickets.get(id); return ticket ? [ticketFacts(view, ticket)] : [] })
   const pending = awaitingEval(view, thread).length
+  const mergePending = (id: string) => mergePosition(store, id) !== undefined
+  const settlement = threadSettlement(store, thread, mergePending)
   return { key: thread.key, source: thread.ref.source, title: threadTitle(store, thread), stage: threadStage(thread, pending, tickets),
     latest: latestOnThread(view, thread), lastAt: thread.lastAt ?? thread.createdAt, createdAt: thread.createdAt,
-    subscriptions: thread.subscriptions.length, tickets, unfinished: threadUnfinished(store, thread),
+    subscriptions: thread.subscriptions.length, tickets, settlement, unfinished: settlement === 'unfinished',
     evaluating: thread.evaluating ? { id: thread.evaluating.id, strength: thread.evaluating.strength, triggers: thread.evaluating.triggerIds.length, startedAt: thread.evaluating.startedAt, deadline: thread.evaluating.deadline } : undefined,
     pending, pollError: attribute(thread.meta.pollError), url: threadUrl(store, thread),
     facts: (thread.meta.facts ?? {}) as ThreadFacts }

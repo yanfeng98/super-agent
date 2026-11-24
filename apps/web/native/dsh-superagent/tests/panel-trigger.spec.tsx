@@ -156,23 +156,34 @@ it('shows a link\'s target far back with every Trigger after it', async () => {
   expect(all('button').some(button => button.textContent === zh.loadEarlier)).toBe(false)
 })
 
-it('puts unfinished Threads ahead of finished ones under 未收尾, and leaves conversations without a Ticket out of both groups', async () => {
+it('groups unfinished work, settled work and ordinary conversations into separate Trigger sections', async () => {
   server.threads = [
-    { ...threadSummary(), key: 'feishu:oc_1:merged', title: '已合并的对话', lastAt: '2026-09-24T00:00:00Z', unfinished: false,
+    { ...threadSummary(), key: 'feishu:oc_1:merged', title: '已合并的对话', lastAt: '2026-09-24T00:00:00Z', settlement: 'settled', unfinished: false,
       tickets: [{ id: 't0', number: 8, title: '已合并工单', state: 'ended', stage: 'ended',
         ended: { at: '2026-09-23T00:00:00Z', by: 'executor', outcome: 'completed' },
         merged: { at: '2026-09-23T00:01:00Z', target: 'main', head: 'abc12345', push: { ok: true } } }] },
-    { ...threadSummary(), key: 'feishu:oc_1:ordinary', title: '普通对话', lastAt: '2026-09-25T00:00:00Z', unfinished: false,
+    { ...threadSummary(), key: 'feishu:oc_1:ordinary', title: '普通对话', lastAt: '2026-09-25T00:00:00Z', settlement: undefined, unfinished: false,
       tickets: [] },
-    { ...threadSummary(), key: 'feishu:oc_1:open', title: '未合并的对话', lastAt: '2026-09-22T00:00:00Z', unfinished: true,
+    { ...threadSummary(), key: 'feishu:oc_1:open', title: '未合并的对话', lastAt: '2026-09-22T00:00:00Z', settlement: 'unfinished', unfinished: true,
       tickets: [{ id: 't1', number: 9, title: '未合并工单', state: 'open', stage: 'working', ended: undefined }] },
+    { ...threadSummary(), key: 'feishu:oc_1:completed', title: '已完成无需合并的对话', lastAt: '2026-09-21T00:00:00Z', settlement: 'settled', unfinished: false,
+      tickets: [{ id: 't2', number: 10, title: '调查工单', state: 'ended', stage: 'ended',
+        ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'completed' } }] },
+    { ...threadSummary(), key: 'feishu:oc_1:abandoned', title: '已放弃的对话', lastAt: '2026-09-20T00:00:00Z', settlement: 'settled', unfinished: false,
+      tickets: [{ id: 't3', number: 11, title: '放弃的工单', state: 'ended', stage: 'ended',
+        ended: { at: '2026-09-20T00:00:00Z', by: 'human', outcome: 'stopped' } }] },
   ]
   await mount()
   await click(zh['tab.trigger'])
   const sectionTitles = all('.dt-section-title').map(element => element.textContent)
-  expect(sectionTitles).toEqual([expect.stringContaining(zh.threadsUnfinished), expect.stringContaining(zh.threadsOther)])
-  const order = all('.dt-section').flatMap(section => [...section.querySelectorAll('.dt-open')].map(button => button.textContent))
-  expect(order).toEqual(['未合并的对话', '已合并的对话', '普通对话'])
+  expect(sectionTitles).toEqual([expect.stringContaining(zh.threadsUnfinished), expect.stringContaining(zh.threadsSettled),
+    expect.stringContaining(zh.threadsOther)])
+  const sections = all('.dt-section')
+  const titlesOf = (index: number) => [...sections[index]!.querySelectorAll('.dt-open')].map(button => button.textContent)
+  // Only the still-unmerged Thread is unfinished; completed-without-merge, abandoned and merged Threads are settled.
+  expect(titlesOf(0)).toEqual(['未合并的对话'])
+  expect(titlesOf(1)).toEqual(['已合并的对话', '已完成无需合并的对话', '已放弃的对话'])
+  expect(titlesOf(2)).toEqual(['普通对话'])
 })
 
 it('deletes an idle Thread from its page after confirmation, and leaves the original message untouched', async () => {

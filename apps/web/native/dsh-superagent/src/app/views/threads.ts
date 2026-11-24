@@ -2,8 +2,9 @@
 import { canDeleteThread, latestReport, threadKey, type Thread, type Ticket, type Trigger } from '../../core/index.ts'
 import type { ThreadFilter } from '../api.ts'
 import type { TextCache } from '../cache.ts'
-import { awaitingEval, channelLink, dayAgo, decisionView, newestFirst, page, snapshot, threadSummary, threadTitle,
-  threadUnfinished, ticketLine, ticketSummary, triggerView, type ViewHost } from './records.ts'
+import { mergePosition } from '../merge-queue.ts'
+import { awaitingEval, channelLink, dayAgo, decisionView, newestFirst, page, snapshot, threadSettlement, threadSummary, threadTitle,
+  ticketLine, ticketSummary, triggerView, type ViewHost } from './records.ts'
 import { attribute } from './text.ts'
 
 export function threadList(host: ViewHost, filter: ThreadFilter, offset: number, limit: number) {
@@ -17,9 +18,12 @@ export function threadList(host: ViewHost, filter: ThreadFilter, offset: number,
     : filter === 'all' || (filter === 'subscribed' ? live(thread) : !!thread.evaluating || awaitingEval(view, thread).length > 0)
   const candidates = filter === 'subscribed' ? store.read.subscribedThreads()
     : filter === 'evaluating' ? store.threads.active() : store.threads.list()
-  const threads = candidates.filter(kept).map(thread => ({ thread, at: lastAt(thread), unfinished: threadUnfinished(store, thread) }))
-    // Work still to be wrapped up stays ahead of finished Threads however recently they were active, so the list opens on it.
-    .sort((a, b) => Number(b.unfinished) - Number(a.unfinished) || b.at.localeCompare(a.at))
+  const pending = (id: string) => mergePosition(store, id) !== undefined
+  const rank: Record<'unfinished' | 'settled' | 'none', number> = { unfinished: 0, settled: 1, none: 2 }
+  const threads = candidates.filter(kept).map(thread => ({ thread, at: lastAt(thread),
+    settlement: (threadSettlement(store, thread, pending) ?? 'none') as 'unfinished' | 'settled' | 'none' }))
+    // Work still to be wrapped up stays first, done work next, ordinary conversations last; each group keeps recent activity order.
+    .sort((a, b) => rank[a.settlement] - rank[b.settlement] || b.at.localeCompare(a.at))
     .map(item => item.thread)
   const result = page(threads, offset, limit)
   return { ...result, items: result.items.map(thread => threadSummary(view, thread)) }
