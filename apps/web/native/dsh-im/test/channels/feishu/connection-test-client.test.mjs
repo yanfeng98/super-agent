@@ -622,6 +622,61 @@ test('Feishu callback repair recovers when a Host restart forgets the browser at
   await act(async () => { renderer.unmount(); });
 });
 
+test('Feishu callback repair waiting view tells the operator to click the verification card', async (t) => {
+  const previousWindow = globalThis.window;
+  globalThis.window = {
+    setInterval() { return 1; },
+    clearInterval() {},
+    setTimeout() { return 2; },
+    clearTimeout() {},
+    requestAnimationFrame() { return 3; },
+    cancelAnimationFrame() {},
+  };
+  t.after(() => {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  });
+
+  const snapshot = {
+    schemaVersion: 2,
+    revision: 1,
+    state: 'connected',
+    bots: [{
+      botId: 'bot_target',
+      state: 'connected',
+      connected: true,
+      configured: true,
+      workspace: '/workspace/current',
+      bot: { name: '目标机器人', appIdMasked: 'cli_tar••••rget' },
+      health: { status: 'healthy', summary: '长连接运行正常' },
+    }],
+    provisioning: {
+      attemptId: 'reg_committed',
+      operation: 'callback_repair',
+      botId: 'bot_target',
+      submitted: true,
+      expiresAt: Date.now() + 60_000,
+      pollIntervalMs: 800,
+    },
+  };
+  const rpcCall = async (endpoint) => {
+    if (endpoint === FEISHU_ENDPOINTS.status) return { ok: true, value: snapshot };
+    throw new Error(`Unexpected endpoint: ${endpoint}`);
+  };
+
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(FeishuSettingsTab, { rpcCall }));
+    await flushMicrotasks();
+  });
+
+  const waiting = textOf(renderer.root);
+  assert.match(waiting, /已确认，正在完成权限与回调配置/);
+  assert.match(waiting, /验证卡片按钮/, 'the user must be told which Feishu card to open');
+  assert.match(waiting, /完成验证/, 'the user must be told which button to click to finish the wait');
+  await act(async () => { renderer.unmount(); });
+});
+
 test('Feishu reconnect failures render fixed English-safe feedback', async (t) => {
   const previousWindow = globalThis.window;
   let nextFrame = 0;

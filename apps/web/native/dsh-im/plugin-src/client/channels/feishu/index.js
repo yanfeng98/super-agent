@@ -387,6 +387,11 @@ function ProvisionProgress({ phase, provision, onCancel, busy }) {
         : grantingGroupMessages
           ? "正在为现有飞书应用申请群消息权限二维码，请稍候。"
           : "正在向飞书申请一次性授权二维码，请稍候。"),
+    connecting && repairing
+      ? h("p", {
+          className: "bxf-probeHint dim-probeHint", role: "status",
+        }, localizeText('权限已保存。请到飞书私聊打开机器人发来的「验证卡片按钮」卡片，点击「完成验证」；收到点击后本页会自动结束等待。'))
+      : null,
     connecting && onCancel
       ? h("div", { className: "bxf-actions dim-viewActions", style: { justifyContent: "center" } },
           h(Button, { onClick: onCancel, disabled: busy }, repairing

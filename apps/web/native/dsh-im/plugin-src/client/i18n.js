@@ -755,6 +755,7 @@ const EN = Object.freeze({
   '已确认，正在完成权限与回调配置': 'Confirmed. Completing permissions and callback setup',
   '正在准备权限补全二维码': 'Preparing the permission-completion QR code',
   '配置已提交，正在保存权限、验证卡片回调并重连此机器人；此阶段无法取消，其他机器人不会中断。': 'The update was submitted. Saving permissions, verifying the card callback, and reconnecting this bot. This stage cannot be cancelled; other bots will not be interrupted.',
+  '权限已保存。请到飞书私聊打开机器人发来的「验证卡片按钮」卡片，点击「完成验证」；收到点击后本页会自动结束等待。': 'Permissions are saved. Open the “Verify card buttons” message the bot sent you in Feishu and tap “Finish verification”; this page finishes waiting once the tap is received.',
   '正在为现有飞书应用申请一次性更新二维码，请稍候。': 'Requesting a one-time update QR code for the existing Feishu app…',
   '权限与回调没有补全完成': 'Permissions and callback setup did not finish',
   '补全权限': 'Complete permissions',
