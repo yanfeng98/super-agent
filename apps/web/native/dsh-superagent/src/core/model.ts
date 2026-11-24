@@ -520,6 +520,11 @@ export interface Execution {
   base?: string
   /** Branch checked out in the main working tree at the first launch; a merge or rebase refuses if it changed since. */
   target?: string
+  /**
+   * Git working tree the automatic worktree is taken from, recorded from the project row or the Execution settings at
+   * acceptance. Absent when neither named one, which uses the repository this installation runs from.
+   */
+  repository?: string
   /** A per-project prepare command that replaces the global one for this ticket. */
   prepare?: string
 }

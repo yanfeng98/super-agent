@@ -434,6 +434,19 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `docs/003-execution.md`, `docs/005-panel.md`, `docs/006-deployment.md`, `README.md`, `SETUP.md` and the Execution
     settings hint (`src/client/locales.ts`) describe the default.
 
+34. **A repository path instead of a prepare command for another repository.** `ExecutorConfigSchema.repository`
+    (`src/policy.ts`) and a project row's `repository` (`src/sources/local.ts`) name the git working tree a Ticket's
+    worktree comes from, as an absolute path inside any checkout; empty falls back to the other setting and then to
+    `Machine.repository`. `ticketExecution` records the choice on `Execution.repository` at acceptance, and
+    `DshExecutor.prepareWorktree` resolves it with `installedRepository` before branching `agent/<name>` from the
+    repository's main working tree, so switching repositories no longer needs a prepare command. A configured path outside
+    every git working tree fails the Ticket with that path and both fixes named. The panel adds the field to the Execution
+    settings and the project rows (`src/client/execution.tsx`, `src/client/locales.ts`), the settings view reports the
+    installation repository (`src/app/views/settings.ts`), and the settings history and environment fingerprint include the
+    new field (`src/app/settings-history.ts`, `src/app/settings.ts`). `tests/runtime.spec.ts`, `tests/local.spec.ts`,
+    `tests/panel-settings.spec.tsx` and `tests/views.spec.ts` cover it; `docs/003-execution.md`, `docs/005-panel.md`,
+    `docs/006-deployment.md`, `docs/007-architecture.md`, `README.md` and `SETUP.md` describe it.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.

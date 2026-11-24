@@ -24,6 +24,7 @@ const LocalConfigSchema = z.object({
   projects: z.array(z.object({
     name: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'Letters, digits, dot, dash or underscore'),
     root: z.string().trim().refine(absolute, 'An absolute path, or empty').default(''),
+    repository: z.string().trim().refine(absolute, 'An absolute path, or empty').default(''),
     prepare: z.string().trim().max(4000).default(''),
   }).strict()).max(20).default([]),
 }).strict()
@@ -211,9 +212,10 @@ export const localKind: SourceKind<LocalConfig> = {
     { key: 'webhook', type: 'text', label: { zh: '通知 Webhook', en: 'Notification webhook' },
       hint: { zh: '工单结束或需要人回答时向这个 http(s) 地址 POST JSON；留空关闭。', en: 'POST JSON to this http(s) address when a ticket ends or needs a person; empty turns it off.' } },
     { key: 'projects', type: 'rows', label: { zh: '项目', en: 'Projects' },
-      hint: { zh: '给请求里的项目名配置执行根目录和 prepare 命令；留空的项沿用 Execution 设置。', en: 'Give a project label its own execution root and prepare command; empty fields keep the Execution settings.' },
+      hint: { zh: '给请求里的项目名配置执行根目录、来源仓库和 prepare 命令；留空的项沿用 Execution 设置。', en: 'Give a project label its own execution root, repository and prepare command; empty fields keep the Execution settings.' },
       columns: [{ key: 'name', type: 'text', label: { zh: '项目名', en: 'Name' } },
         { key: 'root', type: 'text', label: { zh: '根目录', en: 'Root' }, optional: true },
+        { key: 'repository', type: 'text', label: { zh: '仓库', en: 'Repository' }, optional: true },
         { key: 'prepare', type: 'text', label: { zh: 'prepare 命令', en: 'Prepare command' }, optional: true }] },
   ],
   // Intake is request-driven: nothing polls, so the kind reports no health entry.
@@ -291,9 +293,10 @@ async function createLocalRequestOnce(host: SourceHost, input: LocalRequest, ide
   const thread = `${SOURCE}:${id}`
   // A title is one line in the front matter, the heading and the Thread label.
   const title = input.title.replace(/\s+/g, ' ').trim()
-  // A project label may carry its own root and prepare command; a label without a row keeps the global settings.
+  // A project label may carry its own root, repository and prepare command; a label without a row keeps the global settings.
   const project = input.project ? config.projects.find(item => item.name === input.project) : undefined
   const projectMeta = project ? { ...project.root ? { projectRoot: project.root } : {},
+    ...project.repository ? { projectRepository: project.repository } : {},
     ...project.prepare ? { projectPrepare: project.prepare } : {} } : {}
   const file = archiveFile(archiveDir(ctx.deployment, config), id)
   await writeRequest(file, { id, title, text: input.text, at, ...input.project ? { project: input.project } : {},

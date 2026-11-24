@@ -281,6 +281,12 @@ export function ExecutionSettings() {
             <Input className="dt-mono" value={value.directory} placeholder={t('executionDirectoryEmpty')} spellCheck={false} pattern="/.*"
               onChange={event => edit({ directory: event.target.value })} />
           </Field>
+          <Field label={t('executionRepository')} hint={t('executionRepositoryHint')} note={value.repository ? undefined
+            : environment.repository ? t('executionRepositoryDefault', { repository: environment.repository })
+              : t('executionRepositoryNone')}>
+            <Input className="dt-mono" value={value.repository} placeholder={t('executionRepositoryEmpty')} spellCheck={false}
+              onChange={event => edit({ repository: event.target.value })} />
+          </Field>
           <Field label={t('prepareCommand')} hint={t('prepareCommandHint')}>
             <textarea ref={prepare} className="dt-textarea dt-mono" rows={3} maxLength={LIMITS.prepareCommand} spellCheck={false}
               placeholder={t('prepareCommandEmpty')} value={value.prepare}

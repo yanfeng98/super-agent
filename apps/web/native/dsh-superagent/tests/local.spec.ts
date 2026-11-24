@@ -290,22 +290,45 @@ describe('local tickets', () => {
     expect(() => h.engine.approveTicket(ticket.id)).toThrow(/does not wait/)
   })
 
-  it('routes a project label to its configured execution root and prepare command', async () => {
+  it('routes a project label to its configured execution root, repository and prepare command', async () => {
     const h = harness()
     const base = h.store.settings()
     h.store.saveSettings(SettingsSchema.parse({ ...base, sources: { ...base.sources,
-      local: { enabled: true, config: { projects: [{ name: 'api', root: '/srv/api', prepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' }] } } } }))
+      local: { enabled: true, config: { projects: [{ name: 'api', root: '/srv/api', repository: '/srv/api-checkout',
+        prepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' }] } } } }))
     const created = await createLocalRequest(h.host, { title: '项目执行', text: '按项目准备。', project: 'api' })
     expect(h.store.triggers.get(created.trigger)?.meta).toMatchObject({ project: 'api', projectRoot: '/srv/api',
-      projectPrepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' })
+      projectRepository: '/srv/api-checkout', projectPrepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' })
     const candidate = h.candidates.at(-1)!
     const decision = h.engine.decide(created.trigger, { kind: 'accept', title: '项目执行', scope: '准备', reason: 'requested',
       acknowledgement: '开始。', evalId: candidate.evalId, name: 'login-fix' })
     const ticket = h.store.tickets.get(decision.ticketId!)!
     const execution = ticketExecution(ticket, { kind: 'accept', title: '项目执行', scope: '准备', reason: 'requested',
-      name: 'login-fix' } as never, h.store.settings(), dir, { root: '/srv/api', prepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' })
+      name: 'login-fix' } as never, h.store.settings(), dir, { root: '/srv/api', repository: '/srv/api-checkout',
+      prepare: 'git worktree add "$DSH_SUPERAGENT_DIR"' })
     expect(execution.directory.startsWith('/srv/api/')).toBe(true)
+    expect(execution.repository).toBe('/srv/api-checkout')
     expect(execution.prepare).toBe('git worktree add "$DSH_SUPERAGENT_DIR"')
+  })
+
+  it('records the project row\'s repository for the automatic worktree when the row sets no prepare command', async () => {
+    const h = harness()
+    const base = h.store.settings()
+    h.store.saveSettings(SettingsSchema.parse({ ...base, executor: { ...base.executor, repository: '/srv/default' },
+      sources: { ...base.sources, local: { enabled: true, config: { projects: [{ name: 'web', repository: '/srv/web' }] } } } }))
+    const created = await createLocalRequest(h.host, { title: '项目仓库', text: '用项目仓库。', project: 'web' })
+    expect(h.store.triggers.get(created.trigger)?.meta).toMatchObject({ project: 'web', projectRepository: '/srv/web' })
+    const candidate = h.candidates.at(-1)!
+    const decision = h.engine.decide(created.trigger, { kind: 'accept', title: '项目仓库', scope: '仓库', reason: 'requested',
+      acknowledgement: '开始。', evalId: candidate.evalId, name: 'web-fix' })
+    const ticket = h.store.tickets.get(decision.ticketId!)!
+    const outcome = { kind: 'accept', title: '项目仓库', scope: '仓库', reason: 'requested', name: 'web-fix' } as never
+    // A project row without a repository keeps the Execution settings' repository; with neither, no repository is recorded and
+    // preparation falls back to this installation's.
+    expect(ticketExecution(ticket, outcome, h.store.settings(), dir, { repository: '/srv/web' }).repository).toBe('/srv/web')
+    expect(ticketExecution(ticket, outcome, h.store.settings(), dir, {}).repository).toBe('/srv/default')
+    expect(ticketExecution(ticket, outcome, SettingsSchema.parse({ ...h.store.settings(), executor: { ...h.store.settings().executor,
+      repository: '' } }), dir, {}).repository).toBeUndefined()
   })
 
   it('turns a command-line request from the inbox into a ticket and records the result', async () => {

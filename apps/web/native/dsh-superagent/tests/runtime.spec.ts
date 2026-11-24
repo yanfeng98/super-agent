@@ -1044,6 +1044,65 @@ it('prepares each Ticket as a linked worktree of this installation\'s repository
   expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'running' })
 })
 
+it('prepares a Ticket as a worktree of the repository the Execution settings name, not this installation\'s', async () => {
+  runtime = await restart({ repository: '/srv/install' })
+  await runtime.ready
+  runtime.sources.register(feishuImKind)
+  const checkout = join(directory, 'widgets')
+  mkdirSync(join(checkout, '.git'), { recursive: true })
+  runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, repository: checkout } })
+  answers['git worktree list --porcelain'] = 'worktree /srv/widgets\nHEAD 0123456789abcdef\nbranch refs/heads/main\n'
+  answers['git rev-parse --abbrev-ref HEAD'] = 'main'
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  expect(ticket.execution?.repository).toBe(checkout)
+  const calls = subprocess.spawn.mock.calls.map(([spec]) => spec as { argv: string[]; cwd: string })
+  // The configured path is where git reads the worktree list, so its main working tree, not this installation's, is the source.
+  expect(calls.findLast(spec => spec.argv.join(' ') === 'git worktree list --porcelain')?.cwd).toBe(checkout)
+  const added = calls.findLast(spec => spec.argv[0] === 'git' && spec.argv[1] === 'worktree' && spec.argv[2] === 'add')
+  expect(added?.argv).toEqual(['git', 'worktree', 'add', ticket.execution!.directory, '-b', `agent/${ticket.execution!.name}`, 'main'])
+  expect(readdirSync(ticket.execution!.directory)).toContain('.prepared')
+})
+
+it('prepares a Ticket from its project row\'s repository, which overrides the Execution settings', async () => {
+  runtime = await restart({ repository: '/srv/install' })
+  await runtime.ready
+  runtime.sources.register(feishuImKind)
+  const checkout = join(directory, 'api')
+  mkdirSync(join(checkout, '.git'), { recursive: true })
+  const other = join(directory, 'widgets')
+  mkdirSync(join(other, '.git'), { recursive: true })
+  runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, repository: other } })
+  answers['git worktree list --porcelain'] = 'worktree /srv/api\nHEAD 0123456789abcdef\nbranch refs/heads/main\n'
+  answers['git rev-parse --abbrev-ref HEAD'] = 'main'
+  const trigger = feishu('7', '@bot 修一下接口')
+  await receive(trigger)
+  const stored = runtime.store.triggers.get(trigger.id)!
+  runtime.store.triggers.save({ ...stored, meta: { ...stored.meta, project: 'api', projectRepository: checkout } })
+  const result = await route({ kind: 'accept', trigger_id: trigger.id, title: '修复接口', worktree_name: 'fix-api', acknowledgement: '收到。' })
+  const ticket = runtime.store.tickets.get((result.ticket as { ticket_id: string }).ticket_id)!
+  await runtime.idle()
+  expect(ticket.execution?.repository).toBe(checkout)
+  const calls = subprocess.spawn.mock.calls.map(([spec]) => spec as { argv: string[]; cwd: string })
+  expect(calls.findLast(spec => spec.argv.join(' ') === 'git worktree list --porcelain')?.cwd).toBe(checkout)
+  expect(readdirSync(ticket.execution!.directory)).toContain('.prepared')
+})
+
+it('fails a Ticket, naming the configured repository, when it is not inside a git working tree', async () => {
+  runtime = await restart({ repository: '/srv/install' })
+  await runtime.ready
+  runtime.sources.register(feishuImKind)
+  const checkout = join(directory, 'not-a-repository')
+  mkdirSync(checkout, { recursive: true })
+  runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, repository: checkout } })
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  const report = runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report!
+  expect(report.state).toBe('failed')
+  expect(report.summary).toContain(`The repository ${checkout} named by this Ticket's project or the Execution settings is not inside a git working tree`)
+  expect(waitsForPerson(runtime.store.tickets.get(ticket.id)!)).toBe(true)
+})
+
 it('fails a Ticket at once, naming the branch to check out, when the installation repository is on a detached HEAD', async () => {
   runtime = await restart({ repository: '/srv/widgets' })
   await runtime.ready

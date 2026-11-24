@@ -310,19 +310,19 @@ async function reviewProblem(directory: string): Promise<string> {
 export async function workspaceProblem(subprocess: SubprocessRuntime, directory: string, signal: AbortSignal): Promise<string> {
   const entries = await readdir(directory).then(files => files.length, () => undefined)
   if (entries === undefined) {
-    return `The ticket workspace ${directory} does not exist, so it is not a git repository: its prepare command created no checkout. `
-      + 'Set a prepare command in Execution settings that checks one out, then retry the Ticket.'
+    return `The ticket workspace ${directory} does not exist, so it is not a git repository: no checkout was created. `
+      + 'Set Execution → Repository to a git checkout, or a prepare command that creates one, then retry the Ticket.'
   }
   if (entries === 0) {
-    return `The ticket workspace ${directory} is empty, so it is not a git repository: its prepare command created no checkout. `
-      + 'Set a prepare command in Execution settings that checks one out, then retry the Ticket.'
+    return `The ticket workspace ${directory} is empty, so it is not a git repository: no checkout was created. `
+      + 'Set Execution → Repository to a git checkout, or a prepare command that creates one, then retry the Ticket.'
   }
   const git = (cwd: string, args: string[]) => runAsWorker(subprocess, ['git', ...args], cwd,
     AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
   const branch = await git(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => undefined)
   if (!branch) {
     return `The ticket workspace ${directory} is not a git repository, or git could not read it. `
-      + 'A Ticket needs its own checkout of the repository it changes; set a prepare command in Execution settings that creates one.'
+      + 'A Ticket needs its own checkout of the repository it changes; set Execution → Repository or a prepare command that creates one.'
   }
   if (branch === 'HEAD') {
     return `The ticket workspace ${directory} is on a detached HEAD, not on its Ticket branch. `

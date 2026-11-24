@@ -17,9 +17,11 @@ function policyOf(sources: SourceRegistry, id: string, health: HealthMap) {
 }
 /**
  * Builds the settings view by block (`{ value, revision }`), per-Source configuration and restart-sensitive fields,
- * and execution environment details (`stateDir` provides the default ticket working directory root).
+ * and execution environment details (`stateDir` provides the default ticket working directory root, `repository` the
+ * installation's git working tree that Tickets get worktrees of by default).
  */
-export function settingsView(store: Store, sources: SourceRegistry, health: HealthMap, setup: SetupState, stateDir: string) {
+export function settingsView(store: Store, sources: SourceRegistry, health: HealthMap, setup: SetupState, stateDir: string,
+  repository?: string) {
   const settings = store.settings()
   const block = <V>(name: 'policy' | 'eval' | 'executor', value: V) => ({ value, revision: store.blockRevision(name) })
   return {
@@ -36,7 +38,7 @@ export function settingsView(store: Store, sources: SourceRegistry, health: Heal
         facts: kind?.facts?.({ deployment: setup.deployment, config: instance.config, labels }) ?? {},
         labels, ...policyOf(sources, instance.id, health) }
     }),
-    environment: { root: executionRoot(settings, stateDir), variables: declaredVariables(sources, settings) },
+    environment: { root: executionRoot(settings, stateDir), ...repository ? { repository } : {}, variables: declaredVariables(sources, settings) },
   }
 }
 export type SettingsView = ReturnType<typeof settingsView>
