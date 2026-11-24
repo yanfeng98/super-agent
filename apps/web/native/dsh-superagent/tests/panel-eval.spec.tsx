@@ -186,3 +186,15 @@ it('lists the Feishu bots beside its people and saves them', async () => {
   await click(zh.save)
   expect(server.settings.policy.sources.feishu!.bots).toEqual([{ id: 'cli_reviewer', name: '评审机器人' }])
 })
+
+it('shows the Evals that did not complete under 评估未完成, with their reason', async () => {
+  server.decisions = [
+    decisionRow({ id: 'u1', kind: 'unavailable', outcome: 'unavailable', reason: [{ code: 'timeout' }], preview: 'CI 卡住了' }),
+  ]
+  await mount()
+  await click(zh['tab.eval'])
+  await click(zh['decisionFilter.unavailable'])
+  expect(server.requests.some(request => request.path === 'decisions?limit=30&kind=unavailable')).toBe(true)
+  expect(text()).toContain(zh['reason.timeout'])
+  expect(text()).toContain('CI 卡住了')
+})

@@ -7,7 +7,7 @@ import { SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuImKind } from '../src/sources/feishu-im.ts'
 import { localKind } from '../src/sources/local.ts'
-import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
+import { snapshot, threadSummary, ticketSummary, ticketWrappedUp, threadUnfinished, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail, ticketList, ticketTags } from '../src/app/views/tickets.ts'
 import { search, threadDetail } from '../src/app/views/threads.ts'
 import { droppedReplies, sourcesStatus } from '../src/app/views/sources.ts'
@@ -572,4 +572,28 @@ it('pages matching Tickets so more than the first fifty are reachable', () => {
   const next = search(host, 't', new Map(), 50)
   expect(next.tickets).toHaveLength(5)
   expect(next.next_offset).toBeNull()
+})
+
+it('wraps up a Ticket only when its merge landed and its push succeeded, or a person discarded it', () => {
+  const merged = { at, branch: 'agent/t1', target: 'main', head: 'abc' }
+  expect(ticketWrappedUp({ merged })).toBe(true)
+  expect(ticketWrappedUp({ merged: { ...merged, push: { ok: true, at } } })).toBe(true)
+  expect(ticketWrappedUp({ merged: { ...merged, push: { ok: false, at } } })).toBe(false)
+  // A revert newer than the merge undoes it, so the Ticket needs wrapping up again.
+  const after = new Date(Date.now() + 60_000).toISOString()
+  expect(ticketWrappedUp({ merged, reverted: { at: after, commit: 'rev', target: 'main', merge: 'abc' } })).toBe(false)
+  expect(ticketWrappedUp({ discarded: { at } })).toBe(true)
+  // An ended Ticket with no merge still needs a person to land or discard its work.
+  expect(ticketWrappedUp({})).toBe(false)
+})
+
+it('marks a Thread unfinished by any subscribed Ticket that still needs wrapping up', () => {
+  const host = views()
+  live('t1')
+  store.tickets.save({ ...store.tickets.get('t1')!, merged: { at, branch: 'agent/t1', target: 'main', head: 'abc', push: { ok: true, at } } })
+  const merged = { subscriptions: ['t1'] }
+  expect(threadUnfinished(host.store, merged)).toBe(false)
+  store.tickets.save({ ...store.tickets.get('t1')!, merged: { at, branch: 'agent/t1', target: 'main', head: 'abc', push: { ok: false, at } } })
+  expect(threadUnfinished(host.store, merged)).toBe(true)
+  expect(threadUnfinished(host.store, { subscriptions: [] })).toBe(false)
 })

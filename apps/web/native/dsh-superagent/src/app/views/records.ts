@@ -185,6 +185,26 @@ export function threadTitle(store: Pick<Store, 'read'>, thread: Thread): string 
   const first = store.read.firstTrigger(thread.key, true) ?? store.read.firstTrigger(thread.key)
   return first ? preview(first.text, 80) : thread.key
 }
+/**
+ * Whether a Ticket's work is wrapped up: its current merge landed with every push of it succeeded, or a person discarded
+ * it. A Ticket that never merged still needs a person's decision to merge or discard it, and a merge a revert undid or a
+ * merge whose push failed leaves the remote behind, so all of them stay unfinished.
+ */
+export function ticketWrappedUp(ticket: Pick<Ticket, 'merged' | 'reverted' | 'discarded'>): boolean {
+  if (ticket.discarded) return true
+  const merge = ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at) ? ticket.merged : undefined
+  return !!merge && merge.push?.ok !== false
+}
+/**
+ * Whether a Thread started work that is still to be wrapped up: any subscribed Ticket is unfinished. A Thread with no
+ * Ticket is neither finished nor unfinished, since an ordinary conversation started no work to land.
+ */
+export function threadUnfinished(store: Pick<Store, 'tickets'>, thread: Pick<Thread, 'subscriptions'>): boolean {
+  return thread.subscriptions.some(id => {
+    const ticket = store.tickets.get(id)
+    return !!ticket && !ticketWrappedUp(ticket)
+  })
+}
 function latestOnThread(view: Snapshot, thread: Thread) {
   const trigger = view.store.read.threadTriggers(thread.key, 1)[0]
   if (!trigger) return undefined
@@ -205,7 +225,7 @@ export function threadSummary(view: Snapshot, thread: Thread) {
   const pending = awaitingEval(view, thread).length
   return { key: thread.key, source: thread.ref.source, title: threadTitle(store, thread), stage: threadStage(thread, pending, tickets),
     latest: latestOnThread(view, thread), lastAt: thread.lastAt ?? thread.createdAt, createdAt: thread.createdAt,
-    subscriptions: thread.subscriptions.length, tickets,
+    subscriptions: thread.subscriptions.length, tickets, unfinished: threadUnfinished(store, thread),
     evaluating: thread.evaluating ? { id: thread.evaluating.id, strength: thread.evaluating.strength, triggers: thread.evaluating.triggerIds.length, startedAt: thread.evaluating.startedAt, deadline: thread.evaluating.deadline } : undefined,
     pending, pollError: attribute(thread.meta.pollError), url: threadUrl(store, thread),
     facts: (thread.meta.facts ?? {}) as ThreadFacts }
