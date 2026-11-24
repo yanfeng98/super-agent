@@ -895,6 +895,22 @@ Host service backing the generated `ctx.remote.session` namespace.
 
 ```ts cordis-catalog
 /**
+ * The sidebar grouping override a Session's own log records.
+ * @param session - live Session whose durable log is folded.
+ * @returns the latest grouping override, or null when the Session's cwd decides the group.
+ */
+workspaceGroupOf(session: Session): SessionWorkspaceGroup | null
+
+/**
+ * Record the Workspace directory a Session belongs to for sidebar browsing.
+ * The latest accepted value wins; the header cwd is untouched.
+ * @param session - live Session whose durable log receives the override.
+ * @param group - Workspace directory and optional role marker.
+ * @throws when the Workspace directory is not an absolute path.
+ */
+appendWorkspaceGroup(session: Session, group: SessionWorkspaceGroup): void
+
+/**
  * Resolve or resume one ordinary Session for another Host API domain.
  * @param sessionId - Session identity whose Agent owns the operation.
  * @returns the live Agent or the stable Session-domain failure.

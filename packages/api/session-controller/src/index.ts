@@ -10,7 +10,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { errorChain, type ReasoningEffortId, type MessageSource } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import { canOpenNativePath, nativeFileManager, nativeFileApplications, openNativeFileApplication, openNativeAssociatedPath, revealNativePath } from '@deepseek-ai/dsh-native-command'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { Remote, RemoteError, TypertRemoteService, principalOf } from '@deepseek-ai/dsh-typert-protocol'
@@ -34,6 +34,7 @@ import { buildModelCatalog, hasProviderApiKey } from './catalog.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import { ArchivedSessionGate } from './archived-session-gate.ts'
+import { appendWorkspaceGroup as appendWorkspaceGroupRecord, workspaceGroupOf as readWorkspaceGroup } from './workspace-group.ts'
 import type {
   ModelCatalog,
   SessionWorkspacePathApplication,
@@ -62,6 +63,7 @@ import type {
   SessionRenameValue,
   SessionSearchRequest,
   SessionSearchValue,
+  SessionWorkspaceGroup,
   SessionSelectModelRequest,
   SessionSelectModelValue,
   SessionProjectionsRequest,
@@ -72,7 +74,6 @@ import type {
 
 export type * from './types.ts'
 export { ApiSessionNotFound } from './agent.ts'
-export { appendWorkspaceGroup, workspaceGroupOf } from './workspace-group.ts'
 export { SessionFileReferences } from './file-references.ts'
 export { SessionSkillCatalog } from './skill-catalog.ts'
 
@@ -223,6 +224,26 @@ export class SessionController extends TypertRemoteService {
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return
       ctx.emit('api-session/activity', session.id, event.time)
     })
+  }
+
+  /**
+   * The sidebar grouping override a Session's own log records.
+   * @param session - live Session whose durable log is folded.
+   * @returns the latest grouping override, or null when the Session's cwd decides the group.
+   */
+  workspaceGroupOf(session: Session): SessionWorkspaceGroup | null {
+    return readWorkspaceGroup(this.ctx, session)
+  }
+
+  /**
+   * Record the Workspace directory a Session belongs to for sidebar browsing.
+   * The latest accepted value wins; the header cwd is untouched.
+   * @param session - live Session whose durable log receives the override.
+   * @param group - Workspace directory and optional role marker.
+   * @throws when the Workspace directory is not an absolute path.
+   */
+  appendWorkspaceGroup(session: Session, group: SessionWorkspaceGroup): void {
+    appendWorkspaceGroupRecord(session, group)
   }
 
   /**

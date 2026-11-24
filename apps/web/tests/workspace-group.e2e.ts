@@ -9,7 +9,6 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-workspace'
-import { appendWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
 import { saveFailureShot, startWithSessionPanelHidden } from './support.ts'
 
@@ -52,7 +51,7 @@ describe('sidebar workspace group hint', () => {
     await scaffold.ctx.sessionController.rename({ sessionId: orchestrator.sessionId, title: 'dsh-superagent orchestrator' })
     const resolved = await scaffold.ctx.sessionController.resolveAgent(ORCHESTRATOR as SessionId)
     if ('error' in resolved) throw resolved.error
-    appendWorkspaceGroup(resolved.agent.session, { path: bot.path, role: 'orchestrator' })
+    scaffold.ctx.sessionController.appendWorkspaceGroup(resolved.agent.session, { path: bot.path, role: 'orchestrator' })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' })
     await startWithSessionPanelHidden(page)

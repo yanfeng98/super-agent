@@ -3,7 +3,7 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
-import { appendWorkspaceGroup, workspaceGroupOf, type SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
+import type { SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-permission-presets'
@@ -1737,9 +1737,9 @@ export class Runtime extends Service implements SourceHost {
     const agent = this.ctx.agents.get(this.masterId as SessionId)
     if (agent === undefined) return
     const workspace = await this.ctx.workspaceRegistry.create(bound)
-    const current = workspaceGroupOf(this.ctx, agent.session)
+    const current = this.ctx.sessionController.workspaceGroupOf(agent.session)
     if (current?.path === workspace.path && current.role === 'orchestrator') return
-    appendWorkspaceGroup(agent.session, { path: workspace.path, role: 'orchestrator' })
+    this.ctx.sessionController.appendWorkspaceGroup(agent.session, { path: workspace.path, role: 'orchestrator' })
   }
   /** Run one durable sidebar-group write for a Ticket's worker Session and record it for {@link idle} to await. */
   private queueTicketSession(ticket: Ticket): void {

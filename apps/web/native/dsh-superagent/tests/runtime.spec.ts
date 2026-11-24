@@ -7,7 +7,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import type { SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
 import { Runtime } from '../src/app/runtime.ts'
 import { BOT_ID, CHAT, FINGERPRINT, MEMBER, feishuEvent, jobRegistry } from './fixtures/host.ts'
 import { evalsHealth } from '../src/app/views/overview.ts'
@@ -198,6 +199,10 @@ beforeEach(async () => {
   restricts = new Map()
   deliveries = vi.fn()
   controller = {
+    workspaceGroupOf: vi.fn(() => projectedWorkspaceGroup),
+    appendWorkspaceGroup: vi.fn((session: Session, group: SessionWorkspaceGroup) => {
+      session.append('session/workspace-group', group)
+    }),
     create: vi.fn(async ({ sessionId, agentPreset }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()

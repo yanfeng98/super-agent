@@ -588,6 +588,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SessionOpenWorkspacePathRequest: 'session.md',
   SessionOpenWorkspacePathValue: 'session.md',
   SessionWorkspacePathApplication: 'session.md',
+  SessionWorkspaceGroup: 'session.md',
   SessionModels: 'session.md',
   SessionModelsRequest: 'session.md',
   SessionPage: 'session.md',

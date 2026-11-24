@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-superagent/src/app/worktrees
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { appendWorkspaceGroup, workspaceGroupOf, type SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
+import type { SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import { realpathNormalize } from '@deepseek-ai/dsh-workspace'
@@ -189,8 +189,8 @@ export async function groupTicketSession(ctx: Context, ticket: Ticket, session: 
   const workspace = await sessionGroupWorkspace(ctx, ticket)
   if (workspace === undefined) return false
   const next = ticketSessionGroup(ticket, workspace.path)
-  const current = workspaceGroupOf(ctx, session)
+  const current = ctx.sessionController.workspaceGroupOf(session)
   if (current?.path === next.path && current.role === next.role && current.merged === next.merged) return false
-  appendWorkspaceGroup(session, next)
+  ctx.sessionController.appendWorkspaceGroup(session, next)
   return true
 }

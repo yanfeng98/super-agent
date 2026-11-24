@@ -3423,6 +3423,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Host service backing the generated `ctx.remote.session` namespace.',
     methods: [
       {
+        signature: 'workspaceGroupOf(session: Session): SessionWorkspaceGroup | null',
+        description: 'The sidebar grouping override a Session\'s own log records.',
+        parameters: [{ name: 'session', description: 'live Session whose durable log is folded.' }],
+        returns: 'the latest grouping override, or null when the Session\'s cwd decides the group.',
+      },
+      {
+        signature: 'appendWorkspaceGroup(session: Session, group: SessionWorkspaceGroup): void',
+        description: 'Record the Workspace directory a Session belongs to for sidebar browsing. The latest accepted value wins; the header cwd is untouched.',
+        parameters: [{ name: 'session', description: 'live Session whose durable log receives the override.' }, { name: 'group', description: 'Workspace directory and optional role marker.' }],
+        throws: ['when the Workspace directory is not an absolute path.'],
+      },
+      {
         signature: 'resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>',
         description: 'Resolve or resume one ordinary Session for another Host API domain.',
         parameters: [{ name: 'sessionId', description: 'Session identity whose Agent owns the operation.' }],
@@ -10542,6 +10554,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionWireHeader',
     declaration: 'export interface SessionWireHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+  },
+  {
+    name: 'SessionWorkspaceGroup',
+    declaration: 'export interface SessionWorkspaceGroup {\n    readonly path: string;\n    readonly role?: \'orchestrator\' | \'ticket\' | undefined;\n    readonly merged?: true | undefined;\n}',
   },
   {
     name: 'SessionWorkspacePathApplication',

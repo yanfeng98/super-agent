@@ -316,4 +316,17 @@ describe('SessionController facade', () => {
     await disposal
     await expect(waiting).resolves.toMatchObject({ done: true })
   })
+
+  it('records and reads a Session workspace group through the Host service', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
+    const controller = await createSessionTestController(ctx, defaults)
+    const session = ctx.sessions.create(brandString<SessionId>('workspace-group-service'), { meta: { cwd: '/workspace' } })
+    expect(controller.workspaceGroupOf(session)).toBeNull()
+    controller.appendWorkspaceGroup(session, { path: '/projects/super-agent', role: 'orchestrator' })
+    expect(controller.workspaceGroupOf(session)).toEqual({ path: '/projects/super-agent', role: 'orchestrator' })
+    expect(() => { controller.appendWorkspaceGroup(session, { path: 'relative/project' }) }).toThrow(TypeError)
+  })
 })
