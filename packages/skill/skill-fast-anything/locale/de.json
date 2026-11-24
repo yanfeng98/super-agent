@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rust-Hotpath-Portierung",
+    "description": "Bietet den eingebauten fast-anything-Workflow: heiße Funktionen einer App scannen, eine nach Rust portieren und gegen aufgezeichnete Aufrufe prüfen."
+  }
+}

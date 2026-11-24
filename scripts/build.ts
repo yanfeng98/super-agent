@@ -102,6 +102,9 @@ export function buildGates(
     // The rea MCP server installs and builds its vendored npm tree; the Web
     // standard preset spawns the launcher that build produces.
     gates.push(pnpmGate('rea', 'rea MCP server', ['run', 'build:rea'], [], env))
+    // The fast-anything MCP server compiles from its vendored crate; the staged
+    // executable is what the Web standard preset spawns at runtime.
+    gates.push(pnpmGate('fast-anything', 'fast-anything CLI', ['run', 'build:fast-anything'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push(libraryGate(step, step.id === 'host-src' ? ['native', ...step.needs] : step.needs, env))
     }

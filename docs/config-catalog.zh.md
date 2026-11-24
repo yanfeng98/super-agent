@@ -1885,6 +1885,34 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-worktree -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-fast-anything -->
+<a id="deepseek-aidsh-fast-anything"></a>
+
+## `@deepseek-ai/dsh-fast-anything`
+
+- `inject`: `tools`
+- `source`: [`packages/mcp/fast-anything/src/index.ts:36`](../packages/mcp/fast-anything/src/index.ts)
+
+```ts config-catalog
+/** Plugin config: an explicit executable plus the transport budgets. */
+export interface Config {
+  /** Executable to run instead of the staged vendored build. */
+  command?: string
+  /**
+   * `eager` puts all 8 tool schemas in every request; `on-demand` lists them
+   * in the system prompt and loads the ones an agent asks for.
+   */
+  toolLoading: 'eager' | 'on-demand'
+  /** Per-`tools/call` budget in milliseconds. */
+  toolCallTimeoutMs: number
+  /** Budget for the stdio probe, connection and initial tool sync. */
+  startupTimeoutMs: number
+  /** Extra environment for the server process. */
+  env: Record<string, string>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-fast-anything -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
 <a id="deepseek-aidsh-feishu"></a>
 
@@ -4034,6 +4062,22 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-engineering -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-fast-anything -->
+<a id="deepseek-aidsh-skill-fast-anything"></a>
+
+## `@deepseek-ai/dsh-skill-fast-anything`
+
+- `source`: [`packages/skill/skill-fast-anything/src/index.ts:26`](../packages/skill/skill-fast-anything/src/index.ts)
+
+```ts config-catalog
+/** Bundled skill asset location. */
+export interface Config {
+  /** Absolute assets directory containing the skill directory; defaults to the packaged assets. */
+  assetRoot?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-fast-anything -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-filesystem -->
 <a id="deepseek-aidsh-skill-filesystem"></a>

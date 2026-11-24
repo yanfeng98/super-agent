@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The skill family lets agents and users discover and load reusable task instructions only when needed. Use `skill/` to combine catalogs and expose one instruction set per name; choose `skill-filesystem` for project, custom, or user-directory discovery, `skill-office` for Word, PowerPoint, and Excel workflows. The built-in engineering workflow skills in `skill-engineering` ship with the base bundle; `skill-rust-anything` ships the bundled `dsh-rust-anything` migration skill. Add `tool-skill` when models should receive a sorted, durable session catalog, load full instructions through the `skill` tool, or accept direct `/name` invocation. Different sources produce the same model-visible format, and model access requires at least one source.
+The skill family lets agents and users discover and load reusable task instructions only when needed. Use `skill/` to combine catalogs and expose one instruction set per name; choose `skill-filesystem` for project, custom, or user directories, `skill-office` for Word, PowerPoint, and Excel workflows. The built-in engineering workflow skills in `skill-engineering` ship with the base bundle; `skill-rust-anything` ships the bundled `dsh-rust-anything` migration skill, and `skill-fast-anything` the `dsh-fast-anything` hot-path porting one. Add `tool-skill` for a sorted, durable session catalog, full loads through the `skill` tool, or direct `/name` invocation. All sources produce the same model-visible format; model access needs at least one.
 
 ## Table of Contents
 
@@ -29,6 +29,7 @@ The skill family lets agents and users discover and load reusable task instructi
 | [`skill-engineering/`](skill-engineering/README.md) | Ships the built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, and domain modeling | registers on `ctx.skills` |
 | [`skill-office/`](skill-office/README.md) | Bundles Word, PowerPoint, and Excel workflows with structural file checks | registers on `ctx.skills` |
 | [`skill-rust-anything/`](skill-rust-anything/README.md) | Ships the bundled `dsh-rust-anything` skill: the verified, unit-by-unit migration loop to Rust | registers on `ctx.skills` |
+| [`skill-fast-anything/`](skill-fast-anything/README.md) | Ships the bundled `dsh-fast-anything` skill: the hot-path porting and verification loop to Rust | registers on `ctx.skills` |
 | [`tool-skill/`](tool-skill/README.md) | Publishes the session skill catalog and the model-facing `skill` loader tool | registers on `ctx.tools` |
 | [`tool-workspace-dependencies/`](tool-workspace-dependencies/README.md) | Reports bundled Office interpreter paths and versions for Desktop and SDK carriers | registers on `ctx.tools` |
 

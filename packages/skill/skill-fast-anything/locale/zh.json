@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rust 热点移植技能",
+    "description": "提供内置的 fast-anything 工作流：扫描应用的热点函数，把其中一个移植到 Rust，并用录制调用验证。"
+  }
+}

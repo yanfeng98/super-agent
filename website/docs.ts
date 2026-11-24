@@ -218,6 +218,14 @@ const homeAndGuide = pairedPages([
     section: { root: '集成', en: 'Integrations' },
     order: 3,
   },
+  {
+    source: 'docs/user/guide/fast-anything.md',
+    route: 'guide/fast-anything.md',
+    label: { root: '提速热点函数', en: 'Speed up hot paths' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '集成', en: 'Integrations' },
+    order: 4,
+  },
 ])
 
 const develop = pairedPages([

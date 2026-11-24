@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Portar rutas calientes a Rust",
+    "description": "Ofrece el flujo integrado de fast-anything: analizar las funciones costosas de una app, portar una a Rust y verificarla con llamadas grabadas."
+  }
+}

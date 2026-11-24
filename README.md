@@ -32,7 +32,7 @@ pnpm run build
 pnpm dsh web
 ```
 
-`pnpm run build` 会生成运行所需的产物，其中包含从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 现场编译的 rust-anything CLI（首次几分钟，中间产物在 `native/rust-anything/target/`，不纳入版本控制；缺少 `cargo` 时整个构建会失败），以及从 [`native/rea`](native/rea/NATIVE.md) 安装并构建的 rea MCP server（首次约 3 分钟，`node_modules/` 与 `dist/` 不纳入版本控制，需要网络）；`pnpm dsh web` 不会重新构建：宿主端代码由 tsx 直接从 `src` 运行，浏览器端加载构建出的 bundle 与 `apps/web/dist`。首次运行前必须构建；之后宿主端改动重启进程即可生效，浏览器端改动需要重新构建。
+`pnpm run build` 会生成运行所需的产物，其中包含从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 现场编译的 rust-anything CLI（首次几分钟，中间产物在 `native/rust-anything/target/`，不纳入版本控制；缺少 `cargo` 时整个构建会失败），从 [`native/fast-anything`](native/fast-anything/NATIVE.md) 现场编译的 fast-anything CLI（需要 Rust 1.88 或更新版本），以及从 [`native/rea`](native/rea/NATIVE.md) 安装并构建的 rea MCP server（首次约 3 分钟，`node_modules/` 与 `dist/` 不纳入版本控制，需要网络）；`pnpm dsh web` 不会重新构建：宿主端代码由 tsx 直接从 `src` 运行，浏览器端加载构建出的 bundle 与 `apps/web/dist`。首次运行前必须构建；之后宿主端改动重启进程即可生效，浏览器端改动需要重新构建。
 
 该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.zh.md)。
 
@@ -48,7 +48,7 @@ pnpm dsh web
 
 - **直接描述任务**：Agent 会读取和修改工作区文件、运行命令、委派子智能体并维护计划；按当前权限策略需要审批的操作会先询问。
 - **在输入框输入 `/`** 打开技能菜单：随包技能名都带 `eng-` 前缀（`eng-tdd`、`eng-pr`…），32 个工程工作流技能全部可点名，其中 11 个还能由模型按任务自动加载，另外 21 个不进入会话技能目录、只能由你点名，菜单里标着「仅用户」。用上游原名放一份 `tdd` 到 `.dsh/skills`、[`.agents/skills`](.agents/skills) 或用户技能目录，它会与 `eng-tdd` 并存而不是互相覆盖。
-- **技能菜单按来源分组**：标题是「类别 · 来源」，类别按 内置 → 插件 → 项目 → 用户 → 自定义 排列，例如 `内置`（office 4 个）、`内置 · erkamyaman/rust-anything`（rust-anything 技能，只随 `standard` preset 挂载）、`内置 · mattpocock/skills`（工程技能）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；输入查询后标题收起，改为按名称匹配排序。
+- **技能菜单按来源分组**：标题是「类别 · 来源」，类别按 内置 → 插件 → 项目 → 用户 → 自定义 排列，例如 `内置`（office 4 个）、`内置 · erkamyaman/rust-anything`（rust-anything 技能，只随 `standard` preset 挂载）、`内置 · EL4CTEO/fast-anything`（fast-anything 技能，同样只随 `standard` preset 挂载）、`内置 · mattpocock/skills`（工程技能）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；输入查询后标题收起，改为按名称匹配排序。
 - **空草稿时按 ↑** 召回当前文件夹最近 100 条输入，`↑`、`↓` 前后浏览。
 - **插件**页查看已装与实验性插件、添加社区索引，见下一节。
 
@@ -61,6 +61,7 @@ pnpm dsh web
 | 工程工作流技能 | 32 个都在 `/` 菜单里可点名，其中 11 个还能由模型按任务自动加载；见[使用指南](docs/user/guide/engineering-skills.zh.md)与[技能包](packages/skill/skill-engineering/README.zh.md) |
 | 启动片头 | 默认播放，点按钮或按 Esc 跳过；设置页可调序列参数、换用自己的片头视频，见[启动片头包](packages/client/ui-boot-animation/README.zh.md) |
 | 逆向分析 | `standard` preset 自带 rea MCP server 与 `dsh-rea` 技能，用于分析已发布的二进制、应用与运行时行为；见[rea 集成报告](rea-integration.zh.md) |
+| 热点提速 | `standard` preset 自带 fast-anything MCP server 与 `dsh-fast-anything` 技能，只把应用最热的纯函数移植到 Rust，并用录制调用验证；见[fast-anything 集成报告](fast-anything-integration.zh.md) |
 
 ### 把代码迁移到 Rust
 
@@ -69,6 +70,14 @@ pnpm dsh web
 CLI 由 `pnpm run build` 从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 编译到 `native/rust-anything/bin/rust-anything`，终端里可以直接用同一套命令（`analyze`、`gate`、`doctor` 等）。生成的 crate 写在**你指定的目标仓库**（要迁移的那个，不是本仓库）的 `rust/<unit>-rs/`，直接出现在它的工作树里；`record`、`bench`、`shadow` 和 `app record` 会真的运行目标项目的代码（`record --from-tests -- <测试命令>` 还会跑它自己的测试套件），这些代码以你的用户身份读写文件、访问网络，所以迁移在副本或临时 worktree 上做，并且不要把生产凭据留在环境里。不需要这项能力时，删掉 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml) 里的 `mcp-rust-anything` 行；嫌 22 个工具占请求 token，就把该行的 `toolLoading` 改成 `on-demand`，重启后生效。
 
 单元级流程见[rust-anything 使用指南](docs/user/guide/rust-anything.zh.md)，整应用重写见[技能正文](packages/skill/skill-rust-anything/assets/dsh-rust-anything/whole-app.md)，源码基线与上游同步见 [NATIVE.md](native/rust-anything/NATIVE.md)。
+
+### 让慢的那段代码提速
+
+`standard` preset 的会话还挂载了 fast-anything MCP server 与随包技能 `dsh-fast-anything`：说一句「这个脚本要跑五秒，找出热点函数并让它变快」或「去重那一步占了大部分时间，把它搬到 Rust」，也可以用 `/` 点名 `dsh-fast-anything` 先加载技能，Agent 会用 `mcp__fast-anything__*` 推进 `fast_scan` → `fast_port` → 写 Rust → `fast_verify` → `fast_enable` → `fast_bench`/`fast_report`。它只搬最外层能搬的热点循环，应用的其余部分保持原样；每个移植都回放原代码的真实调用、派生边界用例与收缩输入，全部匹配且不比原来慢才会启用。
+
+CLI 由 `pnpm run build` 从 [`native/fast-anything`](native/fast-anything/NATIVE.md) 编译到 `native/fast-anything/bin/fast-anything`。运行时会在**你指定的目标项目**里写 `.fast/` 目录（录制、单函数 crate、`TASK.md` 与报告），生成的 crate 编译进共享的 `.fast/target`；`scan` 与 `port` 会以你的用户身份执行目标项目的代码，`fast_enable` 还会改写它的调用点，所以请在副本上操作并审查 diff。撤销方式：`fast_disable`、`FAST_ANYTHING_DISABLE=1`，或 `fast-anything clean --all`。不需要这项能力时，删掉 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml) 里的 `mcp-fast-anything` 行。
+
+完整流程见[fast-anything 使用指南](docs/user/guide/fast-anything.zh.md)，工具面与限制见 [fast-anything 包说明](packages/mcp/fast-anything/README.zh.md)，技能见 [skill-fast-anything](packages/skill/skill-fast-anything/README.zh.md)，源码基线与上游同步见 [NATIVE.md](native/fast-anything/NATIVE.md)。要把整个应用改写成 Rust，用上一节的 rust-anything。
 
 ### 逆向分析已发布的应用
 

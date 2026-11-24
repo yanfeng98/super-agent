@@ -10,6 +10,7 @@ const artifactGraph = {
   // Native CLI, rea server, IM panel, and proactive-agent builds precede the Web shell.
   'rust-anything': [],
   'rea': [],
+  'fast-anything': [],
   'host-typert': [],
   'host-src': ['native', 'host-typert'],
   'host-bundle': ['host-src'],

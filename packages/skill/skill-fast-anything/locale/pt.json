@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Portar caminhos quentes para Rust",
+    "description": "Oferece o fluxo integrado do fast-anything: analisar as funções custosas de um app, portar uma para Rust e verificá-la com chamadas gravadas."
+  }
+}

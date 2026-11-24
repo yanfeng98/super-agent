@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/skill/skill-fast-anything/README.md
+/:
+  en: 5cbd0a7905562f6c
+  zh: 0c604d3f15c88de3
+/deepseek-ai-dsh-skill-fast-anything:
+  en: 89b8508917542f0c
+  zh: 42a676308ae74cb3
+/deepseek-ai-dsh-skill-fast-anything/summary:
+  en: 56e6ce490bfb193b
+  zh: 647b814c04851483
+/deepseek-ai-dsh-skill-fast-anything/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: af2f3a72884f5587
+/deepseek-ai-dsh-skill-fast-anything/use-this-package:
+  en: 8bd69ae53456c89a
+  zh: aa41182c4f4dc5ad
+/deepseek-ai-dsh-skill-fast-anything/use-this-package/what-the-catalog-contains:
+  en: b5de3c31feecd981
+  zh: 79ba3ab4640f6b04
+/deepseek-ai-dsh-skill-fast-anything/use-this-package/observable-success-and-failures:
+  en: d8dcc39c56b8d61e
+  zh: 34eaac15d944e1bf
+/deepseek-ai-dsh-skill-fast-anything/understand-the-implementation:
+  en: de54eaa8042e8093
+  zh: c27baf9a4b1c6462
+/deepseek-ai-dsh-skill-fast-anything/further-exploration:
+  en: 1917eafce590e7dd
+  zh: 40f1334e533c5d0d
+/deepseek-ai-dsh-skill-fast-anything/model-experience:
+  en: 7fc5b6545bf476ac
+  zh: 43e251aa9365f546
+/deepseek-ai-dsh-skill-fast-anything/model-experience/kv-cache-effect:
+  en: dbb44c3898687ac2
+  zh: 44bee7e1b20ed394
+/deepseek-ai-dsh-skill-fast-anything/known-limitations-and-deferred-work:
+  en: 7e6a1851b960ad4a
+  zh: f7c4020081dff888
+/deepseek-ai-dsh-skill-fast-anything/known-limitations-and-deferred-work/dev-note:
+  en: 78d6f9e73fa876e6
+  zh: b9868cf21d7e485b

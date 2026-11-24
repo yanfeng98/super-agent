@@ -9,7 +9,7 @@ import { historicalSchemaRegion } from './historical-schema-region.ts'
 const root = resolve(import.meta.dirname, '..')
 const blockedTerm = 'prove' + 'nance'
 // Vendored third-party source and the rea skill text derived from it keep their upstream wording.
-const excludedPrefixes = ['vendor/', '.agents/notes/archived/', 'apps/web/native/', 'native/rea/', 'native/rust-anything/', 'packages/skill/skill-rea/assets/'] as const
+const excludedPrefixes = ['vendor/', '.agents/notes/archived/', 'apps/web/native/', 'native/fast-anything/', 'native/rea/', 'native/rust-anything/', 'packages/skill/skill-fast-anything/assets/', 'packages/skill/skill-rea/assets/'] as const
 
 /** One blocked term occurrence in a tracked path or text line. */
 export interface ConcreteTermViolation {

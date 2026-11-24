@@ -856,12 +856,13 @@ function coverageGates(platform: NodeJS.Platform = process.platform): Gate[] {
     : partitionedCoverageGate(partitions)
   return [
     pnpmScript('native-system', 'build:native-system'),
-    // The mount suites spawn the CLI the vendored crate builds and the server
+    // The mount suites spawn the CLIs the vendored crates build and the server
     // the vendored rea tree builds.
     pnpmScript('rust-anything', 'build:rust-anything'),
     pnpmScript('rea', 'build:rea'),
+    pnpmScript('fast-anything', 'build:fast-anything'),
     ...electron,
-    { ...instrumented, needs: ['native-system', 'rust-anything', 'rea', ...electron.map(gate => gate.id)] },
+    { ...instrumented, needs: ['native-system', 'rust-anything', 'rea', 'fast-anything', ...electron.map(gate => gate.id)] },
     coverageExemptHeavyGate(workers.exempt),
   ]
 }
@@ -905,7 +906,8 @@ function coverageShardGates(): Gate[] {
   return [
     pnpmScript('native-system', 'build:native-system'),
     pnpmScript('rea', 'build:rea'),
-    { ...partitionedCoverageGate(partitions), needs: ['native-system', 'rea'] },
+    pnpmScript('fast-anything', 'build:fast-anything'),
+    { ...partitionedCoverageGate(partitions), needs: ['native-system', 'rea', 'fast-anything'] },
     ...shard.index === 1 ? [coverageExemptHeavyGate(coverageWorkerArgs().exempt)] : [],
   ]
 }
@@ -921,9 +923,10 @@ function ciUnitGates(): Gate[] {
     pnpmScript('native-system', 'build:native-system'),
     pnpmScript('rust-anything', 'build:rust-anything'),
     pnpmScript('rea', 'build:rea'),
+    pnpmScript('fast-anything', 'build:fast-anything'),
     pnpmExec('unit', ['vitest', 'run'], {
       label: 'test',
-      needs: ['native-system', 'rust-anything', 'rea'],
+      needs: ['native-system', 'rust-anything', 'rea', 'fast-anything'],
       streamOutput: true,
     }),
   ]

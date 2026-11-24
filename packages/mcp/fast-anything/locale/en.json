@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "fast-anything",
+    "description": "Mount the fast-anything MCP server so an agent can port an app's hottest pure functions to Rust and prove each port against recorded calls."
+  }
+}

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/mcp/fast-anything/README.md
+/:
+  en: 2347b1eb9159dd7a
+  zh: 66c7d543bcba583b
+/deepseek-ai-dsh-fast-anything:
+  en: 222f80a88a8f0367
+  zh: 44089723b610f506
+/deepseek-ai-dsh-fast-anything/summary:
+  en: c61835d91a2acbce
+  zh: a6116d26c0d5d17e
+/deepseek-ai-dsh-fast-anything/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: af2f3a72884f5587
+/deepseek-ai-dsh-fast-anything/use-this-package:
+  en: 38ae7046186e1519
+  zh: c613ebce2d461940
+/deepseek-ai-dsh-fast-anything/understand-the-implementation:
+  en: c2ad1be5c1134f5c
+  zh: 417fd056454604ce
+/deepseek-ai-dsh-fast-anything/further-exploration:
+  en: 8ddee5dda9b3e501
+  zh: 74ec29641a58d91a
+/deepseek-ai-dsh-fast-anything/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-fast-anything/model-experience/mcp-tools-from-the-server:
+  en: 3ec83f7a88d8ac6a
+  zh: 04f7993609cfff26
+/deepseek-ai-dsh-fast-anything/model-experience/mcp-tools-from-the-server/what-the-model-sees:
+  en: 8e20d3a1414e2a2d
+  zh: e28d29709f11a28e
+/deepseek-ai-dsh-fast-anything/model-experience/mcp-tools-from-the-server/token-effect:
+  en: 7786cdf42fcc1939
+  zh: 652d538f696e1310
+/deepseek-ai-dsh-fast-anything/model-experience/mcp-tools-from-the-server/kv-cache-effect:
+  en: 4085ace7d94fe688
+  zh: 0260abe73737ee71
+/deepseek-ai-dsh-fast-anything/known-limitations-and-deferred-work:
+  en: 14819ea00cf5c1f4
+  zh: d10137ff0547e750
+/deepseek-ai-dsh-fast-anything/known-limitations-and-deferred-work/dev-note:
+  en: 6b8115971d1a50ca
+  zh: 87ef148ace0ae127

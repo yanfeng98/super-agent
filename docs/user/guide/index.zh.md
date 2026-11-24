@@ -30,6 +30,7 @@ Agent（智能体）可以读取和编辑工作区文件、运行命令、委派
 
 - [使用内置工程技能](./engineering-skills.zh.md)
 - [使用 rust-anything 迁移到 Rust](./rust-anything.zh.md)
+- [用 fast-anything 让慢的部分变快](./fast-anything.zh.md)
 - [配置模型](./providers.zh.md)
 - [在 Session 之间发送消息](../session-control.zh.md)
 - [使用 Python SDK](./python-sdk.zh.md)

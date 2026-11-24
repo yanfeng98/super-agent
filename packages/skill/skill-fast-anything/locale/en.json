@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rust hot-path port skill",
+    "description": "Provide the built-in fast-anything workflow: scan an app's hot functions, port one to Rust, and prove it against recorded calls."
+  }
+}

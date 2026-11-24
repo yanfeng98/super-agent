@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for fast-anything.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/guide/fast-anything.md
+/make-the-slow-part-fast-with-fast-anything:
+  en: f2d8d1ae02a2ca6f
+  zh: d0fd36f34b296e17
+/make-the-slow-part-fast-with-fast-anything/what-ships:
+  en: f18e23f7c3c95a3b
+  zh: 94310036cd88521d
+/make-the-slow-part-fast-with-fast-anything/before-the-first-session:
+  en: 37b3089113ff08bf
+  zh: 6f25557e2b19bd94
+/make-the-slow-part-fast-with-fast-anything/ask-for-a-speed-up:
+  en: b486d83ea336c786
+  zh: e2d92042d0952b45
+/make-the-slow-part-fast-with-fast-anything/what-it-leaves-behind:
+  en: 721eda1709785ee8
+  zh: 6148f7f624652625
+/make-the-slow-part-fast-with-fast-anything/use-the-cli-directly:
+  en: 0e1bc30d900f88a3
+  zh: a15800b47eb97459
+/make-the-slow-part-fast-with-fast-anything/costs-and-limits:
+  en: ac22f06fca46bd64
+  zh: 97713435f45527c3

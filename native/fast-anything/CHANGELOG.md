@@ -1,0 +1,113 @@
+# Changelog
+
+## 0.8.6
+
+- C#: apps start through their own launcher (`App.exe`), as `dotnet run` does, so WinUI 3 / Windows App SDK apps no longer crash with `0xc000027b` (#79).
+- C#: `scan --duration 30` stops a GUI or server after 30 seconds and ranks what ran (#79).
+- C#: async methods, lambdas and local functions count toward the method that holds them; waiting threads no longer dilute the shares (#79).
+- C#: when the time is in libraries reached from `Main` or async code, `scan` says which; `dotnet test` gets a clear explanation (#79).
+- `doctor` tells "ready to scan" from "ready to port": scanning doesn't need Rust (#79).
+- MCP `fast_scan` returns `why_not` for each function and the scan's notes.
+- `clean` removes the build cache; `clean --all` switches every port back and resets `.fast` (#76).
+- Python: a repeated SIGTERM no longer cuts off a worker writing its results.
+
+Thanks @JuggyBob and @ashp15205.
+
+## 0.8.5
+
+- `scan`: a function whose helper does I/O or is nondeterministic is no longer ranked portable (#75).
+- Python: I/O and randomness reached through an import alias are detected (#77); `os.environ`, `sys.argv` and the standard streams block without a call too (#78).
+
+Thanks @OnurrUgur.
+
+## 0.8.1
+
+- `build` and `enable` require the Rust sources that passed verify (#67, #64).
+- `go --agent` restores the best attempt's Cargo files, `build.rs` and sources (#68, #65).
+- `disable` refuses a block with a missing marker instead of reporting success (#69, #66).
+- `scan` and `status` trim long function ids from the front, so the function name stays visible (#72, #71).
+- Python: `with multiprocessing.Pool(...)` workers are profiled and recorded on Windows (#74, #73).
+
+Thanks @Jack-mi and @Plastic-time.
+
+## 0.8.0
+
+- R apps: `Rscript app.R`, through the C bridge and base R's `.C()`; no packages or R headers (#58).
+- Kotlin/JVM: Gradle apps with sources in `src/main/kotlin` (#63).
+- Python: ports functions that take or return NumPy arrays (#49), dataclasses and NamedTuples (#47); profiles and records inside `multiprocessing` workers (#51).
+- Python verify tells tuples from lists; a `tuple[T, ...]` return stays a tuple (#60).
+- Node.js: static methods can be ported (#43).
+- An enabled port is no longer reported as stale because of its own block (#62).
+
+Thanks @mohitmishra786 and @vaibhavppandey.
+
+## 0.7.0
+
+- JavaScript/TypeScript apps also run on Bun and Deno (#55); `doctor` checks them.
+- Node.js: `worker_threads` are profiled and recorded too (#53).
+- Warns when the original changed since its port was recorded (#29).
+- `disable --all` switches every port back at once (#41).
+- Python: `scan` runs through `uv run`, `poetry run` and other env runners (#34).
+
+Thanks @mohitmishra786.
+
+## 0.6.2
+
+- npm: the launcher sets the binary's execute bit, fixing `EACCES` on macOS and Linux (#27, thanks @podsni).
+- Python verify only accepts the exception type the original raises; a Rust panic no longer counts (#23).
+- `build` won't put an enabled port live if its Rust changed since verify (#25).
+- `doctor` checks minimum runtime versions and PHP's FFI extension (#31).
+- `go --agent` sends a right-but-slower port back to the agent for speed, and keeps the best right attempt (#35).
+- `verify --all` re-checks every port (#38).
+- MCP: progress notifications during long tool calls (#44).
+
+Thanks @mohitmishra786.
+
+## 0.6.1
+
+- Python: verify tells ints from floats (#9); `@staticmethod`s can be ported (#13).
+- Node.js: verify checks functions that aren't exported (#15); entry-script functions port when the main code sits under `if (import.meta.main)` or `require.main === module` (#17); `const` functions port (declared with `let` while enabled, put back on disable) (#19); typed-array edge cases, `Uint8ClampedArray`, `Buffer` and `Set<string>` (#22). Thanks @mohitmishra786 and @ashp15205.
+- `bench` warns when the app prints something else with the Rust ports (#11).
+- C/C++: Intel oneAPI compilers (`icx`, `icpx`, `dpcpp`); `-fsycl` builds profile host code only (#21, thanks @Asahi-Prv).
+
+## 0.6.0
+
+- C# / .NET 8+: `fast-anything scan -- dotnet run -c Release`. Profiled with the runtime's own EventPipe sampler (nothing to install), sources read with Roslyn, ports called through NativeLibrary. Static methods taking numbers, strings, arrays, lists and string-keyed dictionaries; verify adds edge cases and shrunk inputs. Thanks @JuggyBob for the request (#3).
+- `port` refuses functions that change their arguments in place (seen while recording): a port only returns a value, so verify could pass a port that drops those changes (#4).
+- Python: parameters with non-literal defaults and keyword-only parameters get valid PyO3 signatures (#5, thanks @mohitmishra786); TASK.md shows an empty set as `set()` (#7).
+- Ports rebuild about 4× faster after each edit (no LTO, parallel codegen; no measurable runtime cost).
+
+## 0.5.1
+
+- Python: keyword arguments get edge cases and smaller inputs in verify; `bytes`, `bytearray` and `tuple[T, ...]` map to Rust types; fixed generated byte literals. Thanks @ashp15205 (#1).
+
+## 0.5.0
+
+- Edge cases in verify: NaN, ±infinity, -0.0, 0 and ±1, non-ASCII text (accents, CJK, emoji, combining marks), empty and up to 4,096-item inputs, built from the recorded calls and answered by the original. Python, Node.js/TypeScript, Ruby, Go and C++.
+- A port that's right but slower per call than the original (the call into Rust costs more than the work) isn't enabled; `enable --force` overrides.
+
+## 0.4.0
+
+- C and C++ (gcc or clang): `fast-anything scan -- clang -O2 main.c lib.c`. fast-anything builds the app itself, profiles every function for one run, and loads ports with LoadLibrary or dlopen. C ports take numbers, strings and `const T *` + length arrays; C++ ports also take std::string, vector, array, map and pair.
+- Java apps built with Maven (`mvn -q compile exec:java`) or Gradle (`gradle -q run`): sources come from `src/main/java`, every JVM the build starts is profiled, and Gradle runs without its daemon.
+
+## 0.3.0
+
+- PHP (8.1+): apps run as `php app.php`. Profiled with a one-line timer per function for one run, parsed with PHP's tokenizer, ports called through the FFI extension.
+
+## 0.2.0
+
+- Java (22+): apps run as `java App.java`. Profiled with Flight Recorder, parsed with javac's own parser, ports called through the FFM API.
+- Go (1.22+): apps run as `go run .`. Profiled with pprof, bench times a prebuilt binary so the compiler isn't counted. Ports load through the Windows loader or dlopen.
+- Ports for the C-bridge languages are now verified by fast-anything itself, in a child process, so a crashing port can't take it down.
+- Temporary edits made while profiling or recording are backed up in `.fast/backup` and restored even after an interrupted run.
+
+## 0.1.0
+
+- Profile, port, verify, enable, bench and report for Python (PyO3), Node.js/TypeScript (napi-rs) and Ruby (C ABI + JSON via Fiddle, no headers needed).
+- Ports functions in the entry script too, when its main code is under a main guard.
+- Ports the outermost hot loop, with the helpers it calls, so the app crosses into Rust once instead of per call.
+- Verifies against up to 500 real recorded calls plus derived cases (shrunk inputs answered by the original).
+- `go --agent claude|codex|<cmd>`: the whole loop in one command. `doctor` checks your toolchain.
+- MCP server (`fast-anything mcp`), Claude Code plugin and agent skill.
+- npm (`npm i -g @el4cteo/fast-anything`) and crates.io packages, prebuilt binaries for Windows, macOS and Linux.

@@ -11,6 +11,7 @@
     "docs/i18n/terminology.md",
     "docs/i18n/translation-prompt.md",
     "apps/web/native/",
+    "native/fast-anything/",
     "native/rea/",
     "native/rust-anything/"
   ]

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "fast-anything",
+    "description": "挂载 fast-anything MCP server，让 Agent 把应用里最热的纯函数迁移到 Rust，并用真实录制调用验证每个移植。"
+  }
+}

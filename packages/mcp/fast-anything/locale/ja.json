@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "fast-anything",
+    "description": "fast-anything MCP サーバーを接続し、Agent がアプリの最も重い純粋関数を Rust へ移植し、記録した実呼び出しで各移植を検証できるようにします。"
+  }
+}

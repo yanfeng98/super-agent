@@ -1,5 +1,5 @@
 name: Set up Rust
-description: Install the Rust toolchain the vendored rust-anything crate requires, and cache its cargo output.
+description: Install the Rust toolchain the vendored Rust crates require, and cache their cargo output.
 runs:
   using: composite
   steps:
@@ -8,4 +8,6 @@ runs:
         toolchain: 1.97.0
     - uses: Swatinem/rust-cache@v2
       with:
-        workspaces: native/rust-anything
+        workspaces: |
+          native/rust-anything
+          native/fast-anything

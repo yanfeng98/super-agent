@@ -77,6 +77,7 @@ flowchart TD
   subgraph group_skill["packages/skill"]
     pkg_skill["skill"]
     pkg_skill_engineering["skill-engineering"]
+    pkg_skill_fast_anything["skill-fast-anything"]
     pkg_skill_filesystem["skill-filesystem"]
     pkg_skill_office["skill-office"]
     pkg_skill_rea["skill-rea"]
@@ -398,6 +399,7 @@ flowchart TD
     pkg_tool_lsp["tool-lsp"]
   end
   subgraph group_mcp["packages/mcp"]
+    pkg_fast_anything["fast-anything"]
     pkg_mcp_account["mcp-account"]
     pkg_mcp_client["mcp-client"]
     pkg_mcp_manager["mcp-manager"]
@@ -609,6 +611,7 @@ flowchart TD
   pkg_fs --> pkg_llm
   pkg_fs --> pkg_sandbox
   pkg_skill_engineering --> pkg_skill
+  pkg_skill_fast_anything --> pkg_skill
   pkg_skill_office --> pkg_skill
   pkg_skill_rea --> pkg_skill
   pkg_skill_rust_anything --> pkg_skill
@@ -1392,6 +1395,7 @@ flowchart TD
   pkg_webhook_github --> pkg_host_webserver
   pkg_webhook_github --> pkg_session
   pkg_webhook_github --> pkg_webhook
+  pkg_fast_anything --> pkg_mcp_client
   pkg_mcp_manager --> pkg_credentials
   pkg_mcp_manager --> pkg_mcp_client
   pkg_mcp_manager --> pkg_tools
@@ -1862,6 +1866,7 @@ flowchart TD
 | [`system-prompt`](../packages/core/system-prompt) | `core` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
 | [`fs`](../packages/fs/fs) | `fs` | [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox) |
 | [`skill-engineering`](../packages/skill/skill-engineering) | `skill` | [`skill`](../packages/skill/skill) |
+| [`skill-fast-anything`](../packages/skill/skill-fast-anything) | `skill` | [`skill`](../packages/skill/skill) |
 | [`skill-office`](../packages/skill/skill-office) | `skill` | [`skill`](../packages/skill/skill) |
 | [`skill-rea`](../packages/skill/skill-rea) | `skill` | [`skill`](../packages/skill/skill) |
 | [`skill-rust-anything`](../packages/skill/skill-rust-anything) | `skill` | [`skill`](../packages/skill/skill) |
@@ -2024,6 +2029,7 @@ flowchart TD
 | [`forge-gitlab`](../packages/experimental/forge-gitlab) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`experimental-forge-session`](../packages/experimental/forge-session), [`subprocess`](../packages/subprocess/subprocess) |
 | [`tool-session-query`](../packages/experimental/tool-session-query) | `experimental` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-query`](../packages/session-query/session-query), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`webhook-github`](../packages/experimental/webhook-github) | `experimental` | [`credentials`](../packages/credentials/credentials), [`host-webserver`](../packages/host/webserver), [`session`](../packages/core/session), [`webhook`](../packages/experimental/webhook) |
+| [`fast-anything`](../packages/mcp/fast-anything) | `mcp` | [`mcp-client`](../packages/mcp/mcp-client) |
 | [`mcp-manager`](../packages/mcp/mcp-manager) | `mcp` | [`credentials`](../packages/credentials/credentials), [`mcp-client`](../packages/mcp/mcp-client), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`util-values`](../packages/util/values) |
 | [`rea`](../packages/mcp/rea) | `mcp` | [`mcp-client`](../packages/mcp/mcp-client) |
 | [`rust-anything`](../packages/mcp/rust-anything) | `mcp` | [`mcp-client`](../packages/mcp/mcp-client) |

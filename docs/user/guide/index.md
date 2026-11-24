@@ -30,6 +30,7 @@ The composer keeps the newest 100 accepted inputs for the current workspace fold
 
 - [Use the built-in engineering skills](./engineering-skills.md)
 - [Port code to Rust with rust-anything](./rust-anything.md)
+- [Make the slow part fast with fast-anything](./fast-anything.md)
 - [Configure models](./providers.md)
 - [Send messages between Sessions](../session-control.md)
 - [Use the Python SDK](./python-sdk.md)

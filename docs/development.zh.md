@@ -13,7 +13,7 @@
 - Node.js 要求 24.22.3 或更高的 24.x 版本，或 26.13.1 或更高版本。CI 覆盖 24.22.3、最新的 24 和 26；见 [Node 引擎下限 Agent Note](../.agents/notes/implemented/process/2026-10-15-node-24-runtime-floor.zh.md)。
 - 启用 Node.js TypeScript 类型剥离。仓库构建脚本用 tsdown 的 native 配置加载器加载 `tsdown.config.ts`，因此当 `NODE_OPTIONS` 含 `--no-experimental-strip-types` 或 Node.js 构建缺少 TypeScript 支持时会失败；`pnpm run build` 会先检查这一条件并指出原因。
 - 启用了 Corepack 的 pnpm。仓库在 `package.json` 中固定使用 `pnpm@11.28.5`；如果 `pnpm --version` 无法通过 Corepack 解析，请先运行 `corepack enable`。
-- 通过 `rustup` 安装的 Rust。`pnpm run build` 会编译 vendored 在 [`native/rust-anything`](../native/rust-anything/NATIVE.md) 的 rust-anything CLI；该 crate 在自己的 `rust-toolchain.toml` 里固定 Rust 1.97.0，rustup 会按需安装该 channel，缺少 `cargo` 时构建失败。
+- 通过 `rustup` 安装的 Rust。`pnpm run build` 会编译 vendored 在 [`native/rust-anything`](../native/rust-anything/NATIVE.md) 的 rust-anything CLI；该 crate 在自己的 `rust-toolchain.toml` 里固定 Rust 1.97.0，rustup 会按需安装该 channel，缺少 `cargo` 时构建失败。同一次构建还会编译 vendored 在 [`native/fast-anything`](../native/fast-anything/NATIVE.md) 的 fast-anything CLI，它接受 Rust 1.88 或更新版本，因此上面的 1.97.0 工具链也能覆盖它。
 - 构建 rea server 需要 Node.js 24.22.3 或更新版本：`pnpm run build` 会在 [`native/rea`](../native/rea/NATIVE.md) 里按 lockfile 执行一次 `npm ci`，然后跑上游构建，首次需要联网并约 3 分钟。
 - Git 2.26 或更高版本；钩子设置会启用 Git 的 worktree 专属配置扩展。实验性的 [worktree](../packages/experimental/worktree/README.zh.md) 包另外还需要 Git 2.36，用于 `git worktree list --porcelain -z`。
 - 可选：一个 DeepSeek API key，用于 Web、headless 和 ACP（Agent Client Protocol）自动化 agent（智能体）演示以及真实 API 的 e2e 测试。

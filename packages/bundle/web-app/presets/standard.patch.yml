@@ -163,3 +163,16 @@
             config:
               toolLoading: on-demand
               catalogProfile: hot-cold
+          # fast-anything: port an app's hottest pure functions to Rust and
+          # prove each port against recorded calls. `pnpm run build` compiles
+          # the CLI from the crate vendored at native/fast-anything. The bundled
+          # skill carries the porting loop and is mounted beside the tools.
+          - id: skill-fast-anything
+            name: '@deepseek-ai/dsh-skill-fast-anything'
+          - id: mcp-fast-anything
+            name: '@deepseek-ai/dsh-fast-anything'
+            config:
+              # Eager keeps the tool list stable and needs no load step; the 8
+              # schemas (plus the 3 shared resource tools) cost about 800
+              # request tokens per agent that mounts it.
+              toolLoading: eager

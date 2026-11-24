@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "fast-anything",
+    "description": "Conecta o servidor MCP fast-anything para que um agente porte para Rust as funções puras mais custosas de um app e verifique cada port com chamadas gravadas."
+  }
+}
