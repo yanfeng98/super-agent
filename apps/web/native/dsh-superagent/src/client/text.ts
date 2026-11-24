@@ -34,6 +34,35 @@ function label(t: T, reason: Reason): string {
 export const setupText = (t: T, problem: Pick<SetupProblem, 'code' | 'values'>): string => t(`setup.${problem.code}`, problem.values)
 export const healthText = (t: T, health: Pick<Health, 'detail' | 'code' | 'values'>): string =>
   health.code ? t(`healthCode.${health.code}` as const, health.values) : health.detail
+/**
+ * A ticket ending's time, outcome and reason in the panel's language.
+ * @param t - Translator of the active panel language.
+ * @param ended - The recorded ending, or undefined for an open Ticket.
+ * @returns The ending sentence, or an empty string without an ending.
+ */
+export function endedLabel(t: T, ended: { at: string; outcome: string; reason?: string } | undefined): string {
+  if (!ended) return ''
+  const outcome = valueLabel(t, 'outcome', ended.outcome), reason = reasonLabel(t, ended.reason), time = when(ended.at, t('lang'))
+  return reason ? t('endedAt', { time, outcome, reason }) : t('endedAtShort', { time, outcome })
+}
+/**
+ * One notification's detail sentence in the panel's language: an ending's outcome and reason, or where a merge landed.
+ * Records without those fields show the sentence they were written with.
+ * @param t - Translator of the active panel language.
+ * @param item - The stored notification.
+ * @returns The detail sentence to show under its title.
+ */
+export function notificationLabel(t: T, item: { text: string; ending?: { outcome: string; reason?: string }
+  merge?: { target: string; head?: string } }): string {
+  if (item.ending) {
+    const outcome = valueLabel(t, 'outcome', item.ending.outcome)
+    return item.ending.reason ? `${outcome}：${item.ending.reason}` : outcome
+  }
+  if (item.merge) return item.merge.head
+    ? t('notificationMergedCommit', { target: item.merge.target, commit: item.merge.head.slice(0, 8) })
+    : t('notificationMerged', { target: item.merge.target })
+  return item.text
+}
 /** Replaces Feishu content placeholders (images, cards, media, forwards, unresolved mentions) with localized labels. */
 export function readableMarkers(t: T, text: string): string {
   return text.replace(/!\[[^\]]*\]\([^)]*\)|\[Image: [^\]]*\]|\[image\]/g, t('imageMarker'))

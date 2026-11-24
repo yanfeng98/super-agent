@@ -33,8 +33,10 @@ export function notificationFor(previous: string | undefined, ticket: Watched): 
 }
 /** The kinds the inbox records that the ticket poller cannot see, because the Ticket itself does not move. */
 const MERGE_EVENTS = new Set(['merged', 'reverted', 'automerge', 'check', 'push'])
-/** One panel notification as the desktop watcher reads it. */
-export interface InboxItem { id: string; kind: string; title: string; text: string }
+/** One panel notification as the desktop watcher reads it, with the fields the panel words itself. */
+export interface InboxItem { id: string; kind: string; title: string; text: string
+  ending?: { outcome: string; reason?: string }
+  merge?: { target: string; head?: string } }
 /**
  * Decides whether an inbox notification deserves a desktop announcement: a merge outcome, a failing check, or a
  * standing merge the host gave up on. A question or an ending is announced from the ticket's own state instead.
@@ -46,7 +48,22 @@ export function eventNotificationFor(item: InboxItem): { title: string; body: st
   const dict = dictionary()
   const title = dict[`notification.${item.kind}` as keyof Dictionary]
   if (typeof title !== 'string') return undefined
-  return { title, body: `${item.title} · ${item.text}` }
+  return { title, body: `${item.title} · ${noticeText(item, dict)}` }
+}
+
+/** A notification's detail in the watcher's language, preferring the recorded fields over the writer's sentence. */
+function noticeText(item: InboxItem, dict: Dictionary): string {
+  if (item.ending) {
+    const outcome = dict[`outcome.${item.ending.outcome}` as keyof Dictionary]
+    const label = typeof outcome === 'string' ? outcome : item.ending.outcome
+    return item.ending.reason ? `${label}：${item.ending.reason}` : label
+  }
+  if (item.merge) {
+    return item.merge.head
+      ? dict.notificationMergedCommit.replace('{target}', item.merge.target).replace('{commit}', item.merge.head.slice(0, 8))
+      : dict.notificationMerged.replace('{target}', item.merge.target)
+  }
+  return item.text
 }
 let timer: ReturnType<typeof setInterval> | undefined
 let polling = false

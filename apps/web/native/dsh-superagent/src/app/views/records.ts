@@ -125,9 +125,12 @@ export function ticketSummary(ticket: Ticket, number?: number) {
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
   const cleanup = !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   // A revert newer than the merge undoes it, so the row shows the ticket as it stands rather than the merged state.
-  const merged = !!ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at)
+  const merged = ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at) ? ticket.merged : undefined
   return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, tags: [] as string[], state, ...stage, ...note ? { note } : {},
-    ...merged ? { merged: true as const } : {},
+    // Where a merge landed belongs on the row and its hover detail, not only on the Ticket page. Records from older
+    // deployments may lack a target or branch, so the row states only the merge facts it has.
+    ...merged ? { merged: { at: merged.at, ...merged.target ? { target: merged.target } : {},
+      ...merged.branch ? { branch: merged.branch } : {}, ...merged.head ? { head: merged.head } : {} } } : {},
     actions: { retry: canRetry(ticket), stop: liveTicket(ticket), ...cleanup ? { cleanup: true as const } : {} },
     strength: ticket.mandate.strength, ended: ticket.ended,
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },

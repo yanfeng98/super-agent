@@ -340,10 +340,11 @@ it('marks a merged Ticket on its row, and drops the mark once a revert undoes th
   const ended = { ...store.tickets.get('t1')!, ended: { at, by: 'executor' as const, outcome: 'completed' as const },
     merged: { at: '2026-09-23T00:00:00.000Z', branch: 'agent/t1', target: 'main' } }
   store.tickets.save(ended)
-  expect(ticketSummary(store.tickets.get('t1')!)).toMatchObject({ state: 'ended', merged: true })
+  expect(ticketSummary(store.tickets.get('t1')!)).toMatchObject({ state: 'ended', merged: { at: '2026-09-23T00:00:00.000Z',
+    branch: 'agent/t1', target: 'main' } })
   // A revert older than the merge is history; a newer one is the ticket's current state.
   store.tickets.save({ ...ended, reverted: { at: '2026-09-22T00:00:00.000Z', commit: 'c', target: 'main', merge: 'b' } })
-  expect(ticketSummary(store.tickets.get('t1')!).merged).toBe(true)
+  expect(ticketSummary(store.tickets.get('t1')!).merged).toMatchObject({ target: 'main' })
   store.tickets.save({ ...ended, reverted: { at: '2026-09-24T00:00:00.000Z', commit: 'c', target: 'main', merge: 'b' } })
   expect(ticketSummary(store.tickets.get('t1')!).merged).toBeUndefined()
 })

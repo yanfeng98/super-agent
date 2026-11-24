@@ -16,10 +16,11 @@ export function TicketLine({ ticket, question, onChanged, context, select }: {
   const after = async (request: Promise<unknown>) => { await request; await onChanged?.() }
   const note = question && ticket.note && { ...ticket.note, text: readableMarkers(t, ticket.note.text) }
   const answer = ticket.reply && ticket.stage === 'person' && ticket.action === 'answer' ? ticket.reply : undefined
-  return <li className="dt-row dt-link dt-ticket" data-state={question ? status.dot : undefined}>
+  return <li className="dt-row dt-link dt-ticket" data-state={question ? status.dot : undefined}
+    data-select={select ? '' : undefined}>
     {select && <label className="dt-check"><input type="checkbox" checked={select.checked} onChange={select.onToggle}
       aria-label={t('selectTicket', { title: ticket.title })} /></label>}
-    <div className="dt-ticket-stage"><StageMark state={status.dot} icon={status.icon} label={status.label} /></div>
+    <div className="dt-ticket-stage"><StageMark state={status.dot} icon={status.icon} label={status.label} title={status.title} /></div>
     <div className="dt-ticket-body">
       <div className="dt-row-title">{ticket.number ? <span className="dt-ticket-number">{ticketNumber(ticket.number)}</span> : null}
         <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: ticket.id })}>{ticket.title}</button></div>

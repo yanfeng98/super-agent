@@ -13,7 +13,7 @@ import { HOME, TABS, initialLocation, lastSettingsGroup, remember, routeLabel, s
   type Tab } from './route.ts'
 import { SettingsPage } from './settings.tsx'
 import { SourceStatus } from './source.tsx'
-import { actorName, errorText, reasonLabel, valueLabel, type T, readableMarkers } from './text.ts'
+import { actorName, errorText, notificationLabel, reasonLabel, valueLabel, type T, readableMarkers } from './text.ts'
 import { ThreadPage } from './thread.tsx'
 import { TicketPage } from './ticket.tsx'
 import { TriggerStatus } from './trigger.tsx'
@@ -177,7 +177,7 @@ function Header({ masterId }: { masterId: string | undefined }) {
           <div className="dt-row-meta"><span>{t(`notification.${item.kind}`)}</span><When at={item.at} />
             {!item.read && <span className="dt-count">{t('notificationsUnread')}</span>}</div>
           <button type="button" className="dt-open" onClick={() => { void openNotification(item) }}>{item.title}</button>
-          <div className="dt-row-quote">{item.text}</div>
+          <div className="dt-row-quote">{notificationLabel(t, item)}</div>
         </div>
       </li>)}</ul> : <p className="dt-hint">{t('notificationsEmpty')}</p>}
     </Modal>

@@ -24,7 +24,8 @@ import { environmentOf, ticketEnvironment, type Variable } from './execution-env
 import type { SetupProblem } from '../setup.ts'
 import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
-import { notifications as listNotifications, readAllNotifications, readNotification, recordNotification } from './notifications.ts'
+import { notifications as listNotifications, readAllNotifications, readNotification, recordNotification,
+  type Notification } from './notifications.ts'
 import { dequeueMerges, enqueueMerges, markMergeFailed, mergeQueuePaused, mergeQueueView, nextQueuedMerge, queuedMerges,
   recoverableMerges, retryMerges, setMergeQueuePaused, type MergeFailureCode, type MergeQueueView, type QueuedMerge } from './merge-queue.ts'
 import { MasterAssessor } from './assessment.ts'
@@ -192,10 +193,14 @@ export class Runtime extends Service implements SourceHost {
             const kind = event.type === 'ticket.attention' ? 'attention' as const : 'ended' as const
             const text = event.type === 'ticket.attention' ? event.data.question
               : [event.data.outcome, event.data.reason].filter(Boolean).join(': ')
+            // The fields let the panel word the ending in its own language; `text` keeps records and clients that read one.
+            const detail = event.type === 'ticket.ended'
+              ? { ending: { outcome: event.data.outcome, ...event.data.reason ? { reason: event.data.reason } : {} } } : {}
             this.store.afterCommit(() => {
               // An inbox write must not roll back the Ticket change it reports, so it fails alone.
-              try { if (notified) recordNotification(store, { at: event.at, kind, ticketId: notified.id, title: notified.title, text }) }
-              catch (error) { ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
+              try {
+                if (notified) recordNotification(store, { at: event.at, kind, ticketId: notified.id, title: notified.title, text, ...detail })
+              } catch (error) { ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
               this.notifyWebhook(event)
               // A structured request reaches the person without waiting for the main Session to relay it.
               if (event.type === 'ticket.attention' && notified) this.askInChannel(notified)
@@ -358,10 +363,12 @@ export class Runtime extends Service implements SourceHost {
    * Records a panel notification for an event a person may need to act on, and posts it to a local Source's webhook.
    * @param kind - The event a person should see, by the same name in both interfaces.
    * @param text - One sentence stating what happened.
+   * @param detail - Merge facts the panel words itself, so the sentence `text` stays readable to webhooks.
    */
-  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'automerge' | 'check' | 'push', text: string): void {
+  private ticketNotice(ticket: Ticket, kind: 'merged' | 'reverted' | 'review' | 'automerge' | 'check' | 'push', text: string,
+    detail: Pick<Notification, 'merge'> = {}): void {
     const at = now()
-    try { recordNotification(this.store, { at, kind, ticketId: ticket.id, title: ticket.title, text }) }
+    try { recordNotification(this.store, { at, kind, ticketId: ticket.id, title: ticket.title, text, ...detail }) }
     catch (error) { this.ctx.logger.warn('dsh-superagent: recording a notification failed: %s', String(error)) }
     this.postWebhook(ticket, { event: kind, at, text,
       ticket: { id: ticket.id, number: this.store.tickets.number(ticket.id) ?? 0, title: ticket.title } })
@@ -687,7 +694,8 @@ export class Runtime extends Service implements SourceHost {
     // A person may be away from the chat that asked; the panel and a local Source's webhook keep the outcome too.
     const decided = this.store.tickets.get(id) ?? current
     this.ticketNotice(decided, 'merged', `Merged ${this.ticketLabel(decided)} into ${result.target}`
-      + `${result.head ? ` at ${result.head}` : ''}${pushError ? `; the push failed: ${pushError}` : pushed ? ', pushed to the upstream' : ''}`)
+      + `${result.head ? ` at ${result.head}` : ''}${pushError ? `; the push failed: ${pushError}` : pushed ? ', pushed to the upstream' : ''}`,
+      { merge: { target: result.target, ...result.head ? { head: result.head } : {} } })
     // The merge moved the target branch, so the configured check now says whether the merged tree passes; a failure is the
     // person's to see, and the merge can be undone.
     let targetCheck: TicketCheck | undefined

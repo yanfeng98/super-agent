@@ -1,19 +1,34 @@
 /** Pure mappers from domain states (Tickets, Threads, Sources, Decisions) to UI status indicators. */
 import type { DecisionRow, SourceStatusRow, ThreadRow, TicketStage, TicketSummary } from './api.ts'
 import type { DshSuperagentKey } from './locales.ts'
-import { valueLabel, type T } from './text.ts'
+import { endedLabel, valueLabel, when, type T } from './text.ts'
 import type { DotState, IconName, TagTone } from './controls.tsx'
 
-export interface Mark { label: string; tone: TagTone; dot: DotState; icon: IconName }
+/** A row's status indicator; `title` carries the detail a person gets by hovering it. */
+export interface Mark { label: string; tone: TagTone; dot: DotState; icon: IconName; title?: string }
 
-export function ticketMark(t: T, ticket: TicketStage & Pick<TicketSummary, 'ended'> & { merged?: unknown }): Mark {
+/** What a Ticket mark reads: its stage, its ending, and where a recorded merge landed. */
+export type TicketMarkInput = TicketStage & Pick<TicketSummary, 'ended'>
+  & { merged?: { at: string; target?: string; branch?: string; head?: string } }
+
+export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
   switch (ticket.stage) {
     // A merge is the Ticket's strongest end state, so it labels the row even when the work itself was reported completed first.
-    case 'ended': return ticket.merged || ticket.ended?.outcome === 'merged'
-      ? { label: t('outcome.merged'), tone: 'success', dot: 'done', icon: 'pull' }
-      : ticket.ended?.outcome === 'completed'
-        ? { label: t('outcome.completed'), tone: 'success', dot: 'done', icon: 'decision' }
-        : { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop' }
+    case 'ended': {
+      const ended = endedLabel(t, ticket.ended)
+      if (ticket.merged || ticket.ended?.outcome === 'merged') {
+        const merge = ticket.merged
+        const where = merge?.target && merge.branch
+          ? [t('mergedHint', { target: merge.target, branch: merge.branch }),
+            ...merge.head ? [t('mergedCommit', { commit: merge.head.slice(0, 8) })] : []].join('\n')
+          : ''
+        return { label: t('outcome.merged'), tone: 'success', dot: 'done', icon: 'pull', title: where || ended || undefined }
+      }
+      if (ticket.ended?.outcome === 'completed') return { label: t('outcome.completed'), tone: 'success', dot: 'done', icon: 'decision',
+        title: t('markCompletedHint', { time: when(ticket.ended.at, t('lang')) }) }
+      return { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop',
+        title: ended || undefined }
+    }
     case 'person': {
       const action = ticket.action
       const icon: IconName = action === 'review' ? 'review' : action === 'failed' ? 'alert' : action === 'blocked' ? 'blocked'

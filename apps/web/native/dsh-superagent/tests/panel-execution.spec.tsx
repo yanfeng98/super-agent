@@ -22,6 +22,22 @@ it('shows unread notifications in the header and opens their Ticket', async () =
   expect(server.requests.some(request => request.path === 'tickets/t1')).toBe(true)
 })
 
+it('words a recorded ending and merge in the panel language, including records written before the fields existed', async () => {
+  server.notifications = { unread: 2, items: [
+    { id: 'n1', at: '2026-11-18T00:00:00Z', kind: 'ended', ticketId: 't1', title: '修复回归', text: 'completed',
+      ending: { outcome: 'completed' } },
+    { id: 'n2', at: '2026-11-18T00:01:00Z', kind: 'merged', ticketId: 't1', title: '修复回归',
+      text: 'Merged T-0001 into main at aaaa1111', merge: { target: 'main', head: `${'a'.repeat(8)}${'0'.repeat(32)}` } },
+  ] }
+  await mount()
+  await click(document.querySelector('button[aria-label="通知"]') as HTMLButtonElement)
+  const dialog = document.querySelector('[role="dialog"]')!
+  expect(dialog.textContent).toContain(zh['outcome.completed'])
+  expect(dialog.textContent).toContain(zh.notificationMergedCommit.replace('{target}', 'main')
+    .replace('{commit}', 'aaaaaaaa'))
+  expect(dialog.textContent).not.toContain('Merged T-0001')
+})
+
 it('lists Tickets under Execution by who they wait on, with the Executor state and its pause as an action', async () => {
   server.tickets.open = [ticketSummary(), ticketSummary({ id: 't2', title: '执行中的工单', threads: [{ key: 'feishu:oc_2:om_7',
     source: 'feishu', title: '另一个群里的消息', facts: { chat: { value: '另一个群' } } }] })]
@@ -491,8 +507,10 @@ it('gives a Ticket a bot\'s message started its basis, marks a Thread it follows
 })
 
 it('words an ended Ticket by its outcome, on its row and its page, with a person\'s reason after it', async () => {
+  const endedAt = '2026-09-21T00:00:00Z'
   const fields = { id: 't3', title: '已合并的工单', state: 'ended' as const, actions: { retry: false, stop: false },
-    ended: { at: '2026-09-21T00:00:00Z', by: 'executor' as const, outcome: 'merged' as const } }
+    ended: { at: endedAt, by: 'executor' as const, outcome: 'merged' as const },
+    merged: { at: endedAt, target: 'main', branch: 'agent/t3' } }
   server.tickets.ended = [ticketSummary(fields, { stage: 'ended' }), ...server.tickets.ended]
   server.ticketDetails.t3 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended', actions: { ...fields.actions, reopen: true, approve: false, merge: false, discard: false, rebase: false, cleanup: true, check: false,
       reviewDecision: false, revert: true, push: true, dequeue: true },
@@ -504,8 +522,12 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   await click(zh['tab.execution'])
   await click(zh['ticket.ended'])
   expect(all('.dt-ticket-stage').map(stage => stage.textContent)).toEqual([zh['outcome.merged'], zh['outcome.stopped']])
+  // Hovering the row's merge mark says where the branch landed without opening the Ticket.
+  expect(all('.dt-ticket-stage .dt-stage')[0]?.getAttribute('title')).toBe('已合并到 main（agent/t3）。')
   await click('已合并的工单')
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.merged'])
+  expect(document.querySelector('.dt-status-line .dt-stage')?.getAttribute('title'))
+    .toBe('已合并到 main（agent/t3）。\n合并后目标分支停在 eeeeeeee。')
   expect(text()).toContain(zh['outcome.merged'])
   expect(text()).not.toContain('执行器结束')
   // A merged ticket offers cleaning up its worktree instead of discarding the branch, and undoing the merge.
@@ -536,7 +558,8 @@ it('marks a merge ahead of the completed outcome, and explains the worktree a cl
   const endedAt = '2026-09-21T00:00:00Z'
   const completed = { id: 't7', title: '清理的工单', state: 'ended' as const, actions: { retry: false, stop: false },
     ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const } }
-  server.tickets.ended = [ticketSummary({ ...completed, merged: true }, { stage: 'ended' }), ticketSummary(
+  server.tickets.ended = [ticketSummary({ ...completed, merged: { at: endedAt, target: 'main', branch: 'agent/t7' } },
+    { stage: 'ended' }), ticketSummary(
     { ...completed, id: 't8', title: '完成的工单' }, { stage: 'ended' }), ...server.tickets.ended]
   server.ticketDetails.t7 = { ...server.ticketDetails.t1!, ...completed, stage: 'ended',
     actions: { ...completed.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false, cleanup: false,

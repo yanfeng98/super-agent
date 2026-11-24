@@ -8,7 +8,8 @@ import { decisionMark, reportDot, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
 import { Earlier, ThreadLine, automatedRuns } from './rows.tsx'
-import { actorName, errorText, localized, readableMarkers, reasonLabel, ticketNumber as ticketRef, valueLabel, when } from './text.ts'
+import { actorName, endedLabel, errorText, localized, readableMarkers, reasonLabel, ticketNumber as ticketRef, valueLabel,
+  when } from './text.ts'
 import { ActionLink, ClampText, ConfirmButton, ExternalLink, Hint, KeyValues, LabelValue, LoadState, MarkdownLite, PageHead, Section,
   SessionButton, StageMark, When } from './widgets.tsx'
 
@@ -295,18 +296,14 @@ export function TicketPage({ id }: { id: string }) {
   if (!data) return <><PageHead
     title={t('term.ticket')} />{error instanceof ApiError && error.missing ? <Hint>{t('ticketNotFound')}</Hint> : <LoadState
       error={error} loading />}</>
-  const status = ticketMark(t, { ...data, merged: !!data.merged && !data.reverted })
+  const status = ticketMark(t, { ...data, merged: data.reverted ? undefined : data.merged })
   const actor = actorName(t, data.mandate.actor)
   const { legacy } = data.basis
   const undelivered = data.inputs.filter(input => !input.delivered)
   const failedText = /^(?:\w+Error|Error)\b[:：]/.test(data.summary)
   const failed = data.stage === 'person' && data.action === 'failed'
   const opening = data.threads.find(thread => thread.url)
-  const ended = data.ended && (() => {
-    const outcome = valueLabel(t, 'outcome', data.ended.outcome), reason = reasonLabel(t, data.ended.reason), time = when(data.ended.at,
-      t('lang'))
-    return reason ? t('endedAt', { time, outcome, reason }) : t('endedAtShort', { time, outcome })
-  })()
+  const ended = endedLabel(t, data.ended)
   const channel = data.channels[0]
   const review = data.review
   const directory = data.workspace?.directory ?? data.directory ?? t('empty')
@@ -419,7 +416,7 @@ export function TicketPage({ id }: { id: string }) {
     </PageHead>
     {error && <LoadState error={error} loading={false} />}
     <div className="dt-row-meta dt-status-line">
-      <StageMark state={status.dot} icon={status.icon} label={status.label} />
+      <StageMark state={status.dot} icon={status.icon} label={status.label} title={status.title} />
       {data.number ? <LabelValue label={t('ticketNumberLabel')} value={ticketRef(data.number)} /> : null}
       {data.tags.map(tag => <Tag key={tag} tone="quiet">{tag}</Tag>)}
       <Button variant="ghost" size="sm" onClick={() => { setTagsDraft(data.tags.join(', ')); setEditingTags(true) }}>{t('tagsEdit')}</Button>

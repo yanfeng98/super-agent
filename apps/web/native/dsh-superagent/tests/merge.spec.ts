@@ -342,7 +342,8 @@ it('records which interface merged, the commit it left, and the remote answer to
     push: { ok: false, error: 'fatal: no upstream branch', via: 'panel' } })
   // The panel keeps the outcome even when the person has left the chat that asked.
   expect(h.runtime.notifications().items).toContainEqual(expect.objectContaining({ kind: 'merged', ticketId: ticket.id,
-    text: expect.stringContaining('the push failed: fatal: no upstream branch') }))
+    text: expect.stringContaining('the push failed: fatal: no upstream branch'),
+    merge: { target: 'main', head: 'merged-sha' } }))
 })
 
 it('records that the main Session asked for the merge, which may name the ticket by number', async () => {
