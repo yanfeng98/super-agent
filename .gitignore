@@ -41,6 +41,9 @@ native/rust-anything/target/
 native/rust-anything/bin/
 native/fast-anything/target/
 native/fast-anything/bin/
+# The checkout-wide lib/ rule above would drop the vendored rea scripts' own lib/ modules.
+!native/rea/scripts/lib/
+!native/rea/scripts/lib/**
 native/rea/node_modules/
 native/rea/dist/
 native/rea/skills/
