@@ -1,4 +1,5 @@
 import { RegistrationManager } from './registration-manager.mjs';
+import { FEISHU_CHAT_READ_SCOPE } from './repair-manager.mjs';
 import { SLASH_COMMAND_TENANT_SCOPES } from './slash-command-registry.mjs';
 
 export const FEISHU_SECRET_REF = 'DSH_FEISHU_APP_SECRET';
@@ -13,6 +14,7 @@ export const REQUIRED_TENANT_SCOPES = Object.freeze([
   'im:message.reactions:write_only',
   'im:message:recall',
   'im:resource',
+  FEISHU_CHAT_READ_SCOPE,
   'cardkit:card:write',
   ...SLASH_COMMAND_TENANT_SCOPES,
 ]);

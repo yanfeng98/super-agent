@@ -609,6 +609,7 @@ test('callback repair is deduplicated per bot, records granted permissions, and 
       tenant: [
         'im:message:readonly',
         'im:resource',
+        'im:chat:readonly',
         'im:message.group_at_msg.include_bot:readonly',
         'im:message.group_msg',
         'application:app_slash_command:read',

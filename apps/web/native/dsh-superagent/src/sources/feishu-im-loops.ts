@@ -36,20 +36,28 @@ export interface BackfillDeps {
 
 const signalOf = (signal: AbortSignal): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(READ_TIMEOUT_MS)])
 
-/** Merges the chats the bot joined and dsh-im's group targets into the stored label map; both reads are cheap, so they run every round. */
-async function refreshChatLabels(deps: BackfillDeps): Promise<void> {
+/**
+ * Merges the chats the bot joined and dsh-im's group targets into the stored label map; both reads are cheap, so they run every round.
+ * A denied chat list stops being requested for the rest of the loop: the Feishu SDK logs every 403 before throwing, so
+ * retrying a missing scope each minute would keep printing its authorization link until the app is re-authorized.
+ */
+export async function refreshChatLabels(deps: BackfillDeps, state: { chatListDenied: boolean }): Promise<void> {
   const labels: Record<string, string> = { ...(deps.ctx.state.get(KV.sources.labels(SOURCE)) ?? {}) }
   let changed = false
-  if (deps.im.chatListChecked) {
+  if (deps.im.chatListChecked && !state.chatListDenied) {
     try {
       const listed = await deps.im.chatListChecked(deps.botId,
         { expectedFingerprint: deps.fingerprint, signal: signalOf(deps.signal) })
+      state.chatListDenied = false
       for (const chat of listed.chats) {
         if (!chat.name || labels[chat.chatId] === chat.name) continue
         labels[chat.chatId] = chat.name
         changed = true
       }
-    } catch { /* Labels are a display aid; the stored map stays until a later read succeeds. */ }
+    } catch (error) {
+      // Labels are a display aid; the stored map stays until a later read succeeds.
+      if ((error as { code?: unknown })?.code === 'history-permission-denied') state.chatListDenied = true
+    }
   }
   if (deps.im.listTargets) {
     try {
@@ -314,6 +322,7 @@ export async function runFeishuImBackfill(deps: BackfillDeps): Promise<void> {
     deps.report('history', health('paused', 'imBackfillMissing'))
     return
   }
+  const labelState = { chatListDenied: false }
   while (!deps.signal.aborted) {
     const config = deps.config()
     if (!config) {
@@ -321,7 +330,7 @@ export async function runFeishuImBackfill(deps: BackfillDeps): Promise<void> {
       await pause(HISTORY_INTERVAL_MS, deps.signal)
       continue
     }
-    await refreshChatLabels(deps)
+    await refreshChatLabels(deps, labelState)
     const errors: string[] = []
     // One budget for the whole round: a slow remote stretches the interval instead of starving later chats.
     const deadline = Date.now() + ROUND_MS

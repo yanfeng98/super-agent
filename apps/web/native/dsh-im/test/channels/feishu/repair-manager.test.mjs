@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   CallbackRepairManager,
+  FEISHU_CHAT_READ_SCOPE,
   FEISHU_MESSAGE_READ_SCOPE,
   FEISHU_RESOURCE_SCOPE,
   assertCallbackRepairUrl,
@@ -44,6 +45,7 @@ test('CallbackRepairManager targets one real app with only the callback and requ
       tenant: [
         FEISHU_MESSAGE_READ_SCOPE,
         FEISHU_RESOURCE_SCOPE,
+        FEISHU_CHAT_READ_SCOPE,
         'im:message.group_at_msg.include_bot:readonly',
         'im:message.group_msg',
         ...SLASH_COMMAND_TENANT_SCOPES,

@@ -86,6 +86,8 @@ test('QR success stores the secret off-config and becomes immediately chat-ready
   assert.ok(fx.getSdkOptions().addons.scopes.tenant.includes('im:message:readonly'));
   assert.ok(fx.getSdkOptions().addons.scopes.tenant.includes('im:message.group_msg'));
   assert.ok(fx.getSdkOptions().addons.scopes.tenant.includes('im:message:send_as_bot'));
+  // dsh-superagent reads the joined-chat list and a chat's members through im:chat APIs.
+  assert.ok(fx.getSdkOptions().addons.scopes.tenant.includes('im:chat:readonly'));
   assert.ok(fx.getSdkOptions().addons.scopes.tenant.includes('im:resource'));
   assert.equal(fx.getSdkOptions().addons.scopes.tenant.includes('im:resource:upload'), false);
   assert.ok(fx.getSdkOptions().addons.scopes.tenant.includes('application:app_slash_command:read'));

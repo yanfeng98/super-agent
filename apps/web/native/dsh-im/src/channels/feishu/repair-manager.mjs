@@ -4,6 +4,8 @@ import { SLASH_COMMAND_TENANT_SCOPES } from './slash-command-registry.mjs';
 export const CARD_ACTION_CALLBACK = 'card.action.trigger';
 export const FEISHU_MESSAGE_READ_SCOPE = 'im:message:readonly';
 export const FEISHU_RESOURCE_SCOPE = 'im:resource';
+/** Covers `im.v1.chat.list` and `im.v1.chatMembers.get`, used to label chats and sync their members. */
+export const FEISHU_CHAT_READ_SCOPE = 'im:chat:readonly';
 export const CALLBACK_REPAIR_OPERATION = 'callback_repair';
 
 function accountsDomain(domain) {
@@ -76,7 +78,8 @@ export function assertCallbackRepairUrl(value, expectedAppId, domain = 'feishu')
  * shares RegistrationManager's polling/state implementation while fixing the
  * update manifest in one place so callers can add only the card callback, the
  * message-read scope needed to download user-sent media, the resource scope
- * needed to upload bot-sent images/files, group-message and bot-mention scopes, and the
+ * needed to upload bot-sent images/files, the chat-read scope needed to label
+ * chats and sync their members, group-message and bot-mention scopes, and the
  * Slash Command scopes for the native command panel, without adding unrelated scopes, events,
  * presets, or createOnly.
  */
@@ -117,6 +120,7 @@ export class CallbackRepairManager {
           tenant: [
             FEISHU_MESSAGE_READ_SCOPE,
             FEISHU_RESOURCE_SCOPE,
+            FEISHU_CHAT_READ_SCOPE,
             'im:message.group_at_msg.include_bot:readonly',
             'im:message.group_msg',
             ...SLASH_COMMAND_TENANT_SCOPES,

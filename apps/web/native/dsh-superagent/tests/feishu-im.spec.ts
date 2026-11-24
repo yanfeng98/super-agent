@@ -6,7 +6,7 @@ import { feishuImPage } from '../src/app/resources.ts'
 import { setDshIm, type DshImEvent, type DshImService } from '../src/sources/dsh-im.ts'
 import { feishuImKind, imTrigger, isStopCommand, sendFeishuIm, setFeishuConfig, watchFeishuIm, type FeishuConfig, type FeishuWatchContext } from '../src/sources/feishu-im.ts'
 import type { SourceContext } from '../src/sources/host.ts'
-import { backfillChat, runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
+import { backfillChat, refreshChatLabels, runFeishuImBackfill } from '../src/sources/feishu-im-loops.ts'
 import { consumerRetry } from '../src/sources/poll.ts'
 
 const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
@@ -363,6 +363,25 @@ describe('dsh-im Feishu recovery and identity', () => {
     // Both the chats the bot joined and dsh-im's delivery targets name chats for the picker.
     expect(state.get(KV.sources.labels('feishu'))).toEqual({ oc_team: 'Team', oc_other: 'Other' })
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
+  })
+
+  it('stops retrying the chat list once Feishu denies its scope', async () => {
+    let calls = 0
+    const im = service({
+      chatListChecked: async () => {
+        calls++
+        throw Object.assign(new Error('history-permission-denied'), { code: 'history-permission-denied' })
+      },
+    })
+    const state = new Map<string, unknown>()
+    const { deps } = backfillDeps(im, state)
+    const denied = { chatListDenied: false }
+    await refreshChatLabels(deps as never, denied)
+    expect(calls).toBe(1)
+    expect(denied.chatListDenied).toBe(true)
+    await refreshChatLabels(deps as never, denied)
+    // The Feishu SDK logs every 403; a denied scope must not be re-requested each round.
+    expect(calls).toBe(1)
   })
 
   /** Backfill dependencies for a fake dsh-im, recording what they delivered and what the history health said. */
