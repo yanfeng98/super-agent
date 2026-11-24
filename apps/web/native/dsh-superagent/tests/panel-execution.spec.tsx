@@ -551,7 +551,7 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   server.ticketDetails.t3 = { ...server.ticketDetails.t3, ended: { at: '2026-09-21T00:00:00Z', by: 'human', outcome: 'stopped',
     reason: '不需要了' } }
   await remount(en)
-  expect(all('.dt-hint').map(hint => hint.textContent).find(line => line?.includes(en['outcome.stopped']))).toMatch(/Stopped by a person: 不需要了$/)
+  expect(all('.dt-hint').map(hint => hint.textContent).find(line => line?.includes(en['outcome.stopped']))).toMatch(/Abandoned: 不需要了$/)
 })
 
 it('marks a merge ahead of the completed outcome, and explains the worktree a cleanup removed', async () => {

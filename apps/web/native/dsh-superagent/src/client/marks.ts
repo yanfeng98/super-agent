@@ -26,6 +26,10 @@ export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
       }
       if (ticket.ended?.outcome === 'completed') return { label: t('outcome.completed'), tone: 'success', dot: 'done', icon: 'decision',
         title: t('markCompletedHint', { time: when(ticket.ended.at, t('lang')) }) }
+      // A person's stop ends the work for good; the dismiss icon and the word "abandoned" keep it apart from the
+      // ordinary in-progress marks and from completed, merged and reverted work.
+      if (ticket.ended?.outcome === 'stopped') return { label: t('outcome.stopped'), tone: 'neutral', dot: 'idle', icon: 'dismiss',
+        title: [t('markAbandonedHint', { time: when(ticket.ended.at, t('lang')) }), ended].filter(Boolean).join('\n') }
       return { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop',
         title: ended || undefined }
     }

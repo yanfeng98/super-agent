@@ -484,10 +484,11 @@ const TEXT = {
   'outcome.merged': ['已合并', 'Merged'],
   'outcome.closed': ['已关闭（未合并）', 'Closed unmerged'],
   'outcome.dropped': ['无需处理', 'Nothing to do'],
-  'outcome.stopped': ['人工停止', 'Stopped by a person'],
+  'outcome.stopped': ['已放弃', 'Abandoned'],
   // Hover detail on an ended Ticket row; the merged and stopped cases compose existing ending sentences instead.
   markCompletedHint: ['{time} 已完成；若要落到仓库，请在工单页合并它的分支。',
     'Completed {time}; merge its branch from the Ticket page if it should land.'],
+  markAbandonedHint: ['{time} 由人放弃，不再继续。', 'Abandoned {time} by a person; no further work is planned.'],
   'assignment.pending': ['待启动', 'Pending'],
   'assignment.running': ['执行中', 'Running'],
   'assignment.ended': ['已结束', 'Ended'],

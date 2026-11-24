@@ -16,20 +16,23 @@ it('marks each Ticket stage by whom it waits for, and an ended Ticket by its out
     ['执行中', 'info', 'ongoing', 'running'], ['等待新触发', 'neutral', 'idle', 'clock']])
   const ended = (['completed', 'merged', 'closed', 'dropped', 'stopped'] as const).map(outcome => ticketMark(t, { stage: 'ended',
     ended: { at: '', by: outcome === 'stopped' ? 'human' : 'executor', outcome } }))
-  expect(ended.map(mark => mark.label)).toEqual(['已完成', '已合并', '已关闭（未合并）', '无需处理', '人工停止'])
+  expect(ended.map(mark => mark.label)).toEqual(['已完成', '已合并', '已关闭（未合并）', '无需处理', '已放弃'])
   expect(ended.map(({ tone, dot, icon }) => `${tone} ${dot} ${icon}`)).toEqual(['success done decision', 'success done pull',
-    'neutral idle stop', 'neutral idle stop', 'neutral idle stop'])
+    'neutral idle stop', 'neutral idle stop', 'neutral idle dismiss'])
   // A merge labels the end state even when the work had already been reported completed, and its hover details say where
   // and which commit the target holds.
   const merged = { at: '2026-09-21T00:00:00Z', target: 'main', branch: 'agent/t1', head: `${'e'.repeat(8)}${'0'.repeat(32)}` }
   expect(ticketMark(t, { stage: 'ended', merged, ended: { at: '', by: 'executor', outcome: 'completed' } }))
     .toMatchObject({ label: '已合并', tone: 'success', dot: 'done', icon: 'pull',
       title: '已合并到 main（agent/t1）。\n合并后目标分支停在 eeeeeeee。' })
-  // Completed work still says what is left to do, and a stopped Ticket keeps the person's reason in its hover detail.
+  // Completed work still says what is left to do, and an abandoned Ticket keeps the person's reason in its hover detail.
   expect(ticketMark(t, { stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'completed' } }).title)
     .toContain('若要落到仓库')
-  expect(ticketMark(t, { stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'human', outcome: 'stopped',
-    reason: '需求取消' } }).title).toMatch(/^9月21日 \d\d:\d\d 人工停止：需求取消$/)
+  const abandoned = ticketMark(t, { stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'human', outcome: 'stopped',
+    reason: '需求取消' } })
+  expect(abandoned.label).toBe('已放弃')
+  expect(abandoned.title).toContain('由人放弃，不再继续')
+  expect(abandoned.title).toMatch(/9月21日 \d\d:\d\d 已放弃：需求取消$/)
   expect(['failed', 'blocked', 'waiting', 'ready', 'progress', undefined].map(reportDot)).toEqual(['error', 'warning', 'warning', 'done',
     'ongoing', 'ongoing'])
 })
