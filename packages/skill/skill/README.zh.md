@@ -88,6 +88,9 @@ Skill 摘要保留胜出提供方可选的指令文件 `path`（供提供文件�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口、`SkillRegistry` 服务、候选项与定义验证、共享的面向模型渲染 |
+| [`src/bundled-provider.ts`](src/bundled-provider.ts) | 随包技能提供方共享的注册实现：frontmatter 解析器、发现与加载生命周期、失败报告、候选投影 |
+
+子路径 [`@deepseek-ai/dsh-skill/bundled-provider`](src/bundled-provider.ts) 把该注册实现提供给随包提供方：`skill-engineering`、`skill-office`、`skill-rea`、`skill-rust-anything` 与 `skill-fast-anything` 只提供身份、技能目录与 frontmatter 解析器，发现、失败报告与候选投影由共享模块负责。
 
 ### 目录收集
 

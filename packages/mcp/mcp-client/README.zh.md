@@ -165,6 +165,9 @@ kind: "package-reference"
 | [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | 持久化的授权与客户端记录，刷新经凭据提供方串行执行 |
 | [`src/oauth.ts`](src/oauth.ts) | 显式浏览器授权：回调、流程与进行中的工作共用一个所有者 |
 | [`src/types.ts`](src/types.ts) | 客户端可用的连接状态、探测结果与 OAuth 尝试类型（`./types`） |
+| [`src/stdio-plugin.ts`](src/stdio-plugin.ts) | 为 spawn 单个 MCP server 的插件提供共享 stdio 挂载（`./stdio-plugin`） |
+
+子路径 [`@deepseek-ai/dsh-mcp-client/stdio-plugin`](src/stdio-plugin.ts) 用共享的传输、单次调用与启动预算以及额外环境变量挂载一个 stdio server；spawn vendored server 的插件保留自己的可执行文件解析与配置声明，在 `apply` 里调用它。
 
 导出的 `createMcpToolDefinition(ctx, options)` 将上游工具 schema 和原始结果回调适配到相同的规范值、错误和持久化图像投影。每次回调都收到原样的 `ToolExecution`，包括其 Agent 和取消信号；SDK 的规范类型校验会在投影前检查返回结果。调用方负责注册、取消截止时间和提供方卸载。原生 Cua Driver 提供方使用此适配函数，无需打开 MCP 传输。
 

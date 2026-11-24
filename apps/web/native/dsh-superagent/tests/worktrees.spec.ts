@@ -15,7 +15,7 @@ afterEach(async () => {
 /** One Ticket whose checkout is `directory`, with the facts the sidebar presentation reads. */
 const ticket = (directory: string, name: string, title = 'Ticket title', ended = false): Ticket =>
   ({ id: 'ticket-1', title, execution: { name, directory, assignment: '' },
-    ...ended ? { ended: { at: '2026-01-01T00:00:00.000Z', by: 'worker', outcome: 'completed' } } : {} } as Ticket)
+    ...ended ? { ended: { at: '2026-01-01T00:00:00.000Z', by: 'executor', outcome: 'completed' } } : {} } as Ticket)
 
 /** A Host context whose Workspace registry is the fixture's in-memory one. */
 function context() {
@@ -60,8 +60,8 @@ describe('ticket worktree presentation', () => {
     expect(registry.list().find(candidate => candidate.path === checkout)?.parentId).toBe(registry.list().find(candidate => candidate.path === root)?.id)
     // A presentation that already matches is left alone, without resolving the repository again.
     const settled = vi.fn(async () => root)
-    await linkWorktree(ctx, { ...live, ended: { at: '2026-01-01T00:00:00.000Z', by: 'worker', outcome: 'completed' } }, root, false)
-    expect(await adoptWorktrees(ctx, [{ ...live, ended: { at: '2026-01-01T00:00:00.000Z', by: 'worker', outcome: 'completed' } }], settled)).toBe(0)
+    await linkWorktree(ctx, { ...live, ended: { at: '2026-01-01T00:00:00.000Z', by: 'executor', outcome: 'completed' } }, root, false)
+    expect(await adoptWorktrees(ctx, [{ ...live, ended: { at: '2026-01-01T00:00:00.000Z', by: 'executor', outcome: 'completed' } }], settled)).toBe(0)
     expect(settled).not.toHaveBeenCalled()
     workspace = registry.list().find(candidate => candidate.path === checkout)!
     expect(workspace.worktree?.active).toBe(false)
@@ -137,7 +137,7 @@ describe('ticket worktree presentation', () => {
     await registry.create(root)
     expect(ticketSessionGroup(running, root)).toEqual({ path: root, role: 'ticket' })
     const merged = { ...running, execution: { ...running.execution!, root },
-      merged: { at: '2026-01-01T00:00:00.000Z', target: 'main', root } }
+      merged: { at: '2026-01-01T00:00:00.000Z', branch: 'fix-regression-ab12', target: 'main', root } }
     expect(ticketSessionGroup(merged, root)).toEqual({ path: root, role: 'ticket', merged: true })
     // A live checkout's registered parent answers even when the recorded root is unset.
     await linkWorktree(ctx, running, root)

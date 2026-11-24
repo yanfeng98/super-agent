@@ -1889,7 +1889,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-fast-anything`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/fast-anything/src/index.ts:36`](../packages/mcp/fast-anything/src/index.ts)
+- `source`: [`packages/mcp/fast-anything/src/index.ts:29`](../packages/mcp/fast-anything/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: an explicit executable plus the transport budgets. */
@@ -3465,7 +3465,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-rea`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/rea/src/index.ts:42`](../packages/mcp/rea/src/index.ts)
+- `source`: [`packages/mcp/rea/src/index.ts:37`](../packages/mcp/rea/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the runtime, the advertised catalog, and the transport budgets. */
@@ -3536,7 +3536,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-rust-anything`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/rust-anything/src/index.ts:35`](../packages/mcp/rust-anything/src/index.ts)
+- `source`: [`packages/mcp/rust-anything/src/index.ts:29`](../packages/mcp/rust-anything/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: an explicit executable plus the transport budgets. */
@@ -4050,7 +4050,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-engineering`
 
-- `source`: [`packages/skill/skill-engineering/src/index.ts:59`](../packages/skill/skill-engineering/src/index.ts)
+- `source`: [`packages/skill/skill-engineering/src/index.ts:51`](../packages/skill/skill-engineering/src/index.ts)
 
 ```ts config-catalog
 /** Bundled skill asset location. */
@@ -4066,7 +4066,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-fast-anything`
 
-- `source`: [`packages/skill/skill-fast-anything/src/index.ts:26`](../packages/skill/skill-fast-anything/src/index.ts)
+- `source`: [`packages/skill/skill-fast-anything/src/index.ts:23`](../packages/skill/skill-fast-anything/src/index.ts)
 
 ```ts config-catalog
 /** Bundled skill asset location. */
@@ -4122,7 +4122,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:33`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:29`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
 /** Configuration after schema defaults apply. */
@@ -4152,7 +4152,7 @@ export type PythonEnvironment = 'workspace-dependencies' | 'user'
 
 ## `@deepseek-ai/dsh-skill-rea`
 
-- `source`: [`packages/skill/skill-rea/src/index.ts:26`](../packages/skill/skill-rea/src/index.ts)
+- `source`: [`packages/skill/skill-rea/src/index.ts:23`](../packages/skill/skill-rea/src/index.ts)
 
 ```ts config-catalog
 /** Bundled skill asset location. */
@@ -4168,7 +4168,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-rust-anything`
 
-- `source`: [`packages/skill/skill-rust-anything/src/index.ts:26`](../packages/skill/skill-rust-anything/src/index.ts)
+- `source`: [`packages/skill/skill-rust-anything/src/index.ts:23`](../packages/skill/skill-rust-anything/src/index.ts)
 
 ```ts config-catalog
 /** Bundled skill asset location. */

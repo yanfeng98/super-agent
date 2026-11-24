@@ -88,6 +88,9 @@ The registry is host+per-scope layered, the shape the tools registry established
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry, `SkillRegistry` service, candidate and definition validation, shared model-facing rendering |
+| [`src/bundled-provider.ts`](src/bundled-provider.ts) | Shared registration for bundled-skill providers: frontmatter parsers, discovery and load lifecycle, failure reporting, candidate projection |
+
+The [`@deepseek-ai/dsh-skill/bundled-provider`](src/bundled-provider.ts) subpath exposes that registration to packaged providers: `skill-engineering`, `skill-office`, `skill-rea`, `skill-rust-anything` and `skill-fast-anything` supply their identity, skill directories and frontmatter parser, while the shared module owns discovery, failure reporting and candidate projection.
 
 ### Catalog collection
 

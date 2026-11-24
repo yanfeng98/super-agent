@@ -8,7 +8,9 @@ import { initializeRoleModel } from '../src/app/role-models.ts'
 const contexts: Context[] = []
 afterEach(async () => { await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose())); vi.restoreAllMocks() })
 async function fixture() {
-  const ctx = new Context(); contexts.push(ctx); await ctx.plugin(SystemPrompt)
+  const ctx = new Context(); contexts.push(ctx)
+  ctx.reflect.provide('sessionProjections', { register: async () => () => {} } as never)
+  await ctx.plugin(SystemPrompt)
   const resolve = vi.fn(async value => value)
   const flush = vi.fn(async () => {})
   ctx.reflect.provide('llm', { resolveCallConfig: resolve })

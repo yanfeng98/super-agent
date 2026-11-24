@@ -111,7 +111,7 @@ export class Runtime extends Service implements SourceHost {
   /** Tickets whose revert is running, so a second request cannot revert the same merge twice. */
   private readonly reverting = new Set<string>()
   /** Durable sidebar-group writes still running, which {@link idle} waits for. */
-  private readonly groupWrites = new Set<Promise<void>>()
+  private readonly groupWrites = new Set<Promise<unknown>>()
   /** Ending captures still running, so a discard does not remove the worktree a capture reads. */
   private readonly finishing = new Map<string, Promise<void>>()
   /** Operations that move a repository run one at a time, so two merges never share the git index of one checkout. */

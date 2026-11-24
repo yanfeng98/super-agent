@@ -165,6 +165,9 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | Durable grant and client records, with refresh serialized by the credential provider |
 | [`src/oauth.ts`](src/oauth.ts) | Explicit browser authorization: callback, flow, and in-flight work under one owner |
 | [`src/types.ts`](src/types.ts) | Client-safe connection status, probe outcome, and OAuth attempt types (`./types`) |
+| [`src/stdio-plugin.ts`](src/stdio-plugin.ts) | Shared stdio-server mounting for plugins that spawn one MCP server (`./stdio-plugin`) |
+
+The [`@deepseek-ai/dsh-mcp-client/stdio-plugin`](src/stdio-plugin.ts) subpath mounts one stdio server with the shared transport, per-call and startup budgets, and extra environment; plugins that spawn a vendored server keep their own executable resolution and config declaration and call it from `apply`.
 
 The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool schema and raw-result callback to the same canonical values, errors, and durable image projection. Each callback receives the exact `ToolExecution`, including its Agent and cancellation signal; SDK spec-type validation checks its result before projection. Callers own registration, cancellation deadlines, and provider teardown. The native Cua Driver provider uses this adapter without opening an MCP transport.
 

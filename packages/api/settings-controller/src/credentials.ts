@@ -12,6 +12,8 @@ import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 
+import { parseRequest } from './request.ts'
+
 /**
  * Fan-out bound on one remote `describe` batch. A settings page asks about the
  * references its own rows name, so this is far above any real page and still
@@ -25,15 +27,6 @@ const describeRequestSchema = z.object({
 })
 const setRequestSchema = z.object({ ref: credentialRefSchema, value: z.string().min(1) })
 const unsetRequestSchema = z.object({ ref: credentialRefSchema })
-
-/** Parse the domain constraints that are more specific than generated TypeScript codecs. */
-function parseRequest<T>(method: string, schema: z.ZodType<T>, value: unknown): T {
-  const parsed = schema.safeParse(value)
-  if (!parsed.success) {
-    throw new RemoteError('gateway/bad-request', `invalid payload for ${method}`, { issues: parsed.error.issues })
-  }
-  return parsed.data
-}
 
 /**
  * Copy exactly the fields {@link CredentialInfo} declares. The Gateway returns

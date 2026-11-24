@@ -18,6 +18,10 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./stdio-plugin": {
+      "types": "./lib/types/stdio-plugin.d.ts",
+      "default": "./lib/types/stdio-plugin.js"
+    },
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"

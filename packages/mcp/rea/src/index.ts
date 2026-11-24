@@ -19,7 +19,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import * as McpClient from '@deepseek-ai/dsh-mcp-client'
+import { mountStdioServer, STDIO_STARTUP_TIMEOUT_MS, STDIO_TOOL_CALL_TIMEOUT_MS } from '@deepseek-ai/dsh-mcp-client/stdio-plugin'
 
 import { resolveLauncher } from './launcher.ts'
 
@@ -29,15 +29,10 @@ export const name = 'rea'
 /** The MCP client publishes its tools through the tool registry. */
 export const inject = ['tools']
 
-/**
- * Per-`tools/call` budget. Decompilation, runtime observation and whole-app
- * capture outlive the MCP default of 60 seconds.
- */
-const DEFAULT_TOOL_CALL_TIMEOUT_MS = 15 * 60 * 1000
 
-/** Budget for the stdio probe, connection and initial tool sync. */
-const DEFAULT_STARTUP_TIMEOUT_MS = 20 * 1000
-
+// The config catalog pastes each plugin config declaration verbatim, so it stays
+// local; the transport, budgets and mounting are shared through stdio-plugin.ts.
+/* jscpd:ignore-start */
 /** Plugin config: the runtime, the advertised catalog, and the transport budgets. */
 export interface Config {
   /** Node.js executable to run the launcher; defaults to the Host's own runtime. */
@@ -68,10 +63,11 @@ export const Config: z<Partial<Config>, Config> = z.object({
   launcher: z.string(),
   catalogProfile: z.union(['full', 'hot-cold']).default('hot-cold'),
   toolLoading: z.union(['eager', 'on-demand']).default('on-demand'),
-  toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-  startupTimeoutMs: z.number().default(DEFAULT_STARTUP_TIMEOUT_MS),
+  toolCallTimeoutMs: z.number().default(STDIO_TOOL_CALL_TIMEOUT_MS),
+  startupTimeoutMs: z.number().default(STDIO_STARTUP_TIMEOUT_MS),
   env: z.dict(String).default({}),
 })
+/* jscpd:ignore-end */
 
 /**
  * Connect the rea MCP server and publish its tools.
@@ -79,20 +75,11 @@ export const Config: z<Partial<Config>, Config> = z.object({
  * @param config - resolved plugin config.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  await ctx.plugin(McpClient, {
-    serverName: 'rea',
-    transport: 'stdio',
-    command: config.command ?? process.execPath,
-    args: [resolveLauncher(config.launcher), 'mcp'],
-    toolLoading: config.toolLoading,
-    toolCallTimeoutMs: config.toolCallTimeoutMs,
-    startupTimeoutMs: config.startupTimeoutMs,
-    env: {
-      // The vendored launcher refuses runtimes below its engine floor; keep
-      // packaged Electron hosts from passing their own binary through.
-      ELECTRON_RUN_AS_NODE: '1',
-      REA_MCP_TOOL_CATALOG_PROFILE: config.catalogProfile,
-      ...config.env,
-    },
+  await mountStdioServer(ctx, 'rea', config.command ?? process.execPath, [resolveLauncher(config.launcher), 'mcp'], config, {
+    // The vendored launcher refuses runtimes below its engine floor; keep
+    // packaged Electron hosts from passing their own binary through.
+    ELECTRON_RUN_AS_NODE: '1',
+    REA_MCP_TOOL_CATALOG_PROFILE: config.catalogProfile,
+    ...config.env,
   })
 }

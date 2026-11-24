@@ -21,6 +21,8 @@ import { credentialKeyId, credentialKeyScope } from '@deepseek-ai/dsh-credential
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
+
+import { parseRequest } from './request.ts'
 import type {
   AuthorizationAttemptView, AuthorizationFlowView, AuthorizationNoticeView, AuthorizationPhase, AuthorizationPromptView,
 } from './types.ts'
@@ -51,15 +53,6 @@ const answerRequestSchema = z.object({
   promptId: z.number().int().nonnegative(),
   value: z.string(),
 })
-
-/** Parse the domain constraints that are more specific than generated TypeScript codecs. */
-function parseRequest<T>(method: string, schema: z.ZodType<T>, value: unknown): T {
-  const parsed = schema.safeParse(value)
-  if (!parsed.success) {
-    throw new RemoteError('gateway/bad-request', `invalid payload for ${method}`, { issues: parsed.error.issues })
-  }
-  return parsed.data
-}
 
 /** One question waiting on the page, with the handles that retire it. */
 interface PendingPrompt {

@@ -47,6 +47,7 @@
 | 文档门禁 | `pnpm run test:docs` | 21/21 通过 |
 | Lint | `pnpm run lint` | 0 warning / 0 error（7,784 个文件，78.9 s） |
 | 仓库卫生 | `pnpm run hygiene` | 27/27 通过（见 [logs/00129](logs/00129-修复集成遗留问题.md)） |
+| duplication | `pnpm run duplication` | 0 处克隆（此前 9 处，见 [logs/00130](logs/00130-消除共享实现重复.md)） |
 | 覆盖率 | `pnpm vitest run --coverage`（只 include 两个包的 `src`） | 语句/分支/函数/行均 100% |
 | 组合 | `pnpm dsh --profile web --dump-config` | `standard` preset 含 `skill-fast-anything` 与 `mcp-fast-anything`；`minimal` 不含 |
 | 上游单元测试 | `cd native/fast-anything && PATH=/usr/bin:$PATH cargo test --release` | 84/84 通过（系统 Python 3.10.12；conda 的 Python 3.12.2 下有一个多进程 worker 用例失败，属环境差异） |
@@ -78,7 +79,7 @@
 - **移植需要目标语言运行时**：Python 3.10+、Node.js 22+、Ruby 3.3+、Java 22+、Go 1.22+、PHP 8.1+（`ext-ffi`）、C/C++ 编译器、.NET 8+ 或 R 4.0+，按应用而定；`fast-anything doctor` 逐个报告。
 - **工具会执行目标项目代码并改写源码**：`enable` 的 diff 需要人工审查；技能与 README 都要求只在副本上操作、不要把生产凭据留在环境里。
 - **上游测试形态**：Rust 测试是 `src/` 内的内联单元测试（84 个 `#[test]`），没有独立 `tests/` 目录；`cd native/fast-anything && cargo test --release` 可直接跑，但未接入 `pnpm test`（与 rust-anything 的做法一致）。
-- **duplication 门禁仍是红的**：基线 HEAD 已有 5 处克隆，集成后为 9 处（新插件/技能提供方沿用既有实现，与 rea 的接入方式一致）。清零需要把 bundled skill provider 与 MCP stdio 挂载抽成共享实现，涉及 5 个以上包，属于后续重构，本次未展开。
+- **duplication 已清零**：bundled skill provider 与 MCP stdio 挂载已抽成共享实现（`@deepseek-ai/dsh-skill/bundled-provider`、`@deepseek-ai/dsh-mcp-client/stdio-plugin`），五个技能提供方与三个 MCP 插件只保留身份、解析器和配置声明；`pnpm run duplication` 0 处克隆。详见 [logs/00130](logs/00130-消除共享实现重复.md)。
 
 ## 7. 回滚
 
