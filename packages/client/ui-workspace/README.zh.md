@@ -31,7 +31,7 @@ kind: "package-reference"
 
 打开的 Workspace 按列表顺序显示前面的非空白 Session，直到该 Workspace 自己的水位线，水位线初始为五。水位线会升高，以覆盖前 50 条中最后一条正在运行、有子会话正在运行、等待用户、有未读完成提醒或在主视图中打开的 Session；从搜索打开的 Session 会把水位线升高到该 Session，无论其位置。水位线是一个行数，不会自行回落，因此运行或通知结束后这些行仍保持可见；重排若把某个 Session 移到水位线之后，该 Session 会被隐藏。每次点击**展开其余**将水位线升高五条，不受 50 行限制；剩余五条或更少时显示全部；最后一批显示后，**收起**重置水位线。折叠 Workspace 会重置其水位线及其嵌套 Workspace 的水位线；重置后的水位线仍覆盖符合条件的 Session。当前选中的空白**新会话**在首条提示词落地前是水位线之外的额外行。水位线不持久化；分组树的任何卸载都会重置水位线。
 
-存储的 cwd 指向其他目录的 Session 可以携带持久的 Workspace 分组提示。该提示把它列在目标 Workspace 自身成员之后，按列表的最近更新时间排序；它不增加 Workspace 成员关系、不改变执行目录，也不改变会话头。`session/workspace-group` 提示的 role 为 `orchestrator` 时，行和悬停卡还会带上本地化的 orchestrator 标记。带提示的行不能拖拽，因为它的位置不属于该 Workspace 保存的顺序；提示指向未注册的 Workspace 时，该会话仍留在「其他会话」。
+存储的 cwd 指向其他目录的 Session 可以携带持久的 Workspace 分组提示。该提示把它列在目标 Workspace 自身成员之后，按列表的最近更新时间排序；它不增加 Workspace 成员关系、不改变执行目录，也不改变会话头。`session/workspace-group` 提示的 role 为 `orchestrator` 时，行和悬停卡会带上本地化的 orchestrator 标记；工单 Worker Session 的 `ticket` role 说明它归入仓库分组，`merged` 则在工单分支落地后把这个标记换成本地化的「已合并」。带提示的行不能拖拽，因为它的位置不属于该 Workspace 保存的顺序；提示指向未注册的 Workspace 时，该会话仍留在「其他会话」。
 
 未保存标题的历史会话显示本地化名称「未命名 / Untitled」，不使用目录名兜底。当前空会话仍显示「新会话」，其他空会话仍隐藏。重命名草稿使用已保存标题，无标题时留空；无标题行不提供标题复制。
 

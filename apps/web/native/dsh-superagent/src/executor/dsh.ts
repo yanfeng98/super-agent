@@ -10,7 +10,7 @@ import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Execu
 import type { Machine } from '../deployment.ts'
 import { runAsWorker, verifyDirectory } from '../infra/environment.ts'
 import { workspaceFacts, type WorkspaceFacts } from '../app/review.ts'
-import { linkWorktree } from '../app/worktrees.ts'
+import { groupTicketSession, linkWorktree } from '../app/worktrees.ts'
 import { installedRepository } from '../installed.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
@@ -529,15 +529,21 @@ export class DshExecutor implements Executor {
     const directory = ticket.execution?.directory
     if (!directory) return undefined
     const facts = await workspaceFacts(this.host.context.subprocess, directory, this.host.lifetime).catch(() => undefined)
-    if (!facts || ticket.execution?.base) return facts
+    if (!facts) return undefined
     this.host.store.atomic(() => {
       const current = this.host.store.tickets.get(ticket.id)
-      if (!current?.execution || current.execution.base) return
-      // The fork point keeps a review to the Ticket's own commits when the workspace already held commits, such as a branch
-      // adopted for a Ticket that ended before the environment prepared worktrees.
-      current.execution.base = facts.base ?? facts.head
-      current.execution.target = facts.target
-      this.host.store.tickets.save(current)
+      if (!current?.execution) return
+      let changed = false
+      if (!current.execution.base) {
+        // The fork point keeps a review to the Ticket's own commits when the workspace already held commits, such as a branch
+        // adopted for a Ticket that ended before the environment prepared worktrees.
+        current.execution.base = facts.base ?? facts.head
+        current.execution.target = facts.target
+        changed = true
+      }
+      // The repository root lets the Session keep its sidebar group after the checkout is cleaned up.
+      if (!current.execution.root) { current.execution.root = facts.root; changed = true }
+      if (changed) this.host.store.tickets.save(current)
     })
     return facts
   }
@@ -568,6 +574,9 @@ export class DshExecutor implements Executor {
     // The sidebar nests the checkout under the repository's Workspace; a failure here changes no Ticket state.
     await linkWorktree(this.host.context, ticket, facts?.root)
       .catch((error: unknown) => { this.host.context.logger.warn('dsh-superagent: presenting ticket %s\'s worktree failed: %s', ticket.id, String(error)) })
+    // Record the durable group too, so the worker's Session still shows under its repository once the checkout is gone.
+    await groupTicketSession(this.host.context, ticket, agent.session)
+      .catch((error: unknown) => { this.host.context.logger.warn('dsh-superagent: grouping ticket %s\'s Session failed: %s', ticket.id, String(error)) })
     if (!current()) return
     // The background work of the Assignment this one replaces stops first, so its end does not clear this one's message.
     await this.stopped(ticket.id)

@@ -8,8 +8,8 @@ import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-
 import type { Api, ApiResponse, RouteParams } from '../../src/app/api.ts'
 import { SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, builtInPart, builtInParts, composePrompt, composeSkill, defaultPrompts,
   environmentSection, policySection, promptParts } from '../../src/app/prompts.ts'
-import type { DroppedReply, HistoryView, Problem, PromptsView, SetupView, SourceStatusRow, SourceView, StateView, ThreadPageView,
-  ThreadRow, TicketPageView,
+import type { DecisionRow, DroppedReply, HistoryView, Problem, PromptsView, SetupView, SourceStatusRow, SourceView, StateView,
+  ThreadPageView, ThreadRow, TicketPageView,
   TicketRow, TicketStage,
   TriggerRow } from '../../src/client/api.ts'
 import { EvalConfigSchema, ExecutorConfigSchema, PolicyConfigSchema, SettingsSchema } from '../../src/policy.ts'
@@ -43,7 +43,8 @@ export const ticketSummary = (fields: Partial<TicketFields> = {}, stage: TicketS
   ({ ...TICKET, ...fields, ...stage })
 export const threadSummary = (fields: Partial<ThreadRow> = {}): ThreadRow => ({
   key: 'feishu:oc_1:om_root', source: 'feishu', title: '这个文案好奇怪', stage: 'subscribed', latest: undefined, lastAt: '2026-09-23T00:00:00Z',
-  createdAt: '2026-09-22T00:00:00Z', subscriptions: 1, tickets: [{ id: 't1', title: '修复回归', state: 'open' }], evaluating: undefined,
+  createdAt: '2026-09-22T00:00:00Z', subscriptions: 1,
+  tickets: [{ id: 't1', number: 1, title: '修复回归', state: 'open', stage: 'working', ended: undefined }], evaluating: undefined,
   pending: 0, pollError: undefined, url: undefined, facts: { chat: { value: '团队群' } }, ...fields,
 })
 type TriggerFields = Partial<Omit<TriggerRow, 'disposition' | 'actions'>> & { disposition?: Partial<TriggerRow['disposition']> }
@@ -89,6 +90,7 @@ export interface PanelServer {
   tickets: { open: TicketRow[]; ended: TicketRow[] }; ticketDetails: Record<string, TicketPageView>
   threads: ThreadRow[]
   threadPages: (key: string, query: { before?: string; around?: string }) => ThreadPageView | undefined
+  decisions: DecisionRow[]
   person: TicketRow[]; search: Pick<ApiResponse<'GET search'>, 'items' | 'threads'>; history: HistoryView
   notifications: ApiResponse<'GET notifications'>
   mergeQueue: ApiResponse<'GET merge-queue'>
@@ -196,6 +198,10 @@ const overviewView = (): ApiResponse<'GET overview'> => {
     policyVersion: 'abcdef1234567890',
   }
 }
+/** One Eval row as the Decision log returns it, with a Ticket association when the Decision started work. */
+export const decisionRow = (fields: Partial<DecisionRow> = {}): DecisionRow => ({ id: 'd1', kind: 'accept', outcome: 'accept',
+  reason: [{ code: 'explicitRouted' }], at: '2026-09-22T00:00:00Z', strength: 'explicit', ticketId: undefined,
+  triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ...fields })
 export const acceptDecision = (): NonNullable<TicketPageView['decision']> => ({ id: 'd1', kind: 'accept', outcome: 'accept',
   reason: [{ code: 'explicitRouted' }], at: '2026-09-22T00:00:00Z', strength: 'explicit', ticketId: undefined,
   triggerIds: ['e1'], thread: 'feishu:oc_1:om_root', rules: [], preview: '@bot 修一下', ticketTitle: undefined })
@@ -256,7 +262,7 @@ function initial(): PanelServer {
       defaults: defaultPrompts(), parts: Object.entries(builtInParts()).map(([key, part]) => ({ key, ...part, base: builtInBase(part.text) })),
       defaultChanged: [], revisions: [{ ...defaults, changed: [] }], sessions: [], notificationPending: false, next_offset: null },
     tickets: { open: [ticketSummary()], ended: [ended] }, ticketDetails: { t1: ticketDetail() },
-    threads: [threadSummary()], threadPages: threadPage,
+    threads: [threadSummary()], threadPages: threadPage, decisions: [decisionRow()],
     person: [ticketSummary({ attention: { id: 'q1', question: '需要确认按钮颜色' }, note: { text: '需要确认按钮颜色', error: false }, reply },
       { stage: 'person', action: 'answer' }),
       ticketSummary({ id: 't4', title: '截图工具', actions: { retry: true, stop: true }, sessionId: 'worker-t4',
@@ -339,7 +345,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   } },
   'POST triggers/:id/requeue': { answer: ({ params }) => { server.queued.add(params.id); return { queued: true } } },
   'GET decisions': { query: ['kind', 'window', 'offset', 'limit'], answer: ({ query }) =>
-    ({ items: query.kind === 'ignore' ? [] : [acceptDecision()], next_offset: null }) },
+    ({ items: query.kind === 'ignore' ? [] : server.decisions, next_offset: null }) },
   'POST decisions/:id/dismiss': { answer: ({ params }) => params.id === 'u1' ? { dismissed: true } : refuse(404,
     'Unavailable Eval not found') },
   'GET tickets': { query: ['state', 'offset', 'limit', 'tag'], answer: ({ query }) => page(server.tickets[query.state === 'ended' ? 'ended'

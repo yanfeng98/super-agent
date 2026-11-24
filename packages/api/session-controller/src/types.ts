@@ -25,8 +25,14 @@ export type { SessionListMetadata } from '@deepseek-ai/dsh-session-query/types'
 export interface SessionWorkspaceGroup {
   /** Absolute Workspace directory; the sidebar matches it against registered Workspace paths. */
   readonly path: string
-  /** Role marker rendered beside the row inside the group. */
-  readonly role?: 'orchestrator' | undefined
+  /**
+   * Role marker rendered beside the row inside the group: the IM bot's
+   * orchestrator, or a Ticket's worker Session browsed under the repository
+   * once the Ticket's own checkout is gone.
+   */
+  readonly role?: 'orchestrator' | 'ticket' | undefined
+  /** For a Ticket's worker Session, that the Ticket's branch landed on its target. */
+  readonly merged?: true | undefined
 }
 
 declare module '@deepseek-ai/dsh-session/types' {

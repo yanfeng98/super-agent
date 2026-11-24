@@ -402,6 +402,24 @@ describe('deriveGroups', () => {
     expect(owningGroupKey([workspace('first', ['owned'])], sid('orchestrator'), list(hinted).byId)).toBe('first')
   })
 
+  it('marks a Ticket Session with its role and merge state in the group', () => {
+    const worker = {
+      ...summary('ticket', 9, '/state/superagent/work/ticket'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'ticket', merged: true } }),
+    }
+    const open = {
+      ...summary('ticket-open', 8, '/state/superagent/work/open'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'ticket' } }),
+    }
+    const groups = deriveGroups(
+      list(summary('owned', 1, '/projects/first'), worker, open),
+      [workspace('first', ['owned'])], noRows, noAttention, view(['first']),
+    )
+    expect(groups[0]!.sessions[1]).toMatchObject({ groupedByHint: true, ticket: true, merged: true })
+    expect(groups[0]!.sessions[2]).toMatchObject({ groupedByHint: true, ticket: true })
+    expect(groups[0]!.sessions[2]!.merged).toBeUndefined()
+  })
+
   it('hides an archived hinted Session from its group and from the trailing bucket', () => {
     const hinted = {
       ...summary('orchestrator', 9, '/state/superagent'),

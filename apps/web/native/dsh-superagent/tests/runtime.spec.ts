@@ -534,7 +534,8 @@ it('projects read models for the management page and removes thread subscription
   expect(ticketDetail(viewsOf(runtime), ticket.id)).toMatchObject({ mandate: { strength: 'explicit' }, decision: { kind: 'accept' }, threads: [expect.objectContaining({ key: threadKeyValue, title: '@bot 修一下回归' })], channels: [expect.objectContaining({ source: 'feishu' })] })
   const follow = feishu('20', '补充：日志在这里', { mentions: [], root_id: 'om_1', sender_id: 'ou_guest' })
   await receive(follow)
-  expect(threadList(viewsOf(runtime), 'subscribed', 0, 20).items).toEqual([expect.objectContaining({ key: threadKeyValue, lastAt: follow.at, tickets: [{ id: ticket.id, title: '修复回归', state: 'open' }] })])
+  expect(threadList(viewsOf(runtime), 'subscribed', 0, 20).items).toEqual([expect.objectContaining({ key: threadKeyValue, lastAt: follow.at,
+    tickets: [expect.objectContaining({ id: ticket.id, title: '修复回归', number: expect.any(Number), stage: 'working', state: 'open' })] })])
   const detail = threadDetail(viewsOf(runtime), threadKeyValue, undefined, 50)!
   expect(detail.timeline.map(item => item.id)).toEqual([trigger.id, follow.id])
   expect(detail.timeline[0]!.disposition).toMatchObject({ decision: { outcome: 'accept', ticketId: ticket.id } })

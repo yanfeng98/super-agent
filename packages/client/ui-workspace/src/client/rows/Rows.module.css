@@ -301,8 +301,8 @@
   margin-left: 0;
 }
 
-/* The role tag keeps the trailing time visible in a narrow sidebar. */
-.orchestratorMark {
+/* The role or lifecycle tag keeps the trailing time visible in a narrow sidebar. */
+.roleMark {
   max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;

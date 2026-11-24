@@ -9,10 +9,10 @@ import type { SessionWorkspaceGroup } from '../src/types.ts'
 import { appendWorkspaceGroup, workspaceGroupOf, workspaceGroupProjectionDefinition } from '../src/workspace-group.ts'
 
 /** One grouping override, as `appendWorkspaceGroup` records it. */
-function grouped(path: string, role?: 'orchestrator', seq = SessionSeq(0)): SessionEvent {
+function grouped(path: string, role?: 'orchestrator' | 'ticket', seq = SessionSeq(0), merged?: true): SessionEvent {
   return {
     type: 'session/workspace-group', seq, time: Number(seq),
-    data: { path, ...(role === undefined ? {} : { role }) },
+    data: { path, ...(role === undefined ? {} : { role }), ...(merged === undefined ? {} : { merged }) },
   }
 }
 
@@ -36,6 +36,10 @@ describe('session workspace group projection', () => {
 
     state = definition.apply(state, grouped('/projects/other', undefined, SessionSeq(1)))
     expect(state).toEqual({ path: '/projects/other' })
+
+    state = definition.apply(state, grouped('/projects/other', 'ticket', SessionSeq(2), true))
+    expect(state).toEqual({ path: '/projects/other', role: 'ticket', merged: true })
+    expect(definition.stateSchema.parse(state)).toEqual({ path: '/projects/other', role: 'ticket', merged: true })
   })
 
   it('leaves the state untouched for unrelated events', () => {
@@ -63,6 +67,9 @@ describe('session workspace group projection', () => {
     expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: 'relative' })).not.toThrow()
     expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: '' })).toThrow()
     expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', role: 'other' })).toThrow()
+    expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', merged: false })).toThrow()
     expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', extra: true })).toThrow()
+    expect(workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', role: 'ticket', merged: true }))
+      .toEqual({ path: '/abs', role: 'ticket', merged: true })
   })
 })

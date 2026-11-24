@@ -3,7 +3,7 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
-import { appendWorkspaceGroup, workspaceGroupOf } from '@deepseek-ai/dsh-api-session-controller'
+import { appendWorkspaceGroup, workspaceGroupOf, type SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-permission-presets'
@@ -42,7 +42,7 @@ import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
 import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceFacts, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
-import { adoptWorktrees, presentWorktree, removeWorktree, retitleWorktree } from './worktrees.ts'
+import { adoptWorktrees, groupTicketSession, presentWorktree, removeWorktree, retitleWorktree, sessionGroupWorkspace, ticketSessionGroup } from './worktrees.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
 import { archiveNeedsClose, closeArchive, createLocalFollowup, createLocalRequest, OPERATOR, recordApproval, recordCleanup, recordDiscard,
   recordHandback, recordMerge, recordPush, recordRebase, recordRename, recordRequestEdit, recordReview, recordRevert, recordTags, reopenArchive, seedPolicy, ticketArchive, webhookFor,
@@ -693,6 +693,8 @@ export class Runtime extends Service implements SourceHost {
     }
     // A person may be away from the chat that asked; the panel and a local Source's webhook keep the outcome too.
     const decided = this.store.tickets.get(id) ?? current
+    // A merged Ticket's Session keeps its repository group and now reads as merged.
+    this.queueTicketSession(decided)
     this.ticketNotice(decided, 'merged', `Merged ${this.ticketLabel(decided)} into ${result.target}`
       + `${result.head ? ` at ${result.head}` : ''}${pushError ? `; the push failed: ${pushError}` : pushed ? ', pushed to the upstream' : ''}`,
       { merge: { target: result.target, ...result.head ? { head: result.head } : {} } })
@@ -799,6 +801,8 @@ export class Runtime extends Service implements SourceHost {
       try { await recordRevert(ticket, { at, target: result.target, commit: result.head, merge: commit, via: origin }) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a revert in the archive failed: %s', String(error)) }
       const current = this.store.tickets.get(ticketId) ?? ticket
+      // The Ticket is mergeable again, so its Session stops reading as merged.
+      this.queueTicketSession(current)
       this.ticketNotice(current, 'reverted', `Reverted the merge of ${merged.branch} into ${merged.target} with ${result.head}`)
       const pushed = options.push ? await this.pushAfterRevert(current, directory, result.target, result.head, origin) : undefined
       return { ticket_id: ticketId, branch: merged.branch, target: result.target, commit: result.head,
@@ -1737,6 +1741,59 @@ export class Runtime extends Service implements SourceHost {
     if (current?.path === workspace.path && current.role === 'orchestrator') return
     appendWorkspaceGroup(agent.session, { path: workspace.path, role: 'orchestrator' })
   }
+  /** Run one durable sidebar-group write for a Ticket's worker Session and record it for {@link idle} to await. */
+  private queueTicketSession(ticket: Ticket): void {
+    const task = this.presentTicketSession(ticket).catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: grouping ticket %s\'s Session failed: %s', ticket.id, String(error))
+    })
+    this.groupWrites.add(task)
+    void task.finally(() => { this.groupWrites.delete(task) })
+  }
+  /**
+   * Bring a Ticket worker Session's durable sidebar group up to date: the
+   * repository Workspace, the ticket role marker, and the Ticket's merge
+   * state. A loaded Session is written directly; an ended Ticket's cold
+   * Session is resumed through DSH's Session controller, the same path the
+   * panel uses to open it, because a record written before this presentation
+   * existed must receive the hint too. The resumed Agent stays loaded, owned
+   * by that controller.
+   * @param ticket - Ticket whose worker Session is presented.
+   * @returns whether a newer group was appended.
+   */
+  private async presentTicketSession(ticket: Ticket): Promise<boolean> {
+    if (this.closing()) return false
+    const sessionId = workerSessionId(ticket.id) as SessionId
+    const live = this.ctx.agents.get(sessionId)
+    if (live !== undefined) return await groupTicketSession(this.ctx, ticket, live.session)
+    const resolved = await this.ctx.sessionController.resolveAgent(sessionId)
+    if ('error' in resolved) return false
+    return await groupTicketSession(this.ctx, ticket, resolved.agent.session)
+  }
+  /**
+   * Group every recorded Ticket worker Session under its repository Workspace,
+   * backfilling the Sessions recorded before this presentation existed. The
+   * listing's projection values say which groups already match, so only stale
+   * ones are rewritten, and only their cold Sessions resumed.
+   * @returns how many Sessions received a newer group.
+   */
+  private async adoptTicketSessions(): Promise<number> {
+    const listed = await this.ctx.sessionController.list({}, this.stopped.signal)
+    const current = new Map<string, SessionWorkspaceGroup | null>()
+    for (const item of listed.items) {
+      const values = item.projections?.values
+      if (values !== undefined && 'workspaceGroup' in values) current.set(item.sessionId, values.workspaceGroup ?? null)
+    }
+    let adopted = 0
+    for (const ticket of this.store.tickets.list()) {
+      const workspace = await sessionGroupWorkspace(this.ctx, ticket, this.machine.repository)
+      if (workspace === undefined) continue
+      const desired = ticketSessionGroup(ticket, workspace.path)
+      const existing = current.get(workerSessionId(ticket.id))
+      if (existing?.path === desired.path && existing.role === desired.role && existing.merged === desired.merged) continue
+      if (await this.presentTicketSession(ticket)) adopted++
+    }
+    return adopted
+  }
   private async initialize(): Promise<void> {
     // Register management HTTP routes before setup completes so operators can fix setup problems in the UI.
     this.disposers.push(registerHttp(this.ctx, this.httpHost()))
@@ -1765,6 +1822,12 @@ export class Runtime extends Service implements SourceHost {
     void this.adoptWorktrees().catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: presenting recorded ticket checkouts failed: %s', String(error))
     })
+    // Worker Sessions recorded before the same presentation existed receive their durable sidebar group once.
+    const adopted = this.adoptTicketSessions().catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: grouping recorded ticket Sessions failed: %s', String(error))
+    })
+    this.groupWrites.add(adopted)
+    void adopted.finally(() => { this.groupWrites.delete(adopted) })
   }
   private httpHost(): HttpHost {
     const runtime = this

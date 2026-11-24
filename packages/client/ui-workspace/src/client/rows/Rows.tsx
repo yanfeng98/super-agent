@@ -58,6 +58,14 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
   return node.blank ? t('session.new') : (node.title || t('session.untitled'))
 }
 
+/** The role or lifecycle marker a row shows in its trailing cell and hover card, if any. */
+function markerLabel(node: Pick<SessionNode, 'orchestrator' | 'ticket' | 'merged'>, t: RowTranslate): string | undefined {
+  if (node.merged) return t('session.merged')
+  if (node.ticket) return t('session.ticket')
+  if (node.orchestrator) return t('session.orchestrator')
+  return undefined
+}
+
 /** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
 function timeLabel(updatedAt: number, now: number, t: RowTranslate): string {
   const { unit, n } = relativeTime(updatedAt, now)
@@ -390,10 +398,11 @@ function SessionHoverContent({ node, cwd, now, renderSlot, t }: {
   // Archived rows show live activity but suppress idle and unread reminders.
   const statuses = sessionStatuses(node.archived ? { ...node, completed: false } : node, t)
     .filter(status => !(node.archived && status.state === 'idle'))
+  const marker = markerLabel(node, t)
   return (
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{displayTitle(node, t)}</div>
-      {node.orchestrator && <div className={css.hoverPath}>{t('session.orchestrator')}</div>}
+      {marker !== undefined && <div className={css.hoverPath}>{marker}</div>}
       {cwd !== undefined && <div className={css.hoverPath}>{cwd}</div>}
       {/* Same placeholder rule as the row's trailing cell: no timestamp
           before the first prompt. */}
@@ -655,9 +664,9 @@ export function SessionNodeItem({
           actions for existing content are available. */}
       {!row.blank && (
         <span className={css.rowResting}>
-          {row.orchestrator && (
-            <Tag tone="neutral" className={css.orchestratorMark}>{t('session.orchestrator')}</Tag>
-          )}
+          {row.merged ? <Tag tone="success" className={css.roleMark}>{t('session.merged')}</Tag>
+            : row.ticket ? <Tag tone="neutral" className={css.roleMark}>{t('session.ticket')}</Tag>
+              : row.orchestrator && <Tag tone="neutral" className={css.roleMark}>{t('session.orchestrator')}</Tag>}
           <span
             className={clsx(css.time, primaryStatus.trailingLabel === undefined && css.timestamp)}
             aria-hidden={primaryStatus.trailingLabel === undefined ? undefined : true}

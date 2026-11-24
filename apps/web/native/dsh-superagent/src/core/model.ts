@@ -518,6 +518,8 @@ export interface Execution {
   assignment: string
   /** Commit the workspace started from, captured at the first launch so a review lists the commits the ticket added. */
   base?: string
+  /** Git root this checkout belongs to, captured at the first launch so its Session keeps its sidebar group after the checkout goes. */
+  root?: string
   /** Branch checked out in the main working tree at the first launch; a merge or rebase refuses if it changed since. */
   target?: string
   /**

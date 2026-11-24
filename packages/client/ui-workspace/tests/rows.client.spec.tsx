@@ -676,6 +676,22 @@ describe('workspace browser rows', () => {
     expect(drag.start).not.toHaveBeenCalled()
   })
 
+  it('marks a Ticket Session with its merge state instead of the role', () => {
+    const base: SessionNode = {
+      id: sid('ticket'), title: 'Ticket work', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
+      ticket: true, groupedByHint: true,
+    }
+    const drag: RowDragProps = { active: false, marker: null, start: vi.fn(), end: vi.fn(), hover: vi.fn(), drop: vi.fn() }
+    const { rerender } = render(<SessionNodeItem node={base} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag}
+      useSessionAccess={() => true} t={t} />)
+    expect(screen.getByText('工单')).toBeTruthy()
+    rerender(<SessionNodeItem node={{ ...base, merged: true }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag}
+      useSessionAccess={() => true} t={t} />)
+    expect(screen.getByText('已合并')).toBeTruthy()
+    expect(screen.queryByText('工单')).toBeNull()
+  })
+
   it('session row drags and renames from its title only while its access snapshot allows each', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,

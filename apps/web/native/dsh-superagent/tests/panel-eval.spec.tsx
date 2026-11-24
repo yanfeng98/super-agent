@@ -4,7 +4,7 @@ import { act } from 'react'
 import { expect, it } from 'vitest'
 import { zh } from '../src/client/locales.ts'
 import { usePanel, mount, remount, settle, all, find, tab, click, type, text, field } from './fixtures/panel.tsx'
-import { server } from './fixtures/panel-server.ts'
+import { decisionRow, server } from './fixtures/panel-server.ts'
 
 usePanel()
 it('opens the Decisions under Policy from the flow line with their reasons, Decisions that start work first, filterable by kind',
@@ -22,6 +22,19 @@ it('opens the Decisions under Policy from the flow line with their reasons, Deci
   expect(text()).toContain(zh.none)
   await click(zh.lastDayOnly)
   expect(server.requests.some(request => request.path === 'decisions?limit=30&kind=ignore')).toBe(true)
+})
+
+it('shows the Ticket a Decision started with its result and push, or that it started none', async () => {
+  server.decisions = [
+    decisionRow({ ticketId: 't0', ticketTitle: '旧工单', ticket: { id: 't0', number: 8, title: '旧工单', state: 'ended',
+      stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'dropped' },
+      merged: { at: '2026-09-21T00:01:00Z', target: 'main', head: 'abc12345', push: { ok: false, error: 'no upstream' } } } }),
+    decisionRow({ id: 'd2', kind: 'ignore', outcome: 'ignore', ticketId: undefined }),
+  ]
+  await mount()
+  await click(zh['tab.eval'])
+  expect(text()).toContain(`T-0008${zh['outcome.merged']}${zh.pushFailedShort}`)
+  expect(text()).toContain(zh.noTicket)
 })
 
 it('keeps a Policy draft across remounts, and merges another save into it sender by sender and rule by rule', async () => {

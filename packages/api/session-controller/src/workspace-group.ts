@@ -17,7 +17,8 @@ import type { SessionWorkspaceGroup } from './types.ts'
 
 const workspaceGroupSchema = z.object({
   path: z.string().min(1),
-  role: z.literal('orchestrator').optional(),
+  role: z.enum(['orchestrator', 'ticket']).optional(),
+  merged: z.literal(true).optional(),
 }).strict().nullable()
 
 /** Latest `session/workspace-group` value, or null when the Session has no override. */

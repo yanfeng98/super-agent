@@ -1,0 +1,18 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"event:session/workspace-group","kind":"event","event":"session/workspace-group","surface":false,"digest":"6bfd95f8161011d9524585c00c132032ec74cb4838d066951b986f1873543c80"}
+  ],
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "3a575eb6a5302989": {"kind":"literal","value":"orchestrator"},
+    "4cd48f3e5108bd6e": {"kind":"primitive","type":"string"},
+    "6bfd95f8161011d9": {"kind":"object","properties":[{"name":"data","type":"b214dc7fc4285dce","optional":false},{"name":"ignorable","type":"dacf3d5f3e4ff619","optional":true},{"name":"seq","type":"0657d3ca5ac4e7bf","optional":false},{"name":"time","type":"0657d3ca5ac4e7bf","optional":false},{"name":"type","type":"afcd425cd0c35751","optional":false}],"indices":[]},
+    "7975731390707e68": {"kind":"union","types":["3a575eb6a5302989","a4ac0adff406df82"]},
+    "a4ac0adff406df82": {"kind":"literal","value":"ticket"},
+    "afcd425cd0c35751": {"kind":"literal","value":"session/workspace-group"},
+    "b214dc7fc4285dce": {"kind":"object","properties":[{"name":"merged","type":"dacf3d5f3e4ff619","optional":true},{"name":"path","type":"4cd48f3e5108bd6e","optional":false},{"name":"role","type":"7975731390707e68","optional":true}],"indices":[]},
+    "dacf3d5f3e4ff619": {"kind":"literal","value":true}
+  }
+}

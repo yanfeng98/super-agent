@@ -86,6 +86,10 @@ export interface SessionNode {
   groupedByHint?: boolean
   /** Durable role marker shown beside the row (the IM bot's orchestrator). */
   orchestrator?: boolean
+  /** A Ticket's worker Session browsed under its repository once the Ticket's checkout is gone. */
+  ticket?: boolean
+  /** That Ticket's branch landed on its target. */
+  merged?: boolean
 }
 
 /** Session order selected by the Workspace browser. */
@@ -549,6 +553,8 @@ function sessionNode(
     updatedAt: s.updatedAt,
     ...(workspaceGroupPath(s) === undefined ? {} : { groupedByHint: true }),
     ...(s.projectionValues?.workspaceGroup?.role === 'orchestrator' ? { orchestrator: true } : {}),
+    ...(s.projectionValues?.workspaceGroup?.role === 'ticket' ? { ticket: true } : {}),
+    ...(s.projectionValues?.workspaceGroup?.merged === true ? { merged: true } : {}),
     ...(root === undefined || root === '' ? {} : { cwd: root }),
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }

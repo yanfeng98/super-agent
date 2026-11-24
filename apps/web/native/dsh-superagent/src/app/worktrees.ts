@@ -6,6 +6,8 @@
  * @module @deepseek-ai/dsh-superagent/src/app/worktrees
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { appendWorkspaceGroup, workspaceGroupOf, type SessionWorkspaceGroup } from '@deepseek-ai/dsh-api-session-controller'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import { realpathNormalize } from '@deepseek-ai/dsh-workspace'
 import type { Ticket } from '../core/index.ts'
@@ -139,4 +141,56 @@ export async function removeWorktree(ctx: Context, ticket: Ticket): Promise<void
   if (registry === undefined || directory === undefined) return
   const workspace = await workspaceAt(ctx, directory)
   if (workspace !== undefined) await registry.delete(workspace.id)
+}
+
+/**
+ * The registered Workspace a Ticket's worker Session should be browsed under:
+ * the repository Workspace its checkout is nested in while that registration
+ * exists, else the one registered at the repository root the Ticket recorded.
+ * @param ctx - Host context carrying the Workspace registry.
+ * @param ticket - Ticket whose repository Workspace is required.
+ * @param fallbackRoot - Repository this installation runs from, for a Ticket that recorded none.
+ * @returns the parent Workspace, or undefined when none is registered.
+ */
+export async function sessionGroupWorkspace(ctx: Context, ticket: Ticket, fallbackRoot?: string): Promise<Workspace | undefined> {
+  const registry = ctx.get('workspaceRegistry')
+  if (registry === undefined) return undefined
+  const worktree = ticket.execution?.directory === undefined ? undefined : await workspaceAt(ctx, ticket.execution.directory)
+  const parent = worktree?.parentId === undefined ? undefined : registry.list().find(workspace => workspace.id === worktree.parentId)
+  if (parent !== undefined) return parent
+  // A Ticket recorded before the root was captured still names its repository or, failing that, uses this installation's.
+  return parentAt(ctx, ticket.execution?.root ?? ticket.merged?.root ?? ticket.reverted?.root
+    ?? ticket.execution?.repository ?? fallbackRoot)
+}
+
+/**
+ * The durable sidebar group of a Ticket's worker Session: the repository
+ * Workspace, a ticket role marker, and whether the Ticket's branch landed.
+ * Read when a row is grouped by this hint rather than by Workspace membership,
+ * which starts once the Ticket's own checkout registration is gone.
+ * @param ticket - Ticket whose Session is presented.
+ * @param path - Registered repository Workspace directory.
+ * @returns the grouping hint to append.
+ */
+export function ticketSessionGroup(ticket: Ticket, path: string): SessionWorkspaceGroup {
+  return { path, role: 'ticket', ...ticket.merged ? { merged: true as const } : {} }
+}
+
+/**
+ * Durably groups a Ticket's worker Session under its repository Workspace,
+ * with the role marker and merge state the sidebar shows. Repeating the same
+ * facts appends nothing, so a caller may run this whenever a Ticket moves.
+ * @param ctx - Host context carrying the Workspace registry and projections.
+ * @param ticket - Ticket whose Session is presented.
+ * @param session - the live worker Session of that Ticket.
+ * @returns whether a newer group was appended.
+ */
+export async function groupTicketSession(ctx: Context, ticket: Ticket, session: Session): Promise<boolean> {
+  const workspace = await sessionGroupWorkspace(ctx, ticket)
+  if (workspace === undefined) return false
+  const next = ticketSessionGroup(ticket, workspace.path)
+  const current = workspaceGroupOf(ctx, session)
+  if (current?.path === next.path && current.role === next.role && current.merged === next.merged) return false
+  appendWorkspaceGroup(session, next)
+  return true
 }

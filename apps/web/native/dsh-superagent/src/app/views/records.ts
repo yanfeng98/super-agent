@@ -142,6 +142,25 @@ export function ticketSummary(ticket: Ticket, number?: number) {
     updatedAt: ticket.updatedAt }
 }
 export type TicketSummaryView = ReturnType<typeof ticketSummary>
+/**
+ * Compact Ticket facts a Trigger or Eval row shows beside the conversation it
+ * started: its number, stage, ending, and where a recorded merge landed with
+ * the remote's answer when a push followed.
+ * @param view - current snapshot naming the Ticket's display number.
+ * @param ticket - Ticket the conversation created or a Decision accepted.
+ * @returns the row facts, including no worktree checkout fact the caller already knows.
+ */
+export function ticketFacts(view: Pick<Snapshot, 'number'>, ticket: Ticket) {
+  const stage = ticketStage(ticket)
+  // A revert newer than the merge undoes it, so the row shows the Ticket as it stands.
+  const merged = ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at) ? ticket.merged : undefined
+  return { id: ticket.id, number: view.number(ticket.id), title: ticket.title,
+    state: liveTicket(ticket) ? 'open' as const : 'ended' as const, ...stage, ended: ticket.ended,
+    ...merged ? { merged: { at: merged.at, ...merged.target ? { target: merged.target } : {},
+      ...merged.head ? { head: merged.head } : {},
+      ...merged.push ? { push: { ok: merged.push.ok, ...merged.push.error ? { error: merged.push.error } : {} } } : {} } } : {} }
+}
+export type TicketFactsView = ReturnType<typeof ticketFacts>
 function threadUrl(store: Store, thread: Thread): string | undefined {
   return attribute(thread.meta.url) ?? store.read.firstTrigger(thread.key)?.url
 }
@@ -182,10 +201,7 @@ function threadStage(thread: Thread, pending: number, tickets: { state: string }
 }
 export function threadSummary(view: Snapshot, thread: Thread) {
   const { store } = view
-  const tickets = thread.subscriptions.map(id => {
-    const ticket = store.tickets.get(id)
-    return { id, title: ticket?.title ?? id, state: !ticket ? 'unknown' : liveTicket(ticket) ? 'open' : 'ended' }
-  })
+  const tickets = thread.subscriptions.flatMap(id => { const ticket = store.tickets.get(id); return ticket ? [ticketFacts(view, ticket)] : [] })
   const pending = awaitingEval(view, thread).length
   return { key: thread.key, source: thread.ref.source, title: threadTitle(store, thread), stage: threadStage(thread, pending, tickets),
     latest: latestOnThread(view, thread), lastAt: thread.lastAt ?? thread.createdAt, createdAt: thread.createdAt,
@@ -215,6 +231,7 @@ const outcomeOf = (decision: Decision): DecisionOutcome =>
 export function decisionView(view: Snapshot, decision: Decision) {
   const { store } = view
   const thread = store.threads.get(decision.threadKey)
+  const ticket = decision.ticketId ? store.tickets.get(decision.ticketId) : undefined
   const texts = decision.triggerIds.flatMap(id => { const trigger = store.triggers.get(id); return trigger ? [preview(trigger.text)] : [] })
   const audit = AuditSchema.parse(decision.audit ?? {})
   // Fall back to `matches` for assessments recorded by older versions.
@@ -224,6 +241,6 @@ export function decisionView(view: Snapshot, decision: Decision) {
     rules: judged.map(rule => ({ ...view.rule(rule.rule_id), matched: rule.matched, reason: rule.reason })),
     ...audit.direction ? { direction: audit.direction } : {},
     ...thread ? { threadTitle: threadTitle(store, thread) } : {}, preview: texts.join(' / '),
-    ticketTitle: decision.ticketId ? store.tickets.get(decision.ticketId)?.title : undefined }
+    ticketTitle: ticket?.title, ...ticket ? { ticket: ticketFacts(view, ticket) } : {} }
 }
 export type DecisionView = ReturnType<typeof decisionView>

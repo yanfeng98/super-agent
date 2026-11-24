@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Ticket } from '../src/core/index.ts'
-import { adoptWorktrees, linkWorktree, presentWorktree, removeWorktree, retitleWorktree } from '../src/app/worktrees.ts'
+import { adoptWorktrees, linkWorktree, presentWorktree, removeWorktree, retitleWorktree, sessionGroupWorkspace, ticketSessionGroup } from '../src/app/worktrees.ts'
 import { workspaceRegistryStub } from './fixtures/host.ts'
 
 const tickets: string[] = []
@@ -127,6 +127,26 @@ describe('ticket worktree presentation', () => {
     await rm(checkout, { recursive: true })
     await presentWorktree(ctx, presented, false)
     expect(registry.list()).toEqual([])
+  })
+
+  it('names the repository group and merge state its worker Session records', async () => {
+    const { ctx, registry } = context()
+    const root = await directory('repo')
+    const checkout = await directory('ticket')
+    const running = ticket(checkout, 'fix-regression-ab12')
+    await registry.create(root)
+    expect(ticketSessionGroup(running, root)).toEqual({ path: root, role: 'ticket' })
+    const merged = { ...running, execution: { ...running.execution!, root },
+      merged: { at: '2026-01-01T00:00:00.000Z', target: 'main', root } }
+    expect(ticketSessionGroup(merged, root)).toEqual({ path: root, role: 'ticket', merged: true })
+    // A live checkout's registered parent answers even when the recorded root is unset.
+    await linkWorktree(ctx, running, root)
+    expect((await sessionGroupWorkspace(ctx, running))?.path).toBe(root)
+    // After the checkout registration is gone, the recorded root answers.
+    await removeWorktree(ctx, running)
+    expect(await sessionGroupWorkspace(ctx, { ...running, execution: { ...running.execution!, root } }))
+      .toMatchObject({ path: root })
+    expect(registry.list().map(workspace => workspace.path)).toEqual([root])
   })
 
   it('retitles a worktree entry with its Ticket', async () => {

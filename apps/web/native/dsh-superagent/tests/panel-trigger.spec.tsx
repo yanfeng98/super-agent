@@ -11,7 +11,7 @@ it('walks a Thread timeline newest first with dispositions as tags and its Decis
   await mount()
   await click(zh['tab.trigger'])
   expect(document.querySelector('.dt-ticket .dt-stage')?.textContent).toBe(zh.threadSubscribed)
-  expect(text()).toContain('扇出给 修复回归')
+  expect(text()).toContain(`${zh['term.ticket']}T-0001${zh['stage.working']}`)
   await click('这个文案好奇怪')
   expect(document.querySelector('.dt-page-head .dt-btn')?.textContent).toBe(zh['term.trigger'])
   expect(text()).not.toContain('扇出到 1 个工单')
@@ -25,6 +25,19 @@ it('walks a Thread timeline newest first with dispositions as tags and its Decis
   expect(all('.dt-event .dt-event-text').map(element => element.textContent)).toEqual(['message e4', 'message e3', 'message e1'])
   await click(document.querySelector<HTMLElement>('.dt-page-head .dt-btn')!)
   expect(find(zh['threadFilter.subscribed'], '.dt-pill').getAttribute('aria-pressed')).toBe('true')
+})
+
+it('reads the Ticket a Thread started with its result, merge and push, or that it started none', async () => {
+  server.threads = [
+    { ...threadSummary(), key: 'feishu:oc_1:merged', title: '合并过的对话', tickets: [{ id: 't0', number: 7, title: '旧工单', state: 'ended',
+      stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'dropped' },
+      merged: { at: '2026-09-21T00:01:00Z', target: 'main', head: 'abc12345', push: { ok: true } } }] },
+    { ...threadSummary(), key: 'feishu:oc_1:chat', title: '普通对话', tickets: [] },
+  ]
+  await mount()
+  await click(zh['tab.trigger'])
+  expect(text()).toContain(`T-0007${zh['outcome.merged']}${zh.pushed}`)
+  expect(text()).toContain(zh.noTicket)
 })
 
 it('offers to send a person\'s message that reached a ticket to Eval, for one its worker neither did nor handed back', async () => {

@@ -1,11 +1,14 @@
 /** Shared list rows for Tickets, Threads, and Decisions, plus Source fact chips and automated-message run folding. */
 import { useState } from 'react'
-import type { DecisionRow, ThreadFacts, ThreadRow, TicketRow } from './api.ts'
+import type { DecisionRow, ThreadFacts, ThreadRow, TicketFacts, TicketRow } from './api.ts'
 import { Icon, Tag } from './controls.tsx'
 import { decisionMark, threadMark, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { actorName, localized, readableMarkers, reasonLabel, ticketNumber, valueLabel } from './text.ts'
 import { ActionLink, ConfirmButton, LabelValue, SessionButton, StageMark, When } from './widgets.tsx'
+
+/** How many Ticket associations one row shows before folding the rest into a count. */
+const TICKET_ASSOCIATIONS = 2
 
 export function TicketLine({ ticket, question, onChanged, context, select }: {
   ticket: TicketRow; question?: boolean; onChanged?: () => Promise<void>; context?: boolean
@@ -48,6 +51,20 @@ export function TicketLine({ ticket, question, onChanged, context, select }: {
   </li>
 }
 
+/** One Ticket a conversation started, with its stage mark and the remote's answer when the merge asked for a push. */
+export function TicketAssociation({ ticket }: { ticket: TicketFacts }) {
+  const { t, navigate } = usePanel()
+  const mark = ticketMark(t, ticket)
+  const push = ticket.merged?.push
+  return <span className="dt-ticket-assoc">
+    <button type="button" className="dt-textlink" title={mark.title}
+      onClick={() => navigate({ page: 'execution', id: ticket.id })}>{ticketNumber(ticket.number)}</button>
+    <Tag tone={mark.tone} title={mark.title}>{mark.label}</Tag>
+    {push && (push.ok ? <Tag tone="success" title={t('pushOk')}>{t('pushed')}</Tag>
+      : <Tag tone="danger" title={t('pushFailed', { error: push.error ?? '' })}>{t('pushFailedShort')}</Tag>)}
+  </span>
+}
+
 function ContextTag() {
   const { t } = usePanel()
   return <Tag tone="quiet" title={t('contextOnlyHint')}>{t('contextOnly')}</Tag>
@@ -55,9 +72,8 @@ function ContextTag() {
 /** Thread list row; on a Ticket page, `ticketId` omits that Ticket from fanout targets and `context` marks context-only threads. */
 export function ThreadLine({ thread, ticketId, context }: { thread: ThreadRow; ticketId?: string; context?: boolean }) {
   const { t, navigate } = usePanel()
-  const live = thread.tickets.filter(ticket => ticket.state === 'open' && ticket.id !== ticketId)
+  const shown = thread.tickets.filter(ticket => ticket.id !== ticketId)
   const { dot, icon, label } = threadMark(t, thread)
-  const reaches = live.length > 0 && `${live[0]!.title}${live.length > 1 ? t('andMore', { count: live.length - 1 }) : ''}`
   return <li className="dt-row dt-link dt-ticket">
     <div className="dt-ticket-stage"><StageMark state={dot} icon={icon} label={label} /></div>
     <div className="dt-ticket-body">
@@ -72,8 +88,14 @@ export function ThreadLine({ thread, ticketId, context }: { thread: ThreadRow; t
       <div className="dt-row-meta dt-line">
         <ThreadChip thread={thread} />
         {context && <ContextTag />}
-        {thread.pollError ? <span className="dt-line-text dt-error-text">{thread.pollError}</span> : reaches && <LabelValue
-          label={t('fanoutTo')} value={reaches} />}
+        {thread.pollError ? <span className="dt-line-text dt-error-text">{thread.pollError}</span>
+          // On a Ticket's page its own Ticket is omitted; an empty list still means the Thread has one.
+          : shown.length > 0 ? <span className="dt-ticket-assoc">
+            <span className="dt-chip-label">{t('term.ticket')}</span>
+            {shown.slice(0, TICKET_ASSOCIATIONS).map(ticket => <TicketAssociation key={ticket.id} ticket={ticket} />)}
+            {shown.length > TICKET_ASSOCIATIONS && <span className="dt-line-text">{t('andMore', { count: shown.length - TICKET_ASSOCIATIONS })}</span>}
+          </span>
+            : thread.tickets.length > 0 ? null : <Tag tone="quiet" title={t('noTicketHint')}>{t('noTicket')}</Tag>}
         <When at={thread.lastAt} />
       </div>
     </div>
@@ -99,6 +121,8 @@ export function DecisionLine({ decision }: { decision: DecisionRow }) {
       <div className="dt-row-quote dt-line">{preview}</div>
       <div className="dt-row-meta dt-line">
         {reason && <span className="dt-line-text">{reason}</span>}
+        {decision.ticket ? <TicketAssociation ticket={decision.ticket} />
+          : <Tag tone="quiet" title={t('noTicketHint')}>{t('noTicket')}</Tag>}
         {matched.length > 0 && <LabelValue label={t('ruleLabel')} value={matched.join(t('listSeparator'))} />}
         <When at={decision.at} />
       </div>

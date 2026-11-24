@@ -335,6 +335,8 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
         whenIdle: () => status === 'idle' ? Promise.resolve() : new Promise<void>(resolve => { idle.push(resolve) }) } as never)
     }),
     selectModel: vi.fn(async () => {}), resolveAgent: vi.fn(resolveDefault), rename: vi.fn(async () => {}),
+    // The Runtime backfills Ticket worker Session sidebar groups from the same listing the panel reads.
+    list: vi.fn(async () => ({ items: [] })),
     prompt: vi.fn(() => { throw new Error('Plugin delivery must not use user RPC') }),
     inspect: vi.fn(async () => ({ events: [] })),
   }
@@ -345,7 +347,9 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
   const subagents = subagentRuntime(agents)
   const services = { agents, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
     sessionPersistence: persistence, workspaceRegistry: workspaceRegistryStub(), permissionPresets: { set: () => {} }, subprocess, webServer,
-    jobs: jobs.service, subagents: subagents.service }
+    jobs: jobs.service, subagents: subagents.service,
+    // Ticket worker Sessions of chosen sessions start with no sidebar group override; appends are recorded on their fake Sessions.
+    sessionProjections: { summaryKeys: () => new Set(), snapshot: () => ({ asOfSeq: -1, values: { workspaceGroup: null } }) } }
   const ctx = new Context()
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   const seeded = new Store(join(directory, 'orchestrator.sqlite'))
