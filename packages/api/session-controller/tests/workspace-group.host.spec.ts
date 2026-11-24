@@ -71,5 +71,8 @@ describe('session workspace group projection', () => {
     expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', extra: true })).toThrow()
     expect(workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', role: 'ticket', merged: true }))
       .toEqual({ path: '/abs', role: 'ticket', merged: true })
+    expect(workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', role: 'ticket', outcome: 'stopped' }))
+      .toEqual({ path: '/abs', role: 'ticket', outcome: 'stopped' })
+    expect(() => workspaceGroupProjectionDefinition.stateSchema.parse({ path: '/abs', outcome: 'working' })).toThrow()
   })
 })

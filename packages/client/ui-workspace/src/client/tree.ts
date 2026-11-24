@@ -90,6 +90,8 @@ export interface SessionNode {
   ticket?: boolean
   /** That Ticket's branch landed on its target. */
   merged?: boolean
+  /** That Ticket's terminal outcome when it did not merge. */
+  outcome?: 'completed' | 'closed' | 'dropped' | 'stopped'
 }
 
 /** Session order selected by the Workspace browser. */
@@ -555,6 +557,8 @@ function sessionNode(
     ...(s.projectionValues?.workspaceGroup?.role === 'orchestrator' ? { orchestrator: true } : {}),
     ...(s.projectionValues?.workspaceGroup?.role === 'ticket' ? { ticket: true } : {}),
     ...(s.projectionValues?.workspaceGroup?.merged === true ? { merged: true } : {}),
+    ...(s.projectionValues?.workspaceGroup?.outcome === undefined ? {}
+      : { outcome: s.projectionValues.workspaceGroup.outcome }),
     ...(root === undefined || root === '' ? {} : { cwd: root }),
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }

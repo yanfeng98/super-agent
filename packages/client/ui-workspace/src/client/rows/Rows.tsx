@@ -58,9 +58,19 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
   return node.blank ? t('session.new') : (node.title || t('session.untitled'))
 }
 
+type SessionOutcome = NonNullable<SessionNode['outcome']>
+
+const OUTCOME_KEYS: Record<SessionOutcome, 'session.completed' | 'session.closed' | 'session.dropped' | 'session.abandoned'> = {
+  completed: 'session.completed',
+  closed: 'session.closed',
+  dropped: 'session.dropped',
+  stopped: 'session.abandoned',
+}
+
 /** The role or lifecycle marker a row shows in its trailing cell and hover card, if any. */
-function markerLabel(node: Pick<SessionNode, 'orchestrator' | 'ticket' | 'merged'>, t: RowTranslate): string | undefined {
+function markerLabel(node: Pick<SessionNode, 'orchestrator' | 'ticket' | 'merged' | 'outcome'>, t: RowTranslate): string | undefined {
   if (node.merged) return t('session.merged')
+  if (node.outcome !== undefined) return t(OUTCOME_KEYS[node.outcome])
   if (node.ticket) return t('session.ticket')
   if (node.orchestrator) return t('session.orchestrator')
   return undefined
@@ -665,8 +675,10 @@ export function SessionNodeItem({
       {!row.blank && (
         <span className={css.rowResting}>
           {row.merged ? <Tag tone="success" className={css.roleMark}>{t('session.merged')}</Tag>
-            : row.ticket ? <Tag tone="neutral" className={css.roleMark}>{t('session.ticket')}</Tag>
-              : row.orchestrator && <Tag tone="neutral" className={css.roleMark}>{t('session.orchestrator')}</Tag>}
+            : row.outcome !== undefined
+              ? <Tag tone={row.outcome === 'completed' ? 'success' : 'neutral'} className={css.roleMark}>{t(OUTCOME_KEYS[row.outcome])}</Tag>
+              : row.ticket ? <Tag tone="neutral" className={css.roleMark}>{t('session.ticket')}</Tag>
+                : row.orchestrator && <Tag tone="neutral" className={css.roleMark}>{t('session.orchestrator')}</Tag>}
           <span
             className={clsx(css.time, primaryStatus.trailingLabel === undefined && css.timestamp)}
             aria-hidden={primaryStatus.trailingLabel === undefined ? undefined : true}

@@ -420,6 +420,24 @@ describe('deriveGroups', () => {
     expect(groups[0]!.sessions[2]!.merged).toBeUndefined()
   })
 
+  it('projects a finished Ticket outcome alongside its role marker', () => {
+    const abandoned = {
+      ...summary('ticket-stopped', 9, '/state/superagent/work/stopped'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'ticket', outcome: 'stopped' } }),
+    }
+    const done = {
+      ...summary('ticket-completed', 8, '/state/superagent/work/done'),
+      projectionValues: projectionValues({ workspaceGroup: { path: '/projects/first', role: 'ticket', outcome: 'completed' } }),
+    }
+    const groups = deriveGroups(
+      list(summary('owned', 1, '/projects/first'), abandoned, done),
+      [workspace('first', ['owned'])], noRows, noAttention, view(['first']),
+    )
+    expect(groups[0]!.sessions[1]).toMatchObject({ groupedByHint: true, ticket: true, outcome: 'stopped' })
+    expect(groups[0]!.sessions[2]).toMatchObject({ groupedByHint: true, ticket: true, outcome: 'completed' })
+    expect(groups[0]!.sessions[2]!.merged).toBeUndefined()
+  })
+
   it('hides an archived hinted Session from its group and from the trailing bucket', () => {
     const hinted = {
       ...summary('orchestrator', 9, '/state/superagent'),

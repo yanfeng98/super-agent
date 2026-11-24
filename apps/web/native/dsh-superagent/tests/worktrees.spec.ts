@@ -139,6 +139,12 @@ describe('ticket worktree presentation', () => {
     const merged = { ...running, execution: { ...running.execution!, root },
       merged: { at: '2026-01-01T00:00:00.000Z', branch: 'fix-regression-ab12', target: 'main', root } }
     expect(ticketSessionGroup(merged, root)).toEqual({ path: root, role: 'ticket', merged: true })
+    for (const outcome of ['completed', 'closed', 'dropped', 'stopped'] as const) {
+      expect(ticketSessionGroup({ ...running, ended: { at: '2026-01-01T00:00:00.000Z', by: 'human', outcome } }, root))
+        .toEqual({ path: root, role: 'ticket', outcome })
+    }
+    expect(ticketSessionGroup({ ...merged, ended: { at: '2026-01-01T00:00:00.000Z', by: 'executor', outcome: 'completed' } }, root))
+      .toEqual({ path: root, role: 'ticket', merged: true })
     // A live checkout's registered parent answers even when the recorded root is unset.
     await linkWorktree(ctx, running, root)
     expect((await sessionGroupWorkspace(ctx, running))?.path).toBe(root)

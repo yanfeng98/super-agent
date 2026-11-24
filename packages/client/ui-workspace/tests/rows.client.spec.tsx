@@ -692,6 +692,27 @@ describe('workspace browser rows', () => {
     expect(screen.queryByText('工单')).toBeNull()
   })
 
+  it('shows a finished Ticket session outcome instead of the plain role mark', () => {
+    const base: SessionNode = {
+      id: sid('ticket'), title: 'Ticket work', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
+      ticket: true, groupedByHint: true,
+    }
+    const view = render(<SessionNodeItem node={{ ...base, outcome: 'stopped' }} currentId={undefined} now={0}
+      onOpen={vi.fn()} useSessionAccess={() => true} t={t} />)
+    expect(screen.getByText('已放弃')).toBeTruthy()
+    expect(screen.queryByText('工单')).toBeNull()
+    view.rerender(<SessionNodeItem node={{ ...base, outcome: 'completed' }} currentId={undefined} now={0}
+      onOpen={vi.fn()} useSessionAccess={() => true} t={t} />)
+    expect(screen.getByText('已完成')).toBeTruthy()
+    expect(screen.queryByText('已放弃')).toBeNull()
+    // A merge outranks an outcome left in an older projection record.
+    view.rerender(<SessionNodeItem node={{ ...base, merged: true, outcome: 'stopped' }} currentId={undefined} now={0}
+      onOpen={vi.fn()} useSessionAccess={() => true} t={t} />)
+    expect(screen.getByText('已合并')).toBeTruthy()
+    expect(screen.queryByText('已放弃')).toBeNull()
+  })
+
   it('session row drags and renames from its title only while its access snapshot allows each', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,

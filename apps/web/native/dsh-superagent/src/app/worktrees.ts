@@ -165,7 +165,10 @@ export async function sessionGroupWorkspace(ctx: Context, ticket: Ticket, fallba
 
 /**
  * The durable sidebar group of a Ticket's worker Session: the repository
- * Workspace, a ticket role marker, and whether the Ticket's branch landed.
+ * Workspace, a ticket role marker, and the Ticket's end state. A merge is
+ * written as `merged` and suppresses `outcome`, even when the ending also
+ * says completed; every other terminal outcome is written as `outcome`, so
+ * the sidebar can show the same wording as the Ticket and Thread pages.
  * Read when a row is grouped by this hint rather than by Workspace membership,
  * which starts once the Ticket's own checkout registration is gone.
  * @param ticket - Ticket whose Session is presented.
@@ -173,7 +176,9 @@ export async function sessionGroupWorkspace(ctx: Context, ticket: Ticket, fallba
  * @returns the grouping hint to append.
  */
 export function ticketSessionGroup(ticket: Ticket, path: string): SessionWorkspaceGroup {
-  return { path, role: 'ticket', ...ticket.merged ? { merged: true as const } : {} }
+  const outcome = ticket.ended?.outcome
+  const ended = ticket.merged || outcome === undefined || outcome === 'merged' ? {} : { outcome }
+  return { path, role: 'ticket', ...ticket.merged ? { merged: true as const } : {}, ...ended }
 }
 
 /**
@@ -190,7 +195,8 @@ export async function groupTicketSession(ctx: Context, ticket: Ticket, session: 
   if (workspace === undefined) return false
   const next = ticketSessionGroup(ticket, workspace.path)
   const current = ctx.sessionController.workspaceGroupOf(session)
-  if (current?.path === next.path && current.role === next.role && current.merged === next.merged) return false
+  if (current?.path === next.path && current.role === next.role && current.merged === next.merged
+    && current.outcome === next.outcome) return false
   ctx.sessionController.appendWorkspaceGroup(session, next)
   return true
 }

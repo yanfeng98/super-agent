@@ -209,6 +209,9 @@ export class Runtime extends Service implements SourceHost {
           // Record the ending in the archive and the workspace review, and a reopening the operator made afterwards.
           const ended = event.type === 'ticket.ended' ? store.tickets.get(event.data.ticketId) : undefined
           if (ended) this.store.afterCommit(() => {
+            // The sidebar row reads the ending from the durable group, so a completed or abandoned Ticket
+            // shows its outcome without waiting for a merge or the next Assignment.
+            this.queueTicketSession(ended)
             const task = this.finishTicket(ended, ctx).catch((error: unknown) => {
               ctx.logger.warn('dsh-superagent: completing the ending of ticket %s failed: %s', ended.id, String(error))
             })
@@ -221,6 +224,8 @@ export class Runtime extends Service implements SourceHost {
           if (event.type === 'ticket.reopened') {
             const reopened = store.tickets.get(event.data.ticketId)
             if (reopened) this.store.afterCommit(() => {
+              // A reopen clears the ending, so the sidebar row drops the outcome marker.
+              this.queueTicketSession(reopened)
               void reopenArchive(reopened, event.at).catch((error: unknown) => {
                 ctx.logger.warn('dsh-superagent: recording a reopening in the archive failed: %s', String(error))
               })
@@ -1789,7 +1794,8 @@ export class Runtime extends Service implements SourceHost {
       if (workspace === undefined) continue
       const desired = ticketSessionGroup(ticket, workspace.path)
       const existing = current.get(workerSessionId(ticket.id))
-      if (existing?.path === desired.path && existing.role === desired.role && existing.merged === desired.merged) continue
+      if (existing?.path === desired.path && existing.role === desired.role && existing.merged === desired.merged
+        && existing.outcome === desired.outcome) continue
       if (await this.presentTicketSession(ticket)) adopted++
     }
     return adopted

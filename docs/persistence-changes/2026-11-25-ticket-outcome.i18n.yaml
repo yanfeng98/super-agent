@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-25-ticket-outcome.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-11-25-ticket-outcome.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-11-25-ticket-outcome:
+  en: 5268a0ab51e3b0fb
+  zh: eef0a4ccbcab2ff3
+/2026-11-25-ticket-outcome/summary:
+  en: 439a3c85dfc53dfc
+  zh: 2f02b264e3a1ed08
+/2026-11-25-ticket-outcome/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-11-25-ticket-outcome/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-11-25-ticket-outcome/compatibility:
+  en: d18d9553282444a9
+  zh: 9ed218ff465c1488
+/2026-11-25-ticket-outcome/verification:
+  en: ad19bd6c43ec1f92
+  zh: ad832dab58c58cbe
+/2026-11-25-ticket-outcome/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

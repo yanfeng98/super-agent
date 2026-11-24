@@ -19,6 +19,7 @@ const workspaceGroupSchema = z.object({
   path: z.string().min(1),
   role: z.enum(['orchestrator', 'ticket']).optional(),
   merged: z.literal(true).optional(),
+  outcome: z.enum(['completed', 'closed', 'dropped', 'stopped']).optional(),
 }).strict().nullable()
 
 /** Latest `session/workspace-group` value, or null when the Session has no override. */

@@ -33,6 +33,11 @@ export interface SessionWorkspaceGroup {
   readonly role?: 'orchestrator' | 'ticket' | undefined
   /** For a Ticket's worker Session, that the Ticket's branch landed on its target. */
   readonly merged?: true | undefined
+  /**
+   * For a Ticket's worker Session, the Ticket's terminal outcome when it did
+   * not merge. A merged Ticket keeps only `merged`, which outranks this marker.
+   */
+  readonly outcome?: 'completed' | 'closed' | 'dropped' | 'stopped' | undefined
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
