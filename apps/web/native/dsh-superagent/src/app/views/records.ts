@@ -241,6 +241,6 @@ export function decisionView(view: Snapshot, decision: Decision) {
     rules: judged.map(rule => ({ ...view.rule(rule.rule_id), matched: rule.matched, reason: rule.reason })),
     ...audit.direction ? { direction: audit.direction } : {},
     ...thread ? { threadTitle: threadTitle(store, thread) } : {}, preview: texts.join(' / '),
-    ticketTitle: ticket?.title, ...ticket ? { ticket: ticketFacts(view, ticket) } : {} }
+    ...ticket ? { ticketTitle: ticket.title, ticket: ticketFacts(view, ticket) } : {} }
 }
 export type DecisionView = ReturnType<typeof decisionView>
