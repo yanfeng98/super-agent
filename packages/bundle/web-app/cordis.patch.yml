@@ -353,6 +353,19 @@
       config:
         pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' && process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
 
+    # Built-in porting and reverse-engineering skills ship with every Web
+    # profile, like the Office and engineering skills. Their tools stay in the
+    # standard preset so a session pays for a tool catalog only when it selects
+    # that preset; the instructions are harmless without the tools.
+    - id: skill-rust-anything
+      name: '@deepseek-ai/dsh-skill-rust-anything'
+
+    - id: skill-rea
+      name: '@deepseek-ai/dsh-skill-rea'
+
+    - id: skill-fast-anything
+      name: '@deepseek-ai/dsh-skill-fast-anything'
+
     # The right Sidebar's document tab: bounded file reads with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.
     - id: ui-sidebar-documentpreview

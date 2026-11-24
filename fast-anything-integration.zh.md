@@ -43,10 +43,10 @@
 | 类型检查 | `pnpm run typecheck` | 5/5 通过（144.42 s） |
 | 全量构建 | `pnpm run build` | 15/15 通过（34.51 s，Node 24.22.3；含 `fast-anything CLI` gate）；本机默认 Node 24.21.0 低于仓库与 rea 的引擎下限，rea gate 会先失败 |
 | 构建后类型检查 | `pnpm run build:check` | 2/2 通过（10.03 s） |
-| 静态门禁 | `pnpm run check:ci:static` | 71/71 通过（集成后先修掉生成物与两个既有失败，见 [logs/00129](logs/00129-修复集成遗留问题.md)） |
+| 静态门禁 | `pnpm run check:ci:static` | 修复生成物后只剩 1 项既有失败：`verify-plugin-entry-exports` 报 `packages/api/session-controller` 的两个导出（非本工单改动） |
 | 文档门禁 | `pnpm run test:docs` | 21/21 通过 |
 | Lint | `pnpm run lint` | 0 warning / 0 error（7,784 个文件，78.9 s） |
-| 仓库卫生 | `pnpm run hygiene` | 27/27 通过（见 [logs/00129](logs/00129-修复集成遗留问题.md)） |
+| 仓库卫生 | `pnpm run hygiene` | 26/27 通过，唯一失败仍是既有的 `verify-plugin-entry-exports` |
 | duplication | `pnpm run duplication` | 0 处克隆（此前 9 处，见 [logs/00130](logs/00130-消除共享实现重复.md)） |
 | 覆盖率 | `pnpm vitest run --coverage`（只 include 两个包的 `src`） | 语句/分支/函数/行均 100% |
 | 组合 | `pnpm dsh --profile web --dump-config` | `standard` preset 含 `skill-fast-anything` 与 `mcp-fast-anything`；`minimal` 不含 |
@@ -72,7 +72,6 @@
 
 ## 6. 已知取舍与可选下一步
 
-- **集成后修复**：本轮集成报告里的两项遗留问题已按用户要求修复，见 [logs/00129](logs/00129-修复集成遗留问题.md)：fresh checkout 上 rea 构建缺 `native/rea/scripts/lib/`（`lib/` 忽略规则）已提交补齐；`verify-plugin-entry-exports` 报的 session-controller 入口导出已改走 Host 服务方法。完整构建与静态门禁因此转为全绿。
 - **每个 agent 的额外成本**：`standard` agent 多 11 个工具（8 个 server 工具 + 3 个资源工具，约 800 tokens schema 加 392 字节 instructions）和一个 server 进程；`minimal`/`ptc` 不受影响。嫌占上下文可把 preset 行的 `toolLoading` 改成 `on-demand`。
 - **打包运行时（Desktop、Python SDK 可执行文件）**：两者都会挂载这个 preset，但二进制在所有包目录之外，打包不会带上；那里 MCP server 找不到可执行文件时不提供工具（fail-soft），与 rust-anything 的已知回退相同。后续做法是像 `native/system` 那样按平台暂存二进制。这是仍待完成的产品能力，不属于“修复”范围。
 - **构建前置条件**：`pnpm run build` 需要 Rust 1.88+（已安装的 1.97.0 即可），冷构建约 30 s，`target/` 约 55 MB（已 gitignore）。

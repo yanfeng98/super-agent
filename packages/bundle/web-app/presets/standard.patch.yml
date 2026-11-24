@@ -138,11 +138,9 @@
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
           # rust-anything: verified, unit-by-unit ports to Rust. `pnpm run build`
-          # compiles the CLI from the crate vendored at native/rust-anything. The
-          # bundled skill carries the porting loop and is mounted beside the tools,
-          # so an agent that has one has the other.
-          - id: skill-rust-anything
-            name: '@deepseek-ai/dsh-skill-rust-anything'
+          # compiles the CLI from the crate vendored at native/rust-anything. Its
+          # bundled skill ships with every profile from the Web bundle; the tools
+          # stay here so only agents that need them carry their schemas.
           - id: mcp-rust-anything
             name: '@deepseek-ai/dsh-rust-anything'
             config:
@@ -156,8 +154,6 @@
           # advertises five tools and loads the rest through discover_tools, so
           # on-demand keeps the 263-tool surface out of the context until an
           # agent needs it; the bundled skill explains the extra load_tools step.
-          - id: skill-rea
-            name: '@deepseek-ai/dsh-skill-rea'
           - id: mcp-rea
             name: '@deepseek-ai/dsh-rea'
             config:
@@ -165,10 +161,9 @@
               catalogProfile: hot-cold
           # fast-anything: port an app's hottest pure functions to Rust and
           # prove each port against recorded calls. `pnpm run build` compiles
-          # the CLI from the crate vendored at native/fast-anything. The bundled
-          # skill carries the porting loop and is mounted beside the tools.
-          - id: skill-fast-anything
-            name: '@deepseek-ai/dsh-skill-fast-anything'
+          # the CLI from the crate vendored at native/fast-anything. Its bundled
+          # skill ships with every profile from the Web bundle; the tools stay
+          # here so only agents that need them carry their schemas.
           - id: mcp-fast-anything
             name: '@deepseek-ai/dsh-fast-anything'
             config:
