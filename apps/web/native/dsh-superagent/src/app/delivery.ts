@@ -7,9 +7,25 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'dsh-superagent': { kind: 'dsh-superagent' } & ContextFormed
+    'dsh-superagent': { kind: 'dsh-superagent' } & ContextFormed & {
+      /** Source system a relay came from, for the Web UI's provenance badge. */
+      readonly origin?: string
+      /** Plain message text for display, without the routing metadata the model reads. */
+      readonly summary?: string
+    }
   }
 }
+
+/** Display metadata a producer attaches to a relay: the plain text and its source system. */
+export interface RelayDisplay {
+  readonly origin: string
+  readonly summary: string
+}
+/** Bound for a relay's display text, matching the trigger text cap a producer relays. */
+const DISPLAY_MAX_CHARS = 600
+/** Ellipsizes a relay's display text to the bound committed to the durable log. */
+export const boundDisplay = (text: string): string =>
+  text.length <= DISPLAY_MAX_CHARS ? text : `${text.slice(0, DISPLAY_MAX_CHARS - 1)}…`
 
 type Seen = { ids: Set<string>; loaded?: Promise<void> }
 /** The id of the message delivered under `requestId`, the same on every retry. */
@@ -62,9 +78,12 @@ export class AgentDelivery {
     const id = messageId(requestId)
     return (await this.history(agent)).ids.has(id) || [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => deliveryId(message) === id)
   }
-  /** Delivers once to the selected inbox, or injects into history without waking the agent, and flushes Session persistence before acknowledging the producer. */
+  /**
+   * Delivers once to the selected inbox, or injects into history without waking the agent, and flushes Session persistence before acknowledging the producer.
+   * @param display - Optional provenance for a relay: recorded in the message source for the Web UI, never sent to the model.
+   */
   async send(agent: Agent, requestId: string, text: string, mode: 'queue' | 'steer' | { inject: string }, signal: AbortSignal, authorize?: () => void,
-    accepted?: () => void): Promise<void> {
+    accepted?: () => void, display?: RelayDisplay): Promise<void> {
     signal.throwIfAborted()
     const seen = await this.history(agent)
     signal.throwIfAborted()
@@ -73,8 +92,9 @@ export class AgentDelivery {
     const id = messageId(requestId)
     const pending = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => deliveryId(message) === id)
     if (!seen.ids.has(id) && !pending) {
-      const source = typeof mode === 'object' ? { kind: 'dsh-superagent' as const, form: 'notice' as const, summary: mode.inject }
-        : { kind: 'dsh-superagent' as const, form: 'relay' as const }
+      const source = typeof mode === 'object'
+        ? { kind: 'dsh-superagent' as const, form: 'notice' as const, summary: mode.inject }
+        : { kind: 'dsh-superagent' as const, form: 'relay' as const, ...display ? { origin: display.origin, summary: boundDisplay(display.summary) } : {} }
       const message = freezeMessage({ id, role: 'user' as const, content: [{ type: 'text' as const, text }], source })
       if (typeof mode === 'object') { agent.inject(message); seen.ids.add(id) }
       else if (mode === 'steer') agent.steer(message)

@@ -66,3 +66,65 @@
 .toolChanges {
   white-space: nowrap;
 }
+
+/* A source-labelled relay reads like ordinary chat input: plain text and a small badge. */
+.relayRoot {
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.relayRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.relayBadge {
+  flex: none;
+  padding: 1px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta, 0px));
+  white-space: nowrap;
+}
+
+.relayText {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta, 0px));
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.relayDetails {
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.relaySummary {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  cursor: pointer;
+  list-style: none;
+}
+
+.relaySummary::-webkit-details-marker {
+  display: none;
+}
+
+.relaySummary::before {
+  content: '›';
+  display: inline-block;
+  margin-right: 6px;
+  transform: rotate(0deg);
+}
+
+.relayDetails[open] .relaySummary::before {
+  transform: rotate(90deg);
+}

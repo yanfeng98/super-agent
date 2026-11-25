@@ -10,7 +10,7 @@ import { key, liveTicket, type Ticket } from '../core/index.ts'
 import { dshIm, dshImOf } from '../sources/dsh-im.ts'
 import { mandateInstructions, ticketOfSession } from '../executor/dsh.ts'
 import type { HealthEntry } from '../infra/health.ts'
-import { AgentDelivery, messageId } from './delivery.ts'
+import { AgentDelivery, messageId, type RelayDisplay } from './delivery.ts'
 import type { Effects } from './effects.ts'
 import type { Variable } from './execution-environment.ts'
 import { RetryHealth } from './retry-health.ts'
@@ -102,7 +102,7 @@ export class Sessions {
     this.ctx = host.context
     this.agentDelivery = new AgentDelivery(host.context)
     // Deliver relays and notices to the main Session in the order they were queued.
-    host.effects.handle('relay', ({ text }, requestId) => this.prompt(host.masterId, requestId, text, 'steer'), { ordered: true })
+    host.effects.handle('relay', ({ text, display }, requestId) => this.prompt(host.masterId, requestId, text, 'steer', undefined, undefined, display), { ordered: true })
     host.effects.handle('notice', ({ value, summary }, name) => this.inject(name, value, summary), { ordered: true })
   }
   /** Subscribes to host agent and session events so newly created sessions are decorated and model-budget retries are reflected in health. Call once at startup. */
@@ -159,12 +159,15 @@ export class Sessions {
     const result = await this.ctx.sessionController.resolveAgent(sessionId as SessionId)
     return !('error' in result) && await this.agentDelivery.holds(result.agent, key(requestId))
   }
-  /** Deliver a message once per request id: to the next turn, the current one, or `inject`ed with its label without waking the agent. */
+  /**
+   * Deliver a message once per request id: to the next turn, the current one, or `inject`ed with its label without waking the agent.
+   * @param display - Optional provenance recorded in the message source for the Web UI, never sent to the model.
+   */
   async prompt(sessionId: string, requestId: string, text: string, mode: 'queue' | 'steer' | { inject: string }, authorize?: () => void,
-    accepted?: () => void): Promise<void> {
+    accepted?: () => void, display?: RelayDisplay): Promise<void> {
     const result = await this.ctx.sessionController.resolveAgent(sessionId as SessionId)
     if ('error' in result) throw result.error
-    await this.agentDelivery.send(result.agent, key(requestId), text, mode, this.host.lifetime, authorize, accepted)
+    await this.agentDelivery.send(result.agent, key(requestId), text, mode, this.host.lifetime, authorize, accepted, display)
   }
   /**
    * Tell dsh-im not to mirror the main Session's current turn. The orchestrator
@@ -178,8 +181,11 @@ export class Sessions {
   }
   /** The id of the message `prompt` delivers under `requestId`, which DSH's inbox events name it by. */
   promptedId(requestId: string): MessageId { return messageId(key(requestId)) }
-  /** Enqueues a steering relay to the main Session; relays are durable and retried by `Effects` until delivered, at most once per `requestId`. */
-  relay(requestId: string, text: string): void { this.host.effects.enqueue('relay', requestId, { text }) }
+  /**
+   * Enqueues a steering relay to the main Session; relays are durable and retried by `Effects` until delivered, at most once per `requestId`.
+   * @param display - Optional provenance recorded in the message source for the Web UI, never sent to the model.
+   */
+  relay(requestId: string, text: string, display?: RelayDisplay): void { this.host.effects.enqueue('relay', requestId, { text, ...display ? { display } : {} }) }
   /** Enqueues a durable background notice for injection into the main Session; a new notice with the same `name` replaces a still-waiting notice of that `name`. */
   notify(name: string, value: Record<string, unknown>, summary: string): void { this.host.effects.enqueue('notice', name, { value, summary }) }
   /** Waits for currently runnable `notice` effects to settle and returns `'injected'` if notice `name` has reached the main Session or `'pending'` if it is still queued. */

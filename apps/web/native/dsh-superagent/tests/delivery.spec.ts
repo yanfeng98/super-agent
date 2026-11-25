@@ -3,7 +3,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { expect, it, vi } from 'vitest'
-import { AgentDelivery } from '../src/app/delivery.ts'
+import { AgentDelivery, boundDisplay } from '../src/app/delivery.ts'
 
 function fixture(history: UserMessage[] = []) {
   const ctx = new Context()
@@ -23,7 +23,8 @@ function fixture(history: UserMessage[] = []) {
   ctx.reflect.provide('sessionPersistence', { open, flush })
   const delivery = new AgentDelivery(ctx)
   const signal = new AbortController()
-  const send = (id = 'request', mode: 'queue' | 'steer' = 'steer') => delivery.send(agent, id, '{"event_id":"event"}', mode, signal.signal)
+  const send = (id = 'request', mode: 'queue' | 'steer' = 'steer', display?: { origin: string; summary: string }) =>
+    delivery.send(agent, id, '{"event_id":"event"}', mode, signal.signal, undefined, undefined, display)
   const inject = (id: string, summary: string) => delivery.send(agent, id, '{"settings_saved":"policy"}', { inject: summary }, signal.signal)
   const holds = (id: string) => delivery.holds(agent, id)
   const consume = (message: UserMessage) => {
@@ -52,6 +53,20 @@ it.each(['queue', 'steer'] as const)('delivers %s as an orchestrator relay, dedu
   await restored.send('request', mode)
   expect(restored.steer).not.toHaveBeenCalled()
   expect(restored.followup).not.toHaveBeenCalled()
+})
+
+it('bounds a relay display text committed to the source', async () => {
+  expect(boundDisplay('x'.repeat(700))).toHaveLength(600)
+  expect(boundDisplay('x'.repeat(700)).endsWith('…')).toBe(true)
+  expect(boundDisplay('short')).toBe('short')
+})
+
+it('records relay display provenance in the source while the model still reads the full text', async () => {
+  const f = fixture()
+  await f.send('display', 'steer', { origin: 'feishu', summary: '都合并且push了吗' })
+  const message = f.steer.mock.calls[0]![0]
+  expect(message.source).toEqual({ kind: 'dsh-superagent', form: 'relay', origin: 'feishu', summary: '都合并且push了吗' })
+  expect(message.content).toEqual([{ type: 'text', text: '{"event_id":"event"}' }])
 })
 
 it.each(['pending', 'consumed', 'live'] as const)('recognizes legacy plugin identity in %s input without rewriting it', async location => {

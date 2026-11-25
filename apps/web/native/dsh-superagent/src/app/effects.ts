@@ -16,7 +16,7 @@ export interface EffectPayloads {
   /** Hand a ticket's waiting Inputs to its running Assignment; the key is the Ticket ID. */
   delivery: { ticketId: string }
   /** Steer a report or a candidate into the main Session; the key is the request ID. */
-  relay: { text: string }
+  relay: { text: string; display?: { origin: string; summary: string } }
   /** Inject a notice into the main Session without waking it; the key names what it reports, such as `prompts`. */
   notice: { value: Record<string, unknown>; summary: string }
   /** Send a message for a Channel through its Source; the key is the message ID, whose receipt the Outbox keeps. */

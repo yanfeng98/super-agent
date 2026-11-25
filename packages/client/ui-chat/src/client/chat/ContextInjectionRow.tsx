@@ -17,6 +17,15 @@ export interface ContextInjectionRowProps {
   t: ChatViewSlotProps['t']
 }
 
+/** A relay whose producer recorded a plain display text and a source system, for a source-labelled plain row. */
+function relayView(source: ContextInjectionRowProps['source']): { origin: string; summary: string } | undefined {
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) return undefined
+  const record = source as Record<string, unknown>
+  if (record['kind'] !== 'dsh-superagent' || record['form'] !== 'relay') return undefined
+  const { origin, summary } = record
+  return typeof origin === 'string' && typeof summary === 'string' ? { origin, summary } : undefined
+}
+
 /**
  * Render logged context with the Tool calls disclosure chrome from Figma.
  *
@@ -25,6 +34,10 @@ export interface ContextInjectionRowProps {
  * from a workspace instruction file or a recalled session without expanding.
  * The expanded body follows the producer-declared form; an absent or unknown
  * form renders the opaque body.
+ *
+ * A relay that carries a plain display text shows that text with a small source
+ * badge instead of the JSON the model reads; the raw payload stays available in
+ * a collapsed details block.
  * @param props - Durable content, its projected producer role/name and form, and the locale seat.
  * @returns A collapsed context row with a bounded, form-specific body.
  */
@@ -33,6 +46,23 @@ export function ContextInjectionRow({ content, source, producer, form, t }: Cont
   // Resolved rather than declared: a form whose fields are unreadable renders
   // the opaque body, and the marker must say what the row actually shows.
   const { rendered, summary, body } = contextBody(form, { content, source, t })
+  const relay = relayView(source)
+  if (relay !== undefined && relay.origin === 'feishu') {
+    return (
+      <div className={css.relayRoot} data-context-origin={relay.origin}>
+        <div className={css.relayRow}>
+          <span className={css.relayBadge} data-context-origin-badge>{t('message.origin.feishu')}</span>
+          <span className={css.relayText} data-context-relay-text>{relay.summary}</span>
+        </div>
+        <details className={css.relayDetails}>
+          <summary className={css.relaySummary}>{t('message.origin.details')}</summary>
+          <div className={css.body} data-context-injection-body data-context-form={rendered ?? undefined}>
+            {body}
+          </div>
+        </details>
+      </div>
+    )
+  }
 
   const toolBlocks = content.length > 0
     && content.every(block => block.type === 'tool-addition' || block.type === 'tool-removal')

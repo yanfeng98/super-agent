@@ -74,7 +74,12 @@ export const threadFollowedNotice = (ticketId: string, thread: string, reason: s
     `Ticket ${ticketId} follows thread ${thread} for context: ${reason}`)
 
 /** Steering relay payload for the main Session: `id` is the request ID that makes delivery idempotent, and `text` is the message body. */
-export interface Relay { id: string; text: string }
+export interface Relay {
+  readonly id: string
+  readonly text: string
+  /** Plain text and source system for the Web UI; the model still reads `text`. */
+  readonly display?: { readonly origin: string; readonly summary: string }
+}
 /** What a follow-up asks of the main Session: nothing but a stop the person asks for, since its ticket's worker decides it. */
 const FOLLOWUP_NOTE = 'Its ticket\'s worker has it and decides; act only if the person asks to stop the work '
   + '(orchestrator_route kind stop with this trigger_id).'
@@ -94,16 +99,18 @@ export function followupNotice(store: Store, sources: SourceRegistry, triggerId:
     return ticket && liveTicket(ticket) ? [{ ticket_id: id, title: ticket.title, state: ticketCard(ticket).state, ...context }] : []
   })
   if (!tickets.length) return undefined
-  return followupRelay(triggerMessage(trigger, {}, undefined, repliedTo({ store, sources }, trigger)), tickets)
+  const message = triggerMessage(trigger, {}, undefined, repliedTo({ store, sources }, trigger))
+  return followupRelay(message, tickets, typeof message.text === 'string' ? { origin: trigger.source, summary: message.text } : undefined)
 }
 /**
  * A person's message that reached tickets, as the main Session hears of it: the message as their workers read it, and the
  * tickets it reached with their state. Their workers decide it; the main Session may only stop the work on it.
  */
 export function followupRelay(message: { trigger_id: string },
-  tickets: readonly { ticket_id: string; title: string; state: string; context?: boolean }[]): Relay {
+  tickets: readonly { ticket_id: string; title: string; state: string; context?: boolean }[],
+  display?: Relay['display']): Relay {
   return { id: `followup:${message.trigger_id}`, text: JSON.stringify({ kind: 'follow_up', ...message, delivered_to: tickets,
-    note: FOLLOWUP_NOTE }) }
+    note: FOLLOWUP_NOTE }), ...display ? { display } : {} }
 }
 /** Formats a worker report relay for the main Session (truncating summaries over 600 characters behind `ticket/<id>/result`); `replyTo` names the human question trigger it answers. */
 export function resultRelay(ticket: Ticket, state: string, text: string, replyTo?: string): Relay {

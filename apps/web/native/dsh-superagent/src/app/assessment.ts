@@ -58,8 +58,8 @@ export interface AssessorHost {
   paused(): boolean
   /** Thread context reader for `trigger`'s Source, or `undefined` when the Source has none. */
   threadContext(trigger: Trigger): TriggerContext | undefined
-  /** Delivers a candidate card to the main Session once per request ID, resolving after the Session receives it. */
-  deliver(requestId: string, text: string): Promise<void>
+  /** Delivers a candidate card to the main Session once per request ID, with optional display provenance. */
+  deliver(requestId: string, text: string, display?: { origin: string; summary: string }): Promise<void>
   candidateCard(candidate: Candidate): Promise<Record<string, unknown>>
 }
 
@@ -98,7 +98,10 @@ export class MasterAssessor implements Assessor {
       if (candidate?.evalId !== evalId) return
       // The delivery id names the trigger batch, not the Eval: an expired Eval that queues the same triggers again
       // re-arms its deadline without adding a second candidate card to the main Session.
-      await this.host.deliver(`candidate:${candidate.deliveryId}`, JSON.stringify({ kind: 'candidate', ...await this.host.candidateCard(candidate) }))
+      // The JSON stays model-facing so routing ids remain available; the source carries only display provenance.
+      const card = await this.host.candidateCard(candidate)
+      await this.host.deliver(`candidate:${candidate.deliveryId}`, JSON.stringify({ kind: 'candidate', ...card }),
+        typeof card.text === 'string' ? { origin: candidate.triggers.at(-1)!.source, summary: card.text } : undefined)
       this.host.engine.candidateDelivered(evalId)
     }, { limit: () => host.paused() ? 0 : 4 })
   }
