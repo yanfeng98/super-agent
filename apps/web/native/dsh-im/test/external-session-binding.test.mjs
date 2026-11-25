@@ -36,6 +36,21 @@ test('an invalid external binding is rejected without changing the existing one'
   assert.equal((await delivery.describeConversation('orchestrator')).conversationKey, 'group:chat-1');
 });
 
+test('an unbound Session warns once per process, and again after a new binding is cleared', async () => {
+  const warnings = [];
+  const delivery = createDeliveryService({ logger: { warn: message => warnings.push(message) } });
+  assert.deepEqual(await delivery.deliverSessionText('orchestrator', 'first answer'), { sent: false, reason: 'unbound' });
+  assert.deepEqual(await delivery.deliverSessionText('orchestrator', 'second answer'), { sent: false, reason: 'unbound' });
+  assert.equal(warnings.filter(message => message.includes('[unbound] session=orchestrator')).length, 1);
+
+  delivery.bindExternalSessionConversation('orchestrator', {
+    channel: 'feishu', botId: 'bot-1', conversationKey: 'group:chat-1',
+  });
+  delivery.clearExternalSessionConversation('orchestrator');
+  await delivery.deliverSessionText('orchestrator', 'third answer');
+  assert.equal(warnings.filter(message => message.includes('[unbound] session=orchestrator')).length, 2);
+});
+
 test('answer suppression is consumed once and scoped to one Session', () => {
   const delivery = createDeliveryService();
   assert.equal(delivery.consumeSessionSyncAnswerSuppression('orchestrator'), false);

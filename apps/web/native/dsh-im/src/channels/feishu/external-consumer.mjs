@@ -176,6 +176,17 @@ export function mergedForwardText(items) {
 }
 
 /**
+ * Whether a live event was authored by the handing-over bot itself. Its mirrored Session turns and its replies carry new
+ * message ids, so the consumer's trigger-id dedupe cannot catch them; the live ingress drops them instead.
+ */
+export function isOwnBotEvent(event, { appId, botOpenId }) {
+  const senderType = event?.sender?.sender_type;
+  if (senderType !== 'app' && senderType !== 'bot') return false;
+  const id = identifier(event?.sender?.sender_id?.open_id) ?? identifier(event?.sender?.sender_id?.app_id);
+  return !!id && (id === appId || id === botOpenId);
+}
+
+/**
  * Normalizes one Feishu event into the exclusive consumer's evidence. Human text is the default; `includeBots`
  * also admits bot-authored messages, and post/image bodies are rendered so a consumer receives text plus image keys.
  * The runtime adds `voiceTranscript` to an audio event once the channel's voice capability transcribed it: that text

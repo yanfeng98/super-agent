@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeExternalText, ExclusiveInboundConsumers } from '../../../src/channels/feishu/external-consumer.mjs';
+import { normalizeExternalText, ExclusiveInboundConsumers, isOwnBotEvent } from '../../../src/channels/feishu/external-consumer.mjs';
 
 const fingerprint = 'a'.repeat(64);
 function event() {
@@ -35,6 +35,16 @@ test('normalized authenticated text retains causal identities without raw payloa
   assert.deepEqual(evidence.mentions, [{ id: 'bot-open-id', key: '@_user_1', name: 'Platform Bot' }]);
   assert.equal(Object.isFrozen(evidence.mentions[0]), true);
   assert.equal(normalized({ ...input, message: { ...input.message, chat_type: 'unknown' } }), null);
+});
+
+test('recognizes the bot\'s own mirrored or replied messages so live ingress can drop them', () => {
+  const identity = { appId: 'app', botOpenId: 'bot-open-id' };
+  const own = sender => ({ ...event(),
+    sender: { sender_type: 'bot', sender_id: { open_id: sender } } });
+  assert.equal(isOwnBotEvent(own('bot-open-id'), identity), true);
+  assert.equal(isOwnBotEvent({ ...own('app'), sender: { sender_type: 'app', sender_id: { app_id: 'app' } } }, identity), true);
+  assert.equal(isOwnBotEvent(own('someone-else'), identity), false);
+  assert.equal(isOwnBotEvent(event(), identity), false);
 });
 
 test('renders resource, card and system bodies instead of dropping them', () => {

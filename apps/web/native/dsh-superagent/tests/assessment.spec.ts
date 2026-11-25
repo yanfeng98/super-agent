@@ -82,6 +82,45 @@ it('keeps nothing for an Eval once it is decided, as for one that timed out', as
   expect(s.size()).toBe(0)
 })
 
+it('delivers one card when an expired Eval queues the same trigger again, while the deadline is re-armed', async () => {
+  const delivered: string[] = []
+  let assessment!: (payload: { triggerId: string }, evalId: string) => Promise<void>
+  const repo = new MemoryRepositories()
+  const commands = { withSignal() { return commands } } as unknown as Commands
+  let engine!: Engine
+  const host: AssessorHost = {
+    get engine() { return engine }, commands, deployment: testDeployment(), settings: () => SettingsSchema.parse({}),
+    threadContext: () => undefined,
+    effects: {
+      enqueue: () => {},
+      handle: (_kind: string, run: (payload: { triggerId: string }, evalId: string) => Promise<void>) => { assessment = run },
+    } as unknown as AssessorHost['effects'],
+    paused: () => false, deliver: async id => { delivered.push(id) }, candidateCard: async candidate => ({ eval_id: candidate.evalId }),
+  }
+  const assessor = new MasterAssessor(host)
+  const policy: Policy = { version: 'v1', paused: false, evalTimeoutMs: 600_000, gate: () => ({ admissible: true, strength: 'explicit', basis: { via: 'admission', cell: 'listedUnaddressed' } }),
+    revalidate: () => true, admitsInferred: () => true }
+  const executor: Executor = { start: async () => {}, deliver: async () => {}, stop: async () => {} }
+  const scope = { scope: () => ({ listened: true as const, observed: true }) }
+  const outbox = { send: () => {}, status: () => undefined, withdraw: () => {} }
+  let clock = Date.parse('2026-11-25T15:36:00.000Z')
+  const now = () => new Date(clock += 1000).toISOString()
+  engine = new Engine({ repo, policy: () => policy, scope, assessor, executor, outbox, now })
+  engine.receive(issue(1)); engine.evaluateDue()
+  const first = engine.candidate('fixture-1')!
+  const thread = repo.threads.get('fixture:1')!
+  // Simulate the expiry path: a fresh Eval of the same trigger, whose candidate is delivered again.
+  const { evaluating: _expired, ...withoutEval } = thread
+  repo.threads.save({ ...withoutEval, expired: 1, pending: ['fixture-1'] })
+  engine.evaluateDue()
+  const second = engine.candidate('fixture-1')!
+  expect(second.evalId).not.toBe(first.evalId)
+  expect(second.deliveryId).toBe(first.deliveryId)
+  await assessment({ triggerId: 'fixture-1' }, first.evalId)
+  await assessment({ triggerId: 'fixture-1' }, second.evalId)
+  expect(new Set(delivered)).toEqual(new Set([`candidate:${first.deliveryId}`]))
+})
+
 it('keeps nothing from a context read that finishes after its Eval was decided', async () => {
   const s = setup()
   const hold = deferred()

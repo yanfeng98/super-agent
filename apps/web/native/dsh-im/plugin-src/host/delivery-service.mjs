@@ -174,6 +174,8 @@ export class DeliveryService {
   #externalBindings = new Map();
   /** Sessions whose next answer another plugin already delivered itself. */
   #suppressedSessions = new Set();
+  /** Sessions whose unbound delivery already warned once this process; cleared once a binding or delivery succeeds. */
+  #warnedUnbound = new Set();
   dsBot;
 
   constructor({ unavailableSessionSyncChannels = [], dsBot, logger = console } = {}) {
@@ -587,6 +589,7 @@ export class DeliveryService {
     const binding = externalSessionBinding(description);
     if (!binding) throw deliveryError('bad-request', 'Invalid conversation binding');
     this.#externalBindings.set(sessionId, binding);
+    this.#warnedUnbound.delete(sessionId);
   }
 
   /** Whether another Host plugin supplied this Session's mirror address. */
@@ -682,6 +685,7 @@ export class DeliveryService {
       this.#warnUndelivered(sessionId, 'unbound', null);
       return { sent: false, reason: 'unbound' };
     }
+    this.#warnedUnbound.delete(sessionId);
     const draft = deliverySuggestionFromConversationKey(described.channel, described.conversationKey);
     if (!draft) {
       // A key the channel persisted but no route covers stays unroutable. An
@@ -702,6 +706,10 @@ export class DeliveryService {
    * message body, and never a channel credential.
    */
   #warnUndelivered(sessionId, reason, described) {
+    // An unbound Session without a Feishu trigger to bind from repeats on every turn. One warning names the condition;
+    // later turns stay quiet until a binding succeeds, without hiding the first diagnostic.
+    if (reason === 'unbound' && this.#warnedUnbound.has(sessionId)) return;
+    if (reason === 'unbound') this.#warnedUnbound.add(sessionId);
     const where = described
       ? ` channel=${described.channel} conversationKey=${described.conversationKey}`
       : '';

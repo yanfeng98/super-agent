@@ -489,7 +489,9 @@ it('tells live workers about policy changes instead of revoking them and restart
   expect(runtime.store.tickets.get(ticket.id)!.ended).toBeUndefined()
   expect(relays(sessionId)).toEqual([{ text: expect.stringContaining('may no longer start work') }])
   expect(runtime.store.decisions.byThread(`feishu:${CHAT}:om_8`)[0]).toMatchObject({ kind: 'unavailable', reason: [{ code: 'policyChanged' }] })
-  expect(relays(runtime.masterId).filter(item => item.kind === 'candidate' && item.trigger_id === pending.id)).toHaveLength(1)
+  // The re-assessment re-arms the same trigger's Eval, but its card is already in the main Session: sending it again
+  // would read as a second execution request for one Feishu message.
+  expect(relays(runtime.masterId).filter(item => item.kind === 'candidate' && item.trigger_id === pending.id)).toHaveLength(0)
 })
 
 it('attaches an event to an existing open task through orchestrator_route', async () => {

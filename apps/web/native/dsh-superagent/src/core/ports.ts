@@ -29,6 +29,8 @@ export interface Policy {
 /** What the assessor receives: bounded facts, never authority. */
 export interface Candidate {
   evalId: string
+  /** Stable id of the trigger batch this candidate presents: repeated evals of the same batch deliver one card. */
+  deliveryId: string
   thread: Thread
   triggers: Trigger[]
   strength: Strength

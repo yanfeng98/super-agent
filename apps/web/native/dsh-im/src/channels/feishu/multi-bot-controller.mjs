@@ -1,4 +1,4 @@
-import { ExclusiveInboundConsumers, normalizeExternalText } from './external-consumer.mjs';
+import { ExclusiveInboundConsumers, isOwnBotEvent, normalizeExternalText } from './external-consumer.mjs';
 import { atConnectionStage, createConnectionDiagnostics } from '../shared/connection-error.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { connectionTestMessage } from '../shared/connection-test.mjs';
@@ -1625,6 +1625,7 @@ export class MultiBotDshFeishuController {
         };
         const evidence = await this.#withBotTransition(config.id, async () => {
           const current = assertCurrent();
+          if (isOwnBotEvent(event, current)) return null;
           const account = await this.#deliveryAccount(current);
           assertCurrent();
           return normalizeExternalText(event, { botId: current.id, appId: current.appId,
