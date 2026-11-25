@@ -218,8 +218,12 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 }
 
 /** The dsh-im service the fixture's Host offers, recording what the Source asks it to send. */
-function dshImService(replies: { botId: string; route: DshImEvent['reply']; text: string; options: unknown }[]): DshImService {
+function dshImService(replies: { botId: string; route: DshImEvent['reply']; text: string; options: unknown }[],
+  bindings: { sessionId: string; description: { channel: string; botId: string; conversationKey: string; chatId?: string } }[],
+  suppressions: string[]): DshImService {
   return { contractVersion: 1, inboundVersion: 1,
+    bindExternalSessionConversation: (sessionId, description) => { bindings.push({ sessionId, description }) },
+    suppressNextSessionSyncAnswer: (sessionId) => { suppressions.push(sessionId) },
     listBots: async () => [{ botId: BOT_ID, channel: 'feishu' }],
     listTargets: async () => [{ targetId: CHAT, kind: 'group', name: 'Team', route: { chatId: CHAT } }],
     chatMembersChecked: async () => ({ version: 1, chatId: CHAT, users: [{ id: MEMBER, name: 'Alice' }] }),
@@ -245,7 +249,9 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   // What the Source sent through dsh-im, in order: the assertions on a reply read it instead of a CLI call.
   const replies: { botId: string; route: DshImEvent['reply']; text: string; options: unknown }[] = []
-  setDshIm(dshImService(replies))
+  const bindings: { sessionId: string; description: { channel: string; botId: string; conversationKey: string; chatId?: string } }[] = []
+  const suppressions: string[] = []
+  setDshIm(dshImService(replies, bindings, suppressions))
   vi.spyOn(Commands.prototype, 'git').mockResolvedValue('')
   vi.spyOn(Commands.prototype, 'run').mockResolvedValue('{"ok":true,"data":{}}')
   /** A prepare command (`sh -c`) waits for this while it is set. */
@@ -404,6 +410,6 @@ export async function startRuntime(seed?: (store: Store) => void, options: { loc
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, route, acceptedTicket, api, controller, persistence, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim, replies, workspaces: ctx.get('workspaceRegistry')! }
+    jobs, subagents, step, claim, replies, bindings, suppressions, workspaces: ctx.get('workspaceRegistry')! }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

@@ -7,6 +7,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { dirname } from 'node:path'
 import { z } from 'zod'
 import { key, liveTicket, type Ticket } from '../core/index.ts'
+import { dshIm, dshImOf } from '../sources/dsh-im.ts'
 import { mandateInstructions, ticketOfSession } from '../executor/dsh.ts'
 import type { HealthEntry } from '../infra/health.ts'
 import { AgentDelivery, messageId } from './delivery.ts'
@@ -164,6 +165,16 @@ export class Sessions {
     const result = await this.ctx.sessionController.resolveAgent(sessionId as SessionId)
     if ('error' in result) throw result.error
     await this.agentDelivery.send(result.agent, key(requestId), text, mode, this.host.lifetime, authorize, accepted)
+  }
+  /**
+   * Tell dsh-im not to mirror the main Session's current turn. The orchestrator
+   * already sent its answer to the person with `orchestrator_reply`, so a second
+   * copy from the Session sync would be a duplicate. A missing or old dsh-im
+   * leaves the turn alone instead of blocking the reply.
+   */
+  suppressMainTurnMirror(sessionId: string): void {
+    const im = dshImOf(this.host.context) ?? dshIm()
+    try { im?.suppressNextSessionSyncAnswer?.(sessionId) } catch { /* Mirroring is optional. */ }
   }
   /** The id of the message `prompt` delivers under `requestId`, which DSH's inbox events name it by. */
   promptedId(requestId: string): MessageId { return messageId(key(requestId)) }

@@ -434,6 +434,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/delivery.spec.ts` | `AgentDelivery` |
 | `tests/retry-health.spec.ts`, `tests/role-models.spec.ts` | Model budget retries, and the models of the two roles |
 | `tests/runtime.spec.ts` | The whole application on a simulated DeepSeek Harness host, through tools and HTTP |
+| `tests/session-mirror.spec.ts` | Binding the orchestrator Session to the Feishu chat of the latest trigger, and suppressing the mirror when `orchestrator_reply` already answered |
 | `tests/tools.spec.ts` | The Sessions' tools: what `orchestrator_read` reads for each role, including a ticket's notes, review summary and check, and the shapes and checks of the other main Session tools |
 | `tests/chat-tools.spec.ts` | A request and an answer the main Session records from its own conversation, a ticket the answer resumes, a controlled merge with its cleanup and push options, several Tickets queued, retried and dequeued from chat, stopping a Ticket and withdrawing its queued merge, its discard, an approval and note resolution, a check rerun, the waiting list's outcome, a revert recorded from chat, a standing merge request and its cancel, a dependency recorded from chat, and the refusals for another Source's ticket, a disabled local Source and an empty operator list |
 | `tests/runtime-concurrency.spec.ts` | Work that overlaps: Triggers during a pass, Tickets that change during deliveries and launches |

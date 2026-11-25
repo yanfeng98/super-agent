@@ -215,7 +215,10 @@ export function createSessionSyncCoordinator({
     // DS Bot bindings can supply sync targets without any saved delivery target,
     // including after rollover when the persisted Session map is still stale.
     const targets = await deliveryService.listSessionSyncTargets?.(sessionId) ?? [];
-    if (targets.length > 0 || await botHasSavedTargets(sessionId)) {
+    // An externally bound Session (superagent's orchestrator) has no saved
+    // target of its own: it must follow the binding the plugin supplied.
+    if (deliveryService.hasExternalSessionConversation?.(sessionId) !== true
+      && (targets.length > 0 || await botHasSavedTargets(sessionId))) {
       return deliverToTargets(sessionId, targets, text, phase, format, card ?? {});
     }
     return deliverToBinding(sessionId, text, phase, format);
@@ -320,6 +323,9 @@ export function createSessionSyncCoordinator({
 
     if (event.type !== 'turn/end' || event.data?.turn !== state.turn) return;
     turns.delete(sessionId);
+    // A plugin that owns the turn may have delivered its answer to the person
+    // already (orchestrator_reply does); mirroring it again would duplicate it.
+    if (deliveryService.consumeSessionSyncAnswerSuppression?.(sessionId) === true) return;
     await onTurnEnd(sessionId, state, event);
   };
 

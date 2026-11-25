@@ -31,6 +31,18 @@ Setup has many steps, so an agent does it with you. Ask your coding agent:
 
 It asks one short question at a time, shows the full plan once, and then installs and configures everything. [SETUP.md](SETUP.md) is what it follows.
 
+## Mirroring the main Session to Feishu
+
+The orchestrator Session can mirror what you type in the DSH Web GUI and its final answer back into the Feishu chat of your most recent message to the bot. This uses dsh-im's [two-way Session sync](../dsh-im/PROACTIVE_DELIVERY.md), which is off by default.
+
+To enable it:
+
+1. In DSH's **General settings → Delivery**, turn on **Mirror user input** and/or **Deliver model answers**. Both off means nothing is mirrored.
+2. Send at least one message to the bot in the Feishu chat you want. That chat becomes the mirror target; later messages from another chat move the target there.
+3. Type in the orchestrator Session in the Web GUI. Your input and its final answer appear in the bound chat. Tool calls, internal progress and worker traffic are not mirrored.
+
+Answers already sent by `orchestrator_reply` are not mirrored again, and a chat that has never triggered the bot receives nothing. If dsh-im is absent or a send fails, the main Session continues normally.
+
 ## Documentation
 
 Read the numbered documents in order; each builds only on the ones before it.

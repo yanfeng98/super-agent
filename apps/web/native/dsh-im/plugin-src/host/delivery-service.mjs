@@ -148,10 +148,32 @@ function sessionSyncState(value, available) {
   return { enabled: false, state: 'unavailable' };
 }
 
+/**
+ * A Session bound by another Host plugin to one conversation. Only `channel`,
+ * `botId` and `conversationKey` are required: they are the fields the binding
+ * sender needs to resolve a route. The source plugin owns the binding's lifetime.
+ */
+function externalSessionBinding(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (!CHANNEL_PATTERN.test(value.channel ?? '')) return null;
+  const botId = botIdOf(value.botId);
+  const conversationKey = conversationKeyOf(value.conversationKey);
+  return {
+    channel: value.channel,
+    botId,
+    conversationKey,
+    ...(typeof value.chatId === 'string' ? { chatId: value.chatId } : {}),
+  };
+}
+
 export class DeliveryService {
   #adapters = new Map();
   #unavailableSessionSyncChannels;
   #logger;
+  /** Session id → conversation binding supplied by a Host plugin, e.g. superagent's orchestrator. */
+  #externalBindings = new Map();
+  /** Sessions whose next answer another plugin already delivered itself. */
+  #suppressedSessions = new Set();
   dsBot;
 
   constructor({ unavailableSessionSyncChannels = [], dsBot, logger = console } = {}) {
@@ -511,6 +533,8 @@ export class DeliveryService {
    */
   async describeConversation(sessionId) {
     if (typeof sessionId !== 'string' || sessionId === '') return null;
+    const external = this.#externalBindings.get(sessionId);
+    if (external) return { ...external, botName: null };
     for (const { adapter } of this.#adapters.values()) {
       if (typeof adapter.describeConversationBySession !== 'function') continue;
       try {
@@ -533,6 +557,8 @@ export class DeliveryService {
    */
   describeConversationSync(sessionId) {
     if (typeof sessionId !== 'string' || sessionId === '') return null;
+    const external = this.#externalBindings.get(sessionId);
+    if (external) return { ...external, botName: null };
     for (const { adapter } of this.#adapters.values()) {
       if (typeof adapter.describeConversationBySessionSync !== 'function') continue;
       try {
@@ -543,6 +569,51 @@ export class DeliveryService {
       }
     }
     return null;
+  }
+
+  /**
+   * Bind one Session to a conversation described by another Host plugin. The
+   * binding is in memory: the caller records it again after a restart, from the
+   * source of truth it already persists. A malformed description throws, so a
+   * caller cannot silently leave a stale address behind.
+   *
+   * @param {string} sessionId harness session id
+   * @param {{channel: string, botId: string, conversationKey: string, chatId?: string}} description
+   */
+  bindExternalSessionConversation(sessionId, description) {
+    if (typeof sessionId !== 'string' || !sessionId) {
+      throw deliveryError('bad-request', 'Invalid Session id');
+    }
+    const binding = externalSessionBinding(description);
+    if (!binding) throw deliveryError('bad-request', 'Invalid conversation binding');
+    this.#externalBindings.set(sessionId, binding);
+  }
+
+  /** Whether another Host plugin supplied this Session's mirror address. */
+  hasExternalSessionConversation(sessionId) {
+    return this.#externalBindings.has(sessionId);
+  }
+
+  /** Remove an externally supplied binding; a Session without one has no mirror address. */
+  clearExternalSessionConversation(sessionId) {
+    if (typeof sessionId !== 'string') return;
+    this.#externalBindings.delete(sessionId);
+  }
+
+  /**
+   * Mark the next turn whose answer the owning plugin already delivered to the
+   * person. The coordinator skips that answer instead of sending a second copy.
+   */
+  suppressNextSessionSyncAnswer(sessionId) {
+    if (typeof sessionId !== 'string' || !sessionId) return;
+    this.#suppressedSessions.add(sessionId);
+  }
+
+  /** Consume a plugin's suppression for this turn's final answer. */
+  consumeSessionSyncAnswerSuppression(sessionId) {
+    if (!this.#suppressedSessions.has(sessionId)) return false;
+    this.#suppressedSessions.delete(sessionId);
+    return true;
   }
 
   /**

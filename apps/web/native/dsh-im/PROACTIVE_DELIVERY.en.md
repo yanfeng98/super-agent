@@ -93,6 +93,8 @@ A service injection never decides where the turn came from: the context snapshot
 
 The **Two-way Session sync** switch on a delivery target now only affects the candidate range of synced approvals and questions; it is no longer a precondition for Session sync. That candidate range stays private-chat only: mirrored text follows any route the channel persisted (a group, a topic, or a thread), but a question or an approval is offered in a private chat only, because in a group any member could answer it. The first version mirrors current-Host text only—no images, files, cards, tool progress, approvals, or history. A channel with an explicit remote `harnessBaseUrl` is still unsupported.
 
+The main Session can use the same sync. `dsh-superagent`'s orchestrator Session has no chat binding of its own, so on each Feishu trigger it supplies that chat to dsh-im (`bindExternalSessionConversation`). Web turns of that Session then follow the switches above and mirror into the chat of the most recent trigger; a chat that never triggered it receives nothing. When the main Session already answered the person with `orchestrator_reply`, it marks that turn (`suppressNextSessionSyncAnswer`) so the answer is not sent twice. To enable: turn on the switches in **General settings → Delivery** and send at least one message to the bot in Feishu to establish the binding. Turning both switches off stops main-Session mirroring as well.
+
 ## Delivery settings
 
 **General settings → Delivery** stores plugin-wide settings rather than per-bot ones, in `<dshHome>/integrations/dsh-im/delivery-sync-settings.json`:

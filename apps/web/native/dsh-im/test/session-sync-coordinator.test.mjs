@@ -799,3 +799,60 @@ test('a mirrored user input never waits for a card receipt', async (t) => {
   assert.deepEqual(sends.map((entry) => entry.text), ['👤\n\ndesktop input']);
   assert.deepEqual(rendered.map((entry) => entry.text), ['answer']);
 });
+
+test('an externally bound Session follows its binding even when the bot has saved targets', async () => {
+  const sends = [];
+  const service = {
+    hasExternalSessionConversation: (sessionId) => sessionId === 'orchestrator',
+    async describeConversation() {
+      return { channel: 'feishu', botId: 'bot-1', conversationKey: 'group:chat-1' };
+    },
+    async listTargets() {
+      return { targets: [{ targetId: 'saved' }] };
+    },
+    async listSessionSyncTargets() {
+      return [];
+    },
+    async deliverSessionText(sessionId, text, options) {
+      sends.push({ sessionId, text, options });
+      return { sent: true };
+    },
+  };
+  const coordinator = createSessionSyncCoordinator({
+    deliveryService: service,
+    loadSettings: settings({ mirrorUserInput: true, deliverModelAnswers: true }),
+  });
+  void coordinator.enqueue('orchestrator', turnStart());
+  void coordinator.enqueue('orchestrator', userMessage('local question'));
+  void coordinator.enqueue('orchestrator', assistantMessage(0, 'local answer'));
+  void coordinator.enqueue('orchestrator', turnEnd());
+  await coordinator.whenIdle();
+  coordinator.close();
+
+  assert.deepEqual(sends.map((entry) => [entry.sessionId, entry.text]), [
+    ['orchestrator', 'local question'],
+    ['orchestrator', 'local answer'],
+  ]);
+});
+
+test('a turn the owning plugin already answered is not mirrored twice', async () => {
+  const sends = [];
+  const service = {
+    ...deliveryService(sends),
+    consumeSessionSyncAnswerSuppression: (sessionId) => sessionId === 'orchestrator',
+  };
+  const coordinator = createSessionSyncCoordinator({
+    deliveryService: service,
+    loadSettings: settings({ mirrorUserInput: true, deliverModelAnswers: true }),
+  });
+  void coordinator.enqueue('orchestrator', turnStart());
+  void coordinator.enqueue('orchestrator', userMessage('local question'));
+  void coordinator.enqueue('orchestrator', assistantMessage(0, 'already sent by orchestrator_reply'));
+  void coordinator.enqueue('orchestrator', turnEnd());
+  await coordinator.whenIdle();
+  coordinator.close();
+
+  // The input is echoed; only the final answer is suppressed, because the
+  // orchestrator already delivered it to the same person.
+  assert.deepEqual(sends.map((entry) => entry.text), ['local question']);
+});

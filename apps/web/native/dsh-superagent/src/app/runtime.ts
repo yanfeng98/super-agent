@@ -55,7 +55,7 @@ import { health, type Health, type SourceContext, type SourceHost } from '../sou
 import { Sessions } from './sessions.ts'
 import { Settings } from './settings.ts'
 import { sourceContextOf, type SourceContextDeps } from './source-context.ts'
-import { dshImOf } from '../sources/dsh-im.ts'
+import { dshIm, dshImOf } from '../sources/dsh-im.ts'
 import { feishuImConfig } from '../sources/feishu-im.ts'
 import type { ResourceHost } from './resources.ts'
 import { mainTools, type MainToolsHost } from './tools/main.ts'
@@ -1700,8 +1700,35 @@ export class Runtime extends Service implements SourceHost {
   receive(trigger: Trigger): ReceiveResult {
     const result = this.passes.receive(trigger)
     // A Feishu handoff proves dsh-im is active, which is also when its bot's Workspace is resolvable.
-    if (trigger.source === 'feishu') this.queueOrchestratorGroup()
+    if (trigger.source === 'feishu') {
+      this.queueOrchestratorGroup()
+      this.bindOrchestratorMirror(trigger)
+    }
     return result
+  }
+  /**
+   * Point dsh-im's opt-in Session sync at the chat of the most recent Feishu
+   * trigger. The orchestrator Session is not bound by any chat itself, so
+   * without this binding its Web turns have nowhere to be mirrored. A failure
+   * is logged and ignored: mirroring is optional and must never disturb intake.
+   */
+  private bindOrchestratorMirror(trigger: Trigger): void {
+    const im = dshImOf(this.ctx) ?? dshIm()
+    if (typeof im?.bindExternalSessionConversation !== 'function' || !trigger.channel) return
+    const address = trigger.channel.address
+    const botId = address.botId
+    const chatId = address.chatId ?? address.conversationId
+    if (!botId || !chatId) return
+    const direct = address.direct === 'true'
+    const conversationKey = direct
+      ? `p2p:${address.actorId ?? ''}`
+      : `group:${chatId}`
+    if (conversationKey.endsWith(':')) return
+    try {
+      im.bindExternalSessionConversation(this.masterId, { channel: 'feishu', botId, conversationKey, chatId })
+    } catch (error) {
+      this.ctx.logger.warn('dsh-superagent: binding the orchestrator mirror failed: %s', String(error))
+    }
   }
   idle(): Promise<void> {
     return (async () => {

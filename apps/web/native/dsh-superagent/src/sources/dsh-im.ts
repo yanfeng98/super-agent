@@ -66,6 +66,16 @@ export interface DshImService {
   listBots(): Promise<DshImBot[]>
   /** The Workspace directory dsh-im binds this bot to; absent on an older dsh-im, and null when it has no store. */
   botWorkspace?(botId: string): Promise<string | null>
+  /**
+   * Bind a Session that no chat owns itself to the conversation of a person's
+   * latest trigger, so dsh-im's opt-in Session sync can mirror its Web turns.
+   * Absent on an older dsh-im; mirroring stays off when the method is missing.
+   */
+  bindExternalSessionConversation?(sessionId: string, description: {
+    channel: string; botId: string; conversationKey: string; chatId?: string
+  }): void
+  /** Mark that the plugin already delivered the Session's next answer, so it is not mirrored twice. */
+  suppressNextSessionSyncAnswer?(sessionId: string): void
   listTargets(botId: string): Promise<DshImTarget[]>
   describeBot(botId: string): Promise<DshImBotDescription>
   /** Cheap handoff state; absent on an older dsh-im, where the watcher falls back to `describeBot`. */

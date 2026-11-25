@@ -145,6 +145,13 @@ export function createImHostPlugin(internals = {}) {
           createTarget: (botId, target) => deliveryService.createTarget(botId, target),
           listBots: () => deliveryService.listBots(),
           botWorkspace: (botId) => deliveryService.botWorkspace(botId),
+          // Optional Session-sync bridge for a Host plugin (superagent) that owns a
+          // Session not bound by any chat itself: it supplies the conversation of
+          // the person's latest trigger, and marks turns it already answered.
+          bindExternalSessionConversation: (sessionId, description) => deliveryService.bindExternalSessionConversation(sessionId, description),
+          hasExternalSessionConversation: (sessionId) => deliveryService.hasExternalSessionConversation(sessionId),
+          clearExternalSessionConversation: (sessionId) => deliveryService.clearExternalSessionConversation(sessionId),
+          suppressNextSessionSyncAnswer: (sessionId) => deliveryService.suppressNextSessionSyncAnswer(sessionId),
         }));
       }
       const activate = async (readyCtx) => {

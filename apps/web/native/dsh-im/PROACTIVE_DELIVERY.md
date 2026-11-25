@@ -93,6 +93,8 @@
 
 投递目标行上原有的「会话双向同步」开关现在只影响同步审批与同步提问的候选范围，不再是会话同步的前提；这个候选范围仍然只限私聊：镜像文字可以跟随渠道持久化的任意路由（群聊、话题或线程），但同步审批与同步提问只在私聊中提出，因为在群里任何成员都能替读者作答。首版仅同步当前 Host 的文字，不同步图片、文件、卡片、工具过程、审批或历史消息。显式配置了远程 `harnessBaseUrl` 的渠道也不支持。
 
+主 Session 也可以接入这套同步：`dsh-superagent` 的 orchestrator Session 本身没有聊天绑定，它在收到飞书触发时把该会话的聊天提供给 dsh-im（`bindExternalSessionConversation`），此后该 Session 在 Web 中发起的 Turn 就会遵循上面的开关镜像到最近的触发会话；没有触发过的聊天不会被投递。主 Session 通过 `orchestrator_reply` 已经把答复发回给人的 Turn 会被标记为已答复（`suppressNextSessionSyncAnswer`），不会重复发送。启用方式：在「通用设置 → 投递」打开需要的开关，并在飞书里至少向机器人发一次消息建立绑定；关闭两个开关时主 Session 的镜像同样完全停止。
+
 ## 投递设置
 
 「通用设置 → 投递」保存的是全局设置，不属于单个机器人，写入 `<dshHome>/integrations/dsh-im/delivery-sync-settings.json`：
