@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { zh } from '../src/client/locales.ts'
-import { decisionMark, reportDot, sourceMark, threadMark, ticketMark } from '../src/client/marks.ts'
+import { decisionMark, pushMark, reportDot, sourceMark, threadMark, ticketMark } from '../src/client/marks.ts'
 import { translator } from './fixtures/panel.tsx'
 
 const t = translator(zh)
@@ -13,10 +13,10 @@ it('marks each Ticket stage by whom it waits for, and an ended Ticket by its out
     icon] })).toEqual([
     ['待回答', 'warning', 'warning', 'ask'], ['待验收', 'warning', 'warning', 'review'], ['待处理受阻', 'warning', 'warning', 'blocked'],
     ['待处理失败', 'danger', 'error', 'alert'], ['输入未送达', 'warning', 'warning', 'inbox'], ['排队中', 'neutral', 'idle', 'queue'],
-    ['执行中', 'info', 'ongoing', 'running'], ['等待新触发', 'neutral', 'idle', 'clock']])
+    ['执行中', 'info', 'ongoing', 'running'], ['等待触发', 'neutral', 'idle', 'clock']])
   const ended = (['completed', 'merged', 'closed', 'dropped', 'stopped'] as const).map(outcome => ticketMark(t, { stage: 'ended',
     ended: { at: '', by: outcome === 'stopped' ? 'human' : 'executor', outcome } }))
-  expect(ended.map(mark => mark.label)).toEqual(['已完成但未合并', '已合并', '已关闭（未合并）', '无需处理', '已放弃'])
+  expect(ended.map(mark => mark.label)).toEqual(['已完成待合并', '已合并', '已关闭', '无需处理', '已放弃'])
   expect(ended.map(({ tone, dot, icon }) => `${tone} ${dot} ${icon}`)).toEqual(['success done decision', 'success done pull',
     'neutral idle stop', 'neutral idle stop', 'neutral idle dismiss'])
   // A merge labels the end state even when the work had already been reported completed, and its hover details say where
@@ -35,6 +35,11 @@ it('marks each Ticket stage by whom it waits for, and an ended Ticket by its out
   expect(abandoned.title).toMatch(/9月21日 \d\d:\d\d 已放弃：需求取消$/)
   expect(['failed', 'blocked', 'waiting', 'ready', 'progress', undefined].map(reportDot)).toEqual(['error', 'warning', 'warning', 'done',
     'ongoing', 'ongoing'])
+  // Push is a separate axis from the Ticket's own state, so it has its own mark with the same wording everywhere.
+  expect(pushMark(t, undefined)).toBeUndefined()
+  expect(pushMark(t, { ok: true })).toMatchObject({ label: '已推送', tone: 'success' })
+  expect(pushMark(t, { ok: false, error: 'no upstream' })).toMatchObject({ label: '推送失败', tone: 'danger',
+    title: '合并已完成，但推送失败：no upstream' })
 })
 
 it('marks each Thread stage, Source state and Decision outcome', () => {

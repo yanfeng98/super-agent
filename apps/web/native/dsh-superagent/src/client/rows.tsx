@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import type { DecisionRow, ThreadFacts, ThreadRow, TicketFacts, TicketRow } from './api.ts'
 import { Icon, Tag } from './controls.tsx'
-import { decisionMark, threadMark, ticketMark } from './marks.ts'
+import { decisionMark, pushMark, threadMark, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { actorName, localized, readableMarkers, reasonLabel, ticketNumber, valueLabel } from './text.ts'
 import { ActionLink, ConfirmButton, LabelValue, SessionButton, StageMark, When } from './widgets.tsx'
@@ -16,6 +16,7 @@ export function TicketLine({ ticket, question, onChanged, context, select }: {
 }) {
   const { t, call, navigate } = usePanel()
   const status = ticketMark(t, ticket)
+  const push = pushMark(t, ticket.merged?.push)
   const after = async (request: Promise<unknown>) => { await request; await onChanged?.() }
   const note = question && ticket.note && { ...ticket.note, text: readableMarkers(t, ticket.note.text) }
   const answer = ticket.reply && ticket.stage === 'person' && ticket.action === 'answer' ? ticket.reply : undefined
@@ -29,6 +30,7 @@ export function TicketLine({ ticket, question, onChanged, context, select }: {
         <button type="button" className="dt-open" onClick={() => navigate({ page: 'execution', id: ticket.id })}>{ticket.title}</button></div>
       <div className="dt-row-meta dt-ticket-meta">
         {ticket.tags.map(tag => <Tag key={tag} tone="quiet">{tag}</Tag>)}
+        {push && <Tag tone={push.tone} title={push.title}>{push.label}</Tag>}
         {ticket.threads.map(thread => <ThreadChip key={thread.key} thread={thread} />)}
         {context && <ContextTag />}
         {ticket.undelivered > 0 && <LabelValue label={t('ticketUndeliveredLabel')} value={ticket.undelivered} />}
@@ -55,13 +57,12 @@ export function TicketLine({ ticket, question, onChanged, context, select }: {
 export function TicketAssociation({ ticket }: { ticket: TicketFacts }) {
   const { t, navigate } = usePanel()
   const mark = ticketMark(t, ticket)
-  const push = ticket.merged?.push
+  const push = pushMark(t, ticket.merged?.push)
   return <span className="dt-ticket-assoc">
     <button type="button" className="dt-textlink" title={mark.title}
       onClick={() => navigate({ page: 'execution', id: ticket.id })}>{ticketNumber(ticket.number)}</button>
     <Tag tone={mark.tone} title={mark.title}>{mark.label}</Tag>
-    {push && (push.ok ? <Tag tone="success" title={t('pushOk')}>{t('pushed')}</Tag>
-      : <Tag tone="danger" title={t('pushFailed', { error: push.error ?? '' })}>{t('pushFailedShort')}</Tag>)}
+    {push && <Tag tone={push.tone} title={push.title}>{push.label}</Tag>}
   </span>
 }
 

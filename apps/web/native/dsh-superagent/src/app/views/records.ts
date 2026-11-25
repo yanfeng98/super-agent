@@ -131,7 +131,8 @@ export function ticketSummary(ticket: Ticket, number?: number) {
     // Where a merge landed belongs on the row and its hover detail, not only on the Ticket page. Records from older
     // deployments may lack a target or branch, so the row states only the merge facts it has.
     ...merged ? { merged: { at: merged.at, ...merged.target ? { target: merged.target } : {},
-      ...merged.branch ? { branch: merged.branch } : {}, ...merged.head ? { head: merged.head } : {} } } : {},
+      ...merged.branch ? { branch: merged.branch } : {}, ...merged.head ? { head: merged.head } : {},
+      ...merged.push ? { push: { ok: merged.push.ok, ...merged.push.error ? { error: merged.push.error } : {} } } : {} } } : {},
     actions: { retry: canRetry(ticket), stop: liveTicket(ticket), ...cleanup ? { cleanup: true as const } : {} },
     strength: ticket.mandate.strength, ended: ticket.ended,
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },

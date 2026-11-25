@@ -1,4 +1,12 @@
-/** Pure mappers from domain states (Tickets, Threads, Sources, Decisions) to UI status indicators. */
+/**
+ * Pure mappers from domain states (Tickets, Threads, Sources, Decisions) to UI status indicators.
+ *
+ * A Ticket has one primary mark from exactly one of three families: a run state (`stage.queued`/`stage.working`/
+ * `stage.idle`), a person wait (`stage.approval`/`answer`/`review`/`blocked`/`failed`/`delivery`), or a terminal outcome
+ * (`outcome.merged`/`completedUnmerged`/`closed`/`stopped`/`dropped`). `ticketMark` picks exactly one, so the families
+ * never overlap. Merge and push are separate axes: the merge landing is in the primary mark's hover detail, and the push
+ * result is an independent `pushMark` tag shown beside it on every Ticket row, with the same wording on Trigger rows.
+ */
 import type { DecisionRow, SourceStatusRow, ThreadRow, TicketStage, TicketSummary } from './api.ts'
 import type { DshSuperagentKey } from './locales.ts'
 import { endedLabel, valueLabel, when, type T } from './text.ts'
@@ -9,7 +17,7 @@ export interface Mark { label: string; tone: TagTone; dot: DotState; icon: IconN
 
 /** What a Ticket mark reads: its stage, its ending, and where a recorded merge landed. */
 export type TicketMarkInput = TicketStage & Pick<TicketSummary, 'ended'>
-  & { merged?: { at: string; target?: string; branch?: string; head?: string } }
+  & { merged?: { at: string; target?: string; branch?: string; head?: string; push?: { ok: boolean; error?: string } } }
 
 export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
   switch (ticket.stage) {
@@ -45,6 +53,14 @@ export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
     default: return { label: t('stage.idle'), tone: 'neutral', dot: 'idle', icon: 'clock' }
   }
 }
+/** The push result is orthogonal to the ticket's own state, so it is shown as a separate mark beside it. */
+export function pushMark(t: T, push: { ok: boolean; error?: string } | undefined): Mark | undefined {
+  if (!push) return undefined
+  return push.ok
+    ? { label: t('pushed'), tone: 'success', dot: 'done', icon: 'inbox', title: t('pushOk') }
+    : { label: t('pushFailedShort'), tone: 'danger', dot: 'error', icon: 'alert', title: t('pushFailed', { error: push.error ?? '' }) }
+}
+
 export const reportDot = (report: string | undefined): DotState => report === 'failed' ? 'error'
   : report === 'blocked' || report === 'waiting' ? 'warning' : report === 'ready' ? 'done' : 'ongoing'
 
