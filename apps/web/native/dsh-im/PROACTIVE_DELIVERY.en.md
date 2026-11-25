@@ -97,6 +97,8 @@ The main Session can use the same sync. `dsh-superagent`'s orchestrator Session 
 
 ## Delivery settings
 
+Where to find the switches: in the DSH Web GUI open **Settings → IM bots** (the DSH-IM section), select the gear icon **General settings** at the top right, then open the **Delivery** tab. The two checkboxes are in the **Session sync** group, labelled **Mirror messages typed in the Web UI** and **Deliver model answers** (each has a prefix-icon field beside it and **Save delivery settings** at the bottom). This is the DSH-IM section's own General settings page, not DSH's own General settings page; the latter has no Delivery tab.
+
 **General settings → Delivery** stores plugin-wide settings rather than per-bot ones, in `<dshHome>/integrations/dsh-im/delivery-sync-settings.json`:
 
 ```json

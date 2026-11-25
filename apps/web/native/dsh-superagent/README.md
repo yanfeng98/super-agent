@@ -37,7 +37,7 @@ The orchestrator Session can mirror what you type in the DSH Web GUI and its fin
 
 To enable it:
 
-1. In DSH's **General settings → Delivery**, turn on **Mirror user input** and/or **Deliver model answers**. Both off means nothing is mirrored.
+1. In the DSH Web GUI, open **Settings → IM bots** (the DSH-IM section), select the gear icon **General settings** at the top right, then open the **Delivery** tab. Under **Session sync**, turn on **Mirror messages typed in the Web UI** and/or **Deliver model answers** (Chinese UI: **镜像 Web 中输入的消息** / **投递模型回答**). Both off means nothing is mirrored. These switches are not on DSH's own General settings page; they live inside the DSH-IM section's General settings.
 2. Send at least one message to the bot in the Feishu chat you want. That chat becomes the mirror target; later messages from another chat move the target there.
 3. Type in the orchestrator Session in the Web GUI. Your input and its final answer appear in the bound chat. Tool calls, internal progress and worker traffic are not mirrored.
 
