@@ -573,7 +573,7 @@ it('marks a merge ahead of the completed outcome, and explains the worktree a cl
   await click(zh['ticket.ended'])
   // A merged Ticket is labelled merged even though its worker reported the work completed first.
   expect(all('.dt-ticket-stage').map(stage => stage.textContent)).toEqual(expect.arrayContaining([zh['outcome.merged'],
-    zh['outcome.completed']]))
+    zh['outcome.completedUnmerged']]))
   await click('清理的工单')
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.merged'])
   // The captured changes stay readable, and the section says the worktree is gone instead of asking git again.
@@ -594,7 +594,7 @@ it('explains an unreadable worktree in the Changes section instead of showing th
     review: { capturedAt: endedAt, commits: [], files: [], dirty: [], error: 'The workspace is not a git repository, or git could not read it' } }
   at({ page: 'execution', id: 't9' })
   await mount()
-  expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.completed'])
+  expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.completedUnmerged'])
   expect(text()).toContain(zh.reviewWorkspaceNotRepository.replace('{directory}', '/w/t9'))
   expect(text()).not.toContain('The workspace is not a git repository')
   expect(text()).not.toContain(zh.reviewViewDiff)

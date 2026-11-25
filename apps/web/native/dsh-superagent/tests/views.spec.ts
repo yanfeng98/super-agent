@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
+import { enqueueMerges } from '../src/app/merge-queue.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import { SourceRegistry } from '../src/sources/registry.ts'
 import { feishuImKind } from '../src/sources/feishu-im.ts'
@@ -417,7 +418,7 @@ it('lists the person actions on a ticket in time order', () => {
     { code: 'cleaned', at: '2026-09-24T00:00:00Z' }])
 })
 
-it('keeps a custom Source ticket with a merged thread outcome reviewable and mergeable', () => {
+it('keeps a custom Source ticket with a merged thread outcome mergeable, but off the review worklist', () => {
   const host = views()
   live('custom')
   const ticket = store.tickets.get('custom')!
@@ -425,29 +426,44 @@ it('keeps a custom Source ticket with a merged thread outcome reviewable and mer
   ticket.execution = { name: 'custom', directory: '/w/custom', assignment: '' }
   ticket.review = { capturedAt: at, branch: 'agent/custom', base: 'a'.repeat(40), head: 'b'.repeat(40), commits: [], files: [], dirty: [] }
   store.tickets.save(ticket)
-  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id)).toContain('custom')
+  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id)).not.toContain('custom')
   expect(ticketDetail(host, 'custom')!.actions).toMatchObject({ merge: true, rebase: true, discard: true })
 })
 
-it('lists the ended Tickets a person still has to review, and drops the approved ones', () => {
+it('lists only ended Tickets with changes and a merge request still waiting for review approval', () => {
   const host = views()
+  const changes = { capturedAt: at, branch: 'agent/t', base: 'a'.repeat(40), head: 'b'.repeat(40),
+    commits: [{ sha: 'b', subject: 'fix' }], files: [{ status: 'M', path: 'src/a.ts' }], dirty: [] }
   const ended = (id: string, patch: (ticket: NonNullable<ReturnType<typeof store.tickets.get>>) => void) => {
     live(id)
     const ticket = store.tickets.get(id)!
     ticket.ended = { at, by: 'executor', outcome: 'completed' }
+    ticket.review = changes
+    ticket.autoMerge = { at, attempts: 0 }
     patch(ticket)
     store.tickets.save(ticket)
   }
   ended('open-review', () => { /* no approval yet */ })
   ended('approved', ticket => { ticket.reviewed = { at, decision: 'approved', via: 'panel' } })
   ended('merged', ticket => { ticket.merged = { at, branch: 'agent/m', target: 'main', head: 'abc' } })
+  ended('reverted', ticket => { ticket.merged = { at, branch: 'agent/m', target: 'main', head: 'abc' }
+    ticket.reverted = { at, commit: 'r', target: 'main', merge: 'm' } })
+  ended('abandoned', ticket => { ticket.ended = { at, by: 'human', outcome: 'stopped' } })
+  ended('discarded', ticket => { ticket.discarded = { at } })
+  ended('cleaned', ticket => { ticket.cleaned = { at } })
+  ended('no-changes', ticket => { ticket.review = { capturedAt: at, commits: [], files: [], dirty: [] } })
+  ended('no-merge-request', ticket => { delete ticket.autoMerge })
+  ended('queued', ticket => { delete ticket.autoMerge; enqueueMerges(store, [{ ticketId: 'queued', at }]) })
+  ended('thread-merged', ticket => { ticket.ended = { at, by: 'executor', outcome: 'merged' } })
+  ended('nothing-to-do', ticket => { ticket.ended = { at, by: 'executor', outcome: 'dropped' } })
+  ended('closed', ticket => { ticket.ended = { at, by: 'executor', outcome: 'closed' } })
   live('working')
-  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id)).toEqual(['open-review'])
+  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id).sort()).toEqual(['open-review', 'queued'])
   // An approved Ticket comes back to the list only after a new commit clears the decision.
   const ticket = store.tickets.get('approved')!
   delete ticket.reviewed
   store.tickets.save(ticket)
-  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id).sort()).toEqual(['approved', 'open-review'])
+  expect(ticketList(host, 'review', 0, 20).items.map(item => item.id).sort()).toEqual(['approved', 'open-review', 'queued'])
 })
 
 it('lists review notes with their file, line and text, and marks one the changes moved past', () => {

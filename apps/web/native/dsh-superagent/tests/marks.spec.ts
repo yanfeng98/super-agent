@@ -16,7 +16,7 @@ it('marks each Ticket stage by whom it waits for, and an ended Ticket by its out
     ['执行中', 'info', 'ongoing', 'running'], ['等待新触发', 'neutral', 'idle', 'clock']])
   const ended = (['completed', 'merged', 'closed', 'dropped', 'stopped'] as const).map(outcome => ticketMark(t, { stage: 'ended',
     ended: { at: '', by: outcome === 'stopped' ? 'human' : 'executor', outcome } }))
-  expect(ended.map(mark => mark.label)).toEqual(['已完成', '已合并', '已关闭（未合并）', '无需处理', '已放弃'])
+  expect(ended.map(mark => mark.label)).toEqual(['已完成但未合并', '已合并', '已关闭（未合并）', '无需处理', '已放弃'])
   expect(ended.map(({ tone, dot, icon }) => `${tone} ${dot} ${icon}`)).toEqual(['success done decision', 'success done pull',
     'neutral idle stop', 'neutral idle stop', 'neutral idle dismiss'])
   // A merge labels the end state even when the work had already been reported completed, and its hover details say where

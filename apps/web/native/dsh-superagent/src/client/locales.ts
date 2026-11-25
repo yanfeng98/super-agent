@@ -484,6 +484,7 @@ const TEXT = {
   resumeWhere: ['在执行状态中恢复', 'Resume in the Execution status'],
   // Execution
   'outcome.completed': ['已完成', 'Completed'],
+  'outcome.completedUnmerged': ['已完成但未合并', 'Completed, not merged'],
   'outcome.merged': ['已合并', 'Merged'],
   'outcome.closed': ['已关闭（未合并）', 'Closed unmerged'],
   'outcome.dropped': ['无需处理', 'Nothing to do'],
@@ -630,7 +631,8 @@ const TEXT = {
   'ticketFilter.working': ['执行中', 'Working'],
   'ticketFilter.idle': ['等待新触发', 'Waiting for a Trigger'],
   'ticketFilter.review': ['待评审', 'To review'],
-  reviewFilterHint: ['这些工单已经结束，等你看过改动再决定合并；已批准的不会出现在这里。', 'Ended Tickets that wait for your decision before merging; an approved one leaves this list.'],
+  reviewFilterHint: ['有改动、已请求合并且尚未批准的工单才在这里；已放弃、已合并、已回退，以及完成但未请求合并的工单不在此列。',
+    'Only Tickets with changes, a merge request and no approval appear here; abandoned, merged, reverted, and completed Tickets without a merge request do not.'],
   mergeQueueTitle: ['合并队列', 'Merge queue'],
   mergeQueueHint: ['按顺序逐个合并的工单；合并后在目标分支上检查失败时会暂停，等你看过再继续。', 'The Tickets a person queued to merge in order; a check that fails on the merged target pauses it until you resume.'],
   mergeQueuePaused: ['已暂停', 'Paused'],

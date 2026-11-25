@@ -214,6 +214,19 @@ export function ticketSettlement(ticket: Pick<Ticket, 'merged' | 'reverted' | 'd
   return 'unfinished'
 }
 /**
+ * Whether an ended Ticket belongs on the To review worklist: a person asked for its changes to land (a standing request
+ * or a merge queue entry), the ending captured changes to approve, and nobody has approved, merged, reverted, or abandoned
+ * them yet. A completed Ticket with no merge request is finished work that shows as completed but unmerged instead.
+ */
+export function needsReview(ticket: Pick<Ticket, 'ended' | 'merged' | 'reverted' | 'discarded' | 'cleaned' | 'autoMerge'
+  | 'reviewed' | 'review'>, mergePending = false): boolean {
+  if (liveTicket(ticket) || ticket.merged || ticket.reverted || ticket.discarded || ticket.cleaned
+    || (!ticket.autoMerge && !mergePending)) return false
+  if (ticket.ended?.outcome !== 'completed' || ticket.reviewed?.decision === 'approved') return false
+  const review = ticket.review
+  return !!review && (review.commits.length > 0 || review.files.length > 0 || review.dirty.length > 0)
+}
+/**
  * How a Thread started work: `unfinished` when any subscribed Ticket still needs a merge or a push, `settled` when its
  * Tickets are done without one, and undefined when the Thread started no Ticket at all.
  */

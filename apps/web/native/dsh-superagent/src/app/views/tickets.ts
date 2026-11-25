@@ -3,7 +3,7 @@ import { liveTicket, noteOutdated, threadKey, ticketStage, type AcceptMode, type
   type Ticket, type TicketStage } from '../../core/index.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
 import type { Store } from '../store.ts'
-import { channelLink, decisionView, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
+import { channelLink, decisionView, needsReview, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
   type ViewHost } from './records.ts'
 import { mergePosition } from '../merge-queue.ts'
 import { settingsPolicy } from '../../policy.ts'
@@ -48,11 +48,9 @@ export function ticketTags(store: Pick<Store, 'tickets' | 'triggers'>): string[]
 export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'] | 'review', offset: number, limit: number, tag?: string) {
   const view = snapshot(host)
   const { store } = view
-  // The review worklist is the ended Tickets a person still has to decide on: not merged, and not approved.
-  const pending = (ticket: Ticket): boolean => !liveTicket(ticket) && !ticket.merged && !ticket.discarded && !ticket.cleaned
-    && ticket.reviewed?.decision !== 'approved'
   const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket)
-    : stage === 'review' ? pending(ticket) : ticketStage(ticket).stage === stage
+    : stage === 'review' ? needsReview(ticket, mergePosition(store, ticket.id) !== undefined)
+      : ticketStage(ticket).stage === stage
   const tickets = (stage === 'ended' || stage === 'review' ? store.tickets.list() : store.tickets.open()).filter(shown)
     .filter(ticket => !tag || tagsOf(store, ticket).includes(tag)).sort(newestFirst)
   const result = page(tickets, offset, limit)
