@@ -12,8 +12,13 @@ import type { DshSuperagentKey } from './locales.ts'
 import { endedLabel, valueLabel, when, type T } from './text.ts'
 import type { DotState, IconName, TagTone } from './controls.tsx'
 
-/** A row's status indicator; `title` carries the detail a person gets by hovering it. */
+/** A row's status indicator; `title` carries the meaning and any detail a person gets by hovering it. */
 export interface Mark { label: string; tone: TagTone; dot: DotState; icon: IconName; title?: string }
+
+/** Hover text: the mark's meaning first, then any recorded time, merge landing or push detail. */
+function hint(...lines: (string | undefined)[]): string {
+  return lines.filter(Boolean).join('\n')
+}
 
 /** What a Ticket mark reads: its stage, its ending, and where a recorded merge landed. */
 export type TicketMarkInput = TicketStage & Pick<TicketSummary, 'ended'>
@@ -30,35 +35,43 @@ export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
           ? [t('mergedHint', { target: merge.target, branch: merge.branch }),
             ...merge.head ? [t('mergedCommit', { commit: merge.head.slice(0, 8) })] : []].join('\n')
           : ''
-        return { label: t('outcome.merged'), tone: 'success', dot: 'done', icon: 'pull', title: where || ended || undefined }
+        return { label: t('outcome.merged'), tone: 'success', dot: 'done', icon: 'pull',
+          title: hint(t('markMergedHint'), where, ticket.ended?.reason ? ended : undefined) }
       }
       if (ticket.ended?.outcome === 'completed') return { label: t('outcome.completedUnmerged'), tone: 'success', dot: 'done',
-        icon: 'decision', title: t('markCompletedHint', { time: when(ticket.ended.at, t('lang')) }) }
+        icon: 'decision', title: hint(t('markCompletedHint'), ticket.ended.at
+          ? t('markCompletedTimeHint', { time: when(ticket.ended.at, t('lang')) }) : undefined) }
       // A person's stop ends the work for good; the dismiss icon and the word "abandoned" keep it apart from the
       // ordinary in-progress marks and from completed, merged and reverted work.
       if (ticket.ended?.outcome === 'stopped') return { label: t('outcome.stopped'), tone: 'neutral', dot: 'idle', icon: 'dismiss',
-        title: [t('markAbandonedHint', { time: when(ticket.ended.at, t('lang')) }), ended].filter(Boolean).join('\n') }
+        title: hint(t('markAbandonedMeaningHint'), ticket.ended.at
+          ? t('markAbandonedHint', { time: when(ticket.ended.at, t('lang')) }) : undefined,
+        ticket.ended.reason ? ended : undefined) }
+      const meaning = ticket.ended?.outcome === 'closed' ? t('markClosedHint')
+        : ticket.ended?.outcome === 'dropped' ? t('markDroppedHint') : undefined
       return { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop',
-        title: ended || undefined }
+        title: hint(meaning, ticket.ended?.reason ? ended : undefined) }
     }
     case 'person': {
       const action = ticket.action
       const icon: IconName = action === 'review' ? 'review' : action === 'failed' ? 'alert' : action === 'blocked' ? 'blocked'
         : action === 'delivery' ? 'inbox' : action === 'approval' ? 'decision' : 'ask'
       return { label: t(`stage.${action}`), tone: action === 'failed' ? 'danger' : 'warning', dot: action === 'failed' ? 'error'
-        : 'warning', icon }
+        : 'warning', icon, title: t(`markStage.${action}Hint`) }
     }
-    case 'working': return ticket.action === 'queued' ? { label: t('stage.queued'), tone: 'neutral', dot: 'idle', icon: 'queue' }
-      : { label: t('stage.working'), tone: 'info', dot: 'ongoing', icon: 'running' }
-    default: return { label: t('stage.idle'), tone: 'neutral', dot: 'idle', icon: 'clock' }
+    case 'working': return ticket.action === 'queued'
+      ? { label: t('stage.queued'), tone: 'neutral', dot: 'idle', icon: 'queue', title: t('markQueuedHint') }
+      : { label: t('stage.working'), tone: 'info', dot: 'ongoing', icon: 'running', title: t('markWorkingHint') }
+    default: return { label: t('stage.idle'), tone: 'neutral', dot: 'idle', icon: 'clock', title: t('markIdleHint') }
   }
 }
 /** The push result is orthogonal to the ticket's own state, so it is shown as a separate mark beside it. */
 export function pushMark(t: T, push: { ok: boolean; error?: string } | undefined): Mark | undefined {
   if (!push) return undefined
   return push.ok
-    ? { label: t('pushed'), tone: 'success', dot: 'done', icon: 'inbox', title: t('pushOk') }
-    : { label: t('pushFailedShort'), tone: 'danger', dot: 'error', icon: 'alert', title: t('pushFailed', { error: push.error ?? '' }) }
+    ? { label: t('pushed'), tone: 'success', dot: 'done', icon: 'inbox', title: hint(t('pushOk'), t('pushedHint')) }
+    : { label: t('pushFailedShort'), tone: 'danger', dot: 'error', icon: 'alert',
+      title: hint(t('pushFailedShortHint'), t('pushFailed', { error: push.error ?? '' })) }
 }
 
 export const reportDot = (report: string | undefined): DotState => report === 'failed' ? 'error'

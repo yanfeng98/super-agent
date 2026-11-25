@@ -523,11 +523,11 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
   await click(zh['ticket.ended'])
   expect(all('.dt-ticket-stage').map(stage => stage.textContent)).toEqual([zh['outcome.merged'], zh['outcome.stopped']])
   // Hovering the row's merge mark says where the branch landed without opening the Ticket.
-  expect(all('.dt-ticket-stage .dt-stage')[0]?.getAttribute('title')).toBe('已合并到 main（agent/t3）。')
+  expect(all('.dt-ticket-stage .dt-stage')[0]?.getAttribute('title')).toBe('工作做完，分支已经进入目标分支。\n已合并到 main（agent/t3）。')
   await click('已合并的工单')
   expect(document.querySelector('.dt-status-line .dt-stage')?.textContent).toBe(zh['outcome.merged'])
   expect(document.querySelector('.dt-status-line .dt-stage')?.getAttribute('title'))
-    .toBe('已合并到 main（agent/t3）。\n合并后目标分支停在 eeeeeeee。')
+    .toBe('工作做完，分支已经进入目标分支。\n已合并到 main（agent/t3）。\n合并后目标分支停在 eeeeeeee。')
   expect(text()).toContain(zh['outcome.merged'])
   expect(text()).not.toContain('执行器结束')
   // A merged ticket offers cleaning up its worktree instead of discarding the branch, and undoing the merge.

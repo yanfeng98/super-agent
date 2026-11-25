@@ -101,7 +101,7 @@ export function ActionLink({ href, children, icon = 'external' }: { href: string
   return <a className="dt-btn dt-btn-outline dt-btn-sm" href={href} {...external}><span className="dt-btn-icon"><Icon name={icon}
     size={14} /></span>{children}</a>
 }
-/** A row's status mark; `title` is the hover detail (a merge's target and commit, or how the Ticket ended). */
+/** A row's status mark; `title` is the hover meaning plus any merge, ending or push detail. */
 export function StageMark({ state, icon, label, title }: { state: DotState; icon: IconName; label: string; title?: string }) {
   return <span className="dt-stage" data-state={state} title={title}>{state === 'ongoing' ? <StateDot state="ongoing" /> : <Icon name={icon}
     size={14} />}{label}</span>

@@ -78,10 +78,13 @@ function SearchResults({ result, query, onClose, onMore, loadingMore }: { result
       <Button variant="ghost" size="sm" icon={<Icon name="close" size={14} />} aria-label={t('close')} onClick={onClose} />
     </div>
     {!empty && <ul className="dt-list">
-      {result.tickets.map(ticket => <Result key={ticket.id} name={<Highlight text={ticket.title} query={query} />}
-        open={go({ page: 'execution', id: ticket.id })}>
-        <span>{t('term.ticket')}</span><span>{ticketMark(t, ticket).label}</span>
-      </Result>)}
+      {result.tickets.map(ticket => {
+        const mark = ticketMark(t, ticket)
+        return <Result key={ticket.id} name={<Highlight text={ticket.title} query={query} />}
+          open={go({ page: 'execution', id: ticket.id })}>
+          <span>{t('term.ticket')}</span><span title={mark.title}>{mark.label}</span>
+        </Result>
+      })}
       {result.threads.map(thread => <Result key={thread.key} name={readableMarkers(t, thread.title)} open={go({ page: 'trigger',
         id: thread.key })}>
         <span>{t('term.thread')}</span>
