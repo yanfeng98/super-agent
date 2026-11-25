@@ -9,6 +9,7 @@ import { key, threadKey, type OutboundMessage, type Trigger } from '../core/inde
 import { checkedImText } from '../infra/text.ts'
 import { admissionFileKeys, admissionImageKeys, feishuChatLink, SOURCE, withMentionNames } from './feishu-shared.ts'
 import { dshIm, dshImOf, setDshIm, type DshImBotDescription, type DshImEvent, type DshImHistory, type DshImMessage, type DshImService } from './dsh-im.ts'
+import { endImageGroup, imageGroupRoot } from './feishu-image-groups.ts'
 import { runFeishuImBackfill } from './feishu-im-loops.ts'
 import { consumerRetry } from './poll.ts'
 import { KV } from '../kv.ts'
@@ -38,6 +39,8 @@ const FeishuConfigSchema = z.object({
   otherChats: z.enum(['none', 'mentions']).default('none'),
   readPageSize: z.number().int().min(1).max(PAGE_LIMIT).default(DEFAULT_PAGE),
   linkTimeoutMs: z.number().int().min(1).max(90_000).default(5_000),
+  /** Longest gap between two consecutive images that still join one Thread, in milliseconds. */
+  imageGroupWindowMs: z.number().int().min(0).max(10 * 60_000).default(30_000),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
 /** Parses a stored Feishu Source config, ignoring keys it does not use. */
@@ -355,6 +358,9 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     { key: 'readPageSize', type: 'number', advanced: true, min: 1, max: PAGE_LIMIT, label: { zh: '每页消息数', en: 'Messages per page' }, hint: { zh: '智能体读取线程和群历史时，每页的消息数，最多 50 条（dsh-im 单页上限，也是飞书的上限）；默认 20。', en: 'Messages per page when agents read Threads and chat history, at most 50 (both the dsh-im and the Feishu page limit); the default is 20.' } },
     { key: 'linkTimeoutMs', type: 'number', advanced: true, min: 1, max: 90_000, label: { zh: '原消息链接的查询时限 / 毫秒', en: 'Original message link time limit / ms' },
       hint: { zh: '查询原消息链接最多等待的时间；超时后智能体改为直接读取原消息。', en: 'How long to wait for an original message\'s link; after that, agents read the message itself.' } },
+    { key: 'imageGroupWindowMs', type: 'number', advanced: true, min: 0, max: 10 * 60_000,
+      label: { zh: '连续图片合并时限 / 毫秒', en: 'Consecutive image grouping window / ms' },
+      hint: { zh: '同一人连续发的独立图片在这个间隔内会进入同一个会话；中间发别的消息会断开。默认 30 秒，设为 0 表示不合并。', en: 'Standalone images from one sender within this gap join one Thread; another message from that sender breaks the run. Default 30 seconds; 0 disables grouping.' } },
   ],
   health: ['feishu', 'history'],
   scope({ meta }, config) {
@@ -595,7 +601,14 @@ export async function watchFeishuIm(ctx: FeishuWatchContext, serviceOf: () => Ds
                 onEvent: async (event: DshImEvent) => {
                   const current = ctx.config(SOURCE)
                   if (current && ctx.configured()) {
-                    const trigger = imTrigger(event)
+                    // Consecutive standalone images join one Thread; the reply route stays exactly as dsh-im reported it.
+                    let grouped: string | undefined
+                    if (full) {
+                      endImageGroup(full.state, event)
+                      const windowMs = feishuImConfig(current).imageGroupWindowMs
+                      if (windowMs > 0) grouped = imageGroupRoot(full.state, event, windowMs)
+                    }
+                    const trigger = imTrigger(event, grouped ?? event.reply.rootId)
                     try {
                       // A person's `/stop` is a control message: it ends this Thread's work instead of becoming
                       // assessment work, and the Source answers it so the person sees what happened. A sender the Policy

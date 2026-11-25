@@ -344,7 +344,11 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     last delivered, and a read that stopped on its budget or failed keeps the window it did not finish, so a cap, a
     failure or the round's five-minute time budget never skips replies. A Topic's thread is keyed by the message that
     opened it — Feishu gives that message a `thread_id` and no `root_id`, while its replies name it as their root — and a
-    recovered reply keeps the route dsh-im reported, because dsh-im refuses a read or reply whose route does not match. A Topic's own history is read oldest-first through `threadHistoryChecked` (`historyChecked` on an older
+    recovered reply keeps the route dsh-im reported, because dsh-im refuses a read or reply whose route does not match.
+    A standalone image Feishu leaves in the chat container has neither id, so each image would otherwise open its own
+    Thread; consecutive standalone images from one sender within `imageGroupWindowMs` take the first image as their
+    Thread root (`KV.feishu.imageGroups`), and a non-image message from that sender ends the run. Grouping changes only
+    the Thread key, never the reply route, so dsh-im's anchor check still resolves every message. A Topic's own history is read oldest-first through `threadHistoryChecked` (`historyChecked` on an older
     dsh-im), so the message that opened it anchors the first page an assessment window reads. `imTrigger`
     substitutes mention names, marks bot senders non-human, and records `messageType`/`images`; `readFeishuImImage`
     downloads an image through `resourceChecked` and commits it as a model-visible attachment. Policy regains `bots` and

@@ -3,6 +3,7 @@ import type { Thread, Trigger } from '../core/index.ts'
 import { KV } from '../kv.ts'
 import { SOURCE } from './feishu-shared.ts'
 import type { DshImEvent, DshImService } from './dsh-im.ts'
+import { endImageGroup, imageGroupRoot } from './feishu-image-groups.ts'
 import type { FeishuConfig } from './feishu-im.ts'
 import { POLL_HORIZON_MS, cursorAt, pause, pollThreads, polled } from './poll.ts'
 import { health, type Health, type SourceContext } from './host.ts'
@@ -35,6 +36,13 @@ export interface BackfillDeps {
 }
 
 const signalOf = (signal: AbortSignal): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(READ_TIMEOUT_MS)])
+
+/** Keeps recovered standalone images in the same Thread as the live consumer does, without touching the reply route. */
+function recoveredRoot(deps: BackfillDeps, event: DshImEvent): string | undefined {
+  endImageGroup(deps.ctx.state, event)
+  const windowMs = deps.config()?.imageGroupWindowMs ?? 0
+  return windowMs > 0 ? imageGroupRoot(deps.ctx.state, event, windowMs) : undefined
+}
 
 /**
  * Merges the chats the bot joined and dsh-im's group targets into the stored label map; both reads are cheap, so they run every round.
@@ -122,7 +130,7 @@ export async function backfillChat(deps: BackfillDeps, chatId: string, direct: b
     if (!deps.config()) return { recovered: count, omitted }
     omitted += result.omitted
     for (const event of result.events) {
-      const trigger = deps.toTrigger(event)
+      const trigger = deps.toTrigger(event, recoveredRoot(deps, event) ?? event.reply.rootId)
       await deps.ctx.receive(trigger)
       deps.describe?.(event, trigger)
       count++

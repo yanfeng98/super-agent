@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { key } from '../src/core/index.ts'
+import { key, type Trigger } from '../src/core/index.ts'
 import { KV } from '../src/kv.ts'
 import { sourceLink } from '../src/app/links.ts'
 import { feishuImPage } from '../src/app/resources.ts'
@@ -19,7 +19,7 @@ const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
 })
 const config = (overrides: Partial<FeishuConfig> = {}): FeishuConfig => ({
   botId: 'bot_1', chats: [{ chatId: 'oc_team', listen: 'mentions' }], directMessages: true, otherChats: 'none', readPageSize: 20,
-  linkTimeoutMs: 5000,
+  linkTimeoutMs: 5000, imageGroupWindowMs: 30_000,
   ...overrides,
 })
 const service = (overrides: Partial<DshImService> = {}): DshImService => ({
@@ -189,6 +189,43 @@ describe('the dsh-im-backed Feishu Source', () => {
     await running
     expect(release).toBe(1)
     expect(described).toBe(1)
+  })
+
+  it('joins consecutive standalone images to one Thread while keeping each reply route', async () => {
+    let accept: ((event: DshImEvent, context: { signal: AbortSignal }) => Promise<unknown>) | undefined
+    const received: Trigger[] = []
+    const imService = service({
+      inboundStatus: async () => ({ version: 1, botId: 'bot_1', superagent: true, superagentActive: false }),
+      consumeInbound: async (_botId, options) => { accept = options.onEvent; return () => {} },
+    })
+    setDshIm(imService)
+    const controller = new AbortController()
+    const ctx: FeishuWatchContext = { ready: Promise.resolve(), config: () => config({ imageGroupWindowMs: 30_000 }),
+      configured: () => true, receive: trigger => { received.push(trigger as Trigger) }, report: () => {} }
+    const state = new Map<string, unknown>()
+    const full = { ...ctx,
+      state: { get: (name: string) => state.get(name), set: (name: string, value: unknown) => { state.set(name, value) }, keys: () => [] },
+      tickets: { stopOnThread: async () => undefined }, notify: () => {},
+    } as unknown as SourceContext
+    const running = watchFeishuIm(ctx, () => imService, controller.signal, full)
+    for (let attempt = 0; attempt < 20 && !accept; attempt += 1) await new Promise(resolve => setTimeout(resolve, 0))
+    const image = (messageId: string, at: string) => event({ messageId, at, messageType: 'image', text: `[图片] img_${messageId}`,
+      images: [`img_${messageId}`], reply: { messageId, conversationId: 'oc_team', actorId: 'ou_alice' } })
+    await accept!(image('om_a', '2026-11-25T10:00:00.000Z'), { signal: new AbortController().signal })
+    await accept!(image('om_b', '2026-11-25T10:00:02.000Z'), { signal: new AbortController().signal })
+    await accept!(image('om_c', '2026-11-25T10:00:04.000Z'), { signal: new AbortController().signal })
+    expect(received.map(trigger => trigger.threads[0]?.id)).toEqual([
+      'oc_team:om_a', 'oc_team:om_a', 'oc_team:om_a',
+    ])
+    // A later text message from the same sender ends the run, so the next image starts a new Thread.
+    await accept!(event({ messageId: 'om_text', messageType: 'text', text: 'done', at: '2026-11-25T10:00:05.000Z',
+      reply: { messageId: 'om_text', conversationId: 'oc_team', actorId: 'ou_alice' } }), { signal: new AbortController().signal })
+    await accept!(image('om_d', '2026-11-25T10:00:06.000Z'), { signal: new AbortController().signal })
+    expect(received.at(-1)?.threads[0]?.id).toBe('oc_team:om_d')
+    // The reply route never borrowed the group root, so dsh-im's anchor check still resolves each message.
+    for (const trigger of received) expect(trigger.channel?.address).not.toHaveProperty('rootId')
+    controller.abort()
+    await running
   })
 
   it('keeps a message whose handling failed in the Source\'s health until the next message is handled', async () => {
@@ -363,6 +400,21 @@ describe('dsh-im Feishu recovery and identity', () => {
     // Both the chats the bot joined and dsh-im's delivery targets name chats for the picker.
     expect(state.get(KV.sources.labels('feishu'))).toEqual({ oc_team: 'Team', oc_other: 'Other' })
     expect(typeof state.get(KV.feishu.history('oc_team'))).toBe('string')
+  })
+
+  it('recovers consecutive images into the same Thread without forging a reply route', async () => {
+    const state = new Map<string, unknown>()
+    state.set(KV.feishu.history('oc_team'), '2026-11-25T09:00:00.000Z')
+    const image = (messageId: string, at: string) => event({ messageId, at, messageType: 'image', text: `[图片] img_${messageId}`,
+      images: [`img_${messageId}`], reply: { messageId, conversationId: 'oc_team', actorId: 'ou_alice' } })
+    const im = service({ chatHistoryChecked: async () => chatPage([
+      image('om_a', '2026-11-25T10:00:00.000Z'), image('om_b', '2026-11-25T10:00:02.000Z'),
+    ]) })
+    const { received, deps, controller } = backfillDeps(im, state)
+    await backfillChat(deps as never, 'oc_team', false, 50, [])
+    controller.abort()
+    expect(received.map(trigger => trigger.threads?.[0]?.id)).toEqual(['oc_team:om_a', 'oc_team:om_a'])
+    for (const trigger of received) expect(trigger.channel?.address).not.toHaveProperty('rootId')
   })
 
   it('stops retrying the chat list once Feishu denies its scope', async () => {

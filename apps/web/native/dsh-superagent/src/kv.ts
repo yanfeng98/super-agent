@@ -43,6 +43,8 @@ export const KV = {
      * has been read.
      */
     imTopics: family<Record<string, { at: string; rootId: string; readThrough?: string }>, [chat: string]>('feishu-im-topics:'),
+    /** Open runs of consecutive standalone images, keyed by sender, per chat. */
+    imageGroups: family<Record<string, { senderId: string; rootId: string; lastAt: string }>, [chat: string]>('feishu-image-groups:'),
     /** Per-polled-thread topic lookup: the Thread activity it was looked up at, and the topic when Feishu reports one. */
     topic: family<{ at: string; threadId?: string }, [thread: string]>('thread-topic:') },
 }
