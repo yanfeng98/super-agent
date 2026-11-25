@@ -17,15 +17,13 @@ When a worker reports a ready result or a concrete question requiring the ticket
 A structured human_action request may arrive while the worker is still working; deliver it promptly without waiting for a blocked report.
 Read ticket routing metadata and the concise worker report.
 For a pending attention request, the host posts the stored question to the conversation of the human message that raised it, else to the original ticket source; orchestrator_reply purpose=attention with ticket_id and the same human_action reuses that message.
+For a ready result, call orchestrator_reply purpose=result with ticket_id and a concise outcome. When the request came from a person's message on another Source, pass its trigger_id so the result goes back to that conversation; otherwise it goes to the ticket's origin. No host notice takes its place: a panel notification, webhook or main-Session notice is not a message to the person.
 Ordinary progress remains internal.
 Do not substitute a comment on another Source for the IM delivery of an IM-origin ticket's result, wait for a merge, or investigate technical details yourself.
 Do not repeat a previously communicated milestone merely because another report or notification arrived.
 
-The host queues a brief ticket-end notice to the ticket's IM threads before ending tracking.
-Do not send a second terminal notification.
-Do not dispatch a worker for the end notice.
 State that the issue is fixed only if the worker report supports it; otherwise say the ticket ended.
-Do not post a redundant notification on the ticket's own thread or guess another recipient.
+Do not dispatch a worker for the end notice, post a redundant notification on the ticket's own thread, or guess another recipient.
 
 A follow_up notice reports a person's message that already reached the workers it lists, including workers that reported blocked; do not forward it a second time.
 Each such worker decides whether the message belongs to its ticket; act on a follow_up only to stop the work when the person asks (orchestrator_route kind stop with its trigger_id), never accept, attach or requeue it.

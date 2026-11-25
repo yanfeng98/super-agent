@@ -403,6 +403,12 @@ it('keeps the routing rules in dispatch, which says the main Session may accept 
   expect(route).not.toMatch(/needs a new ticket on another explicit instruction/)
 })
 
+it('sends a ready result to the originating conversation itself, without a host terminal notice to rely on', () => {
+  const dispatch = surfaces.find(surface => surface.where === 'orchestrator prompt runtime/dispatch')!.text
+  expect(dispatch).toContain('orchestrator_reply purpose=result')
+  expect(dispatch).not.toMatch(/host queues a brief ticket-end notice|Do not send a second terminal notification/)
+})
+
 it('lists in the main Session\'s Policy section exactly the enabled rules, as the drive\'s save left them', () => {
   const text = host.sections.get(host.runtime.masterId)!({}), at = text.indexOf('## Policy')
   const listed = text.slice(at, text.indexOf('\n\n', at)).split('\n').filter(line => line.startsWith('- '))

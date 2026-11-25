@@ -485,9 +485,9 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
     }),
     tool({
       name: 'orchestrator_reply',
-      description: `Send an answer to a human question, a ready result, or attention requiring human action, as the replies section says; the gate refuses anything else, such as progress. purpose=result needs a ticket in person/review after a ready report, a completed or merged one, or a dropped one whose matched rule asks for a closing message. IM limit: ${IM_WORDS} words.`,
+      description: `Send an answer to a human question, a ready result, or attention requiring human action, as the replies section says; the gate refuses anything else, such as progress. purpose=result needs a ticket in person/review after a ready report, a completed or merged one, or a dropped one whose matched rule asks for a closing message. A trigger_id on a result sends it to that person's conversation instead of the ticket's origin. IM limit: ${IM_WORDS} words.`,
       schema: z.object({
-        trigger_id: z.string().optional().describe('The original human question, for an answer only.'),
+        trigger_id: z.string().optional().describe('The original human message: an answer needs it, and a result may name where to deliver.'),
         ticket_id: z.string().optional(),
         purpose: z.enum(['answer', 'result', 'attention']),
         human_action: z.string().trim().min(1).optional().describe('Required for attention: the ticket\'s current attention question.'),

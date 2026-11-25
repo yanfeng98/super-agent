@@ -305,6 +305,15 @@ it('returns where a reply stands: sent, or dropped when its conversation can no 
   expect(await reply('修好了，请看 PR。')).toEqual({ status: 'dropped' })
 })
 
+it('delivers a ready result to the human trigger named on the reply', async () => {
+  const { ticket, sessionId, trigger } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  await h.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'Done.' })
+  h.replies.length = 0
+  expect(await h.runTool(h.runtime.masterId, 'orchestrator_reply',
+    { ticket_id: ticket.id, trigger_id: trigger.id, purpose: 'result', text: '修好了。' })).toEqual({ status: 'sent' })
+  expect(h.replies.at(-1)).toMatchObject({ text: '修好了。', botId: BOT_ID })
+})
+
 it('checks an acknowledgement against the IM word limit, not a character count', async () => {
   const trigger = feishu('1', '@bot 修一下回归')
   h.runtime.receive(trigger); await h.runtime.idle()
