@@ -28,6 +28,7 @@ it('shows the Ticket a Decision started with its result and push, or that it sta
   server.decisions = [
     decisionRow({ ticketId: 't0', ticketTitle: '旧工单', ticket: { id: 't0', number: 8, title: '旧工单', state: 'ended',
       stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'dropped' },
+      mergeRequested: false, settlement: 'settled',
       merged: { at: '2026-09-21T00:01:00Z', target: 'main', head: 'abc12345', push: { ok: false, error: 'no upstream' } } } }),
     decisionRow({ id: 'd2', kind: 'ignore', outcome: 'ignore', ticketId: undefined }),
   ]

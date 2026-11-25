@@ -22,7 +22,12 @@ it('marks each Ticket stage by whom it waits for, and an ended Ticket by its out
   expect(open.every(mark => Boolean(mark.title))).toBe(true)
   const ended = (['completed', 'merged', 'closed', 'dropped', 'stopped'] as const).map(outcome => ticketMark(t, { stage: 'ended',
     ended: { at: '', by: outcome === 'stopped' ? 'human' : 'executor', outcome } }))
-  expect(ended.map(mark => mark.label)).toEqual(['已完成待合并', '已合并', '已关闭', '无需处理', '已放弃'])
+  expect(ended.map(mark => mark.label)).toEqual(['已完成无需合并', '已合并', '已关闭', '无需处理', '已放弃'])
+  // A merge request is what makes a completed Ticket wait to land; a standing request or a queued entry both count.
+  const awaiting = ticketMark(t, { stage: 'ended', mergeRequested: true,
+    ended: { at: '', by: 'executor', outcome: 'completed' } })
+  expect(awaiting.label).toBe('已完成待合并')
+  expect(awaiting.title).toContain('有人要求合并')
   expect(ended.map(({ tone, dot, icon }) => `${tone} ${dot} ${icon}`)).toEqual(['success done decision', 'success done pull',
     'neutral idle stop', 'neutral idle stop', 'neutral idle dismiss'])
   expect(ended.map(mark => mark.title)).toEqual([

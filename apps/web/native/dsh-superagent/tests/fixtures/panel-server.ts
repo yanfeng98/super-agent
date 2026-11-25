@@ -34,6 +34,7 @@ export function actor(source: string, id: string, human = true): Actor {
 type TicketFields = Omit<TicketRow, 'stage' | 'action'>
 const TICKET = {
   id: 't1', title: '修复回归', tags: [] as string[], state: 'open', actions: { retry: false, stop: true }, strength: 'explicit', ended: undefined,
+  mergeRequested: false, settlement: 'unfinished',
   attention: undefined, assignments: 1, inputs: 2, undelivered: 0, deliveryError: undefined, sessionId: 'worker-t1', directory: '/w/t1',
   summary: 'working on it', createdAt: '2026-09-22T00:00:00Z', updatedAt: '2026-09-23T00:00:00Z',
   threads: [{ key: 'feishu:oc_1:om_root', source: 'feishu', title: '这个文案好奇怪',
@@ -44,7 +45,8 @@ export const ticketSummary = (fields: Partial<TicketFields> = {}, stage: TicketS
 export const threadSummary = (fields: Partial<ThreadRow> = {}): ThreadRow => ({
   key: 'feishu:oc_1:om_root', source: 'feishu', title: '这个文案好奇怪', stage: 'subscribed', latest: undefined, lastAt: '2026-09-23T00:00:00Z',
   createdAt: '2026-09-22T00:00:00Z', subscriptions: 1,
-  tickets: [{ id: 't1', number: 1, title: '修复回归', state: 'open', stage: 'working', ended: undefined }], evaluating: undefined,
+  tickets: [{ id: 't1', number: 1, title: '修复回归', state: 'open', stage: 'working', ended: undefined,
+    mergeRequested: false, settlement: 'unfinished' }], evaluating: undefined,
   pending: 0, pollError: undefined, url: undefined, facts: { chat: { value: '团队群' } }, settlement: 'settled', unfinished: false, ...fields,
 })
 type TriggerFields = Partial<Omit<TriggerRow, 'disposition' | 'actions'>> & { disposition?: Partial<TriggerRow['disposition']> }
@@ -87,7 +89,7 @@ export interface PanelServer {
   joinError?: string
   settings: Settings; revisions: Record<string, number>
   prompts: PromptsView
-  tickets: { open: TicketRow[]; ended: TicketRow[] }; ticketDetails: Record<string, TicketPageView>
+  tickets: { open: TicketRow[]; ended: TicketRow[]; settled: TicketRow[] }; ticketDetails: Record<string, TicketPageView>
   threads: ThreadRow[]
   threadPages: (key: string, query: { before?: string; around?: string }) => ThreadPageView | undefined
   decisions: DecisionRow[]
@@ -261,7 +263,7 @@ function initial(): PanelServer {
       skillPrefix: SKILL_PREFIX, revision: 0, current: { ...defaults, config: defaultPrompts() },
       defaults: defaultPrompts(), parts: Object.entries(builtInParts()).map(([key, part]) => ({ key, ...part, base: builtInBase(part.text) })),
       defaultChanged: [], revisions: [{ ...defaults, changed: [] }], sessions: [], notificationPending: false, next_offset: null },
-    tickets: { open: [ticketSummary()], ended: [ended] }, ticketDetails: { t1: ticketDetail() },
+    tickets: { open: [ticketSummary()], ended: [ended], settled: [] }, ticketDetails: { t1: ticketDetail() },
     threads: [threadSummary()], threadPages: threadPage, decisions: [decisionRow()],
     person: [ticketSummary({ attention: { id: 'q1', question: '需要确认按钮颜色' }, note: { text: '需要确认按钮颜色', error: false }, reply },
       { stage: 'person', action: 'answer' }),
@@ -348,9 +350,9 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
     ({ items: query.kind === 'ignore' ? [] : server.decisions, next_offset: null }) },
   'POST decisions/:id/dismiss': { answer: ({ params }) => params.id === 'u1' ? { dismissed: true } : refuse(404,
     'Unavailable Eval not found') },
-  'GET tickets': { query: ['state', 'offset', 'limit', 'tag'], answer: ({ query }) => page(server.tickets[query.state === 'ended' ? 'ended'
-    : 'open'].filter(ticket => !query.tag || ticket.tags.includes(query.tag))) },
-  'GET tags': { answer: () => ({ tags: [...new Set([...server.tickets.open, ...server.tickets.ended, ...server.person]
+  'GET tickets': { query: ['state', 'offset', 'limit', 'tag'], answer: ({ query }) => page(server.tickets[query.state === 'ended'
+    || query.state === 'settled' ? query.state : 'open'].filter(ticket => !query.tag || ticket.tags.includes(query.tag))) },
+  'GET tags': { answer: () => ({ tags: [...new Set([...server.tickets.open, ...server.tickets.ended, ...server.tickets.settled, ...server.person]
     .flatMap(ticket => ticket.tags))].sort() }) },
   'GET tickets/:id': { answer: ({ params }) => server.ticketDetails[params.id] ?? refuse(404, 'Ticket not found') },
   'POST tickets/:id/retry': { answer: ({ params }) => {

@@ -120,14 +120,19 @@ function ticketNote(ticket: Ticket, stage: TicketStage): { text: string; error: 
   if ((stage.action !== 'blocked' && stage.action !== 'failed') || !summary) return undefined
   return { text: preview(summary.split('\n')[0]!), error: stage.action === 'failed' }
 }
-export function ticketSummary(ticket: Ticket, number?: number) {
+/** Whether a person asked for this Ticket's branch to land, by standing request or by joining the merge queue. */
+export const mergeRequested = (ticket: Pick<Ticket, 'id' | 'autoMerge'>, queued: (ticketId: string) => boolean): boolean =>
+  !!ticket.autoMerge || queued(ticket.id)
+export function ticketSummary(ticket: Ticket, number?: number, queued: (ticketId: string) => boolean = () => false) {
   const stage = ticketStage(ticket)
   const note = ticketNote(ticket, stage)
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
   const cleanup = !!ticket.merged && !ticket.discarded && !ticket.cleaned && !!ticket.execution?.directory
   // A revert newer than the merge undoes it, so the row shows the ticket as it stands rather than the merged state.
   const merged = ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at) ? ticket.merged : undefined
+  const asked = mergeRequested(ticket, queued)
   return { id: ticket.id, title: ticket.title, ...number ? { number } : {}, tags: [] as string[], state, ...stage, ...note ? { note } : {},
+    mergeRequested: asked, settlement: ticketSettlement(ticket, asked),
     // Where a merge landed belongs on the row and its hover detail, not only on the Ticket page. Records from older
     // deployments may lack a target or branch, so the row states only the merge facts it has.
     ...merged ? { merged: { at: merged.at, ...merged.target ? { target: merged.target } : {},
@@ -152,12 +157,14 @@ export type TicketSummaryView = ReturnType<typeof ticketSummary>
  * @param ticket - Ticket the conversation created or a Decision accepted.
  * @returns the row facts, including no worktree checkout fact the caller already knows.
  */
-export function ticketFacts(view: Pick<Snapshot, 'number'>, ticket: Ticket) {
+export function ticketFacts(view: Pick<Snapshot, 'number' | 'store'>, ticket: Ticket) {
   const stage = ticketStage(ticket)
   // A revert newer than the merge undoes it, so the row shows the Ticket as it stands.
   const merged = ticket.merged && !(ticket.reverted && ticket.reverted.at > ticket.merged.at) ? ticket.merged : undefined
+  const asked = mergeRequested(ticket, id => mergePosition(view.store, id) !== undefined)
   return { id: ticket.id, number: view.number(ticket.id), title: ticket.title,
     state: liveTicket(ticket) ? 'open' as const : 'ended' as const, ...stage, ended: ticket.ended,
+    mergeRequested: asked, settlement: ticketSettlement(ticket, asked),
     ...merged ? { merged: { at: merged.at, ...merged.target ? { target: merged.target } : {},
       ...merged.head ? { head: merged.head } : {},
       ...merged.push ? { push: { ok: merged.push.ok, ...merged.push.error ? { error: merged.push.error } : {} } } : {} } } : {} }
@@ -172,7 +179,7 @@ export function threadFacts(store: Store, thread: Thread) {
 }
 export type ThreadFactsView = ReturnType<typeof threadFacts>
 export const ticketLine = (view: Snapshot, ticket: Ticket) => ({
-  ...ticketSummary(ticket, view.number(ticket.id)),
+  ...ticketSummary(ticket, view.number(ticket.id), id => mergePosition(view.store, id) !== undefined),
   // Tags are labels a person put on the request; they grant nothing and are not sent back to the worker.
   tags: (() => {
     if (ticket.tags) return ticket.tags

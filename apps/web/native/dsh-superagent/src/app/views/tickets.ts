@@ -3,8 +3,8 @@ import { liveTicket, noteOutdated, threadKey, ticketStage, type AcceptMode, type
   type Ticket, type TicketStage } from '../../core/index.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
 import type { Store } from '../store.ts'
-import { channelLink, decisionView, needsReview, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
-  type ViewHost } from './records.ts'
+import { channelLink, decisionView, needsReview, newestFirst, page, snapshot, threadSummary, ticketLine, ticketSettlement,
+  type Snapshot, type ViewHost } from './records.ts'
 import { mergePosition } from '../merge-queue.ts'
 import { settingsPolicy } from '../../policy.ts'
 import { markdown, plain, preview, readable } from './text.ts'
@@ -45,13 +45,20 @@ export function ticketTags(store: Pick<Store, 'tickets' | 'triggers'>): string[]
   for (const ticket of store.tickets.list()) for (const tag of tagsOf(store, ticket)) all.add(tag)
   return [...all].sort((a, b) => a.localeCompare(b))
 }
-export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'] | 'review', offset: number, limit: number, tag?: string) {
+export type TicketListStage = 'open' | TicketStage['stage'] | 'review' | 'settled'
+export function ticketList(host: ViewHost, stage: TicketListStage, offset: number, limit: number, tag?: string) {
   const view = snapshot(host)
   const { store } = view
+  const pending = (id: string) => mergePosition(store, id) !== undefined
+  const ended = (ticket: Ticket) => ticketStage(ticket).stage === 'ended'
   const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket)
-    : stage === 'review' ? needsReview(ticket, mergePosition(store, ticket.id) !== undefined)
-      : ticketStage(ticket).stage === stage
-  const tickets = (stage === 'ended' || stage === 'review' ? store.tickets.list() : store.tickets.open()).filter(shown)
+    : stage === 'review' ? needsReview(ticket, pending(ticket.id))
+      // Ended work splits by settlement: work still needing a merge or push stays in Ended, the rest in Settled.
+      : stage === 'ended' ? ended(ticket) && ticketSettlement(ticket, pending(ticket.id)) === 'unfinished'
+        : stage === 'settled' ? ended(ticket) && ticketSettlement(ticket, pending(ticket.id)) === 'settled'
+          : ticketStage(ticket).stage === stage
+  const endedList = stage === 'ended' || stage === 'settled' || stage === 'review'
+  const tickets = (endedList ? store.tickets.list() : store.tickets.open()).filter(shown)
     .filter(ticket => !tag || tagsOf(store, ticket).includes(tag)).sort(newestFirst)
   const result = page(tickets, offset, limit)
   return { ...result, items: result.items.map(ticket => ticketRow(view, ticket)) }

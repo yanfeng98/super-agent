@@ -160,7 +160,8 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
     || replied.has(ticket.id) || tags(ticket).some(tag => tag.toLowerCase().includes(lower))
   const matched = store.tickets.list().filter(ticket => state(ticket) && tagged(ticket) && authored(ticket) && dated(ticket) && text(ticket))
     .sort(newestFirst)
-  const tickets = matched.slice(offset, offset + 50).map(ticket => ticketSummary(ticket, view.number(ticket.id)))
+  const tickets = matched.slice(offset, offset + 50).map(ticket => ticketSummary(ticket, view.number(ticket.id),
+    id => mergePosition(store, id) !== undefined))
   // Omit automated triggers from threads already included in `threads`.
   const shownThreads = new Set(threads.map(thread => thread.key))
   const item = (trigger: Trigger) => {

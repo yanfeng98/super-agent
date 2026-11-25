@@ -194,6 +194,8 @@ export function ExecutionStatus({ filter: current, state, reload }: {
     </div>
     {current === 'idle' && <Hint>{t('idleHint')}</Hint>}
     {current === 'review' && <Hint>{t('reviewFilterHint')}</Hint>}
+    {current === 'ended' && <Hint>{t('endedFilterHint')}</Hint>}
+    {current === 'settled' && <Hint>{t('settledFilterHint')}</Hint>}
     <LoadState error={error} loading={!data} />
     {data && <>
       {chosen.length > 0 && <div className="dt-row-meta dt-status-line">

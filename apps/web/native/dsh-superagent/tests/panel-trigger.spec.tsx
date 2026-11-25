@@ -31,6 +31,7 @@ it('reads the Ticket a Thread started with its result, merge and push, or that i
   server.threads = [
     { ...threadSummary(), key: 'feishu:oc_1:merged', title: '合并过的对话', tickets: [{ id: 't0', number: 7, title: '旧工单', state: 'ended',
       stage: 'ended', ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'dropped' },
+      mergeRequested: false, settlement: 'settled',
       merged: { at: '2026-09-21T00:01:00Z', target: 'main', head: 'abc12345', push: { ok: true } } }] },
     { ...threadSummary(), key: 'feishu:oc_1:chat', title: '普通对话', tickets: [] },
   ]
@@ -160,18 +161,19 @@ it('groups unfinished work, settled work and ordinary conversations into separat
   server.threads = [
     { ...threadSummary(), key: 'feishu:oc_1:merged', title: '已合并的对话', lastAt: '2026-09-24T00:00:00Z', settlement: 'settled', unfinished: false,
       tickets: [{ id: 't0', number: 8, title: '已合并工单', state: 'ended', stage: 'ended',
-        ended: { at: '2026-09-23T00:00:00Z', by: 'executor', outcome: 'completed' },
+        ended: { at: '2026-09-23T00:00:00Z', by: 'executor', outcome: 'completed' }, mergeRequested: false, settlement: 'settled',
         merged: { at: '2026-09-23T00:01:00Z', target: 'main', head: 'abc12345', push: { ok: true } } }] },
     { ...threadSummary(), key: 'feishu:oc_1:ordinary', title: '普通对话', lastAt: '2026-09-25T00:00:00Z', settlement: undefined, unfinished: false,
       tickets: [] },
     { ...threadSummary(), key: 'feishu:oc_1:open', title: '未合并的对话', lastAt: '2026-09-22T00:00:00Z', settlement: 'unfinished', unfinished: true,
-      tickets: [{ id: 't1', number: 9, title: '未合并工单', state: 'open', stage: 'working', ended: undefined }] },
+      tickets: [{ id: 't1', number: 9, title: '未合并工单', state: 'open', stage: 'working', ended: undefined,
+        mergeRequested: false, settlement: 'unfinished' }] },
     { ...threadSummary(), key: 'feishu:oc_1:completed', title: '已完成无需合并的对话', lastAt: '2026-09-21T00:00:00Z', settlement: 'settled', unfinished: false,
       tickets: [{ id: 't2', number: 10, title: '调查工单', state: 'ended', stage: 'ended',
-        ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'completed' } }] },
+        ended: { at: '2026-09-21T00:00:00Z', by: 'executor', outcome: 'completed' }, mergeRequested: false, settlement: 'settled' }] },
     { ...threadSummary(), key: 'feishu:oc_1:abandoned', title: '已放弃的对话', lastAt: '2026-09-20T00:00:00Z', settlement: 'settled', unfinished: false,
       tickets: [{ id: 't3', number: 11, title: '放弃的工单', state: 'ended', stage: 'ended',
-        ended: { at: '2026-09-20T00:00:00Z', by: 'human', outcome: 'stopped' } }] },
+        ended: { at: '2026-09-20T00:00:00Z', by: 'human', outcome: 'stopped' }, mergeRequested: false, settlement: 'settled' }] },
   ]
   await mount()
   await click(zh['tab.trigger'])

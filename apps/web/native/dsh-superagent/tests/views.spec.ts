@@ -614,6 +614,25 @@ it('settles a Ticket that needs no merge, and leaves one that still has to land 
   expect(ticketSettlement({ ended: { at, by: 'executor', outcome: 'completed' } }, true)).toBe('unfinished')
 })
 
+it('splits ended Tickets into still-unmerged and settled lists, and names the merge request on each row', () => {
+  const host = views()
+  const ended = (id: string, patch: Record<string, unknown>) => {
+    live(id)
+    store.tickets.save({ ...store.tickets.get(id)!, ended: { at, by: 'executor', outcome: 'completed' }, ...patch } as never)
+  }
+  // An investigation nobody asked to merge is settled; a standing request still waits to land.
+  ended('investigation', {})
+  ended('awaiting', { autoMerge: { at, strategy: 'ff', attempts: 0 } })
+  ended('queued', {})
+  enqueueMerges(store, [{ ticketId: 'queued', strategy: 'ff', at }])
+  const pending = ticketList(host, 'ended', 0, 20)
+  const settled = ticketList(host, 'settled', 0, 20)
+  expect(pending.items.map(item => item.id).sort()).toEqual(['awaiting', 'queued'])
+  expect(settled.items.map(item => item.id)).toEqual(['investigation'])
+  expect(pending.items.every(item => item.mergeRequested && item.settlement === 'unfinished')).toBe(true)
+  expect(settled.items[0]).toMatchObject({ mergeRequested: false, settlement: 'settled' })
+})
+
 it('marks a Thread unfinished, settled, or neither by its subscribed Tickets', () => {
   const host = views()
   live('t1')

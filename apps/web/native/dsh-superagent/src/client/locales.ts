@@ -489,6 +489,7 @@ const TEXT = {
   // Ended tickets use one namespace so a row reads as one terminal state, with merge and push results shown beside it.
   'outcome.completed': ['已完成', 'Completed'],
   'outcome.completedUnmerged': ['已完成待合并', 'Completed, awaiting merge'],
+  'outcome.completedSettled': ['已完成无需合并', 'Completed, no merge needed'],
   'outcome.merged': ['已合并', 'Merged'],
   'outcome.closed': ['已关闭', 'Closed'],
   'outcome.dropped': ['无需处理', 'Nothing to do'],
@@ -506,6 +507,8 @@ const TEXT = {
   'markStage.deliveryHint': ['发给执行器的输入还没送达。', 'An input to the Executor has not been delivered.'],
   markCompletedHint: ['工作做完、没人要求合并；若要落到仓库，请在工单页合并它的分支。',
     'Work is done and no merge was requested; merge its branch from the Ticket page if it should land.'],
+  markCompletedMergeHint: ['有人要求合并，分支还没进入目标分支。',
+    'A merge was requested; the branch has not landed on the target branch yet.'],
   markCompletedTimeHint: ['{time} 完成。', 'Completed {time}.'],
   markMergedHint: ['工作做完，分支已经进入目标分支。', 'Work is done and the branch has landed on the target branch.'],
   markAbandonedMeaningHint: ['由人放弃，不再继续。', 'Abandoned by a person; no further work is planned.'],
@@ -660,6 +663,11 @@ const TEXT = {
   mergeQueuePause: ['暂停队列', 'Pause the queue'],
   mergeQueueResume: ['继续队列', 'Resume the queue'],
   'ticketFilter.ended': ['已结束', 'Ended'],
+  endedFilterHint: ['工单已结束，但分支还要合并或推送：有人请求合并却未落地、合并被回退、推送失败，或关闭后仍待处理。',
+    'Tickets that ended but still need a merge or push: a merge was requested but has not landed, was reverted, its push failed, or a closed Ticket still needs a decision.'],
+  'ticketFilter.settled': ['无需合并 / 已收尾', 'Settled / no merge needed'],
+  settledFilterHint: ['工作已收尾、无需再合并或推送：完成但没人要求合并、已放弃、已丢弃，或已合并且推送成功。',
+    'Work is settled with no merge or push outstanding: completed without a merge request, abandoned, discarded, or merged with its push succeeding.'],
   // Settings, drafts, and configuration history
   policyVersionUnrecorded: ['最近的保存记录里没有策略版本 {version}：它来自更早的保存、首次启动时的设置或更早的数据。', 'The recent saves do not include Policy version {version}: an older save, the settings at the first start, or older data made it.'],
   defaultModel: ['DSH 当前默认：{model}', 'DSH default: {model}'],

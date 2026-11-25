@@ -557,7 +557,7 @@ it('words an ended Ticket by its outcome, on its row and its page, with a person
 it('marks a merge ahead of the completed outcome, and explains the worktree a cleanup removed', async () => {
   const endedAt = '2026-09-21T00:00:00Z'
   const completed = { id: 't7', title: '清理的工单', state: 'ended' as const, actions: { retry: false, stop: false },
-    ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const } }
+    ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const }, mergeRequested: true }
   server.tickets.ended = [ticketSummary({ ...completed, merged: { at: endedAt, target: 'main', branch: 'agent/t7' } },
     { stage: 'ended' }), ticketSummary(
     { ...completed, id: 't8', title: '完成的工单' }, { stage: 'ended' }), ...server.tickets.ended]
@@ -586,7 +586,7 @@ it('marks a merge ahead of the completed outcome, and explains the worktree a cl
 it('explains an unreadable worktree in the Changes section instead of showing the git error', async () => {
   const endedAt = '2026-09-21T00:00:00Z'
   const fields = { id: 't9', title: '无工作区的工单', state: 'ended' as const, actions: { retry: false, stop: false },
-    ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const } }
+    ended: { at: endedAt, by: 'executor' as const, outcome: 'completed' as const }, mergeRequested: true }
   server.ticketDetails.t9 = { ...server.ticketDetails.t1!, ...fields, stage: 'ended',
     actions: { ...fields.actions, reopen: false, approve: false, merge: false, discard: false, rebase: false, cleanup: false,
       check: false, reviewDecision: false, revert: false, push: false, dequeue: false },
@@ -674,4 +674,24 @@ it('replies to a local ticket from its page', async () => {
   await click(zh.localReplySend)
   expect(server.requests.find(request => request.path === 'local/followups')).toMatchObject({ method: 'POST',
     body: { thread: 'local:req1', text: '按这个方案做' } })
+})
+
+it('separates ended Tickets that still need a merge from settled ones with no merge request', async () => {
+  const endedAt = '2026-11-25T04:00:00Z'
+  const row = (id: string, title: string, patch: Record<string, unknown> = {}) => ticketSummary({ id, title, state: 'ended',
+    ended: { at: endedAt, by: 'executor', outcome: 'completed' }, ...patch }, { stage: 'ended' })
+  server.tickets.ended = [row('t1', '等待合并的工单', { mergeRequested: true, settlement: 'unfinished' })]
+  server.tickets.settled = [row('t2', '调查工单'), row('t3', '临时清理工单')]
+  await mount()
+  await click(zh['tab.execution'])
+  await click(zh['ticketFilter.ended'])
+  expect(all('.dt-ticket').some(item => item.textContent?.includes('等待合并的工单'))).toBe(true)
+  expect(all('.dt-ticket-stage').map(item => item.textContent)).toEqual([zh['outcome.completedUnmerged']])
+  expect(text()).toContain(zh.endedFilterHint)
+  await click(zh['ticketFilter.settled'])
+  expect(server.requests.some(request => request.path.startsWith('tickets?state=settled'))).toBe(true)
+  expect(all('.dt-ticket').some(item => item.textContent?.includes('调查工单'))).toBe(true)
+  expect(all('.dt-ticket-stage').map(item => item.textContent)).toEqual([zh['outcome.completedSettled'], zh['outcome.completedSettled']])
+  expect(text()).toContain(zh.settledFilterHint)
+  expect(text()).not.toContain(zh['outcome.completedUnmerged'])
 })

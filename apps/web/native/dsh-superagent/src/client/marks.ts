@@ -3,7 +3,7 @@
  *
  * A Ticket has one primary mark from exactly one of three families: a run state (`stage.queued`/`stage.working`/
  * `stage.idle`), a person wait (`stage.approval`/`answer`/`review`/`blocked`/`failed`/`delivery`), or a terminal outcome
- * (`outcome.merged`/`completedUnmerged`/`closed`/`stopped`/`dropped`). `ticketMark` picks exactly one, so the families
+ * (`outcome.merged`/`completedUnmerged`/`completedSettled`/`closed`/`stopped`/`dropped`). `ticketMark` picks exactly one, so the families
  * never overlap. Merge and push are separate axes: the merge landing is in the primary mark's hover detail, and the push
  * result is an independent `pushMark` tag shown beside it on every Ticket row, with the same wording on Trigger rows.
  */
@@ -22,7 +22,7 @@ function hint(...lines: (string | undefined)[]): string {
 
 /** What a Ticket mark reads: its stage, its ending, and where a recorded merge landed. */
 export type TicketMarkInput = TicketStage & Pick<TicketSummary, 'ended'>
-  & { merged?: { at: string; target?: string; branch?: string; head?: string; push?: { ok: boolean; error?: string } } }
+  & { mergeRequested?: boolean; merged?: { at: string; target?: string; branch?: string; head?: string; push?: { ok: boolean; error?: string } } }
 
 export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
   switch (ticket.stage) {
@@ -38,9 +38,13 @@ export function ticketMark(t: T, ticket: TicketMarkInput): Mark {
         return { label: t('outcome.merged'), tone: 'success', dot: 'done', icon: 'pull',
           title: hint(t('markMergedHint'), where, ticket.ended?.reason ? ended : undefined) }
       }
-      if (ticket.ended?.outcome === 'completed') return { label: t('outcome.completedUnmerged'), tone: 'success', dot: 'done',
-        icon: 'decision', title: hint(t('markCompletedHint'), ticket.ended.at
-          ? t('markCompletedTimeHint', { time: when(ticket.ended.at, t('lang')) }) : undefined) }
+      if (ticket.ended?.outcome === 'completed') return ticket.mergeRequested
+        ? { label: t('outcome.completedUnmerged'), tone: 'success', dot: 'done', icon: 'decision',
+          title: hint(t('markCompletedMergeHint'), ticket.ended.at
+            ? t('markCompletedTimeHint', { time: when(ticket.ended.at, t('lang')) }) : undefined) }
+        : { label: t('outcome.completedSettled'), tone: 'success', dot: 'done', icon: 'decision',
+          title: hint(t('markCompletedHint'), ticket.ended.at
+            ? t('markCompletedTimeHint', { time: when(ticket.ended.at, t('lang')) }) : undefined) }
       // A person's stop ends the work for good; the dismiss icon and the word "abandoned" keep it apart from the
       // ordinary in-progress marks and from completed, merged and reverted work.
       if (ticket.ended?.outcome === 'stopped') return { label: t('outcome.stopped'), tone: 'neutral', dot: 'idle', icon: 'dismiss',
