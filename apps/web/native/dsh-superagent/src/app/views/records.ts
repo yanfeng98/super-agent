@@ -100,7 +100,10 @@ export function triggerView(view: Snapshot, trigger: Trigger, threadDecisions?: 
   const decided = !!disposition?.acked?.length || (!!decision && settled(decision))
   const unjudged = !!disposition?.filtered || decision?.kind === 'unavailable' || delivered || (!!disposition?.fanout.length && !decided)
     || (!!decision && !decided)
-  const requeue = trigger.human && !queued && !evaluating && unjudged
+  // An unanswered assessment on a thread whose work has landed is history: assessing it again would repeat settled work.
+  const staleUnavailable = decision?.kind === 'unavailable' && !!home
+    && threadSettlement(store, home, id => mergePosition(store, id) !== undefined) === 'settled'
+  const requeue = trigger.human && !queued && !evaluating && unjudged && !staleUnavailable && !decision?.dismissed
   return { id: trigger.id, source: trigger.source, actor: view.actor(trigger.actor, trigger.human), human: trigger.human, at: trigger.at,
     text: plain(readable(trigger.text), true),
     preview: preview(trigger.text), url: trigger.url, threads: trigger.threads.map(threadKey), actions: { requeue },

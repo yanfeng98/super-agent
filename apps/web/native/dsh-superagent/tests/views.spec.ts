@@ -147,6 +147,24 @@ it('does not show a follow-up that reached a ticket as waiting for an Eval, thou
   expect(threadSummary(snapshot(host), store.threads.get('feishu:oc_1:om_root')!)).toMatchObject({ stage: 'queued', pending: 1 })
 })
 
+it('does not offer a settled thread\'s old message for Eval again, even when its last assessment was unavailable', () => {
+  const host = views()
+  const ticket = store.tickets.get('t1') ?? (live('t1'), store.tickets.get('t1')!)
+  store.tickets.save({ ...ticket, ended: { at, by: 'executor', outcome: 'completed' } })
+  store.triggers.save(message('s1', { source: 'feishu', id: 'ou_alice' }))
+  store.triggers.saveDisposition('s1', { fanout: ['t1'], at })
+  store.threads.save({ key: 'feishu:oc_1:om_root', ref: { source: 'feishu', id: 'oc_1:om_root' }, createdAt: at, subscriptions: ['t1'],
+    correlated: [], pending: [], meta: {} })
+  const view = snapshot(host)
+  const row = triggerView(view, store.triggers.get('s1')!)
+  expect(row.actions.requeue).toBe(true)
+  // An unavailable Decision on a thread whose work has landed is history, not another assessment to queue.
+  store.decisions.save({ id: 'd-unavailable', evalId: 'e', threadKey: 'feishu:oc_1:om_root', triggerIds: ['s1'], policyVersion: 'v1',
+    at, kind: 'unavailable', reason: [{ code: 'timeout' }], strength: 'explicit' })
+  store.triggers.saveDisposition('s1', { fanout: ['t1'], decisionId: 'd-unavailable', at })
+  expect(triggerView(snapshot(host), store.triggers.get('s1')!).actions.requeue).toBe(false)
+})
+
 const load = { running: 0, queued: 0 }
 const problems = (host: ReturnType<typeof views>, health: Parameters<typeof overview>[1] = {}) =>
   overview(host, health, 'v1', load).problems

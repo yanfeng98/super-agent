@@ -350,6 +350,20 @@ describe('resume and stop', () => {
     expect(ticket.undelivered).toEqual([])
     expect(h.requests.length).toBeGreaterThan(before)
   })
+  it('keeps a ticket with a standing merge request ended, sending its follow-up to Eval instead of waking it', async () => {
+    const h = harness()
+    const ticketId = await ended(h, 'executor')
+    const stored = h.repo.tickets.get(ticketId)!
+    h.repo.tickets.save({ ...stored, autoMerge: { at: '2026-09-23T00:00:00Z', strategy: 'ff', attempts: 0 } })
+    const before = h.requests.length
+    h.engine.receive(trigger('2', { actor: guest }))
+    h.pump()
+    const ticket = h.repo.tickets.get(ticketId)!
+    expect(ticket.ended).toMatchObject({ outcome: 'completed' })
+    expect(ticket.autoMerge).toBeDefined()
+    expect(ticket.inputs.map(input => input.kind)).not.toContain('resumed')
+    expect(h.requests.length).toBeGreaterThan(before)
+  })
   it('resumes an ended ticket at once when a person attaches a message to it', async () => {
     const h = harness()
     const ticketId = await ended(h, 'executor')

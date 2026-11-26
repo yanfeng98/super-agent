@@ -653,7 +653,9 @@ export class Tickets extends EnginePart {
     const ticket = this.repo.tickets.get(ticketId)
     if (!ticket || liveTicket(ticket) || ticket.ended?.by === 'human' || !ticket.undelivered.length) return
     // A merged, discarded or cleaned Ticket cannot take new work under its Mandate; its messages go back to Eval instead.
-    if (ticket.merged || ticket.discarded || ticket.cleaned) { this.refuse(ticket); return }
+    // One with a standing merge request is waiting to land too: resuming it would clear `ended`, which is the precondition
+    // of a merge, so a person's message about that work goes to Eval as its own request rather than reopening the Ticket.
+    if (ticket.merged || ticket.discarded || ticket.cleaned || ticket.autoMerge) { this.refuse(ticket); return }
     const policy = this.policy()
     if (policy.paused) return
     if (!policy.revalidate(ticket.mandate)) { this.refuse(ticket); return }

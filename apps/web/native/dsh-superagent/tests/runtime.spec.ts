@@ -814,6 +814,18 @@ it('retries only a failed, blocked or undelivered ticket with a new assignment, 
   expect(unjudged()).toEqual([])
 })
 
+it('stops listing an unavailable Eval as a problem once the thread\'s work has ended', async () => {
+  const { ticket } = await acceptedTicket()
+  const accepted = runtime.store.read.recentDecisions(0, 1)[0]!
+  runtime.store.decisions.save({ ...accepted, id: 'unavailable-settled', kind: 'unavailable', reason: [{ code: 'timeout' }], at: new Date().toISOString() })
+  const unjudged = () => overviewOf(runtime).problems.filter(problem => problem.kind === 'eval-unavailable')
+  expect(unjudged()).toHaveLength(1)
+  runtime.store.atomic(() => { runtime.engine.report(ticket.id, { state: 'ready', summary: 'done' }) })
+  expect(runtime.store.tickets.get(ticket.id)!.ended).toMatchObject({ outcome: 'completed' })
+  expect(unjudged()).toEqual([])
+  expect(evalsHealth(runtime.store)).toMatchObject({ state: 'ready' })
+})
+
 it('links Channels and Threads for people, finds tickets by a message id on a Thread they follow, and keeps ended subscriptions out of the default Thread filter', async () => {
   const { ticket } = await acceptedTicket(feishu('1', '@_user_1 修一下回归', { mentions: [{ id: 'ou_bot', key: '@_user_1', name: 'dsh-superagent' }] }))
   const home = `feishu:${CHAT}:om_1`

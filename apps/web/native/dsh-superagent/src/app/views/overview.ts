@@ -4,7 +4,8 @@ import type { Health } from '../../sources/host.ts'
 import type { SetupProblem } from '../../setup.ts'
 import { anyoneAllowed } from '../../policy.ts'
 import type { Store } from '../store.ts'
-import { awaitingEval, dayAgo, newestFirst, ownersOf, snapshot, threadSummary, type ViewHost } from './records.ts'
+import { awaitingEval, dayAgo, newestFirst, ownersOf, snapshot, threadSettlement, threadSummary, type ViewHost } from './records.ts'
+import { mergePosition } from '../merge-queue.ts'
 import { sourceHealth, type HealthMap } from './sources.ts'
 import { ticketRow, type ExecutorLoad } from './tickets.ts'
 import { preview } from './text.ts'
@@ -18,6 +19,8 @@ function unjudged(store: Store, since: string): { thread: Thread; decision: Deci
     seen.add(decision.threadKey)
     const thread = store.threads.get(decision.threadKey)
     if (!thread || thread.evaluating || awaitingEval(queue, thread).length || decision.dismissed) return []
+    // A thread whose work has landed needs no assessment: its old unavailable Decision is history, not an open problem.
+    if (threadSettlement(store, thread, id => mergePosition(store, id) !== undefined) === 'settled') return []
     if (store.decisions.byThread(thread.key).at(-1)?.id !== decision.id) return []
     return [{ thread, decision }]
   })
