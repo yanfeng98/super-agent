@@ -337,6 +337,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   renderSlotChain: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain']
 }) {
   const data = node.data
+  const relay = 'origin' in data && typeof data.origin === 'string'
+    ? { origin: data.origin, raw: 'relayRaw' in data && typeof data.relayRaw === 'string' ? data.relayRaw : '' }
+    : undefined
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
     : undefined
@@ -366,28 +369,43 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       })
     }
   return (
-    <UserStyleBubble
-      node={node}
-      renderSlotChain={renderSlotChain}
-      content={data.content}
-      interactive
-      renderFactorySlot={renderFactorySlot}
-      loadImage={loadImage}
-      batchStart={node.kind === 'steering' && node.data.batchStart === true}
-      {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
-      actions={text => (
-        <MessageIconActions
-          text={text}
-          time={data.time}
-          clock="start"
-          className={css.actions}
-          onEdit={editAction === undefined ? undefined : () => { editAction(text) }}
-          editUnavailable={editAction === undefined ? undefined : editUnavailable}
-          t={t}
-        />
+    <>
+      {relay !== undefined && (
+        <div className={css.relayOrigin} data-user-origin={relay.origin}>
+          <span className={css.relayBadge} data-user-origin-badge>
+            {relay.origin === 'feishu' ? t('message.origin.feishu') : relay.origin}
+          </span>
+        </div>
       )}
-    />
+      <UserStyleBubble
+        node={node}
+        renderSlotChain={renderSlotChain}
+        content={data.content}
+        interactive
+        renderFactorySlot={renderFactorySlot}
+        loadImage={loadImage}
+        batchStart={node.kind === 'steering' && node.data.batchStart === true}
+        {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
+        {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
+        actions={text => (
+          <MessageIconActions
+            text={text}
+            time={data.time}
+            clock="start"
+            className={css.actions}
+            onEdit={editAction === undefined ? undefined : () => { editAction(text) }}
+            editUnavailable={editUnavailable}
+            t={t}
+          />
+        )}
+      />
+      {relay !== undefined && (
+        <details className={css.relayDetails} data-user-relay-details>
+          <summary className={css.relaySummary}>{t('message.origin.details')}</summary>
+          <pre className={css.relayRaw}>{relay.raw}</pre>
+        </details>
+      )}
+    </>
   )
 })
 

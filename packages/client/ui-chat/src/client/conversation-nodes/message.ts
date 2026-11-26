@@ -4,6 +4,7 @@ import type {
   SteeringMessageNode, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { isAppendSurfaceEvent, isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { InboxState } from './inbox.ts'
 import type { ProcessEvidenceState } from './turn-process.ts'
 import { chatNode, contextLocation } from './common.ts'
@@ -14,6 +15,10 @@ interface ReferencedUserMessageNode extends UserMessageNode {
   readonly referenceLabels?: readonly string[]
   /** Skill names the same step's `skill-invocation` injections loaded. */
   readonly skillNames?: readonly string[]
+  /** Source system a relay came from, when the producer recorded one. */
+  readonly origin?: string
+  /** Model-facing payload of a relay, kept behind the user row's raw disclosure. */
+  readonly relayRaw?: string
 }
 
 interface ReferencedSteeringMessageNode extends SteeringMessageNode {
@@ -21,6 +26,10 @@ interface ReferencedSteeringMessageNode extends SteeringMessageNode {
   readonly referenceLabels?: readonly string[]
   /** Skill names the same step's `skill-invocation` injections loaded. */
   readonly skillNames?: readonly string[]
+  /** Source system a relay came from, when the producer recorded one. */
+  readonly origin?: string
+  /** Model-facing payload of a relay, kept behind the user row's raw disclosure. */
+  readonly relayRaw?: string
   /**
    * First human message of its `next-step` claim that Chat orders after its Turn's process control;
    * the row keeps the Turn tail slot above it.
@@ -47,6 +56,15 @@ function isCompactionCheckpoint(event: Parameters<ConversationNodeDefinition['ma
   if (event.type !== 'user/message' || !isReplacementSurfaceEvent(event)) return false
   const source = event.data.source as { kind?: unknown }
   return source.kind === 'compact-checkpoint'
+}
+
+/** A human relay whose producer recorded plain display text, for an ordinary user bubble. */
+function relayDisplay(source: unknown): { origin: string; summary: string } | undefined {
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) return undefined
+  const record = source as Record<string, unknown>
+  if (record['kind'] !== 'dsh-superagent' || record['form'] !== 'relay') return undefined
+  const { origin, summary } = record
+  return typeof origin === 'string' && typeof summary === 'string' ? { origin, summary } : undefined
 }
 
 /** Context presentation shared by user-role injections and developer messages. */
@@ -93,7 +111,17 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   start: (_context, match, reader) => {
     const event = match.event
     if (event.type !== 'user/message') throw new Error('input-message start requires user/message')
-    if (event.data.source.kind !== 'user') {
+    const relay = relayDisplay(event.data.source)
+    // A human message relayed from another source reads like one typed here:
+    // an ordinary user bubble carrying the plain text, with its origin shown.
+    // It follows the same inbox claim as local input, so a steer into an active
+    // turn stays a steering row instead of opening a new exchange.
+    const display = relay === undefined ? undefined : {
+      content: [{ type: 'text' as const, text: relay.summary }] as UserMessageNode['content'],
+      origin: relay.origin,
+      relayRaw: event.data.content.filter((block: ContentBlock): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join(''),
+    }
+    if (relay === undefined && event.data.source.kind !== 'user') {
       const nextTurn = reader.previous<InboxState>('inbox-next-turn')?.state
       const nextStep = reader.previous<InboxState>('inbox-next-step')?.state
       const location = match.location
@@ -118,8 +146,9 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
-        content: event.data.content,
+        content: display?.content ?? event.data.content,
         source: event.data.source,
+        ...display,
         ...claim.firstClaimedHuman === id && followsProcessEvidence(match.location, reader)
           ? { batchStart: true }
           : {},
@@ -129,8 +158,9 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
-        content: event.data.content,
+        content: display?.content ?? event.data.content,
         source: event.data.source,
+        ...display,
       }
   },
   update: context => context.state,

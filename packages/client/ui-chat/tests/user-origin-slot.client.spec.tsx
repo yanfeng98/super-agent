@@ -120,6 +120,22 @@ describe('official user renderer origin seat', () => {
     }
   })
 
+  it('shows a relayed Feishu message as a user bubble with its origin and raw disclosure', () => {
+    const raw = JSON.stringify({ kind: 'candidate', trigger_id: 'tr1', text: '都合并且push了吗' })
+    const relay: UserMessageNode = {
+      kind: 'user', seq: 9, time: 9_000,
+      content: [{ type: 'text', text: '都合并且push了吗' }] as never,
+      source: { kind: 'dsh-superagent', form: 'relay', origin: 'feishu', summary: '都合并且push了吗' },
+      ...{ origin: 'feishu', relayRaw: raw },
+    }
+    const view = render(<UserMessageNodeView {...viewProps(relay)} {...userSlots} renderSlotChain={() => null} />)
+    expect(view.container.querySelector('[data-user-origin-badge]')?.textContent).toBe(zh['message.origin.feishu'])
+    expect(view.container.querySelector('[data-message-bubble]')?.textContent).toContain('都合并且push了吗')
+    const details = view.container.querySelector('[data-user-relay-details]') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    expect(details.textContent).toContain('trigger_id')
+  })
+
   it('asks the chain only for the user row beside a steering row', () => {
     const renderSlotChain = vi.fn(() => <span data-test-origin="" />)
     const view = render(<>
