@@ -384,6 +384,47 @@ export async function targetContained(subprocess: SubprocessRuntime, directory: 
   const repo = await workspaceRepo(subprocess, directory, signal)
   return repo ? contains(subprocess, repo, signal) : undefined
 }
+
+/** How long back the remote log is searched for a commit rewritten from a merge's head. */
+const REWRITTEN_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+/** A rewritten commit keeps its message and author date, which identify it across a history rewrite. */
+const COMMIT_IDENTITY = '%s%x09%aI'
+/**
+ * Whether a merge's commit already reached its target's upstream, so a recorded push failure is stale.
+ *
+ * A local push normally fast-forwards the upstream through the recorded head, which `merge-base --is-ancestor` answers
+ * directly. A later history rewrite can replace that commit with an identical one under another SHA; the remote log is then
+ * searched for a commit with the same subject and author date, which a rewrite preserves. The remote-tracking ref is read
+ * as git last saw it: no fetch runs here, so a stale ref simply leaves the recorded failure in place.
+ *
+ * @param directory - The repository root recorded on the merge; a worktree removed by cleanup is not needed.
+ * @param head - The commit the merge left on its target branch.
+ * @param target - The branch the merge moved, whose upstream is asked for the commit.
+ * @param mergedAt - When the merge landed; rewritten commits before this time are within the search window.
+ * @returns `true` when the commit is in the upstream, `false` when it is not or no upstream is configured, and `undefined`
+ * when git cannot read the repository; an unknown answer never changes a recorded push result.
+ */
+export async function pushLanded(subprocess: SubprocessRuntime, directory: string, head: string, target: string,
+  mergedAt: string | undefined, signal: AbortSignal): Promise<boolean | undefined> {
+  const repo = await workspaceRepo(subprocess, directory, signal)
+  if (!repo) return undefined
+  const git = (args: string[]) => runAsWorker(subprocess, ['git', ...args], repo.root,
+    AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])).then(output => output.trim())
+  const upstream = await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${target}@{u}`]).catch(() => undefined)
+  if (!upstream) return false
+  const ancestor = await git(['merge-base', '--is-ancestor', head, upstream]).then(() => true)
+    .catch((error: unknown) => {
+      if (error instanceof CliError && error.exitCode === 1) return false
+      return undefined
+    })
+  if (ancestor === true) return true
+  const identity = await git(['show', '-s', `--format=${COMMIT_IDENTITY}`, head]).catch(() => undefined)
+  if (!identity) return ancestor === false ? false : undefined
+  const since = mergedAt && Date.parse(mergedAt) > REWRITTEN_WINDOW_MS
+    ? new Date(Date.parse(mergedAt) - REWRITTEN_WINDOW_MS).toISOString() : undefined
+  const log = await git(['log', `--format=${COMMIT_IDENTITY}`, ...since ? [`--since=${since}`] : [], upstream]).catch(() => undefined)
+  return log?.split('\n').includes(identity) ?? false
+}
 /**
  * Merges the ticket branch into the repository's checked-out branch by `strategy`: a fast-forward, one squashed commit, or a
  * merge commit. The ticket branch must contain the repository's commit, so the merge cannot conflict.

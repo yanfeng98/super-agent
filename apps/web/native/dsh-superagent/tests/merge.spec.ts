@@ -1,6 +1,6 @@
 /** Merging from the main Session: one request rebases a branch the repository moved past and runs the check it needs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceDiff, workspaceFacts, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushLanded, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, revertWorkspace, targetContained, workspaceDiff, workspaceFacts, workspaceHead } from '../src/app/review.ts'
 import { workspaceCheck, workspaceChecks } from '../src/app/check.ts'
 import { queuedMerges } from '../src/app/merge-queue.ts'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
@@ -12,7 +12,7 @@ vi.mock('../src/app/check.ts', async importOriginal => {
 vi.mock('../src/app/review.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/app/review.ts')>()
   return { ...actual, mergeWorkspace: vi.fn(), targetContained: vi.fn(), workspaceHead: vi.fn(), captureReview: vi.fn(),
-    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn(), patchFingerprint: vi.fn(),
+    rebaseWorkspace: vi.fn(), discardWorkspace: vi.fn(), pushLanded: vi.fn(), pushWorkspace: vi.fn(), revertWorkspace: vi.fn(), patchFingerprint: vi.fn(),
     workspaceDiff: vi.fn(), workspaceFacts: vi.fn() }
 })
 
@@ -27,6 +27,7 @@ beforeEach(async () => {
   vi.mocked(rebaseWorkspace).mockReset().mockResolvedValue({ branch: 'agent/t', target: 'main', base: 'base' })
   vi.mocked(discardWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(pushWorkspace).mockReset().mockResolvedValue(undefined)
+  vi.mocked(pushLanded).mockReset().mockResolvedValue(undefined)
   vi.mocked(revertWorkspace).mockReset().mockResolvedValue({ target: 'main', head: 'undo-sha' })
   vi.mocked(workspaceChecks).mockReset().mockResolvedValue(passingRuns('2026-11-19T00:02:00.000Z'))
   vi.mocked(patchFingerprint).mockReset().mockResolvedValue('same-changes')
@@ -668,6 +669,32 @@ it('retries a push that failed on the branch the merge moved, and records the an
   expect(h.runtime.notifications().items.filter(item => item.kind === 'push')).toHaveLength(2)
   const { ticket: open } = await h.acceptedTicket(feishu('2', '@bot 还没合'))
   await expect(h.runtime.pushTicket(open.id)).rejects.toThrow(/Only a merged or reverted ticket/)
+})
+
+it('clears a stale push failure once the merge commit is already in the upstream', async () => {
+  const { ticket } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
+  ended(ticket.id)
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'merged-sha', root: '/repo' })
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  await h.runtime.mergeTicket(ticket.id, 'ff', { push: true })
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: false })
+  // A later push or a history rewrite can carry the same commit upstream; the remote ref is the evidence.
+  vi.mocked(pushLanded).mockResolvedValue(true)
+  expect(await h.runtime.reconcilePushes()).toBe(1)
+  expect(pushLanded).toHaveBeenCalledWith(expect.anything(), '/repo', h.runtime.store.tickets.get(ticket.id)!.merged!.head,
+    'main', expect.any(String), expect.anything())
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push).toMatchObject({ ok: true, via: 'auto' })
+  expect(h.runtime.store.tickets.get(ticket.id)?.merged?.push?.error).toBeUndefined()
+  // Reconciliation is idempotent and a commit still absent from the upstream leaves the recorded failure alone.
+  expect(await h.runtime.reconcilePushes()).toBe(0)
+  const { ticket: other } = await h.acceptedTicket(feishu('2', '@bot 再修一个'))
+  ended(other.id)
+  vi.mocked(mergeWorkspace).mockResolvedValue({ branch: 'agent/t', target: 'main', head: 'other-sha', root: '/repo' })
+  vi.mocked(pushWorkspace).mockRejectedValueOnce(new Error('fatal: no upstream branch'))
+  await h.runtime.mergeTicket(other.id, 'ff', { push: true })
+  vi.mocked(pushLanded).mockResolvedValue(false)
+  expect(await h.runtime.reconcilePushes()).toBe(0)
+  expect(h.runtime.store.tickets.get(other.id)?.merged?.push).toMatchObject({ ok: false })
 })
 
 it('pauses the queue when the check on the merged target fails, leaving the rest waiting', async () => {

@@ -40,7 +40,7 @@ import { registerHttp, type HttpHost } from './http.ts'
 import { newestFirst, type LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { mergeBlockedByCheck, parseChecks, workspaceChecks } from './check.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceFacts, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, patchFingerprint, pushLanded, pushWorkspace, RebaseConflictError, rebaseWorkspace, remapNoteAnchors, RevertConflictError, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceFacts, workspaceHead, workspaceRepo, type DiffFile, type MergeStrategy, type NoteAnchor } from './review.ts'
 import { sendWebhook, type WebhookPayload } from './webhook.ts'
 import { adoptWorktrees, groupTicketSession, presentWorktree, removeWorktree, retitleWorktree, sessionGroupWorkspace, ticketSessionGroup } from './worktrees.ts'
 import { eventNotice, followupNotice, receiptNotice } from './notices.ts'
@@ -449,6 +449,37 @@ export class Runtime extends Service implements SourceHost {
     })
   }
   /**
+   * Clears push failures whose merge already reached the upstream, so a merged Ticket does not also read as needing a push.
+   * A later merge or a history rewrite can carry the same change to the remote after this Ticket's own push was rejected;
+   * the repository's remote-tracking ref is the evidence, and an unanswered git question leaves the record alone.
+   * @returns The number of push failures resolved.
+   */
+  async reconcilePushes(): Promise<number> {
+    let resolved = 0
+    for (const ticket of this.store.tickets.list()) {
+      const merge = ticket.merged
+      if (merge?.push?.ok !== false || !merge.head || !merge.target) continue
+      const directory = merge.root ?? ticket.execution?.directory
+      if (!directory) continue
+      try {
+        const landed = await pushLanded(this.ctx.subprocess, directory, merge.head, merge.target, merge.at, this.stopped.signal)
+        if (!landed) continue
+        const at = now()
+        this.store.atomic(() => {
+          const current = this.store.tickets.get(ticket.id)
+          if (current?.merged?.at !== merge.at || current.merged.push?.ok !== false) return
+          current.merged.push = { at, ok: true, via: 'auto' }
+          this.store.tickets.save(current)
+        })
+        if (this.store.tickets.get(ticket.id)?.merged?.push?.at !== at) continue
+        try { await recordPush(ticket, { at, ok: true, via: 'auto' }) }
+        catch (error) { this.ctx.logger.warn('dsh-superagent: recording a reconciled push in the archive failed: %s', String(error)) }
+        resolved++
+      } catch (error) { this.ctx.logger.warn('dsh-superagent: checking whether a push reached the upstream failed: %s', String(error)) }
+    }
+    return resolved
+  }
+  /**
    * Completes archive records a crash may have left half-written: the close section of ended local tickets, and the merge or
    * discard section of tickets that already recorded one. Runs once after startup; each write is idempotent.
    * @returns The number of close sections added.
@@ -706,6 +737,10 @@ export class Runtime extends Service implements SourceHost {
     this.ticketNotice(decided, 'merged', `Merged ${this.ticketLabel(decided)} into ${result.target}`
       + `${result.head ? ` at ${result.head}` : ''}${pushError ? `; the push failed: ${pushError}` : pushed ? ', pushed to the upstream' : ''}`,
       { merge: { target: result.target, ...result.head ? { head: result.head } : {} } })
+    // A push of this merge carried earlier merges on the same branch with it, which may clear their failed pushes.
+    if (pushed) void this.reconcilePushes().catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: reconciling recorded pushes failed: %s', String(error))
+    })
     // The merge moved the target branch, so the configured check now says whether the merged tree passes; a failure is the
     // person's to see, and the merge can be undone.
     let targetCheck: TicketCheck | undefined
@@ -1042,6 +1077,9 @@ export class Runtime extends Service implements SourceHost {
       try { await recordPush(ticket, { at, ok: true, via: origin }) }
       catch (error) { this.ctx.logger.warn('dsh-superagent: recording a push in the archive failed: %s', String(error)) }
       this.ticketNotice(ticket, 'push', `Pushed ${label} to the upstream its repository names`)
+      void this.reconcilePushes().catch((error: unknown) => {
+        this.ctx.logger.warn('dsh-superagent: reconciling recorded pushes failed: %s', String(error))
+      })
       return { ticket_id: ticketId, pushed: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -1853,6 +1891,10 @@ export class Runtime extends Service implements SourceHost {
     // A crash between an ending and its archive write leaves the archive behind; complete those records once at startup.
     void this.reconcileArchives().catch((error: unknown) => {
       this.ctx.logger.warn('dsh-superagent: completing archive records failed: %s', String(error))
+    })
+    // A push that failed earlier may have landed with a later merge or a history rewrite.
+    void this.reconcilePushes().catch((error: unknown) => {
+      this.ctx.logger.warn('dsh-superagent: reconciling recorded pushes failed: %s', String(error))
     })
     // Checkouts recorded before the sidebar presentation existed are linked now, without waiting for another launch.
     void this.adoptWorktrees().catch((error: unknown) => {

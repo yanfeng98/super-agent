@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { Ticket } from '../src/core/index.ts'
-import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, remapNoteAnchors, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
+import { captureReview, discardWorkspace, mergeWorkspace, parseDiff, patchFingerprint, pushLanded, pushWorkspace, RebaseConflictError, rebaseWorkspace, RevertConflictError, remapNoteAnchors, revertWorkspace, targetContained, workingBase, workspaceDiff, workspaceHead } from '../src/app/review.ts'
 
 let dir: string
 let repo: string
@@ -410,6 +410,55 @@ describe('merge and discard', () => {
     expect(existsSync(worktree)).toBe(false)
     expect(() => git('show-ref', '--verify', '--quiet', 'refs/heads/agent/discard')).toThrow()
     await expect(discardWorkspace(subprocess(), repo, signal)).rejects.toThrow(/repository itself/)
+  })
+})
+
+describe('pushLanded', () => {
+  /** A repository with a bare upstream, a pushed main, and one commit still only in the local branch. */
+  const withRemote = () => {
+    git('init', '-q')
+    git('branch', '-M', 'main')
+    writeFileSync(join(repo, 'a.txt'), 'one\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'base')
+    const remote = join(dir, 'remote.git')
+    execFileSync('git', ['init', '-q', '--bare', remote])
+    git('remote', 'add', 'origin', remote)
+    git('push', '-q', '-u', 'origin', 'main')
+    return remote
+  }
+
+  it('recognises a commit the upstream holds by SHA and one rewritten with the same subject and author date', async () => {
+    withRemote()
+    writeFileSync(join(repo, 'a.txt'), 'two\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'landed by SHA')
+    const bySha = git('rev-parse', 'HEAD')
+    git('push', '-q')
+    expect(await pushLanded(subprocess(), repo, bySha, 'main', undefined, signal)).toBe(true)
+
+    writeFileSync(join(repo, 'a.txt'), 'three\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'rewritten on the remote')
+    const rewritten = git('rev-parse', 'HEAD')
+    const subject = git('log', '-1', '--format=%s', rewritten)
+    const date = git('log', '-1', '--format=%aI', rewritten)
+    // A history rewrite drops the local commit but lands an equivalent one with the same identity upstream.
+    git('reset', '-q', '--hard', 'HEAD~1')
+    git('push', '-q', '-f')
+    git('commit', '-q', '--allow-empty', '-m', subject, `--date=${date}`)
+    git('push', '-q')
+    expect(git('rev-parse', 'HEAD')).not.toBe(rewritten)
+    expect(await pushLanded(subprocess(), repo, rewritten, 'main', undefined, signal)).toBe(true)
+  })
+
+  it('leaves a failure in place when the commit never reached the upstream or no upstream is configured', async () => {
+    withRemote()
+    writeFileSync(join(repo, 'a.txt'), 'local only\n')
+    git('add', 'a.txt'); git('commit', '-q', '-m', 'not pushed')
+    const local = git('rev-parse', 'HEAD')
+    expect(await pushLanded(subprocess(), repo, local, 'main', undefined, signal)).toBe(false)
+    git('remote', 'remove', 'origin')
+    expect(await pushLanded(subprocess(), repo, local, 'main', undefined, signal)).toBe(false)
+    // A commit git cannot read is not reported as landed, so a recorded failure stays.
+    expect(await pushLanded(subprocess(), repo, '0'.repeat(40), 'main', undefined, signal)).toBe(false)
   })
 })
 
