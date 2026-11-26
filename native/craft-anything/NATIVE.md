@@ -40,7 +40,7 @@ Because the executable sits outside every workspace package, packaged runtimes (
 - `pnpm run build:craft-anything` — compile and stage the CLI.
 - `pnpm vitest run packages/mcp/craft-anything` — mount suite against the staged executable.
 - `pnpm vitest run packages/skill/skill-craft-anything` — bundled skill provider suite.
-- `native/craft-anything/bin/craft-anything-cli capabilities` — reports the 323 tools, 16 toolsets and engine availability of this build.
+- `native/craft-anything/bin/craft-anything-cli capabilities` — reports the 323 tools, 17 toolsets and engine availability of this build.
 - `cd native/craft-anything && cargo test --release --locked -p craft-anything-cli` — upstream's inline unit tests; upstream also runs `cargo fmt --check` and clippy in CI.
 
 ## Upstream sync

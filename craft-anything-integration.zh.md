@@ -40,7 +40,7 @@
 | 检查 | 命令 | 结果 |
 | --- | --- | --- |
 | 源码构建与暂存 | `pnpm run build:craft-anything` | 通过；`cargo build --release --locked -p craft-anything-cli` 约 3 分 51 秒，产出 `craft-anything-cli 0.6.1` |
-| CLI 能力 | `native/craft-anything/bin/craft-anything-cli capabilities` | 报告 323 个工具、16 个工具集与本机引擎可用性 |
+| CLI 能力 | `native/craft-anything/bin/craft-anything-cli capabilities` | 报告 323 个工具、17 个工具集与本机引擎可用性 |
 | MCP 工具面 | 对 `mcp` 子命令发 `initialize` + `tools/list` | 初始 30 个工具（约 31 KB schema），`capabilities.tools.listChanged: true`；`list_toolsets`/`enable_toolset` 在列 |
 | 包单测 | `pnpm vitest run packages/mcp/craft-anything packages/skill/skill-craft-anything scripts/build-craft-anything.spec.ts scripts/build.spec.ts scripts/run-gates.spec.ts packages/bundle/web-app/tests/bundled-skills.spec.ts` | 6 个文件、231 个用例通过 |
 | 组合 | `pnpm dsh --profile web --dump-config` | `standard` preset 含 `mcp-craft-anything`；其他 preset 不重复挂技能行 |
@@ -79,3 +79,8 @@ pnpm install
 ```
 
 `native/craft-anything/target/`、`bin/` 都不进 git，删除目录即可清除构建产物。
+
+## 8. 复查后修正
+
+- 工具集数量按 `capabilities` 实测从 16 更正为 17；包 README、`NATIVE.md`、本报告与日志已同步。
+- `verify-concrete-terms` 与 `verify-repository-references` 的 vendored 例外清单补上 `native/craft-anything/`（与技能资产），避免上游源码原文触发仓库措辞门禁；两份脚本单测 90/90 通过。独立复审确认构建、MCP 挂载、按需工具加载与全部接线正确。

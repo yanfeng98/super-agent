@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Connect an agent to [craft-anything](https://github.com/storytold/craft-anything): a clean-room investigation harness for programs, app bundles, packages, firmware, crash dumps and captures. It keeps a durable brief, plan, hypotheses, findings and handoff in a project folder, and records evidence ids so claims can be checked. Tools are grouped into 16 toolsets; the server starts with the Core toolset and enables others on request. The CLI is compiled from the Rust workspace vendored at [`native/craft-anything`](../../../native/craft-anything/NATIVE.md) by `pnpm run build`, so a checkout needs no global install, published binary or per-machine registration. The Web bundle mounts it in its `standard` agent preset.
+Connect an agent to [craft-anything](https://github.com/storytold/craft-anything): a clean-room investigation harness for programs, app bundles, packages, firmware, crash dumps and captures. It keeps a durable brief, plan, hypotheses, findings and handoff in a project folder, and records evidence ids so claims can be checked. Tools are grouped into 17 toolsets; the server starts with the Core toolset and enables others on request. The CLI is compiled from the Rust workspace vendored at [`native/craft-anything`](../../../native/craft-anything/NATIVE.md) by `pnpm run build`, so a checkout needs no global install, published binary or per-machine registration. The Web bundle mounts it in its `standard` agent preset.
 
 ## Table of Contents
 

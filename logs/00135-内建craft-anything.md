@@ -45,7 +45,7 @@
 | 命令 | 结果 |
 |---|---|
 | `pnpm run build:craft-anything` | 通过；`cargo build --release --locked -p craft-anything-cli` 约 3 分 51 秒；`craft-anything-cli --version` → `0.6.1` |
-| `craft-anything-cli capabilities` | 报告 323 个工具、16 个工具集、引擎可用性 |
+| `craft-anything-cli capabilities` | 报告 323 个工具、17 个工具集、引擎可用性 |
 | 对 `mcp` 子命令 `initialize` + `tools/list` | 初始 30 个工具、约 31 KB schema；`tools.listChanged: true`；含 `list_toolsets`/`enable_toolset` |
 | 包单测 | `pnpm vitest run packages/mcp/craft-anything packages/skill/skill-craft-anything scripts/build-craft-anything.spec.ts scripts/build.spec.ts scripts/run-gates.spec.ts packages/bundle/web-app/tests/bundled-skills.spec.ts` | 6 个文件、231 个用例全部通过 |
 | 类型检查 | `pnpm run typecheck` | 5/5 通过（约 1089 s） |
@@ -69,3 +69,10 @@
 - `native/craft-anything/README.zh.md` 未纳入 vendored 子树：翻译配对门禁排除 vendored 树，与 rea/fast-anything 的单语言上游 README 保持一致。
 - `pnpm run doc-sync` 唯一失败项是基线上已存在的 `verify-repository-references`（5 个与本次改动无关的 log 含 commit-hash），已在本地核实这些 log 与 HEAD 无差异。
 - 本机默认 toolchain 为 1.96；构建与测试均通过 vendored 的 `rust-toolchain.toml` 自动选择 1.97.0。
+
+## 7. 复查（复审后修正）
+
+- 独立复审发现文档把工具集写成 16 个，而 `v0.6.1` 的 `capabilities` 实际报告 17 个（323 个工具不变）；已在两份包 README、`NATIVE.md`、集成报告与本日志中统一改为 17，并重记 README 的 i18n 配对记录。
+- 复审发现 `scripts/verify-concrete-terms.ts` 与 `scripts/verify-repository-references.ts` 的 vendored 例外清单漏了 `native/craft-anything/`（与技能资产），导致 `test:docs` 的 `verify-concrete-terms` 因上游源码中的既有措辞失败；已按其他 vendored 子树的同一模式补上例外，两项脚本的单测 90/90 通过。
+- 复审确认构建、暂存、MCP 挂载、`on-demand` + `tools/list_changed` 刷新、30/323 工具数、`standard` preset 与全部 manifest/tsconfig/gate 接线均正确；`verify-md-links`（2862 文件）与 `verify-translation-pairing`（1419 对）通过。
+- `verify-repository-references` 仍只报出 5 个未改动的既有 log 中的 commit-hash，属基线问题，本工单未触碰这些文件。

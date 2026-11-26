@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-把 Agent 接入 [craft-anything](https://github.com/storytold/craft-anything)：一套用于调查程序、应用包、固件、崩溃转储与网络抓包的洁净室工具。它在项目目录里维护持续的简报、计划、假设、发现与交接，并用证据编号让每条结论可回溯。工具分为 16 个工具集，server 启动时只列出 Core 工具集，其余按需启用。CLI 由 `pnpm run build` 从 [`native/craft-anything`](../../../native/craft-anything/NATIVE.md) 的 Rust 工作区编译，无需全局安装、发布版二进制或逐机注册。Web bundle 把它挂载在 `standard` agent preset 中。
+把 Agent 接入 [craft-anything](https://github.com/storytold/craft-anything)：一套用于调查程序、应用包、固件、崩溃转储与网络抓包的洁净室工具。它在项目目录里维护持续的简报、计划、假设、发现与交接，并用证据编号让每条结论可回溯。工具分为 17 个工具集，server 启动时只列出 Core 工具集，其余按需启用。CLI 由 `pnpm run build` 从 [`native/craft-anything`](../../../native/craft-anything/NATIVE.md) 的 Rust 工作区编译，无需全局安装、发布版二进制或逐机注册。Web bundle 把它挂载在 `standard` agent preset 中。
 
 ## 目录
 
