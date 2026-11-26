@@ -361,6 +361,22 @@ describe('built-in conversation node Definitions', () => {
     expect(streamed).not.toBe(opening)
   })
 
+  it('renders a Feishu relay as an ordinary user message carrying its plain text', () => {
+    const raw = JSON.stringify({ kind: 'candidate', trigger_id: 'tr1', text: '都合并且push了吗' })
+    const relay = {
+      id: 'relay-1', role: 'user', content: [{ type: 'text', text: raw }],
+      source: { kind: 'dsh-superagent', form: 'relay', origin: 'feishu', summary: '都合并且push了吗' },
+    }
+    const value = assembler([
+      at(1, 'user/message', relay, { surfaceOp: 'append' }),
+    ])
+    const current = snapshot(value)
+    const projected = node(current, 'user')
+    expect(projected).toBeDefined()
+    expect(projected?.data).toMatchObject({ origin: 'feishu', relayRaw: raw, content: [{ type: 'text', text: '都合并且push了吗' }] })
+    expect(node(current, 'context')).toBeUndefined()
+  })
+
   it('bounds each rail preview at its card budget instead of copying the whole transcript', () => {
     const long = 'x'.repeat(400)
     const value = assembler([
