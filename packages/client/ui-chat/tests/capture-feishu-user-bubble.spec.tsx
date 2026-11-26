@@ -48,6 +48,7 @@ html,body{margin:0;background:#fff;color:#222;font-family:system-ui,"PingFang SC
 [data-clock] button{width:16px;height:16px;padding:0;border:0;background:none;color:inherit;cursor:pointer}
 ${css}
 </style></head><body><div class="chat">${body}</div></body></html>`
+    .split('\n').map(line => line.trimEnd()).join('\n')
 }
 
 it('writes the before/after production captures', () => {
