@@ -26,6 +26,10 @@ interface ReferencedSteeringMessageNode extends SteeringMessageNode {
   readonly referenceLabels?: readonly string[]
   /** Skill names the same step's `skill-invocation` injections loaded. */
   readonly skillNames?: readonly string[]
+  /** Source system a relay came from, when the producer recorded one. */
+  readonly origin?: string
+  /** Model-facing payload of a relay, kept behind the user row's raw disclosure. */
+  readonly relayRaw?: string
   /**
    * First human message of its `next-step` claim that Chat orders after its Turn's process control;
    * the row keeps the Turn tail slot above it.
@@ -108,21 +112,16 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     const event = match.event
     if (event.type !== 'user/message') throw new Error('input-message start requires user/message')
     const relay = relayDisplay(event.data.source)
-    if (relay !== undefined) {
-      // A human message relayed from another source reads like one typed here:
-      // an ordinary user bubble carrying the plain text, with its origin shown.
-      return {
-        kind: 'user',
-        messageId: event.data.id,
-        seq: event.seq,
-        time: event.time,
-        content: [{ type: 'text', text: relay.summary }],
-        source: event.data.source,
-        origin: relay.origin,
-        relayRaw: event.data.content.filter((block: ContentBlock): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join(''),
-      }
+    // A human message relayed from another source reads like one typed here:
+    // an ordinary user bubble carrying the plain text, with its origin shown.
+    // It follows the same inbox claim as local input, so a steer into an active
+    // turn stays a steering row instead of opening a new exchange.
+    const display = relay === undefined ? undefined : {
+      content: [{ type: 'text' as const, text: relay.summary }] as UserMessageNode['content'],
+      origin: relay.origin,
+      relayRaw: event.data.content.filter((block: ContentBlock): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join(''),
     }
-    if (event.data.source.kind !== 'user') {
+    if (relay === undefined && event.data.source.kind !== 'user') {
       const nextTurn = reader.previous<InboxState>('inbox-next-turn')?.state
       const nextStep = reader.previous<InboxState>('inbox-next-step')?.state
       const location = match.location
@@ -147,8 +146,9 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
-        content: event.data.content,
+        content: display?.content ?? event.data.content,
         source: event.data.source,
+        ...display,
         ...claim.firstClaimedHuman === id && followsProcessEvidence(match.location, reader)
           ? { batchStart: true }
           : {},
@@ -158,8 +158,9 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
-        content: event.data.content,
+        content: display?.content ?? event.data.content,
         source: event.data.source,
+        ...display,
       }
   },
   update: context => context.state,

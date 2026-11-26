@@ -377,6 +377,27 @@ describe('built-in conversation node Definitions', () => {
     expect(node(current, 'context')).toBeUndefined()
   })
 
+  it('keeps a Feishu relay admitted into an active turn as a steering row', () => {
+    const raw = JSON.stringify({ kind: 'follow_up', trigger_id: 'tr2', text: '继续' })
+    const relay = {
+      id: 'relay-steer', role: 'user', content: [{ type: 'text', text: raw }],
+      source: { kind: 'dsh-superagent', form: 'relay', origin: 'feishu', summary: '继续' },
+    }
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('user-1', 'question'), { surfaceOp: 'append' }),
+      at(3, 'step/start', { turn: 1, step: 1 }),
+      at(4, 'agent/inbox/spliced', { target: 'next-step', start: 0, inserted: [relay] }),
+      at(5, 'agent/inbox/spliced', { target: 'next-step', start: 0, removedCount: 1, inserted: [] }),
+      at(6, 'user/message', relay, { surfaceOp: 'append' }),
+    ])
+    const current = snapshot(value)
+    const steering = node(current, 'steering')
+    expect(steering?.data).toMatchObject({ origin: 'feishu', relayRaw: raw, content: [{ type: 'text', text: '继续' }] })
+    expect(node(current, 'user')?.data).toMatchObject({ messageId: 'user-1' })
+    expect(node(current, 'context')).toBeUndefined()
+  })
+
   it('bounds each rail preview at its card budget instead of copying the whole transcript', () => {
     const long = 'x'.repeat(400)
     const value = assembler([
