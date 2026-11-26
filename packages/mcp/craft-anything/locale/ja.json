@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "craft-anything",
+    "description": "craft-anything MCP サーバーをマウントし、エージェントがオンデマンドのツールセットで公開済みソフトウェアを調査できるようにします。"
+  }
+}

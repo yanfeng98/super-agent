@@ -32,7 +32,7 @@ pnpm run build
 pnpm dsh web
 ```
 
-`pnpm run build` 会生成运行所需的产物，其中包含从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 现场编译的 rust-anything CLI（首次几分钟，中间产物在 `native/rust-anything/target/`，不纳入版本控制；缺少 `cargo` 时整个构建会失败），从 [`native/fast-anything`](native/fast-anything/NATIVE.md) 现场编译的 fast-anything CLI（需要 Rust 1.88 或更新版本），以及从 [`native/rea`](native/rea/NATIVE.md) 安装并构建的 rea MCP server（首次约 3 分钟，`node_modules/` 与 `dist/` 不纳入版本控制，需要网络）；`pnpm dsh web` 不会重新构建：宿主端代码由 tsx 直接从 `src` 运行，浏览器端加载构建出的 bundle 与 `apps/web/dist`。首次运行前必须构建；之后宿主端改动重启进程即可生效，浏览器端改动需要重新构建。
+`pnpm run build` 会生成运行所需的产物，其中包含从 [`native/rust-anything`](native/rust-anything/NATIVE.md) 现场编译的 rust-anything CLI（首次几分钟，中间产物在 `native/rust-anything/target/`，不纳入版本控制；缺少 `cargo` 时整个构建会失败），从 [`native/fast-anything`](native/fast-anything/NATIVE.md) 现场编译的 fast-anything CLI（需要 Rust 1.88 或更新版本），以及从 [`native/rea`](native/rea/NATIVE.md) 安装并构建的 rea MCP server（首次约 3 分钟，`node_modules/` 与 `dist/` 不纳入版本控制，需要网络），还有从 [`native/craft-anything`](native/craft-anything/NATIVE.md) 现场编译的 craft-anything CLI（需要 Rust 1.97 或更新版本，首次约 4 分钟）；`pnpm dsh web` 不会重新构建：宿主端代码由 tsx 直接从 `src` 运行，浏览器端加载构建出的 bundle 与 `apps/web/dist`。首次运行前必须构建；之后宿主端改动重启进程即可生效，浏览器端改动需要重新构建。
 
 该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.zh.md)。
 
@@ -48,7 +48,7 @@ pnpm dsh web
 
 - **直接描述任务**：Agent 会读取和修改工作区文件、运行命令、委派子智能体并维护计划；按当前权限策略需要审批的操作会先询问。
 - **在输入框输入 `/`** 打开技能菜单：随包技能名都带 `eng-` 前缀（`eng-tdd`、`eng-pr`…），32 个工程工作流技能全部可点名，其中 11 个还能由模型按任务自动加载，另外 21 个不进入会话技能目录、只能由你点名，菜单里标着「仅用户」。用上游原名放一份 `tdd` 到 `.dsh/skills`、[`.agents/skills`](.agents/skills) 或用户技能目录，它会与 `eng-tdd` 并存而不是互相覆盖。
-- **技能菜单按来源分组**：标题是「类别 · 来源」，类别按 内置 → 插件 → 项目 → 用户 → 自定义 排列，例如 `内置`（office 4 个）、`内置 · erkamyaman/rust-anything`（rust-anything 技能）、`内置 · EL4CTEO/fast-anything`（fast-anything 技能）、`内置 · mattpocock/skills`（工程技能）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；rust-anything、fast-anything、rea 与 office、工程技能一样随 Web bundle 挂载，所有 profile 的 `/` 菜单里都可见（对应工具目录仍只在 `standard` preset）；输入查询后标题收起，改为按名称匹配排序。
+- **技能菜单按来源分组**：标题是「类别 · 来源」，类别按 内置 → 插件 → 项目 → 用户 → 自定义 排列，例如 `内置`（office 4 个）、`内置 · erkamyaman/rust-anything`（rust-anything 技能）、`内置 · EL4CTEO/fast-anything`（fast-anything 技能）、`内置 · storytold/craft-anything`（craft-anything 技能）、`内置 · mattpocock/skills`（工程技能）、`插件 · dsh-superagent`、`项目 · .agents/skills`、`用户 · ~/.agents/skills`、`自定义`；rust-anything、fast-anything、rea、craft-anything 与 office、工程技能一样随 Web bundle 挂载，所有 profile 的 `/` 菜单里都可见（对应工具目录仍只在 `standard` preset）；输入查询后标题收起，改为按名称匹配排序。
 - **空草稿时按 ↑** 召回当前文件夹最近 100 条输入，`↑`、`↓` 前后浏览。
 - **插件**页查看已装与实验性插件、添加社区索引，见下一节。
 
@@ -62,6 +62,7 @@ pnpm dsh web
 | 启动片头 | 默认播放，点按钮或按 Esc 跳过；设置页可调序列参数、换用自己的片头视频，见[启动片头包](packages/client/ui-boot-animation/README.zh.md) |
 | 逆向分析 | `standard` preset 自带 rea MCP server 与 `dsh-rea` 技能，用于分析已发布的二进制、应用与运行时行为；见[rea 集成报告](rea-integration.zh.md) |
 | 热点提速 | `standard` preset 自带 fast-anything MCP server；`dsh-fast-anything` 技能随 Web bundle 挂载，所有 profile 的 `/` 菜单里都可点名。只把应用最热的纯函数移植到 Rust，并用录制调用验证；见[fast-anything 集成报告](fast-anything-integration.zh.md) |
+| 已发布软件调查 | `standard` preset 自带 craft-anything MCP server；`dsh-craft-anything` 技能随 Web bundle 挂载，所有 profile 的 `/` 菜单里都可点名。按证据调查程序、应用包、固件与抓包，工具集按需加载；见[craft-anything 集成报告](craft-anything-integration.zh.md) |
 
 ### 把代码迁移到 Rust
 
@@ -86,6 +87,14 @@ CLI 由 `pnpm run build` 从 [`native/fast-anything`](native/fast-anything/NATIV
 server 由 `pnpm run build` 从 [`native/rea`](native/rea/NATIVE.md) 的 vendored 源码安装并构建，运行在 Host 自己的 Node.js 上；深度原生分析仍需要另行安装的 Hopper、Ghidra、IDA 或 JADX，工具会报告 provider 是否可用。运行时观察、截图与环境录制会以你的用户身份执行被分析的目标，所以请在副本上操作，并且不要把生产凭据留在环境里。CLI 是同一份构建：在仓库根目录运行 `node native/rea/scripts/rea.mjs <command>`。不需要这项能力时，删掉 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml) 里的 `mcp-rea` 行。
 
 工具面、目录配置与已知限制见 [rea 包说明](packages/mcp/rea/README.zh.md)，技能见 [skill-rea](packages/skill/skill-rea/README.zh.md)，源码基线与上游同步见 [NATIVE.md](native/rea/NATIVE.md)。
+
+### 调查已发布软件
+
+`standard` preset 的会话还挂载了 craft-anything MCP server 与随包技能 `dsh-craft-anything`：说一句「这个应用里的搜索是怎么实现的」「比较这两个构建」或「这个固件镜像里有什么」，也可以用 `/` 点名 `dsh-craft-anything` 先加载技能。Agent 先用 `core_target_open` 打开目标并写下简报与计划，再用 `list_toolsets`/`enable_toolset` 只启用需要的工具集，通过 `mcp__craft-anything__load_tools` 加载工具。初始只公布 28 个 Core 工具与 2 个工具集选择工具，323 个工具不会一次性挤满上下文；每条结论都带证据编号。
+
+CLI 由 `pnpm run build` 从 [`native/craft-anything`](native/craft-anything/NATIVE.md) 编译到 `native/craft-anything/bin/craft-anything-cli`。默认洁净室模式不读取目标内部的文件或源码，深度模式需要你明确同意；执行目标代码或改动设备的工具需要逐次确认，所以请在副本上操作。不需要这项能力时，删掉 [`standard.patch.yml`](packages/bundle/web-app/presets/standard.patch.yml) 里的 `mcp-craft-anything` 行。
+
+工具面与限制见 [craft-anything 包说明](packages/mcp/craft-anything/README.md)，技能见 [skill-craft-anything](packages/skill/skill-craft-anything/README.md)，源码基线与上游同步见 [NATIVE.md](native/craft-anything/NATIVE.md)。
 
 ### 命令行模式
 

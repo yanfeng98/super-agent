@@ -248,6 +248,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/skill-badge': { kind: 'indirect', reason: 'The bundled provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-office': { kind: 'indirect', reason: 'The bundled Office provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-engineering': { kind: 'indirect', reason: 'The bundled engineering workflow provider delegates model rendering to dsh-tool-skill.' },
+  'packages/skill/skill-craft-anything': { kind: 'indirect', reason: 'The bundled craft-anything provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-fast-anything': { kind: 'indirect', reason: 'The bundled fast-anything provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-rea': { kind: 'indirect', reason: 'The bundled rea provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-rust-anything': { kind: 'indirect', reason: 'The bundled rust-anything provider delegates model rendering to dsh-tool-skill.' },

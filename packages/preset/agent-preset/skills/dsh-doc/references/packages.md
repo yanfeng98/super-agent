@@ -367,6 +367,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
+| `@deepseek-ai/dsh-craft-anything` | yes | Mounts the craft-anything MCP server (evidence-backed investigation of shipped software through on-demand toolsets) from the Rust workspace vendored at native/craft-anything |
 | `@deepseek-ai/dsh-fast-anything` | yes | Mounts the fast-anything MCP server (port an app's hottest pure functions to Rust, proved against recorded calls) from the crate vendored at native/fast-anything |
 | `@deepseek-ai/dsh-mcp-account` | no | MCP connector accounts on the Plugins page: each connector's OAuth server in the connector account registry, authorized through the MCP manager |
 | `@deepseek-ai/dsh-mcp-client` | yes | MCP client bridge: connects to MCP servers and registers their tools on ctx.tools |
@@ -467,6 +468,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-skill` | yes | Agent skill provider registry for the DeepSeek Harness |
+| `@deepseek-ai/dsh-skill-craft-anything` | yes | Built-in craft-anything skill: investigate shipped programs, bundles, firmware and captures with recorded evidence and durable notes |
 | `@deepseek-ai/dsh-skill-engineering` | yes | Built-in engineering workflow skills: grilling, specs, tickets, TDD, code review, domain modeling, and writing |
 | `@deepseek-ai/dsh-skill-fast-anything` | yes | Built-in fast-anything skill: scan a slow app's hot functions, port them to Rust, and verify each port against recorded calls |
 | `@deepseek-ai/dsh-skill-filesystem` | yes | Local filesystem skill provider for the DeepSeek Harness |

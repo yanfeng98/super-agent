@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "craft-anything",
+    "description": "Mountet den craft-anything MCP-Server, damit ein Agent veröffentlichte Software mit evidenzbasierten Toolsets untersuchen kann."
+  }
+}

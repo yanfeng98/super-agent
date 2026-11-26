@@ -11,6 +11,7 @@ const artifactGraph = {
   'rust-anything': [],
   'rea': [],
   'fast-anything': [],
+  'craft-anything': [],
   'host-typert': [],
   'host-src': ['native', 'host-typert'],
   'host-bundle': ['host-src'],

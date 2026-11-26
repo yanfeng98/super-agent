@@ -171,3 +171,13 @@
               # schemas (plus the 3 shared resource tools) cost about 800
               # request tokens per agent that mounts it.
               toolLoading: eager
+          # craft-anything: evidence-backed investigation of shipped programs,
+          # bundles, firmware and captures. `pnpm run build` compiles the CLI
+          # from the Rust workspace vendored at native/craft-anything. The
+          # server starts with the Core toolset plus two meta-tools; enabling a
+          # toolset emits tools/list_changed, and the on-demand loader publishes
+          # only the tools an agent asks to load.
+          - id: mcp-craft-anything
+            name: '@deepseek-ai/dsh-craft-anything'
+            config:
+              toolLoading: on-demand

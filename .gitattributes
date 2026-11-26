@@ -29,3 +29,6 @@ packages/*/*/src/types.ts dsh-review-layer=interface
 # Vendored rea keeps upstream bytes for source syncs: its license texts and a
 # few bridge sources carry trailing spaces or a final blank line.
 native/rea/** whitespace=-trailing-space,-space-before-tab
+# Vendored craft-anything keeps upstream bytes for source syncs: its font
+# licenses and one source file carry trailing spaces upstream.
+native/craft-anything/** whitespace=-trailing-space,-space-before-tab

@@ -33,6 +33,7 @@ The client owns each configured connection, the manager runs a settings-driven f
 | [`rust-anything/`](rust-anything/README.md) | Mount the rust-anything MCP server, with its CLI compiled from the crate vendored at `native/rust-anything` |
 | [`fast-anything/`](fast-anything/README.md) | Mount the fast-anything MCP server, with its CLI compiled from the crate vendored at `native/fast-anything` |
 | [`rea/`](rea/README.md) | Mount the rea MCP server, with its server built from the source vendored at `native/rea` |
+| [`craft-anything/`](craft-anything/README.md) | Mount the craft-anything MCP server, with its CLI compiled from the Rust workspace vendored at `native/craft-anything` |
 
 -----
 

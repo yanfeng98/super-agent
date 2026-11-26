@@ -33,6 +33,7 @@ kind: "package-group"
 | [`rust-anything/`](rust-anything/README.zh.md) | 挂载 rust-anything MCP server，CLI 由 `native/rust-anything` 的 vendored 源码编译 |
 | [`fast-anything/`](fast-anything/README.zh.md) | 挂载 fast-anything MCP server，CLI 由 `native/fast-anything` 的 vendored 源码编译 |
 | [`rea/`](rea/README.zh.md) | 挂载 rea MCP server，server 由 `native/rea` 的 vendored 源码构建 |
+| [`craft-anything/`](craft-anything/README.zh.md) | 挂载 craft-anything MCP server，CLI 由 `native/craft-anything` 的 vendored Rust 工作区编译 |
 
 -----
 

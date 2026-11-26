@@ -10557,7 +10557,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionWorkspaceGroup',
-    declaration: 'export interface SessionWorkspaceGroup {\n    readonly path: string;\n    readonly role?: \'orchestrator\' | \'ticket\' | undefined;\n    readonly merged?: true | undefined;\n}',
+    declaration: 'export interface SessionWorkspaceGroup {\n    readonly path: string;\n    readonly role?: \'orchestrator\' | \'ticket\' | undefined;\n    readonly merged?: true | undefined;\n    readonly outcome?: \'completed\' | \'closed\' | \'dropped\' | \'stopped\' | undefined;\n}',
   },
   {
     name: 'SessionWorkspacePathApplication',

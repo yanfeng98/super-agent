@@ -1087,6 +1087,35 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cordis-host-runner -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-craft-anything -->
+<a id="deepseek-aidsh-craft-anything"></a>
+
+## `@deepseek-ai/dsh-craft-anything`
+
+- `inject`: `tools`
+- `source`: [`packages/mcp/craft-anything/src/index.ts:31`](../packages/mcp/craft-anything/src/index.ts)
+
+```ts config-catalog
+/** Plugin config: an explicit executable plus the transport budgets. */
+export interface Config {
+  /** Executable to run instead of the staged vendored build. */
+  command?: string
+  /**
+   * `on-demand` keeps the initial Core toolset in the request and loads an
+   * enabled toolset only when the agent asks for it; `eager` publishes every
+   * tool from the start.
+   */
+  toolLoading: 'eager' | 'on-demand'
+  /** Per-`tools/call` budget in milliseconds. */
+  toolCallTimeoutMs: number
+  /** Budget for the stdio probe, connection and initial tool sync. */
+  startupTimeoutMs: number
+  /** Extra environment for the server process. */
+  env: Record<string, string>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-craft-anything -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-credentials-local -->
 <a id="deepseek-aidsh-credentials-local"></a>
 
@@ -4046,6 +4075,22 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-craft-anything -->
+<a id="deepseek-aidsh-skill-craft-anything"></a>
+
+## `@deepseek-ai/dsh-skill-craft-anything`
+
+- `source`: [`packages/skill/skill-craft-anything/src/index.ts:23`](../packages/skill/skill-craft-anything/src/index.ts)
+
+```ts config-catalog
+/** Bundled skill asset location. */
+export interface Config {
+  /** Absolute assets directory containing the skill directory; defaults to the packaged assets. */
+  assetRoot?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-craft-anything -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-engineering -->
 <a id="deepseek-aidsh-skill-engineering"></a>

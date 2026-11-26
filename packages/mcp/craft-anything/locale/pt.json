@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "craft-anything",
+    "description": "Monta o servidor MCP craft-anything para que um agente investigue software publicado com conjuntos de ferramentas sob demanda."
+  }
+}

@@ -5,6 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
+import * as SkillCraftAnything from '@deepseek-ai/dsh-skill-craft-anything'
 import * as SkillFastAnything from '@deepseek-ai/dsh-skill-fast-anything'
 import * as SkillRea from '@deepseek-ai/dsh-skill-rea'
 import * as SkillRustAnything from '@deepseek-ai/dsh-skill-rust-anything'
@@ -27,6 +28,7 @@ const BUNDLED_SKILLS = [
   { id: 'skill-rust-anything', name: '@deepseek-ai/dsh-skill-rust-anything' },
   { id: 'skill-rea', name: '@deepseek-ai/dsh-skill-rea' },
   { id: 'skill-fast-anything', name: '@deepseek-ai/dsh-skill-fast-anything' },
+  { id: 'skill-craft-anything', name: '@deepseek-ai/dsh-skill-craft-anything' },
 ]
 
 it('mounts the built-in porting and reverse-engineering skills in the host patch', () => {
@@ -35,8 +37,8 @@ it('mounts the built-in porting and reverse-engineering skills in the host patch
 })
 
 it('keeps the heavy MCP tool catalogs in the standard preset', () => {
-  const standard = presetRows('standard').filter(row => ['mcp-rust-anything', 'mcp-rea', 'mcp-fast-anything'].includes(row.id))
-  expect(standard.map(row => row.id)).toEqual(['mcp-rust-anything', 'mcp-rea', 'mcp-fast-anything'])
+  const standard = presetRows('standard').filter(row => ['mcp-rust-anything', 'mcp-rea', 'mcp-fast-anything', 'mcp-craft-anything'].includes(row.id))
+  expect(standard.map(row => row.id)).toEqual(['mcp-rust-anything', 'mcp-rea', 'mcp-fast-anything', 'mcp-craft-anything'])
   for (const preset of ['superagent-worker', 'superagent-router', 'ptc', 'cordis', 'minimal']) {
     expect(presetRows(preset).some(row => BUNDLED_SKILLS.some(skill => skill.id === row.id)),
       `${preset} must not duplicate the host skill rows`).toBe(false)
@@ -47,12 +49,12 @@ it('lists the host-mounted skills from an agent scope without preset rows', asyn
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SkillRegistry)
-  for (const plugin of [SkillRustAnything, SkillRea, SkillFastAnything]) {
+  for (const plugin of [SkillRustAnything, SkillRea, SkillFastAnything, SkillCraftAnything]) {
     await ctx.plugin(plugin, {})
   }
   // An orchestrator/agent scope can be nested without any preset mounting the skill rows.
   const agentKey = {}
   createScope(ctx, agentKey)
   const names = (await ctx.skills.list({ scope: agentKey })).map(skill => skill.name)
-  expect(names).toEqual(expect.arrayContaining(['dsh-rust-anything', 'dsh-rea', 'dsh-fast-anything']))
+  expect(names).toEqual(expect.arrayContaining(['dsh-rust-anything', 'dsh-rea', 'dsh-fast-anything', 'dsh-craft-anything']))
 })

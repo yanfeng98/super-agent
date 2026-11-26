@@ -11,3 +11,4 @@ runs:
         workspaces: |
           native/rust-anything
           native/fast-anything
+          native/craft-anything

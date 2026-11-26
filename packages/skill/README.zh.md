@@ -30,6 +30,7 @@ skill 家族让 agent 和用户仅在需要时发现并加载可复用的任务�
 | [`skill-office/`](skill-office/README.zh.md) | 随包提供 Word、PowerPoint 和 Excel 工作流及文件结构检查 | 注册到 `ctx.skills` |
 | [`skill-rust-anything/`](skill-rust-anything/README.zh.md) | 提供内置的 `dsh-rust-anything` 技能：把代码验证性地按单元迁移到 Rust | 注册到 `ctx.skills` |
 | [`skill-fast-anything/`](skill-fast-anything/README.zh.md) | 提供内置的 `dsh-fast-anything` 技能：把应用的热点函数移植到 Rust 并验证 | 注册到 `ctx.skills` |
+| [`skill-craft-anything/`](skill-craft-anything/README.zh.md) | 提供内置的 `dsh-craft-anything` 技能：对已发布软件做证据优先的调查 | 注册到 `ctx.skills` |
 | [`tool-skill/`](tool-skill/README.zh.md) | 发布会话 skill 目录与面向模型的 `skill` 加载工具 | 注册到 `ctx.tools` |
 | [`tool-workspace-dependencies/`](tool-workspace-dependencies/README.zh.md) | 为 Desktop 与 SDK 载体报告内置 Office 解释器路径和版本 | 注册到 `ctx.tools` |
 

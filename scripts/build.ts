@@ -105,6 +105,10 @@ export function buildGates(
     // The fast-anything MCP server compiles from its vendored crate; the staged
     // executable is what the Web standard preset spawns at runtime.
     gates.push(pnpmGate('fast-anything', 'fast-anything CLI', ['run', 'build:fast-anything'], [], env))
+    // The craft-anything MCP server compiles from the Rust workspace vendored
+    // at native/craft-anything; the staged CLI is what the Web standard preset
+    // spawns at runtime.
+    gates.push(pnpmGate('craft-anything', 'craft-anything CLI', ['run', 'build:craft-anything'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push(libraryGate(step, step.id === 'host-src' ? ['native', ...step.needs] : step.needs, env))
     }

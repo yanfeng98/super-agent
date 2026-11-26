@@ -366,6 +366,9 @@
     - id: skill-fast-anything
       name: '@deepseek-ai/dsh-skill-fast-anything'
 
+    - id: skill-craft-anything
+      name: '@deepseek-ai/dsh-skill-craft-anything'
+
     # The right Sidebar's document tab: bounded file reads with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.
     - id: ui-sidebar-documentpreview

@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/skill/skill-craft-anything/README.md
+/:
+  en: df192cf3e00cdb9f
+  zh: eea7aaae0b2c2a66
+/deepseek-ai-dsh-skill-craft-anything:
+  en: df3acc106b135e04
+  zh: 5dcb3eb63efca846
+/deepseek-ai-dsh-skill-craft-anything/summary:
+  en: e562047dcbaca2fb
+  zh: 3fc4e0546cd6b2b3
+/deepseek-ai-dsh-skill-craft-anything/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 405b30feaf48c087
+/deepseek-ai-dsh-skill-craft-anything/use-this-package:
+  en: 7c8c703476b3ca4b
+  zh: 298a700376c92429
+/deepseek-ai-dsh-skill-craft-anything/use-this-package/what-the-catalog-contains:
+  en: 81524fcc2d23499a
+  zh: 2df1f90af617ae92
+/deepseek-ai-dsh-skill-craft-anything/use-this-package/observable-success-and-failures:
+  en: 57939d0921878fc5
+  zh: 04598eb5eec75088
+/deepseek-ai-dsh-skill-craft-anything/understand-the-implementation:
+  en: 53be29984f4c550d
+  zh: 47f669bd2da656dd
+/deepseek-ai-dsh-skill-craft-anything/further-exploration:
+  en: 1e385a5aba45cd4f
+  zh: 5ca19d74ce74e25e
+/deepseek-ai-dsh-skill-craft-anything/model-experience:
+  en: 7fc5b6545bf476ac
+  zh: e423659f8efdc7ea
+/deepseek-ai-dsh-skill-craft-anything/model-experience/kv-cache-effect:
+  en: a736f7fa011d96a2
+  zh: f3b274040c60838b
+/deepseek-ai-dsh-skill-craft-anything/known-limitations-and-deferred-work:
+  en: a97accb5300bbf1f
+  zh: 6085a1cc39a65f17
+/deepseek-ai-dsh-skill-craft-anything/known-limitations-and-deferred-work/dev-note:
+  en: 25779806a03b2c44
+  zh: cd78bcedbeeb8ad6

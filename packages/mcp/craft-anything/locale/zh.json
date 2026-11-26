@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "craft-anything",
+    "description": "挂载 craft-anything MCP server，让 Agent 通过按需加载的工具集对已发布软件做证据驱动的调查。"
+  }
+}

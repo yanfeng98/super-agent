@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/mcp/craft-anything/README.md
+/:
+  en: f6f7b4a20af9bbe9
+  zh: 7fa9f102694b7d42
+/deepseek-ai-dsh-craft-anything:
+  en: c27245272119d86a
+  zh: 68f1a3119f6f1bd4
+/deepseek-ai-dsh-craft-anything/summary:
+  en: 0d609d58928cefea
+  zh: 3c5d8a6a8f2658cf
+/deepseek-ai-dsh-craft-anything/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 405b30feaf48c087
+/deepseek-ai-dsh-craft-anything/use-this-package:
+  en: 3572dbae26501ca7
+  zh: e7707f4ccc4d9010
+/deepseek-ai-dsh-craft-anything/understand-the-implementation:
+  en: f7da726e771c20f9
+  zh: f8ca97bd22c0b716
+/deepseek-ai-dsh-craft-anything/further-exploration:
+  en: 6e8d2fc418f3fd44
+  zh: d4ad03bf578f42d8
+/deepseek-ai-dsh-craft-anything/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-craft-anything/model-experience/mcp-tools-from-the-server:
+  en: 3ec83f7a88d8ac6a
+  zh: 04f7993609cfff26
+/deepseek-ai-dsh-craft-anything/model-experience/mcp-tools-from-the-server/what-the-model-sees:
+  en: 3b9c9d6615c89e98
+  zh: d1349c7a9f630c61
+/deepseek-ai-dsh-craft-anything/model-experience/mcp-tools-from-the-server/token-effect:
+  en: bebffae60401dcf6
+  zh: 814819eb6b67cb04
+/deepseek-ai-dsh-craft-anything/model-experience/mcp-tools-from-the-server/kv-cache-effect:
+  en: 0b9ac4978eac4eca
+  zh: acd2ff2591a9ea95
+/deepseek-ai-dsh-craft-anything/known-limitations-and-deferred-work:
+  en: c83b3f11449a182c
+  zh: bc2b72f0d967f383
+/deepseek-ai-dsh-craft-anything/known-limitations-and-deferred-work/dev-note:
+  en: 4d69a53e41177bed
+  zh: f8ddb51eab926cf9
