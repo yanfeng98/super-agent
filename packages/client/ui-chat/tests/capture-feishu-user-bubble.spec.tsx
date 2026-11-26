@@ -30,7 +30,7 @@ function cssFor(root: HTMLElement, ...sheets: string[]): string {
     const body = readFileSync(resolve(process.cwd(), path), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...body.matchAll(/([.#][^{}]+?)\s*\{([^}]*)\}/g)].map(match => ({ selector: match[1]!.trim(), body: match[2]!.trim() }))
     return rules.filter(rule => rule.selector.startsWith('.')).map((rule) => {
-      const key = rule.selector.slice(1).split(/[\s,:]/)[0]!
+      const key = rule.selector.slice(1).split(/[\s,:\[]/)[0]!
       const hashed = [...used].find(name => name.startsWith(`_${key}_`))
       return hashed ? rule.selector.replace(`.${key}`, `.${hashed}`) + ` { ${rule.body} }` : ''
     })
@@ -78,7 +78,7 @@ it('writes the before/after production captures', () => {
     {...slots} renderSlotChain={() => null} />)
   writeFileSync(resolve(process.cwd(), 'evidence/feishu-user-bubble/capture-after.html'),
     page('Feishu relay after', cssFor(afterView.container,
-      'packages/client/ui-chat/src/client/chat/MessageItem.module.css',
+      'packages/client/ui-chat/src/client/chat/MessageIconActions.module.css',
       'packages/client/ui-chat/src/client/chat/MessageItem.module.css'), afterView.container.innerHTML))
   afterView.unmount()
 })

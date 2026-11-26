@@ -6,22 +6,60 @@ html,body{margin:0;background:#fff;color:#222;font-family:system-ui,"PingFang SC
 ._root_98397e{font-size:13px}
 [data-clock]{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-tertiary);font-size:11px}
 [data-clock] button{width:16px;height:16px;padding:0;border:0;background:none;color:inherit;cursor:pointer}
+._actions_dfd505 { display: flex;
+  align-items: center;
+  gap: 8px;
+  height: calc(28px + var(--dsh-content-font-delta, 0px)); }
+._sourceCaption_dfd505 { color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  white-space: nowrap; }
+._sourceCaption_dfd505[data-with-clock]::after { content: '·';
+  margin-left: 6px; }
+._timeStart_dfd505 { padding-right: 12px;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap; }
+._actions_dfd505,
+  :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering']):has(
+    ~ :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])
+  ) .actions { opacity: 0;
+    transition: opacity 80ms ease; }
+._actions_dfd505,
+  [data-actions-reveal='hover']:focus-within .actions,
+  :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering']):has(
+    ~ :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])
+  ):hover .actions,
+  :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering']):has(
+    ~ :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])
+  ):focus-within .actions { opacity: 1; }
+._action_dfd505 { display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px + var(--dsh-content-font-delta, 0px));
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer; }
+._action_dfd505 svg { width: calc(15px + var(--dsh-content-font-delta, 0px));
+  height: calc(15px + var(--dsh-content-font-delta, 0px)); }
+._actions_dfd505[data-clock='end'] .action svg { flex: none;
+  width: calc(16px + var(--dsh-content-font-delta, 0px));
+  height: calc(16px + var(--dsh-content-font-delta, 0px)); }
+._action_dfd505:hover { background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary); }
+._action_dfd505[data-unavailable] { cursor: default;
+  opacity: 0.4; }
+._action_dfd505[data-unavailable]:hover { background: transparent;
+    color: var(--dsw-alias-label-tertiary); }
 ._userRow_0af9cc { display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 6px; }
-._relayOrigin_0af9cc { display: flex;
-  justify-content: flex-end;
-  width: 100%; }
-._relayBadge_0af9cc { flex: none;
-  padding: 1px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-label-dimmed);
-  color: var(--dsw-alias-label-primary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(20px + var(--dsh-content-font-delta, 0px));
-  white-space: nowrap; }
 ._relayDetails_0af9cc { display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -35,6 +73,7 @@ html,body{margin:0;background:#fff;color:#222;font-family:system-ui,"PingFang SC
 ._relaySummary_0af9cc::before { content: '›';
   display: inline-block;
   margin-right: 6px; }
+._relayDetails_0af9cc[open] .relaySummary::before { transform: rotate(90deg); }
 ._relayRaw_0af9cc { --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   box-sizing: border-box;
@@ -56,54 +95,4 @@ html,body{margin:0;background:#fff;color:#222;font-family:system-ui,"PingFang SC
   min-width: 0;
 
   max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); }
-._userRow_0af9cc { display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px; }
-._relayOrigin_0af9cc { display: flex;
-  justify-content: flex-end;
-  width: 100%; }
-._relayBadge_0af9cc { flex: none;
-  padding: 1px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-label-dimmed);
-  color: var(--dsw-alias-label-primary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(20px + var(--dsh-content-font-delta, 0px));
-  white-space: nowrap; }
-._relayDetails_0af9cc { display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); }
-._relaySummary_0af9cc { color: var(--dsw-alias-label-tertiary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  cursor: pointer;
-  list-style: none; }
-._relaySummary_0af9cc::-webkit-details-marker { display: none; }
-._relaySummary_0af9cc::before { content: '›';
-  display: inline-block;
-  margin-right: 6px; }
-._relayRaw_0af9cc { --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  box-sizing: border-box;
-  width: 100%;
-  max-height: 141px;
-  margin: 0;
-  overflow: auto;
-  padding: 10px 12px;
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-markdown-code-block);
-  color: var(--dsw-alias-label-tertiary);
-  font: 400 11px/16px var(--ds-font-family-code);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere; }
-._userStack_0af9cc { display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  min-width: 0;
-
-  max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); }
-</style></head><body><div class="chat"><div class="_relayOrigin_0af9cc" data-user-origin="feishu"><span class="_relayBadge_0af9cc" data-user-origin-badge="true">飞书</span></div><div class="_userRow_0af9cc"><div class="_userStack_0af9cc"><div data-message-bubble="" data-text-interaction-source="" class="_bubble_ac873c"><span class="_root_98397e"><span class="_plainRun_3545aa">都合并且push了吗</span></span></div></div><div class="_actions_dfd505 _actions_0af9cc" data-clock="start"><span class="_timeStart_dfd505">1970年1月1日 08:00</span><button type="button" class="_action_dfd505" aria-label="复制"><svg width="16" height="16" data-icon="dsw-icon-copy-outline-regular" aria-hidden="true"><use href="#dsw-icon-copy-outline-regular"></use></svg></button></div></div><details class="_relayDetails_0af9cc" data-user-relay-details="true"><summary class="_relaySummary_0af9cc">查看原始内容</summary><pre class="_relayRaw_0af9cc">{"kind":"candidate","trigger_id":"tr1","from":"ou_member","thread":"feishu:oc_team:om_1","at":"2026-11-25T16:00:00.000Z","text":"都合并且push了吗","strength":"inferred","next_action":"Ignore it with orchestrator_route if the card shows it touches no enabled rule; else assess it with orchestrator_eval."}</pre></details></div></body></html>
+</style></head><body><div class="chat"><div class="_userRow_0af9cc"><div class="_userStack_0af9cc"><div data-message-bubble="" data-text-interaction-source="" class="_bubble_ac873c"><span class="_root_98397e"><span class="_plainRun_3545aa">都合并且push了吗</span></span></div></div><div class="_actions_dfd505 _actions_0af9cc" data-clock="start"><span class="_sourceCaption_dfd505" data-with-clock="true"><span data-user-origin="feishu" data-user-origin-badge="true">飞书</span></span><span class="_timeStart_dfd505">1970年1月1日 08:00</span><button type="button" class="_action_dfd505" aria-label="复制"><svg width="16" height="16" data-icon="dsw-icon-copy-outline-regular" aria-hidden="true"><use href="#dsw-icon-copy-outline-regular"></use></svg></button></div></div><details class="_relayDetails_0af9cc" data-user-relay-details="true"><summary class="_relaySummary_0af9cc">查看原始内容</summary><pre class="_relayRaw_0af9cc">{"kind":"candidate","trigger_id":"tr1","from":"ou_member","thread":"feishu:oc_team:om_1","at":"2026-11-25T16:00:00.000Z","text":"都合并且push了吗","strength":"inferred","next_action":"Ignore it with orchestrator_route if the card shows it touches no enabled rule; else assess it with orchestrator_eval."}</pre></details></div></body></html>

@@ -370,13 +370,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
     }
   return (
     <>
-      {relay !== undefined && (
-        <div className={css.relayOrigin} data-user-origin={relay.origin}>
-          <span className={css.relayBadge} data-user-origin-badge>
-            {relay.origin === 'feishu' ? t('message.origin.feishu') : relay.origin}
-          </span>
-        </div>
-      )}
       <UserStyleBubble
         node={node}
         renderSlotChain={renderSlotChain}
@@ -395,6 +388,11 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
             className={css.actions}
             onEdit={editAction === undefined ? undefined : () => { editAction(text) }}
             editUnavailable={editUnavailable}
+            {...relay === undefined ? {} : { source: (
+              <span data-user-origin={relay.origin} data-user-origin-badge>
+                {relay.origin === 'feishu' ? t('message.origin.feishu') : relay.origin}
+              </span>
+            ) }}
             t={t}
           />
         )}

@@ -25,7 +25,7 @@ function cssFor(root: HTMLElement): string {
   root.querySelectorAll('*').forEach((el) => { el.classList.forEach((name) => { used.add(name) }) })
   const rules = [...body.matchAll(/(^|\})\s*([^{}]+)\{([^}]*)\}/g)].map(match => ({ selector: match[2]!.trim(), body: match[3]!.trim() }))
   return rules.filter(rule => rule.selector.startsWith('.')).map((rule) => {
-    const key = rule.selector.slice(1).split(/[\s,:]/)[0]!
+    const key = rule.selector.slice(1).split(/[\s,:\[]/)[0]!
     const hashed = [...used].find(name => name.startsWith(`_${key}_`))
     return hashed ? rule.selector.replace(`.${key}`, `.${hashed}`) + ` { ${rule.body} }` : ''
   }).filter(Boolean).join('\n')

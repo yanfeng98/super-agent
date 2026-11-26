@@ -51,7 +51,7 @@ export function ContextInjectionRow({ content, source, producer, form, t }: Cont
     return (
       <div className={css.relayRoot} data-context-origin={relay.origin}>
         <div className={css.relayRow}>
-          <span className={css.relayBadge} data-context-origin-badge>{t('message.origin.feishu')}</span>
+          <span className={css.relayOrigin} data-context-origin-badge>{t('message.origin.feishu')}</span>
           <span className={css.relayText} data-context-relay-text>{relay.summary}</span>
         </div>
         <details className={css.relayDetails}>

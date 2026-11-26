@@ -37,6 +37,8 @@ export interface MessageIconActionsProps {
    * branch control at the end of the icon cluster.
    */
   usageAction?: ReactNode
+  /** Provenance caption for relayed messages, shown before the clock in the metadata tier. */
+  source?: ReactNode
   /** The owning view's locale seat, passed down as a plain prop. */
   t: ChatViewSlotProps['t']
 }
@@ -48,7 +50,7 @@ export interface MessageIconActionsProps {
  */
 export function MessageIconActions({
   text, time, clock, onEdit, editUnavailable, onBranch, branchUnavailable = false, className,
-  extraActions, usageAction, t,
+  extraActions, usageAction, source, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
   const editReasonId = useId()
@@ -61,7 +63,14 @@ export function MessageIconActions({
   )
   return (
     <div className={className === undefined ? css.actions : `${css.actions} ${className}`} data-clock={clock}>
-      {clock === 'start' ? clockEl : null}
+      {clock === 'start' ? (
+        <>
+          {source === undefined ? null : (
+            <span className={css.sourceCaption} data-with-clock={time === undefined ? undefined : true}>{source}</span>
+          )}
+          {clockEl}
+        </>
+      ) : null}
       <Tooltip label={copied ? t('copied') : t('copy')} side="bottom">
         <button type="button" className={css.action} aria-label={copied ? t('copied') : t('copy')} onClick={onCopy}>
           {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}

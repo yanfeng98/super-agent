@@ -9,6 +9,19 @@
   height: calc(28px + var(--dsh-content-font-delta, 0px));
 }
 
+/* Relay provenance shares the clock's metadata tier without a tag surface. */
+.sourceCaption {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  white-space: nowrap;
+}
+
+.sourceCaption[data-with-clock]::after {
+  content: '·';
+  margin-left: 6px;
+}
+
 /* The user clock keeps the secondary tier. */
 .timeStart {
   padding-right: 12px;
