@@ -31,6 +31,10 @@ Setup has many steps, so an agent does it with you. Ask your coding agent:
 
 It asks one short question at a time, shows the full plan once, and then installs and configures everything. [SETUP.md](SETUP.md) is what it follows.
 
+## If the main Session is deleted
+
+The orchestrator Session is recreated automatically. If someone deletes it in the DSH Web GUI, the next Feishu message or queued notice opens a fresh main Session under the same id and asks it to assess the message. The new Session starts with no history from the deleted one; Tickets and their worker Sessions are unaffected.
+
 ## Mirroring the main Session to Feishu
 
 The orchestrator Session can mirror what you type in the DSH Web GUI and its final answer back into the Feishu chat of your most recent message to the bot. This uses dsh-im's [two-way Session sync](../dsh-im/PROACTIVE_DELIVERY.md), which is off by default.

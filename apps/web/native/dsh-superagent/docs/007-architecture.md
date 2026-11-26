@@ -175,7 +175,7 @@ Failures retry with exponential backoff. Throwing `Later` defers work without co
 | `launch` | DshExecutor | Launches a pending Assignment: prepare command, Executor Session, assignment message | The free worker slots, none while paused | A passing failure of the model provider or the network runs again after 5 s doubling to 300 s, three times; any other failure, and a failed prepare command, fails its Ticket. One held by a pause or by full worker slots tries again after 5 s |
 | `delivery` | DshExecutor | Hands a Ticket's waiting Inputs to its running Assignment, in order | 4, none while paused | 2 s doubling to 60 s; one that waits for a worker slot tries again after 2 s |
 | `relay` | Sessions | Steers a worker's report or question, or a person's follow-up, into the main Session's turn | 1, in queue order | 2 s doubling to 60 s |
-| `notice` | Sessions | Injects a notice into the main Session without waking it | 1, in queue order | 2 s doubling to 60 s |
+| `notice` | Sessions | Injects a notice into the main Session, recreating it first when missing | 1, in queue order | 2 s for each of the first three consecutive failures when the main Session cannot be resolved; from the fourth, the doubling schedule applies and health reports an error after three counted failures |
 | `reply` | Outbox | Sends a message for a Channel through its Source, after the earlier messages of its Ticket to its conversation that have not failed three times; withdrawing the message cancels it | 1, none while paused | 5 s doubling to 300 s; one whose Source is off, or behind an earlier message, tries again after 5 s |
 
 Each kind has a health entry under its name. It reports an error once one of its effects failed three times in a row, except `delivery`, whose failures show on their Ticket instead. Relays keep their order, and so do notices; a failed one holds back the later ones of its kind.
@@ -232,9 +232,9 @@ Validation inherits an omitted base from the saved override, drops removed parts
 
 ### Sessions
 
-`Sessions` (`src/app/sessions.ts`) manages DeepSeek Harness Sessions for both roles. `ensure` creates a Session with its role's model. `install` follows agent events and registers prompts, skills and tools for managed Sessions.
+`Sessions` (`src/app/sessions.ts`) manages DeepSeek Harness Sessions for both roles. `ensure` creates a Session with its role's model. Recovery recreates a removed main Session under its recorded id, with the router preset, and shares one in-flight attempt across concurrent callers; it also restores the durable sidebar workspace group. `install` follows agent events and registers prompts, skills and tools for managed Sessions.
 
-`prompt` delivers once per request id. `relay` and `notify` enqueue main-Session messages handled by the `relay` and `notice` effects. `src/app/notices.ts` defines their content; `delivery` checks whether a message arrived.
+`prompt` delivers once per request id. A missing main Session is recreated before delivery, so removing the Session in the Web GUI does not leave incoming messages unanswered. `relay` and `notify` enqueue main-Session messages handled by the `relay` and `notice` effects; a notice whose Session cannot be resolved yet reschedules without dropping the queued row. `src/app/notices.ts` defines their content; `delivery` checks whether a message arrived.
 
 Each model request binds the Session to the current prompt revision. The revisions it used are stored durably: `promptVersion` identifies the active one and `mayRead` restricts which versions a worker can inspect. Registrations are tracked in one map per agent.
 
@@ -433,7 +433,7 @@ Some generic modules still refer directly to Feishu:
 | `tests/health.spec.ts` | One health entry per part, each cleared by its own next success |
 | `tests/delivery.spec.ts` | `AgentDelivery` |
 | `tests/retry-health.spec.ts`, `tests/role-models.spec.ts` | Model budget retries, and the models of the two roles |
-| `tests/runtime.spec.ts` | The whole application on a simulated DeepSeek Harness host, through tools and HTTP |
+| `tests/runtime.spec.ts` | The whole application on a simulated DeepSeek Harness host, through tools and HTTP; recovery of a deleted main Session, concurrent recreation, notice retry and health reporting, and cleanup of a Session minted while the old id was still being deleted |
 | `tests/session-mirror.spec.ts` | Binding the orchestrator Session to the Feishu chat of the latest trigger, and suppressing the mirror when `orchestrator_reply` already answered |
 | `tests/tools.spec.ts` | The Sessions' tools: what `orchestrator_read` reads for each role, including a ticket's notes, review summary and check, and the shapes and checks of the other main Session tools |
 | `tests/chat-tools.spec.ts` | A request and an answer the main Session records from its own conversation, a ticket the answer resumes, a controlled merge with its cleanup and push options, several Tickets queued, retried and dequeued from chat, stopping a Ticket and withdrawing its queued merge, its discard, an approval and note resolution, a check rerun, the waiting list's outcome, a revert recorded from chat, a standing merge request and its cancel, a dependency recorded from chat, and the refusals for another Source's ticket, a disabled local Source and an empty operator list |

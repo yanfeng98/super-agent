@@ -451,6 +451,8 @@ copy starts without machine configuration. Set `stateDir` in the profile's `cord
     `tests/panel-settings.spec.tsx` and `tests/views.spec.ts` cover it; `docs/003-execution.md`, `docs/005-panel.md`,
     `docs/006-deployment.md`, `docs/007-architecture.md`, `README.md` and `SETUP.md` describe it.
 
+35. **Main Session recovery after deletion.** `src/app/sessions.ts` recreates the main Session under its recorded id when a delivery finds it missing: both the `relay` handler (`prompt`) and the `notice` handler (`inject`) resolve through one shared, in-flight `ensureMaster()` attempt, so concurrent Feishu messages or queued notices create one Session under the `dsh-superagent-router` preset. Recovery restores the durable sidebar workspace group through `onMasterReady` (`src/app/runtime.ts`), and an id reclaimed while DSH is still deleting the old Session is detected through the `sessionId` `create` returns: the minted blank Session is removed and the delivery retries. A notice whose Session stays unavailable reschedules on a short backoff before it becomes a reported effect failure. `tests/runtime.spec.ts` covers recreation, concurrency, notice delivery, workspace-group restoration, minted-id cleanup and the health transition; `docs/007-architecture.md`, `docs/001-domain.md` and `README.md` describe the behavior.
+
 `cordis.patch.yml` in this directory is the upstream bundle layer, kept as the package's own definition and covered by
 `tests/bundle-patch.spec.ts`. The Web bundle's rows and preset files are what the built-in copy actually mounts; keep the
 two in step when changing a preset.
@@ -462,7 +464,7 @@ rewriting its test idioms.
 ## Checks
 
 - `pnpm --filter dsh-superagent run build` builds the Host entries and the browser client.
-- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,327 tests).
+- `pnpm --filter dsh-superagent exec vitest run` runs the vendored suite (1,376 tests).
 - `pnpm run typecheck`, `pnpm run build:check`, `pnpm run lint` and `pnpm run test:docs` cover the repository gates; the
   vendored directory is excluded from the inventory and lint corpora, as `vendor/` is.
 - `pnpm dsh web` boots the Web profile: the sidebar shows **Superagent**, `GET /orchestrator/api/state` answers without a

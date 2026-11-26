@@ -96,6 +96,8 @@ export class Runtime extends Service implements SourceHost {
   private readonly board = new HealthBoard()
   private readonly runtimeHealth = this.board.claim('runtime', { state: 'starting', detail: '' })
   readonly masterId: string
+  /** Workspace and title the main Session was created with, reused when it is recreated. */
+  private readonly master: { cwd: string; title: string }
   private readonly sourceLinks = new TextCache(200_000)
   private readonly stopped = new AbortController()
   private readonly disposers: (() => void)[] = []
@@ -160,8 +162,9 @@ export class Runtime extends Service implements SourceHost {
       const resources: ResourceHost = { store, pages: new TextCache(4_000_000), prompts, commands, masterId, context: ctx,
         promptVersion: id => this.sessions.promptVersion(id), mayRead: (id, revision) => this.sessions.mayRead(id, revision),
         sourceLink: link, ticketDiff: id => this.ticketDiff(id) }
-      const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
-        lifetime: this.lifetime,
+      const master = this.master = { cwd: machine.stateDir, title: 'dsh-superagent orchestrator' }
+      const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId, master,
+        onMasterReady: () => this.queueOrchestratorGroup(), lifetime: this.lifetime,
         closing: () => this.closing(), environment,
         tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
@@ -1836,7 +1839,7 @@ export class Runtime extends Service implements SourceHost {
     }
     this.sessions.install()
     this.executor.install()
-    await this.sessions.ensure(this.masterId, this.machine.stateDir, 'dsh-superagent orchestrator', 'orchestrator')
+    await this.sessions.ensure(this.masterId, this.master.cwd, this.master.title, 'orchestrator')
     // Backfill an existing orchestrator Session's durable sidebar group.
     this.queueOrchestratorGroup()
     await Promise.allSettled([...this.groupWrites])

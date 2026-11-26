@@ -11,7 +11,7 @@ import { dshIm, dshImOf } from '../sources/dsh-im.ts'
 import { mandateInstructions, ticketOfSession } from '../executor/dsh.ts'
 import type { HealthEntry } from '../infra/health.ts'
 import { AgentDelivery, messageId, type RelayDisplay } from './delivery.ts'
-import type { Effects } from './effects.ts'
+import { Later, type Effects } from './effects.ts'
 import type { Variable } from './execution-environment.ts'
 import { RetryHealth } from './retry-health.ts'
 import { initializeRoleModel } from './role-models.ts'
@@ -31,6 +31,10 @@ export interface SessionsHost {
   /** The `models` health entry, which reports managed sessions waiting on a model-budget retry. */
   readonly health: HealthEntry
   readonly masterId: string
+  /** Workspace and title used to recreate the main Session after a person removes it. */
+  readonly master: { cwd: string; title: string }
+  /** Refreshes Host state attached to the main Session, such as its durable sidebar group. */
+  readonly onMasterReady?: () => void
   readonly lifetime: AbortSignal
   closing(): boolean
   /** Execution environment variables for `ticket`, rendered into its worker's system prompt. */
@@ -47,6 +51,8 @@ interface SessionBinding { disposers: (() => void)[]; scope?: Context; skills?: 
 
 /** The agent presets Executor Sessions and the main Session are created with, which the bundle's patch defines. */
 export const WORKER_PRESET = 'dsh-superagent-worker', ROUTER_PRESET = 'dsh-superagent-router'
+/** A requested Session id could not be reclaimed, so delivery waits for the controller to settle. */
+const RECREATE_DEFERRED = 'session/recreate-deferred'
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /** DSH's agent preset registry selected `agentPreset` for a Session. */
@@ -97,6 +103,10 @@ export class Sessions {
   private readonly bindings = new Map<Agent, SessionBinding>()
   private readonly retryHealth = new RetryHealth()
   private readonly ctx: Context
+  /** One recreation in flight, so concurrent deliveries do not create the main Session twice. */
+  private recoveringMaster?: Promise<Agent>
+  /** Consecutive notice deliveries held for a missing main Session; a bounded run becomes a reported failure. */
+  private masterFailures = 0
   /** Registers ordered `relay` and `notice` effect handlers that deliver to the main Session. */
   constructor(private readonly host: SessionsHost) {
     this.ctx = host.context
@@ -135,15 +145,27 @@ export class Sessions {
       if (status === 'idle' && !this.host.closing()) { this.retryHealth.clear(agent.id); this.updateModelHealth() }
     })
   }
-  /** Resolves or creates session `id` in workspace `cwd`, initializes its role model, decorates it with prompts/skills/tools, sets `danger-full-access` permissions, and renames it to `title`. */
-  async ensure(id: string, cwd: string, title: string, role: 'orchestrator' | 'worker'): Promise<Agent> {
+  /**
+   * Resolves or creates session `id` in workspace `cwd`, initializes its role model, decorates it with prompts/skills/tools, sets `danger-full-access` permissions, and renames it to `title`.
+   * `reclaim` names a Session that must keep its id: when the controller mints a different one because the id is still being deleted, the freshly created blank Session is removed and the caller is told to try later.
+   */
+  async ensure(id: string, cwd: string, title: string, role: 'orchestrator' | 'worker', reclaim = false): Promise<Agent> {
     const ctx = this.ctx
     let result = await ctx.sessionController.resolveAgent(id as SessionId)
     if ('error' in result && result.error.code === 'session/not-found') {
       const workspace = await ctx.workspaceRegistry.create(cwd)
       // A Session keeps the preset it was created with, one of the bundle's own (cordis.patch.yml).
-      await ctx.sessionController.create({ sessionId: id as SessionId, workspaceId: workspace.id,
+      const created = await ctx.sessionController.create({ sessionId: id as SessionId, workspaceId: workspace.id,
         agentPreset: role === 'worker' ? WORKER_PRESET : ROUTER_PRESET })
+      if (reclaim && created?.sessionId !== undefined && created.sessionId !== id) {
+        // The controller mints a fresh id while the named Session is being
+        // deleted. That blank Session has no orchestrator role; remove it
+        // rather than leaving one orphan per recovery attempt. A refusal is
+        // reported because the orphan then needs an operator's attention.
+        try { await ctx.sessionController.delete?.({ sessionId: created.sessionId }) }
+        catch (error) { this.ctx.logger.warn('dsh-superagent could not remove the Session minted while reclaiming %s: %s', id, String(error)) }
+        throw Object.assign(new Error(`Session ${id} could not be reclaimed yet`), { code: RECREATE_DEFERRED })
+      }
       result = await ctx.sessionController.resolveAgent(id as SessionId)
     }
     if ('error' in result) throw result.error
@@ -153,6 +175,56 @@ export class Sessions {
     ctx.permissionPresets.set(result.agent.session, 'danger-full-access')
     await ctx.sessionController.rename({ sessionId: id as SessionId, title })
     return result.agent
+  }
+  /**
+   * Creates or recreates the main Session under its recorded id with the router
+   * preset. Concurrent callers share one attempt, so recovery cannot create a
+   * second Session when several messages arrive at once.
+   */
+  ensureMaster(): Promise<Agent> {
+    this.recoveringMaster ??= this.ensure(this.host.masterId, this.host.master.cwd, this.host.master.title, 'orchestrator', true)
+      .then(agent => { this.host.onMasterReady?.(); return agent })
+      .finally(() => { this.recoveringMaster = undefined })
+    return this.recoveringMaster
+  }
+  /**
+   * Resolves the main Session, recreating it under its recorded id when a
+   * person removed it while the orchestrator kept running. Durable deliveries
+   * to the main Session then reach the replacement instead of retrying forever.
+   * A failed recreation is reported to the caller, which decides whether to
+   * retry or skip: only the agent this attempt decorated is returned.
+   */
+  private async masterAgent(): Promise<Agent> {
+    const id = this.host.masterId as SessionId
+    const found = await this.ctx.sessionController.resolveAgent(id)
+    if (!('error' in found)) {
+      // A previous recreation may have created the Session but failed while
+      // decorating it. `decorate` is idempotent, so restore prompt, skills and
+      // tools before any delivery reaches the model.
+      await this.decorate(found.agent)
+      return found.agent
+    }
+    if (found.error.code !== 'session/not-found') throw found.error
+    return await this.ensureMaster()
+  }
+  /**
+   * Resolves the main Session for a notice. The first few misses reschedule the
+   * notice without counting a failure; sustained misses become a normal failure
+   * so the queue reports the problem. The queued row stays until delivery or a
+   * caller withdraws it.
+   */
+  private async retriedMasterAgent(): Promise<Agent> {
+    try {
+      const agent = await this.masterAgent()
+      this.masterFailures = 0
+      return agent
+    } catch (error) {
+      // A few short retries cover a Session being deleted or resumed. Beyond
+      // that, count a normal failure so the effect health reports the problem.
+      this.masterFailures++
+      if (this.masterFailures > 3) throw error
+      throw new Later(String(error))
+    }
   }
   /** Returns whether `sessionId` already holds the message delivered under `requestId`, or `false` if the session does not exist. */
   async holds(sessionId: string, requestId: string): Promise<boolean> {
@@ -165,9 +237,16 @@ export class Sessions {
    */
   async prompt(sessionId: string, requestId: string, text: string, mode: 'queue' | 'steer' | { inject: string }, authorize?: () => void,
     accepted?: () => void, display?: RelayDisplay): Promise<void> {
+    const agent = sessionId === this.host.masterId
+      ? await this.masterAgent()
+      : await this.resolve(sessionId)
+    await this.agentDelivery.send(agent, key(requestId), text, mode, this.host.lifetime, authorize, accepted, display)
+  }
+  /** Resolves a non-main Session, which is never recreated by a delivery. */
+  private async resolve(sessionId: string): Promise<Agent> {
     const result = await this.ctx.sessionController.resolveAgent(sessionId as SessionId)
     if ('error' in result) throw result.error
-    await this.agentDelivery.send(result.agent, key(requestId), text, mode, this.host.lifetime, authorize, accepted, display)
+    return result.agent
   }
   /**
    * Tell dsh-im not to mirror the main Session's current turn. The orchestrator
@@ -193,13 +272,12 @@ export class Sessions {
     await this.host.effects.idle('notice')
     return this.host.effects.pending('notice', name) ? 'pending' : 'injected'
   }
-  /** Injects a notice into the main Session without waking it; no-op if the main Session does not exist yet. */
+  /** Injects a notice into the main Session without waking it. A removed main Session is recreated before delivery. */
   private async inject(name: string, value: Record<string, unknown>, summary: string): Promise<void> {
-    const resolved = await this.ctx.sessionController.resolveAgent(this.host.masterId as SessionId)
-    if ('error' in resolved) return
+    const agent = await this.retriedMasterAgent()
     // Deduplicate by notice name and payload hash so retries are idempotent while updated payloads still deliver.
     const text = JSON.stringify(value)
-    await this.agentDelivery.send(resolved.agent, `notice:${name}:${key(text)}`, text, { inject: summary }, this.host.lifetime)
+    await this.agentDelivery.send(agent, `notice:${name}:${key(text)}`, text, { inject: summary }, this.host.lifetime)
   }
   /** Returns the current prompt revision, the active prompt revision of each loaded Session, and whether the main Session still has a pending `'prompts'` notice. */
   status() {

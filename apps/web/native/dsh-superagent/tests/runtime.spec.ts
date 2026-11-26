@@ -301,6 +301,98 @@ it('groups the orchestrator Session under the Workspace its IM bot works in, onc
   expect(append).toHaveBeenCalledWith('session/workspace-group', { path: '/projects/other', role: 'orchestrator' })
 })
 
+it('recreates a removed main Session on the next Feishu message, so its candidate still reaches a main Session', async () => {
+  const master = runtime.masterId
+  const created = controller.create.mock.calls.length
+  agents.delete(master)
+  const trigger = feishu('50', '@bot 还有问题吗')
+  await receive(trigger)
+  expect(controller.create).toHaveBeenCalledTimes(created + 1)
+  expect(controller.create.mock.calls.at(-1)![0]).toMatchObject({ sessionId: master, agentPreset: 'dsh-superagent-router' })
+  expect(relays(master).some(item => item.trigger_id === trigger.id)).toBe(true)
+  expect(agents.has(master)).toBe(true)
+})
+
+it('recreates the main Session once for concurrent Feishu messages and injects a notice into it', async () => {
+  const master = runtime.masterId
+  const created = controller.create.mock.calls.length
+  agents.delete(master)
+  const first = feishu('51', '@bot 第一个'), second = feishu('52', '@bot 第二个')
+  runtime.receive(first)
+  runtime.receive(second)
+  await runtime.idle()
+  expect(controller.create).toHaveBeenCalledTimes(created + 1)
+  expect(relays(master).some(item => item.trigger_id === first.id)).toBe(true)
+  expect(relays(master).some(item => item.trigger_id === second.id)).toBe(true)
+  agents.delete(master)
+  await runtime.settings.save('executor', { ...runtime.store.settings().executor, maxWorkers: 4 }, runtime.store.blockRevision('executor'), 'panel')
+  await runtime.idle()
+  expect(controller.create).toHaveBeenCalledTimes(created + 2)
+  expect(agents.get(master)!.inject).toHaveBeenCalledOnce()
+  expect(agents.get(master)!.inject.mock.calls[0]![0].source).toMatchObject({ kind: 'dsh-superagent', form: 'notice' })
+})
+
+it('restores the orchestrator workspace group when a removed main Session is recreated', async () => {
+  const master = runtime.masterId
+  botWorkspace = '/projects/super-agent'
+  agents.delete(master)
+  await receive(feishu('53', '@bot 回来了'))
+  expect(agents.get(master)!.session.append).toHaveBeenCalledWith('session/workspace-group', { path: '/projects/super-agent', role: 'orchestrator' })
+})
+
+it('keeps a notice queued when the main Session cannot be resolved, then delivers it once the Session is free', async () => {
+  const master = runtime.masterId
+  const created = controller.create.mock.calls.length
+  const original = controller.resolveAgent.getMockImplementation()! as (id: string) => Promise<unknown>
+  controller.resolveAgent.mockImplementation(async (id: string) => String(id) === master
+    ? { error: { code: 'session/writer-held' } } : original(id))
+  const saved = await runtime.settings.save('executor', { ...runtime.store.settings().executor, maxWorkers: 4 },
+    runtime.store.blockRevision('executor'), 'panel')
+  expect(saved).toMatchObject({ saved: true, context_delivery: 'pending' })
+  await runtime.idle()
+  expect(controller.create).toHaveBeenCalledTimes(created)
+  expect(agents.get(master)!.inject).not.toHaveBeenCalled()
+  controller.resolveAgent.mockImplementation(original)
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3000 })
+  try { await runtime.pump(); await runtime.idle() } finally { vi.useRealTimers() }
+  expect(agents.get(master)!.inject).toHaveBeenCalledOnce()
+})
+
+it('removes a freshly minted Session when the controller cannot reclaim the main Session id during deletion', async () => {
+  const master = runtime.masterId
+  const created = controller.create.mock.calls.length
+  const remove = vi.fn(async () => ({ deleted: true }))
+  Object.assign(controller, { delete: remove })
+  const original = controller.create.getMockImplementation()! as (...args: unknown[]) => Promise<unknown>
+  controller.create.mockImplementation(async (request: { sessionId: string }) =>
+    request.sessionId === master ? { sessionId: 'session-minted-while-deleting' } : original(request))
+  agents.delete(master)
+  await runtime.settings.save('executor', { ...runtime.store.settings().executor, maxWorkers: 7 },
+    runtime.store.blockRevision('executor'), 'panel')
+  expect(remove).toHaveBeenCalledWith({ sessionId: 'session-minted-while-deleting' })
+  expect(controller.create).toHaveBeenCalledTimes(created + 1)
+  expect(agents.has(master)).toBe(false)
+})
+
+it('reports an error when a main Session stays unavailable past short notice retries', async () => {
+  const master = runtime.masterId
+  const original = controller.resolveAgent.getMockImplementation()! as (id: string) => Promise<unknown>
+  controller.resolveAgent.mockImplementation(async (id: string) => String(id) === master
+    ? { error: { code: 'session/writer-held' } } : original(id))
+  await runtime.settings.save('executor', { ...runtime.store.settings().executor, maxWorkers: 6 },
+    runtime.store.blockRevision('executor'), 'panel')
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() })
+  try {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      vi.setSystemTime(Date.now() + 3000)
+      await runtime.pump()
+      await runtime.idle()
+    }
+  } finally { vi.useRealTimers() }
+  expect(runtime.health['notice']).toMatchObject({ state: 'error' })
+  controller.resolveAgent.mockImplementation(original)
+})
+
 it('renders a tool result\'s file as a saved file block, and its image as an image block', async () => {
   const tool = tools.get(runtime.masterId)!.get('orchestrator_eval_read')!
   const file = { attachmentId: 'sha256:abc', name: 'file_x', bytes: 5 }
