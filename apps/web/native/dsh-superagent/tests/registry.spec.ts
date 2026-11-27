@@ -41,7 +41,7 @@ describe('Source registry', () => {
     sources.register(probe); sources.register(feishuImKind)
     expect(sources.instances()).toEqual([
       { id: 'feishu', kind: 'feishu', enabled: true, config: { botId: '', chats: [], directMessages: true, otherChats: 'none',
-        readPageSize: 20, linkTimeoutMs: 5000, imageGroupWindowMs: 30_000 }, installed: true },
+        readPageSize: 20, linkTimeoutMs: 5000, imageGroupWindowMs: 30_000, replyFormat: 'text' }, installed: true },
       { id: 'probe', kind: 'probe', enabled: false, config: { interval: 9 }, installed: true },
       { id: 'retired', kind: 'retired', enabled: true, config: { x: 1 }, installed: false },
     ])

@@ -19,7 +19,7 @@ const event = (overrides: Partial<DshImEvent> = {}): DshImEvent => ({
 })
 const config = (overrides: Partial<FeishuConfig> = {}): FeishuConfig => ({
   botId: 'bot_1', chats: [{ chatId: 'oc_team', listen: 'mentions' }], directMessages: true, otherChats: 'none', readPageSize: 20,
-  linkTimeoutMs: 5000, imageGroupWindowMs: 30_000,
+  linkTimeoutMs: 5000, imageGroupWindowMs: 30_000, replyFormat: 'text',
   ...overrides,
 })
 const service = (overrides: Partial<DshImService> = {}): DshImService => ({
@@ -105,10 +105,21 @@ describe('the dsh-im-backed Feishu Source', () => {
     await expect(sendFeishuIm({ commands: {} as never }, message)).resolves.toBe('sent')
     expect(calls[0]?.[0]).toBe('bot_1')
     expect(calls[0]?.[1]).toMatchObject({ messageId: 'om_1', conversationId: 'oc_team', actorId: 'ou_alice', threadId: 'omt_1' })
-    // Replies render as rich text in the source message's topic, and the receipt id deduplicates a retry.
-    expect(calls[0]?.[3]).toMatchObject({ uuid: 'reply_1', format: 'markdown', replyInThread: true })
+    // Replies use plain text so every Feishu client shows the answer, in the source message's topic; the receipt id deduplicates a retry.
+    expect(calls[0]?.[3]).toMatchObject({ uuid: 'reply_1', format: 'text', replyInThread: true })
     setDshIm(service({ replyChecked: async () => { throw Object.assign(new Error('gone'), { code: 'stale-route' }) } }))
     await expect(sendFeishuIm({ commands: {} as never }, message)).resolves.toBe('gone')
+  })
+
+  it('opts replies back into Markdown cards when the Source config asks for them', async () => {
+    const calls: unknown[][] = []
+    setFeishuConfig(config({ replyFormat: 'markdown' }))
+    setDshIm(service({ replyChecked: async (...args) => { calls.push(args); return { sent: true, messageId: 'om_reply' } } }))
+    const message = { id: 'reply_md', channel: { source: 'feishu', thread: 'feishu:oc_team', address: {
+      chatId: 'oc_team', messageId: 'om_1', actorId: 'ou_alice',
+    } }, text: 'done', kind: 'reply' as const }
+    await expect(sendFeishuIm({ commands: {} as never }, message)).resolves.toBe('sent')
+    expect(calls[0]?.[3]).toMatchObject({ format: 'markdown', replyInThread: true })
   })
 
   it('reads thread context through dsh-im history and a root or parent message by its id', async () => {

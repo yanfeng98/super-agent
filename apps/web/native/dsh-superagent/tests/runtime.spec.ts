@@ -275,7 +275,7 @@ it('relays an explicit member mention as a candidate and creates the ticket, ack
   const acknowledged = replies.filter(reply => reply.text === '收到，修复回归。')
   expect(acknowledged).toHaveLength(1)
   expect(acknowledged[0]).toMatchObject({ botId: BOT_ID, route: { messageId: 'om_1', conversationId: CHAT, actorId: MEMBER },
-    options: { uuid: key('ack', trigger.id), format: 'markdown', replyInThread: true, expectedFingerprint: FINGERPRINT } })
+    options: { uuid: key('ack', trigger.id), format: 'text', replyInThread: true, expectedFingerprint: FINGERPRINT } })
   // The first message holds the request itself: an explicit ticket has no assignment text beyond it, and nothing to read first.
   const first = relays(sessionId)[0]!
   expect(first).toEqual({ ticket_id: ticket.id, title: '修复回归', trigger: expect.objectContaining({ trigger_id: trigger.id, from: MEMBER,

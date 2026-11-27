@@ -41,6 +41,10 @@ const FeishuConfigSchema = z.object({
   linkTimeoutMs: z.number().int().min(1).max(90_000).default(5_000),
   /** Longest gap between two consecutive images that still join one Thread, in milliseconds. */
   imageGroupWindowMs: z.number().int().min(0).max(10 * 60_000).default(30_000),
+  /**
+   * How a reply renders in Feishu. Plain text works in every client; a Markdown card can be unreadable on older ones.
+   */
+  replyFormat: z.enum(['text', 'markdown']).default('text'),
 })
 export type FeishuConfig = z.infer<typeof FeishuConfigSchema>
 /** Parses a stored Feishu Source config, ignoring keys it does not use. */
@@ -311,7 +315,7 @@ export async function sendFeishuIm(_host: Pick<SourceContext, 'commands'>, messa
   try {
     await im.replyChecked(botId, routeOf(message.channel.address), checkedImText(message.text),
       { expectedFingerprint: bot.fingerprint, signal: AbortSignal.timeout(30_000), uuid: message.id,
-        format: 'markdown', replyInThread: true })
+        format: config?.replyFormat ?? 'text', replyInThread: true })
     return 'sent'
   } catch (error) {
     // `reply-result-unknown` is retryable: the same receipt id is sent as Feishu's `uuid`, so a retry after an
@@ -361,6 +365,10 @@ export const feishuImKind: SourceKind<FeishuConfig> = {
     { key: 'imageGroupWindowMs', type: 'number', advanced: true, min: 0, max: 10 * 60_000,
       label: { zh: '连续图片合并时限 / 毫秒', en: 'Consecutive image grouping window / ms' },
       hint: { zh: '同一人连续发的独立图片在这个间隔内会进入同一个会话；中间发别的消息会断开。默认 30 秒，设为 0 表示不合并。', en: 'Standalone images from one sender within this gap join one Thread; another message from that sender breaks the run. Default 30 seconds; 0 disables grouping.' } },
+    { key: 'replyFormat', type: 'select', advanced: true,
+      label: { zh: '回复格式', en: 'Reply format' },
+      options: [{ value: 'text', label: { zh: '纯文本', en: 'Plain text' } }, { value: 'markdown', label: { zh: 'Markdown 卡片', en: 'Markdown card' } }],
+      hint: { zh: '纯文本在所有飞书客户端都能显示；Markdown 卡片在旧客户端会显示为升级提示。', en: 'Plain text renders in every Feishu client; older clients show an upgrade prompt instead of a Markdown card.' } },
   ],
   health: ['feishu', 'history'],
   scope({ meta }, config) {
